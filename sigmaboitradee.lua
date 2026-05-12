@@ -253,7 +253,7 @@ TabTransfer:CreateButton({
                 })
 
                 giftRequestRemote:FireServer(target.UserId)  
-                task.wait(6) -- DELAY 5 DETIK  
+                task.wait(4.5) -- DELAY 5 DETIK  
                 itemsSent = itemsSent + 1  
             end  
         end  
@@ -427,7 +427,7 @@ TabBundle:CreateButton({
                 })
 
                 giftRequestRemote:FireServer(target.UserId)  
-                task.wait(6) -- DELAY 5 DETIK  
+                task.wait(4.5) -- DELAY 5 DETIK  
                 sentCount = sentCount + 1  
             end  
         end  
