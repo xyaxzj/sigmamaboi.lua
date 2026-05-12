@@ -244,7 +244,7 @@ TabTransfer:CreateButton({
             local character = localPlayer.Character  
             if character and character:FindFirstChild("Humanoid") then  
                 character.Humanoid:EquipTool(tool)  
-                task.wait(2)  
+                task.wait(1.5)  
                 
                 -- Update Status (Sending)
                 LiveStatusLabel:Set({  
@@ -253,7 +253,7 @@ TabTransfer:CreateButton({
                 })
 
                 giftRequestRemote:FireServer(target.UserId)  
-                task.wait(7) -- DELAY 5 DETIK  
+                task.wait(6) -- DELAY 5 DETIK  
                 itemsSent = itemsSent + 1  
             end  
         end  
@@ -418,7 +418,7 @@ TabBundle:CreateButton({
             local character = localPlayer.Character  
             if character and character:FindFirstChild("Humanoid") then  
                 character.Humanoid:EquipTool(tool)  
-                task.wait(2)  
+                task.wait(1.5)  
                 
                 -- Update Package Status (Sending)
                 PackageStatusLabel:Set({  
@@ -427,7 +427,7 @@ TabBundle:CreateButton({
                 })
 
                 giftRequestRemote:FireServer(target.UserId)  
-                task.wait(7) -- DELAY 5 DETIK  
+                task.wait(6) -- DELAY 5 DETIK  
                 sentCount = sentCount + 1  
             end  
         end  
