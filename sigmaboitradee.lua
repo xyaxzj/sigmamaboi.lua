@@ -1,6 +1,8 @@
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 local StarterGui = game:GetService("StarterGui")
 local Players = game:GetService("Players")
+local HttpService = game:GetService("HttpService")
+local CoreGui = game:GetService("CoreGui")
 local localPlayer = Players.LocalPlayer
 
 -- // Services & Remotes // --
@@ -9,13 +11,17 @@ local giftRequestRemote = networkFolder:WaitForChild("rev_GiftRequest")
 
 -- // State Variables // --
 local GiftingActive = false
+local SafetyLock = true
+local DiscordWebhookURL = "" -- Isi link webhook kamu di UI nanti
 local StopThreshold = 0
 local TargetPlayerName = ""
 local TargetItemName = ""
 local CurrentBundle = {}
 local InventoryConnections = {}
+local SearchQueryTransfer = ""
+local SearchQueryBundle = ""
 
--- // UI Helper: Progress Bar Generator // --
+-- // Helper Functions // --
 local function getProgressBar(current, total, length)
     length = length or 20
     if total <= 0 then return "[" .. string.rep("░", length) .. "] 0%" end
@@ -26,49 +32,19 @@ local function getProgressBar(current, total, length)
     return "[" .. string.rep("█", filled) .. string.rep("░", empty) .. "] " .. percentage .. "%"
 end
 
--- // Core Functions // --
--- Fungsi membaca tas DAN tangan (Hold-Detection Patch)
 local function getAllTools()
     local tools = {}
     local bp = localPlayer:FindFirstChild("Backpack")
-    if bp then
-        for _, t in ipairs(bp:GetChildren()) do
-            if t:IsA("Tool") then table.insert(tools, t) end
-        end
-    end
+    if bp then for _, t in ipairs(bp:GetChildren()) do if t:IsA("Tool") then table.insert(tools, t) end end end
     local char = localPlayer.Character
-    if char then
-        for _, t in ipairs(char:GetChildren()) do
-            if t:IsA("Tool") then table.insert(tools, t) end
-        end
-    end
+    if char then for _, t in ipairs(char:GetChildren()) do if t:IsA("Tool") then table.insert(tools, t) end end end
     return tools
 end
 
 local function isTradeable(tool)
-    if tool and tool:IsA("Tool") then
-        return tool:GetAttribute("guid") or tool:GetAttribute("GUID")
-    end
-    return false
+    return tool and tool:IsA("Tool") and (tool:GetAttribute("guid") or tool:GetAttribute("GUID"))
 end
 
-local function shuffleTable(tbl)
-    for i = #tbl, 2, -1 do
-        local j = math.random(i)
-        tbl[i], tbl[j] = tbl[j], tbl[i]
-    end
-    return tbl
-end
-
-local function getPlayerList()
-    local tbl = {}
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= localPlayer then table.insert(tbl, p.Name) end
-    end
-    return tbl
-end
-
--- Deteksi Mutasi & Level
 local function getItemMutation(tool)
     local mut = tool:GetAttribute("Mutation") or tool:GetAttribute("mutation") or tool:GetAttribute("Variant")
     if not mut then
@@ -91,34 +67,62 @@ local function getFullItemName(tool)
     local displayName = tool.Name
     local mut = getItemMutation(tool)
     local lvl = getItemLevel(tool)
-
     if mut then displayName = displayName .. " [" .. mut .. "]" end  
     if lvl then displayName = displayName .. " (Lv." .. tostring(lvl) .. ")" end  
     return displayName
 end
 
-local function getInventoryList()
+local function getPlayerList()
+    local tbl = {}
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= localPlayer then table.insert(tbl, p.Name) end
+    end
+    return tbl
+end
+
+local function shuffleTable(tbl)
+    for i = #tbl, 2, -1 do
+        local j = math.random(i)
+        tbl[i], tbl[j] = tbl[j], tbl[i]
+    end
+    return tbl
+end
+
+local function getAvailableStock(itemName)
+    local allTools = getAllTools()
+    local count = 0
+    for _, tool in ipairs(allTools) do
+        if isTradeable(tool) then
+            if itemName == "" or itemName == "[ANY ASSET]" then
+                count = count + 1
+            elseif getFullItemName(tool) == itemName then
+                count = count + 1
+            end
+        end
+    end
+    return count
+end
+
+local function getInventoryList(searchFilter)
     local inventoryCounts = {}
     local allTools = getAllTools()
 
     for _, tool in ipairs(allTools) do  
         if isTradeable(tool) then
             local displayName = getFullItemName(tool)  
-            inventoryCounts[displayName] = (inventoryCounts[displayName] or 0) + 1  
+            if not searchFilter or searchFilter == "" or string.find(displayName:lower(), searchFilter:lower()) then
+                inventoryCounts[displayName] = (inventoryCounts[displayName] or 0) + 1  
+            end
         end
     end  
 
     local itemsList = {"[ANY ASSET]"}  
-    for name, count in pairs(inventoryCounts) do  
-        table.insert(itemsList, name .. " | Qty: " .. count)  
-    end  
-      
+    for name, count in pairs(inventoryCounts) do table.insert(itemsList, name .. " | Qty: " .. count) end  
     table.sort(itemsList, function(a, b)  
         if a == "[ANY ASSET]" then return true end  
         if b == "[ANY ASSET]" then return false end  
         return a < b  
     end)  
-      
     return itemsList
 end
 
@@ -128,21 +132,195 @@ local function getBaseName(dropdownString)
     return base or dropdownString
 end
 
+-- // Fitur Preset Save/Load //
+local function savePreset(name)
+    pcall(function()
+        if not isfolder("MoctaPresets") then makefolder("MoctaPresets") end
+        local data = HttpService:JSONEncode(CurrentBundle)
+        writefile("MoctaPresets/"..name..".json", data)
+    end)
+end
+
+local function loadPreset(name)
+    local success = false
+    pcall(function()
+        local path = "MoctaPresets/"..name..".json"
+        if isfile(path) then
+            local data = readfile(path)
+            CurrentBundle = HttpService:JSONDecode(data)
+            success = true
+        end
+    end)
+    return success
+end
+
+local function getPresetList()
+    local names = {}
+    pcall(function()
+        if isfolder("MoctaPresets") then
+            local files = listfiles("MoctaPresets")
+            for _, f in ipairs(files) do table.insert(names, f:gsub("MoctaPresets\\", ""):gsub("MoctaPresets/", ""):gsub(".json", "")) end
+        end
+    end)
+    return names
+end
+
+-- // ========================================== //
+-- // FITUR BARU: EVIDENCE OVERLAY & WEBHOOK
+-- // ========================================== //
+
+local function sendDiscordWebhook(target, totalQty, itemListStr)
+    if DiscordWebhookURL == "" then return end
+    
+    local data = {
+        ["embeds"] = {{
+            ["title"] = "✅ Transaction Completed",
+            ["description"] = "**Sender:** " .. localPlayer.Name .. "\n**Receiver:** " .. target .. "\n**Total Assets:** " .. totalQty,
+            ["color"] = tonumber(0x2B2D31),
+            ["fields"] = {
+                {["name"] = "Items Transferred", ["value"] = "```\n" .. itemListStr .. "\n```", ["inline"] = false}
+            },
+            ["footer"] = {["text"] = "Mocta System V2.3 | " .. os.date("%Y-%m-%d %H:%M:%S")}
+        }}
+    }
+    
+    pcall(function()
+        local headers = {["Content-Type"] = "application/json"}
+        local request = http_request or request or HttpPost
+        if request then
+            request({Url = DiscordWebhookURL, Method = "POST", Headers = headers, Body = HttpService:JSONEncode(data)})
+        end
+    end)
+end
+
+local function showReceiptOverlay(targetName, totalQty, itemsDict)
+    -- Build Item String
+    local itemListStr = ""
+    for name, qty in pairs(itemsDict) do
+        itemListStr = itemListStr .. "- " .. name .. " (x" .. qty .. ")\n"
+    end
+
+    -- Create Elegant UI
+    local sg = Instance.new("ScreenGui")
+    sg.Name = "MoctaEvidenceReceipt"
+    sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    
+    -- Try to hide from game detection if possible
+    pcall(function() if syn and syn.protect_gui then syn.protect_gui(sg) end end)
+    sg.Parent = CoreGui
+
+    local bg = Instance.new("Frame")
+    bg.Size = UDim2.new(1, 0, 1, 0)
+    bg.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    bg.BackgroundTransparency = 0.5
+    bg.Parent = sg
+
+    local receipt = Instance.new("Frame")
+    receipt.Size = UDim2.new(0, 400, 0, 500)
+    receipt.Position = UDim2.new(0.5, -200, 0.5, -250)
+    receipt.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+    receipt.BorderSizePixel = 0
+    receipt.ClipsDescendants = true
+    receipt.Parent = bg
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = receipt
+
+    local header = Instance.new("TextLabel")
+    header.Size = UDim2.new(1, 0, 0, 60)
+    header.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    header.Text = "TRANSACTION RECEIPT"
+    header.TextColor3 = Color3.fromRGB(255, 255, 255)
+    header.Font = Enum.Font.GothamBold
+    header.TextSize = 20
+    header.Parent = receipt
+
+    local details = Instance.new("TextLabel")
+    details.Size = UDim2.new(1, -40, 0, 100)
+    details.Position = UDim2.new(0, 20, 0, 70)
+    details.BackgroundTransparency = 1
+    details.TextXAlignment = Enum.TextXAlignment.Left
+    details.TextYAlignment = Enum.TextYAlignment.Top
+    details.Text = string.format("Status: SUCCESS\nDate: %s\nSender: %s\nReceiver: %s\nTotal Assets: %d", os.date("%Y-%m-%d %H:%M:%S"), localPlayer.Name, targetName, totalQty)
+    details.TextColor3 = Color3.fromRGB(200, 200, 200)
+    details.Font = Enum.Font.Gotham
+    details.TextSize = 14
+    details.Parent = receipt
+
+    local listHeader = Instance.new("TextLabel")
+    listHeader.Size = UDim2.new(1, -40, 0, 20)
+    listHeader.Position = UDim2.new(0, 20, 0, 180)
+    listHeader.BackgroundTransparency = 1
+    listHeader.TextXAlignment = Enum.TextXAlignment.Left
+    listHeader.Text = "ASSETS TRANSFERRED:"
+    listHeader.TextColor3 = Color3.fromRGB(255, 255, 255)
+    listHeader.Font = Enum.Font.GothamBold
+    listHeader.TextSize = 14
+    listHeader.Parent = receipt
+
+    local scroll = Instance.new("ScrollingFrame")
+    scroll.Size = UDim2.new(1, -40, 1, -280)
+    scroll.Position = UDim2.new(0, 20, 0, 210)
+    scroll.BackgroundTransparency = 1
+    scroll.ScrollBarThickness = 4
+    scroll.Parent = receipt
+
+    local list = Instance.new("TextLabel")
+    list.Size = UDim2.new(1, -10, 1, 0)
+    list.BackgroundTransparency = 1
+    list.TextXAlignment = Enum.TextXAlignment.Left
+    list.TextYAlignment = Enum.TextYAlignment.Top
+    list.Text = itemListStr
+    list.TextColor3 = Color3.fromRGB(150, 255, 150)
+    list.Font = Enum.Font.Code
+    list.TextSize = 13
+    list.Parent = scroll
+    
+    -- Auto-resize scroll content
+    list.Size = UDim2.new(1, -10, 0, list.TextBounds.Y + 20)
+    scroll.CanvasSize = UDim2.new(0, 0, 0, list.Size.Y.Offset)
+
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Size = UDim2.new(1, -40, 0, 40)
+    closeBtn.Position = UDim2.new(0, 20, 1, -50)
+    closeBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+    closeBtn.Text = "CLOSE & DISMISS"
+    closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    closeBtn.Font = Enum.Font.GothamBold
+    closeBtn.TextSize = 14
+    closeBtn.Parent = receipt
+    
+    local btnCorner = Instance.new("UICorner")
+    btnCorner.CornerRadius = UDim.new(0, 6)
+    btnCorner.Parent = closeBtn
+
+    closeBtn.MouseButton1Click:Connect(function()
+        sg:Destroy()
+    end)
+    
+    -- Fire Discord Webhook in background
+    task.spawn(function() sendDiscordWebhook(targetName, totalQty, itemListStr) end)
+end
+
 -- // UI Initialization // --
 local Window = Rayfield:CreateWindow({
-    Name = "Mocta Gifter System",
+    Name = "Mocta System V2.3",
     LoadingTitle = "Authenticating Protocol...",
-    LoadingSubtitle = "Loading Asset Management",
     ConfigurationSaving = { Enabled = false },
-    KeySystem = false,
     Theme = "DarkBlue"
 })
 
 -- ==========================================
--- TAB 1: SYSTEM DASHBOARD
+-- TAB 1: DASHBOARD
 -- ==========================================
 local TabDashboard = Window:CreateTab("Dashboard", 4483362458)
-TabDashboard:CreateSection("Asset Overview")
+TabDashboard:CreateSection("Security & Tracking")
+TabDashboard:CreateToggle({
+    Name = "Safety Confirmation Pop-up",
+    CurrentValue = true,
+    Callback = function(Value) SafetyLock = Value end,
+})
 
 local InventoryStatusLabel = TabDashboard:CreateParagraph({
     Title = "Real-time Inventory Assessment",
@@ -157,7 +335,6 @@ TabDashboard:CreateButton({
     end,
 })
 
-TabDashboard:CreateSection("Emergency Controls")
 TabDashboard:CreateButton({
     Name = "TERMINATE ALL OPERATIONS",
     Callback = function()
@@ -170,7 +347,6 @@ TabDashboard:CreateButton({
 -- TAB 2: DIRECT TRANSFER
 -- ==========================================
 local TabTransfer = Window:CreateTab("Direct Transfer", 4483362458)
-TabTransfer:CreateSection("Target Definition")
 
 local PlayerDropdown = TabTransfer:CreateDropdown({
     Name = "Pilih Penerima",
@@ -180,14 +356,23 @@ local PlayerDropdown = TabTransfer:CreateDropdown({
     Callback = function(Option) TargetPlayerName = Option[1] end,
 })
 
-local ItemDropdown = TabTransfer:CreateDropdown({
-    Name = "Select Brainrot Type",
-    Options = getInventoryList(),
+local ItemDropdown 
+TabTransfer:CreateInput({
+    Name = "Cari Item...",
+    PlaceholderText = "Ketik nama/mutasi...",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(Text) 
+        SearchQueryTransfer = Text 
+        ItemDropdown:Refresh(getInventoryList(SearchQueryTransfer), true)
+    end,
+})
+
+ItemDropdown = TabTransfer:CreateDropdown({
+    Name = "Select Asset",
+    Options = getInventoryList(""),
     CurrentOption = {"[ANY ASSET]"},
     MultipleOptions = false,
-    Callback = function(Option)
-        TargetItemName = getBaseName(Option[1])
-    end,
+    Callback = function(Option) TargetItemName = getBaseName(Option[1]) end,
 })
 
 TabTransfer:CreateInput({
@@ -197,101 +382,96 @@ TabTransfer:CreateInput({
     Callback = function(Text) StopThreshold = tonumber(Text) or 0 end,
 })
 
-TabTransfer:CreateSection("Execution")
-
--- [ROMBAKAN STATUS DIRECT TRANSFER]
 local LiveStatusLabel = TabTransfer:CreateParagraph({
     Title = "⚡ Operation Status",
-    Content = "System Standby.\nWaiting for execution..."
+    Content = "System Standby."
 })
+
+local function executeDirectTransfer()
+    GiftingActive = true  
+    local itemsSent = 0  
+    local allTools = getAllTools()  
+    local itemsToProcess = {}  
+    local target = Players:FindFirstChild(TargetPlayerName)
+    local sentHistory = {} -- Untuk Receipt
+
+    for _, tool in ipairs(allTools) do  
+        if isTradeable(tool) then  
+            local displayName = getFullItemName(tool)  
+            if TargetItemName == "" or displayName == TargetItemName then  
+                table.insert(itemsToProcess, tool)  
+            end  
+        end  
+    end  
+
+    if TargetItemName == "" then shuffleTable(itemsToProcess) end  
+    local displayTargetName = TargetItemName == "" and "Randomized Assets" or TargetItemName  
+
+    for _, tool in ipairs(itemsToProcess) do  
+        if itemsSent >= StopThreshold or not GiftingActive then break end  
+        
+        LiveStatusLabel:Set({  
+            Title = "⚡ Transferring to: " .. TargetPlayerName,  
+            Content = string.format("Asset: %s\nProgress: %d / %d\n%s\nStatus: Equipping...", displayTargetName, itemsSent, StopThreshold, getProgressBar(itemsSent, StopThreshold))  
+        })
+
+        local character = localPlayer.Character  
+        if character and character:FindFirstChild("Humanoid") then  
+            character.Humanoid:EquipTool(tool)  
+            task.wait(1.5)  
+            
+            LiveStatusLabel:Set({  
+                Title = "⚡ Transferring to: " .. TargetPlayerName,  
+                Content = string.format("Asset: %s\nProgress: %d / %d\n%s\nStatus: Sending Packet...", displayTargetName, itemsSent, StopThreshold, getProgressBar(itemsSent, StopThreshold))  
+            })
+
+            giftRequestRemote:FireServer(target.UserId)  
+            task.wait(4.5)  
+            
+            -- Rekam sejarah untuk receipt
+            local tName = getFullItemName(tool)
+            sentHistory[tName] = (sentHistory[tName] or 0) + 1
+            itemsSent = itemsSent + 1  
+        end  
+    end  
+
+    GiftingActive = false  
+    LiveStatusLabel:Set({Title = "✅ Operation Concluded", Content = "Transfer finished."})  
+    updateInventoryDisplay()
+    
+    -- TAMPILKAN RECEIPT KALAU SUKSES
+    if itemsSent > 0 then showReceiptOverlay(TargetPlayerName, itemsSent, sentHistory) end
+end
 
 TabTransfer:CreateButton({
     Name = "INITIATE TRANSFER",
     Callback = function()
         if GiftingActive then return end
         local target = Players:FindFirstChild(TargetPlayerName)
-        if not target or StopThreshold <= 0 then
-            Rayfield:Notify({Title = "Validation Failed", Content = "Invalid target or quantity.", Duration = 3})
-            return
-        end
+        if not target or StopThreshold <= 0 then return Rayfield:Notify({Title = "Failed", Content = "Target atau Qty tidak valid.", Duration = 3}) end
 
-        GiftingActive = true  
-        local itemsSent = 0  
-        local allTools = getAllTools()  
-        local itemsToProcess = {}  
+        local maxAvailable = getAvailableStock(TargetItemName)
+        if StopThreshold > maxAvailable then return Rayfield:Notify({Title = "Stock Kurang!", Content = "Maksimal yang bisa dikirim: " .. maxAvailable, Duration = 4}) end
 
-        for _, tool in ipairs(allTools) do  
-            if isTradeable(tool) then  
-                local displayName = getFullItemName(tool)  
-                if TargetItemName == "" or displayName == TargetItemName then  
-                    table.insert(itemsToProcess, tool)  
-                end  
-            end  
-        end  
-
-        if TargetItemName == "" then shuffleTable(itemsToProcess) end  
-        local displayTargetName = TargetItemName == "" and "Randomized Assets" or TargetItemName  
-
-        for _, tool in ipairs(itemsToProcess) do  
-            if itemsSent >= StopThreshold or not GiftingActive then break end  
-            
-            -- Update Status (Preparing)
-            LiveStatusLabel:Set({  
-                Title = "⚡ Transferring to: " .. TargetPlayerName,  
-                Content = string.format("Asset: %s\nProgress: %d / %d\n%s\nStatus: Equipping...", displayTargetName, itemsSent, StopThreshold, getProgressBar(itemsSent, StopThreshold))  
+        if SafetyLock then
+            Window:CreateDialog({
+                Title = "⚠️ SECURITY CONFIRMATION",
+                Content = "Kirim " .. StopThreshold .. " item ke " .. TargetPlayerName .. "?",
+                Buttons = {
+                    { Name = "Proceed (Gas)", Callback = function() executeDirectTransfer() end },
+                    { Name = "Cancel", Callback = function() end }
+                }
             })
-
-            local character = localPlayer.Character  
-            if character and character:FindFirstChild("Humanoid") then  
-                character.Humanoid:EquipTool(tool)  
-                task.wait(1.5)  
-                
-                -- Update Status (Sending)
-                LiveStatusLabel:Set({  
-                    Title = "⚡ Transferring to: " .. TargetPlayerName,  
-                    Content = string.format("Asset: %s\nProgress: %d / %d\n%s\nStatus: Sending Packet...", displayTargetName, itemsSent, StopThreshold, getProgressBar(itemsSent, StopThreshold))  
-                })
-
-                giftRequestRemote:FireServer(target.UserId)  
-                task.wait(4.5) -- DELAY 5 DETIK  
-                itemsSent = itemsSent + 1  
-            end  
-        end  
-
-        GiftingActive = false  
-        LiveStatusLabel:Set({
-            Title = "✅ Operation Concluded", 
-            Content = string.format("Successfully sent %d unit(s) to %s.\n%s", itemsSent, TargetPlayerName, getProgressBar(itemsSent, StopThreshold))
-        })  
-        updateInventoryDisplay()
+        else
+            executeDirectTransfer()
+        end
     end,
 })
 
 -- ==========================================
 -- TAB 3: PACKAGE AUTO-MIX
 -- ==========================================
-local TabBundle = Window:CreateTab("Package Auto-Mix", 4483362458)
-TabBundle:CreateSection("Package Configuration")
-
-local BundleItemName = ""
-local BundleItemQty = 0
-
-local BundleItemDropdown = TabBundle:CreateDropdown({
-    Name = "Select Asset to Add",
-    Options = getInventoryList(),
-    CurrentOption = {""},
-    MultipleOptions = false,
-    Callback = function(Option)
-        BundleItemName = getBaseName(Option[1])
-    end,
-})
-
-TabBundle:CreateInput({
-    Name = "Quantity for this Asset",
-    PlaceholderText = "Qty (Leave empty if adding ALL)",
-    RemoveTextAfterFocusLost = false,
-    Callback = function(Text) BundleItemQty = tonumber(Text) or 0 end,
-})
+local TabBundle = Window:CreateTab("Package & Presets", 4483362458)
 
 local BundleContentLabel = TabBundle:CreateParagraph({
     Title = "Current Package Specifications",
@@ -309,223 +489,69 @@ local function updateBundleDisplay()
     BundleContentLabel:Set({Title = "Current Package Specifications", Content = text})
 end
 
-TabBundle:CreateButton({
-    Name = "Add to Package (Specific Qty)",
-    Callback = function()
-        if BundleItemName ~= "" and BundleItemName ~= "[ANY ASSET]" and BundleItemQty > 0 then
-            CurrentBundle[BundleItemName] = (CurrentBundle[BundleItemName] or 0) + BundleItemQty
-            updateBundleDisplay()
-            Rayfield:Notify({Title = "Package Updated", Content = "Asset added to bundle.", Duration = 2})
-        end
-    end,
+TabBundle:CreateSection("1. Load / Save Preset")
+local PresetNameInput = ""
+TabBundle:CreateInput({
+    Name = "Nama Preset Baru (Untuk Save)",
+    PlaceholderText = "Ketik nama paket...",
+    Callback = function(Text) PresetNameInput = Text end,
 })
 
 TabBundle:CreateButton({
-    Name = "Add ALL Available Stock",
+    Name = "💾 Save Current Package as Preset",
     Callback = function()
-        if BundleItemName ~= "" and BundleItemName ~= "[ANY ASSET]" then
-            local totalAvailable = 0
-            local allTools = getAllTools()
-            
-            for _, tool in ipairs(allTools) do
-                if isTradeable(tool) and getFullItemName(tool) == BundleItemName then
-                    totalAvailable = totalAvailable + 1
-                end
-            end
-
-            if totalAvailable > 0 then
-                CurrentBundle[BundleItemName] = totalAvailable
-                updateBundleDisplay()
-                Rayfield:Notify({Title = "Package Updated", Content = "Added ALL (" .. totalAvailable .. ") units of " .. BundleItemName, Duration = 3})
-            else
-                Rayfield:Notify({Title = "Stock Error", Content = "No stock found for this asset.", Duration = 3})
-            end
-        else
-            Rayfield:Notify({Title = "Selection Error", Content = "Please select a valid asset first.", Duration = 3})
-        end
+        if PresetNameInput ~= "" then savePreset(PresetNameInput); Rayfield:Notify({Title = "Saved", Content = "Preset tersimpan.", Duration = 3}) end
     end,
 })
 
-TabBundle:CreateButton({
-    Name = "Clear Package",
-    Callback = function()
-        CurrentBundle = {}
-        updateBundleDisplay()
-    end,
-})
-
-TabBundle:CreateSection("Package Execution")
-local BundleReceiverDropdown = TabBundle:CreateDropdown({
-    Name = "Select Receiver Identity",
-    Options = getPlayerList(),
+local PresetDropdown = TabBundle:CreateDropdown({
+    Name = "Load Saved Preset",
+    Options = getPresetList(),
     CurrentOption = {""},
     MultipleOptions = false,
-    Callback = function(Option) TargetPlayerName = Option[1] end,
-})
-
--- [FITUR BARU: STATUS PACKAGE AUTO-MIX]
-local PackageStatusLabel = TabBundle:CreateParagraph({
-    Title = "📦 Delivery Status",
-    Content = "System Standby.\nPackage ready to be dispatched."
+    Callback = function(Option)
+        if Option[1] ~= "" and loadPreset(Option[1]) then updateBundleDisplay() end
+    end,
 })
 
 TabBundle:CreateButton({
-    Name = "EXECUTE PACKAGE TRANSFER",
+    Name = "🔄 Refresh Preset List",
+    Callback = function() PresetDropdown:Refresh(getPresetList(), true) end,
+})
+
+TabBundle:CreateSection("2. Manual Package Editor")
+local BundleItemName = ""
+local BundleItemQty = 0
+
+local BundleItemDropdown
+TabBundle:CreateInput({
+    Name = "Cari Item...",
+    PlaceholderText = "Ketik nama/mutasi...",
+    Callback = function(Text) 
+        SearchQueryBundle = Text 
+        BundleItemDropdown:Refresh(getInventoryList(SearchQueryBundle), true)
+    end,
+})
+
+BundleItemDropdown = TabBundle:CreateDropdown({
+    Name = "Select Asset to Add",
+    Options = getInventoryList(""),
+    CurrentOption = {""},
+    MultipleOptions = false,
+    Callback = function(Option) BundleItemName = getBaseName(Option[1]) end,
+})
+
+TabBundle:CreateInput({
+    Name = "Quantity for this Asset",
+    PlaceholderText = "Qty",
+    Callback = function(Text) BundleItemQty = tonumber(Text) or 0 end,
+})
+
+TabBundle:CreateButton({
+    Name = "Add to Package",
     Callback = function()
-        if GiftingActive then return end
-        local target = Players:FindFirstChild(TargetPlayerName)
-        if not target then return Rayfield:Notify({Title = "Error", Content = "Invalid target.", Duration = 3}) end
-
-        local allTools = getAllTools()
-        local queue = {}  
-        local totalReqAssets = 0
-        
-        for reqItemName, reqQty in pairs(CurrentBundle) do  
-            local found = 0  
-            for _, tool in ipairs(allTools) do  
-                if isTradeable(tool) then  
-                    local displayName = getFullItemName(tool)  
-                    if displayName == reqItemName and found < reqQty then  
-                        table.insert(queue, tool)  
-                        found = found + 1  
-                    end  
-                end  
-            end  
-            
-            if found < reqQty then  
-                Rayfield:Notify({Title = "Stock Deficit", Content = "Insufficient: " .. reqItemName, Duration = 5})  
-                return   
-            end  
-            totalReqAssets = totalReqAssets + reqQty
-        end  
-
-        if totalReqAssets == 0 then return end
-
-        GiftingActive = true  
-        local sentCount = 0  
-        
-        for _, tool in ipairs(queue) do  
-            if not GiftingActive then break end  
-            
-            local currentToolName = getFullItemName(tool)
-
-            -- Update Package Status (Preparing)
-            PackageStatusLabel:Set({  
-                Title = "📦 Delivering to: " .. TargetPlayerName,  
-                Content = string.format("Current Asset: %s\nOverall Progress: %d / %d\n%s\nStatus: Equipping...", currentToolName, sentCount, totalReqAssets, getProgressBar(sentCount, totalReqAssets))  
-            })
-
-            local character = localPlayer.Character  
-            if character and character:FindFirstChild("Humanoid") then  
-                character.Humanoid:EquipTool(tool)  
-                task.wait(1.5)  
-                
-                -- Update Package Status (Sending)
-                PackageStatusLabel:Set({  
-                    Title = "📦 Delivering to: " .. TargetPlayerName,  
-                    Content = string.format("Current Asset: %s\nOverall Progress: %d / %d\n%s\nStatus: Sending Packet...", currentToolName, sentCount, totalReqAssets, getProgressBar(sentCount, totalReqAssets))  
-                })
-
-                giftRequestRemote:FireServer(target.UserId)  
-                task.wait(4.5) -- DELAY 5 DETIK  
-                sentCount = sentCount + 1  
-            end  
-        end  
-        
-        GiftingActive = false  
-        PackageStatusLabel:Set({
-            Title = "✅ Package Delivered", 
-            Content = string.format("Successfully delivered %d assets to %s.\n%s", sentCount, TargetPlayerName, getProgressBar(sentCount, totalReqAssets))
-        })
-        Rayfield:Notify({Title = "Package Delivered", Content = "Sent " .. sentCount .. " assets successfully.", Duration = 5})  
-        updateInventoryDisplay()
-    end,
-})
-
--- ==========================================
--- TAB 4: ENVIRONMENT
--- ==========================================
-local TabEnv = Window:CreateTab("Environment", 4483362458)
-TabEnv:CreateSection("Cinematic / Evidence Mode")
-
-TabEnv:CreateToggle({
-    Name = "Enable Clean UI Mode",
-    CurrentValue = false,
-    Flag = "CleanUI",
-    Callback = function(Value)
-        StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, not Value)
-
-        local pGui = localPlayer:WaitForChild("PlayerGui")  
-        for _, gui in ipairs(pGui:GetChildren()) do  
-            if gui:IsA("ScreenGui") and gui.Name ~= "Rayfield" then  
-                if Value then  
-                    gui:SetAttribute("WasEnabled", gui.Enabled)  
-                    gui.Enabled = false  
-                else  
-                    if gui:GetAttribute("WasEnabled") ~= nil then  
-                        gui.Enabled = gui:GetAttribute("WasEnabled")  
-                    else  
-                        gui.Enabled = true  
-                    end  
-                end  
-            end  
-        end  
-         
-        if Value then  
-            Rayfield:Notify({Title = "Environment", Content = "Clean UI Active.", Duration = 3})  
-        end
-    end,
-})
-
-TabEnv:CreateSection("Data Synchronization")
-TabEnv:CreateButton({
-    Name = "Sync Dropdowns",
-    Callback = function()
-        PlayerDropdown:Refresh(getPlayerList())
-        ItemDropdown:Refresh(getInventoryList())
-        BundleItemDropdown:Refresh(getInventoryList())
-        BundleReceiverDropdown:Refresh(getPlayerList())
-    end,
-})
-
--- // GLOBAL FUNCTIONS // --
-function updateInventoryDisplay()
-    local inventoryData = {}
-    local totalCount = 0
-    local allTools = getAllTools()
-
-    for _, tool in pairs(allTools) do  
-        if isTradeable(tool) then
-            local displayName = getFullItemName(tool)  
-            inventoryData[displayName] = (inventoryData[displayName] or 0) + 1  
-            totalCount = totalCount + 1  
-        end
-    end  
-
-    local displayString = "Total Authorized Assets: " .. totalCount .. "\n"  
-    for itemName, amount in pairs(inventoryData) do  
-        displayString = displayString .. string.format("\n• %s: %d Unit(s)", itemName, amount)  
-    end  
-    InventoryStatusLabel:Set({Title = "Real-time Inventory Assessment", Content = displayString})
-end
-
--- Initialize & Hold-Detection Sync
-local function connect()
-    local backpack = localPlayer:WaitForChild("Backpack")
-    table.insert(InventoryConnections, backpack.ChildAdded:Connect(updateInventoryDisplay))
-    table.insert(InventoryConnections, backpack.ChildRemoved:Connect(updateInventoryDisplay))
-    
-    local char = localPlayer.Character or localPlayer.CharacterAdded:Wait()
-    table.insert(InventoryConnections, char.ChildAdded:Connect(updateInventoryDisplay))
-    table.insert(InventoryConnections, char.ChildRemoved:Connect(updateInventoryDisplay))
-    
-    localPlayer.CharacterAdded:Connect(function(newChar)
-        table.insert(InventoryConnections, newChar.ChildAdded:Connect(updateInventoryDisplay))
-        table.insert(InventoryConnections, newChar.ChildRemoved:Connect(updateInventoryDisplay))
-    end)
-
-    task.wait(0.5)
-    updateInventoryDisplay()
-end
-
-connect()
+        if BundleItemName ~= "" and BundleItemName ~= "[ANY ASSET]" and BundleItemQty > 0 then
+            local currentInPackage = CurrentBundle[BundleItemName] or 0
+            local maxAvailable = getAvailableStock(BundleItemName)
+            if currentInPackage + BundleItemQty > maxAvailable then
+                Rayfield:Notify({Title = "Overstock Limit", Content = "Gagal! Sisa stock yang bisa ditambah cuma " .. (maxAv
