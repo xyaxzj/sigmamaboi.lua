@@ -5,14 +5,12 @@ local HttpService = game:GetService("HttpService")
 local CoreGui = game:GetService("CoreGui")
 local localPlayer = Players.LocalPlayer
 
--- // Services & Remotes // --
 local networkFolder = game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Packages"):WaitForChild("Network")
 local giftRequestRemote = networkFolder:WaitForChild("rev_GiftRequest")
 
--- // State Variables // --
 local GiftingActive = false
 local SafetyLock = true
-local DiscordWebhookURL = "" -- Isi link webhook kamu di UI nanti
+local DiscordWebhookURL = ""
 local StopThreshold = 0
 local TargetPlayerName = ""
 local TargetItemName = ""
@@ -21,7 +19,6 @@ local InventoryConnections = {}
 local SearchQueryTransfer = ""
 local SearchQueryBundle = ""
 
--- // Helper Functions // --
 local function getProgressBar(current, total, length)
     length = length or 20
     if total <= 0 then return "[" .. string.rep("░", length) .. "] 0%" end
@@ -132,7 +129,6 @@ local function getBaseName(dropdownString)
     return base or dropdownString
 end
 
--- // Fitur Preset Save/Load //
 local function savePreset(name)
     pcall(function()
         if not isfolder("MoctaPresets") then makefolder("MoctaPresets") end
@@ -165,47 +161,31 @@ local function getPresetList()
     return names
 end
 
--- // ========================================== //
--- // FITUR BARU: EVIDENCE OVERLAY & WEBHOOK
--- // ========================================== //
-
 local function sendDiscordWebhook(target, totalQty, itemListStr)
     if DiscordWebhookURL == "" then return end
-    
     local data = {
         ["embeds"] = {{
             ["title"] = "✅ Transaction Completed",
             ["description"] = "**Sender:** " .. localPlayer.Name .. "\n**Receiver:** " .. target .. "\n**Total Assets:** " .. totalQty,
             ["color"] = tonumber(0x2B2D31),
-            ["fields"] = {
-                {["name"] = "Items Transferred", ["value"] = "```\n" .. itemListStr .. "\n```", ["inline"] = false}
-            },
-            ["footer"] = {["text"] = "Mocta System V2.3 | " .. os.date("%Y-%m-%d %H:%M:%S")}
+            ["fields"] = { {["name"] = "Items Transferred", ["value"] = "```\n" .. itemListStr .. "\n```", ["inline"] = false} },
+            ["footer"] = {["text"] = "Mocta System V2.4 | " .. os.date("%Y-%m-%d %H:%M:%S")}
         }}
     }
-    
     pcall(function()
         local headers = {["Content-Type"] = "application/json"}
         local request = http_request or request or HttpPost
-        if request then
-            request({Url = DiscordWebhookURL, Method = "POST", Headers = headers, Body = HttpService:JSONEncode(data)})
-        end
+        if request then request({Url = DiscordWebhookURL, Method = "POST", Headers = headers, Body = HttpService:JSONEncode(data)}) end
     end)
 end
 
 local function showReceiptOverlay(targetName, totalQty, itemsDict)
-    -- Build Item String
     local itemListStr = ""
-    for name, qty in pairs(itemsDict) do
-        itemListStr = itemListStr .. "- " .. name .. " (x" .. qty .. ")\n"
-    end
+    for name, qty in pairs(itemsDict) do itemListStr = itemListStr .. "- " .. name .. " (x" .. qty .. ")\n" end
 
-    -- Create Elegant UI
     local sg = Instance.new("ScreenGui")
     sg.Name = "MoctaEvidenceReceipt"
     sg.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    
-    -- Try to hide from game detection if possible
     pcall(function() if syn and syn.protect_gui then syn.protect_gui(sg) end end)
     sg.Parent = CoreGui
 
@@ -277,7 +257,6 @@ local function showReceiptOverlay(targetName, totalQty, itemsDict)
     list.TextSize = 13
     list.Parent = scroll
     
-    -- Auto-resize scroll content
     list.Size = UDim2.new(1, -10, 0, list.TextBounds.Y + 20)
     scroll.CanvasSize = UDim2.new(0, 0, 0, list.Size.Y.Offset)
 
@@ -295,25 +274,17 @@ local function showReceiptOverlay(targetName, totalQty, itemsDict)
     btnCorner.CornerRadius = UDim.new(0, 6)
     btnCorner.Parent = closeBtn
 
-    closeBtn.MouseButton1Click:Connect(function()
-        sg:Destroy()
-    end)
-    
-    -- Fire Discord Webhook in background
+    closeBtn.MouseButton1Click:Connect(function() sg:Destroy() end)
     task.spawn(function() sendDiscordWebhook(targetName, totalQty, itemListStr) end)
 end
 
--- // UI Initialization // --
 local Window = Rayfield:CreateWindow({
-    Name = "Mocta System V2.3",
+    Name = "Mocta System V2.4",
     LoadingTitle = "Authenticating Protocol...",
     ConfigurationSaving = { Enabled = false },
     Theme = "DarkBlue"
 })
 
--- ==========================================
--- TAB 1: DASHBOARD
--- ==========================================
 local TabDashboard = Window:CreateTab("Dashboard", 4483362458)
 TabDashboard:CreateSection("Security & Tracking")
 TabDashboard:CreateToggle({
@@ -321,33 +292,20 @@ TabDashboard:CreateToggle({
     CurrentValue = true,
     Callback = function(Value) SafetyLock = Value end,
 })
-
 local InventoryStatusLabel = TabDashboard:CreateParagraph({
     Title = "Real-time Inventory Assessment",
     Content = "Synchronizing data..."
 })
-
 TabDashboard:CreateButton({
     Name = "Refresh Database",
-    Callback = function()
-        updateInventoryDisplay()
-        Rayfield:Notify({Title = "System", Content = "Database synchronized.", Duration = 2})
-    end,
+    Callback = function() updateInventoryDisplay(); Rayfield:Notify({Title = "System", Content = "Database synchronized.", Duration = 2}) end,
 })
-
 TabDashboard:CreateButton({
     Name = "TERMINATE ALL OPERATIONS",
-    Callback = function()
-        GiftingActive = false
-        Rayfield:Notify({Title = "Alert", Content = "All active transfers halted.", Duration = 3})
-    end,
+    Callback = function() GiftingActive = false; Rayfield:Notify({Title = "Alert", Content = "All active transfers halted.", Duration = 3}) end,
 })
 
--- ==========================================
--- TAB 2: DIRECT TRANSFER
--- ==========================================
 local TabTransfer = Window:CreateTab("Direct Transfer", 4483362458)
-
 local PlayerDropdown = TabTransfer:CreateDropdown({
     Name = "Pilih Penerima",
     Options = getPlayerList(),
@@ -355,18 +313,13 @@ local PlayerDropdown = TabTransfer:CreateDropdown({
     MultipleOptions = false,
     Callback = function(Option) TargetPlayerName = Option[1] end,
 })
-
 local ItemDropdown 
 TabTransfer:CreateInput({
     Name = "Cari Item...",
     PlaceholderText = "Ketik nama/mutasi...",
     RemoveTextAfterFocusLost = false,
-    Callback = function(Text) 
-        SearchQueryTransfer = Text 
-        ItemDropdown:Refresh(getInventoryList(SearchQueryTransfer), true)
-    end,
+    Callback = function(Text) SearchQueryTransfer = Text; ItemDropdown:Refresh(getInventoryList(SearchQueryTransfer), true) end,
 })
-
 ItemDropdown = TabTransfer:CreateDropdown({
     Name = "Select Asset",
     Options = getInventoryList(""),
@@ -374,18 +327,13 @@ ItemDropdown = TabTransfer:CreateDropdown({
     MultipleOptions = false,
     Callback = function(Option) TargetItemName = getBaseName(Option[1]) end,
 })
-
 TabTransfer:CreateInput({
     Name = "Transfer Quantity",
     PlaceholderText = "Qty",
     RemoveTextAfterFocusLost = false,
     Callback = function(Text) StopThreshold = tonumber(Text) or 0 end,
 })
-
-local LiveStatusLabel = TabTransfer:CreateParagraph({
-    Title = "⚡ Operation Status",
-    Content = "System Standby."
-})
+local LiveStatusLabel = TabTransfer:CreateParagraph({Title = "⚡ Operation Status", Content = "System Standby."})
 
 local function executeDirectTransfer()
     GiftingActive = true  
@@ -393,14 +341,12 @@ local function executeDirectTransfer()
     local allTools = getAllTools()  
     local itemsToProcess = {}  
     local target = Players:FindFirstChild(TargetPlayerName)
-    local sentHistory = {} -- Untuk Receipt
+    local sentHistory = {} 
 
     for _, tool in ipairs(allTools) do  
         if isTradeable(tool) then  
             local displayName = getFullItemName(tool)  
-            if TargetItemName == "" or displayName == TargetItemName then  
-                table.insert(itemsToProcess, tool)  
-            end  
+            if TargetItemName == "" or displayName == TargetItemName then table.insert(itemsToProcess, tool) end  
         end  
     end  
 
@@ -410,25 +356,14 @@ local function executeDirectTransfer()
     for _, tool in ipairs(itemsToProcess) do  
         if itemsSent >= StopThreshold or not GiftingActive then break end  
         
-        LiveStatusLabel:Set({  
-            Title = "⚡ Transferring to: " .. TargetPlayerName,  
-            Content = string.format("Asset: %s\nProgress: %d / %d\n%s\nStatus: Equipping...", displayTargetName, itemsSent, StopThreshold, getProgressBar(itemsSent, StopThreshold))  
-        })
-
+        LiveStatusLabel:Set({Title = "⚡ Transferring...", Content = string.format("Asset: %s\nProgress: %d / %d", displayTargetName, itemsSent, StopThreshold)})
         local character = localPlayer.Character  
         if character and character:FindFirstChild("Humanoid") then  
             character.Humanoid:EquipTool(tool)  
             task.wait(1.5)  
-            
-            LiveStatusLabel:Set({  
-                Title = "⚡ Transferring to: " .. TargetPlayerName,  
-                Content = string.format("Asset: %s\nProgress: %d / %d\n%s\nStatus: Sending Packet...", displayTargetName, itemsSent, StopThreshold, getProgressBar(itemsSent, StopThreshold))  
-            })
-
             giftRequestRemote:FireServer(target.UserId)  
             task.wait(4.5)  
             
-            -- Rekam sejarah untuk receipt
             local tName = getFullItemName(tool)
             sentHistory[tName] = (sentHistory[tName] or 0) + 1
             itemsSent = itemsSent + 1  
@@ -438,8 +373,6 @@ local function executeDirectTransfer()
     GiftingActive = false  
     LiveStatusLabel:Set({Title = "✅ Operation Concluded", Content = "Transfer finished."})  
     updateInventoryDisplay()
-    
-    -- TAMPILKAN RECEIPT KALAU SUKSES
     if itemsSent > 0 then showReceiptOverlay(TargetPlayerName, itemsSent, sentHistory) end
 end
 
@@ -448,110 +381,116 @@ TabTransfer:CreateButton({
     Callback = function()
         if GiftingActive then return end
         local target = Players:FindFirstChild(TargetPlayerName)
-        if not target or StopThreshold <= 0 then return Rayfield:Notify({Title = "Failed", Content = "Target atau Qty tidak valid.", Duration = 3}) end
-
-        local maxAvailable = getAvailableStock(TargetItemName)
-        if StopThreshold > maxAvailable then return Rayfield:Notify({Title = "Stock Kurang!", Content = "Maksimal yang bisa dikirim: " .. maxAvailable, Duration = 4}) end
+        if not target or StopThreshold <= 0 then return end
+        if StopThreshold > getAvailableStock(TargetItemName) then return end
 
         if SafetyLock then
             Window:CreateDialog({
                 Title = "⚠️ SECURITY CONFIRMATION",
                 Content = "Kirim " .. StopThreshold .. " item ke " .. TargetPlayerName .. "?",
-                Buttons = {
-                    { Name = "Proceed (Gas)", Callback = function() executeDirectTransfer() end },
-                    { Name = "Cancel", Callback = function() end }
-                }
+                Buttons = {{ Name = "Proceed (Gas)", Callback = executeDirectTransfer }, { Name = "Cancel", Callback = function() end }}
             })
-        else
-            executeDirectTransfer()
-        end
+        else executeDirectTransfer() end
     end,
 })
 
--- ==========================================
--- TAB 3: PACKAGE AUTO-MIX
--- ==========================================
 local TabBundle = Window:CreateTab("Package & Presets", 4483362458)
-
-local BundleContentLabel = TabBundle:CreateParagraph({
-    Title = "Current Package Specifications",
-    Content = "Package is empty."
-})
+local BundleContentLabel = TabBundle:CreateParagraph({Title = "Current Package", Content = "Package is empty."})
 
 local function updateBundleDisplay()
-    local text = ""
-    local totalItems = 0
-    for name, qty in pairs(CurrentBundle) do
-        text = text .. string.format("- %s: %d Unit(s)\n", name, qty)
-        totalItems = totalItems + qty
-    end
-    if text == "" then text = "Package is empty." else text = text .. "\nTotal Brainrots in Package: " .. totalItems end
-    BundleContentLabel:Set({Title = "Current Package Specifications", Content = text})
+    local text, totalItems = "", 0
+    for name, qty in pairs(CurrentBundle) do text = text .. string.format("- %s: %d Unit(s)\n", name, qty); totalItems = totalItems + qty end
+    if text == "" then text = "Package is empty." else text = text .. "\nTotal: " .. totalItems end
+    BundleContentLabel:Set({Title = "Current Package", Content = text})
 end
 
 TabBundle:CreateSection("1. Load / Save Preset")
 local PresetNameInput = ""
-TabBundle:CreateInput({
-    Name = "Nama Preset Baru (Untuk Save)",
-    PlaceholderText = "Ketik nama paket...",
-    Callback = function(Text) PresetNameInput = Text end,
-})
-
-TabBundle:CreateButton({
-    Name = "💾 Save Current Package as Preset",
-    Callback = function()
-        if PresetNameInput ~= "" then savePreset(PresetNameInput); Rayfield:Notify({Title = "Saved", Content = "Preset tersimpan.", Duration = 3}) end
-    end,
-})
-
+TabBundle:CreateInput({Name = "Nama Preset Baru", Callback = function(Text) PresetNameInput = Text end})
+TabBundle:CreateButton({Name = "💾 Save Preset", Callback = function() if PresetNameInput ~= "" then savePreset(PresetNameInput) end end})
 local PresetDropdown = TabBundle:CreateDropdown({
-    Name = "Load Saved Preset",
-    Options = getPresetList(),
-    CurrentOption = {""},
-    MultipleOptions = false,
-    Callback = function(Option)
-        if Option[1] ~= "" and loadPreset(Option[1]) then updateBundleDisplay() end
-    end,
+    Name = "Load Preset", Options = getPresetList(), CurrentOption = {""}, MultipleOptions = false,
+    Callback = function(Option) if Option[1] ~= "" and loadPreset(Option[1]) then updateBundleDisplay() end end,
 })
+TabBundle:CreateButton({Name = "🔄 Refresh List", Callback = function() PresetDropdown:Refresh(getPresetList(), true) end})
 
-TabBundle:CreateButton({
-    Name = "🔄 Refresh Preset List",
-    Callback = function() PresetDropdown:Refresh(getPresetList(), true) end,
-})
-
-TabBundle:CreateSection("2. Manual Package Editor")
-local BundleItemName = ""
-local BundleItemQty = 0
-
+TabBundle:CreateSection("2. Manual Editor")
+local BundleItemName, BundleItemQty = "", 0
 local BundleItemDropdown
-TabBundle:CreateInput({
-    Name = "Cari Item...",
-    PlaceholderText = "Ketik nama/mutasi...",
-    Callback = function(Text) 
-        SearchQueryBundle = Text 
-        BundleItemDropdown:Refresh(getInventoryList(SearchQueryBundle), true)
-    end,
-})
-
-BundleItemDropdown = TabBundle:CreateDropdown({
-    Name = "Select Asset to Add",
-    Options = getInventoryList(""),
-    CurrentOption = {""},
-    MultipleOptions = false,
-    Callback = function(Option) BundleItemName = getBaseName(Option[1]) end,
-})
-
-TabBundle:CreateInput({
-    Name = "Quantity for this Asset",
-    PlaceholderText = "Qty",
-    Callback = function(Text) BundleItemQty = tonumber(Text) or 0 end,
-})
+TabBundle:CreateInput({Name = "Cari Item...", Callback = function(Text) SearchQueryBundle = Text; BundleItemDropdown:Refresh(getInventoryList(SearchQueryBundle), true) end})
+BundleItemDropdown = TabBundle:CreateDropdown({Name = "Select Asset", Options = getInventoryList(""), CurrentOption = {""}, MultipleOptions = false, Callback = function(Option) BundleItemName = getBaseName(Option[1]) end})
+TabBundle:CreateInput({Name = "Qty", Callback = function(Text) BundleItemQty = tonumber(Text) or 0 end})
 
 TabBundle:CreateButton({
     Name = "Add to Package",
     Callback = function()
-        if BundleItemName ~= "" and BundleItemName ~= "[ANY ASSET]" and BundleItemQty > 0 then
-            local currentInPackage = CurrentBundle[BundleItemName] or 0
+        if BundleItemName ~= "" and BundleItemQty > 0 then
+            local current = CurrentBundle[BundleItemName] or 0
+            if current + BundleItemQty <= getAvailableStock(BundleItemName) then
+                CurrentBundle[BundleItemName] = current + BundleItemQty
+                updateBundleDisplay()
+            end
+        end
+    end,
+})
+TabBundle:CreateButton({
+    Name = "Add ALL Available Stock",
+    Callback = function()
+        if BundleItemName ~= "" then
             local maxAvailable = getAvailableStock(BundleItemName)
-            if currentInPackage + BundleItemQty > maxAvailable then
-                Rayfield:Notify({Title = "Overstock Limit", Content = "Gagal! Sisa stock yang bisa ditambah cuma " .. (maxAv
+            if maxAvailable > 0 then CurrentBundle[BundleItemName] = maxAvailable; updateBundleDisplay() end
+        end
+    end,
+})
+TabBundle:CreateButton({Name = "Clear Package", Callback = function() CurrentBundle = {}; updateBundleDisplay() end})
+
+TabBundle:CreateSection("3. Package Execution")
+local BundleReceiverDropdown = TabBundle:CreateDropdown({
+    Name = "Select Receiver", Options = getPlayerList(), CurrentOption = {""}, MultipleOptions = false,
+    Callback = function(Option) TargetPlayerName = Option[1] end,
+})
+local PackageStatusLabel = TabBundle:CreateParagraph({Title = "📦 Status", Content = "Ready."})
+
+local function executePackageTransfer()
+    GiftingActive = true  
+    local target = Players:FindFirstChild(TargetPlayerName)
+    local allTools = getAllTools()
+    local queue, totalReqAssets, sentHistory = {}, 0, {}
+    
+    for reqItemName, reqQty in pairs(CurrentBundle) do  
+        local found = 0  
+        for _, tool in ipairs(allTools) do  
+            if isTradeable(tool) then  
+                if getFullItemName(tool) == reqItemName and found < reqQty then table.insert(queue, tool); found = found + 1 end  
+            end  
+        end  
+        if found < reqQty then GiftingActive = false; return end  
+        totalReqAssets = totalReqAssets + reqQty
+    end  
+
+    if totalReqAssets == 0 then GiftingActive = false return end
+
+    local sentCount = 0  
+    for _, tool in ipairs(queue) do  
+        if not GiftingActive then break end  
+        local currentToolName = getFullItemName(tool)
+        PackageStatusLabel:Set({Title = "📦 Delivering...", Content = string.format("Progress: %d / %d", sentCount, totalReqAssets)})
+
+        local character = localPlayer.Character  
+        if character and character:FindFirstChild("Humanoid") then  
+            character.Humanoid:EquipTool(tool)  
+            task.wait(1.5)  
+            giftRequestRemote:FireServer(target.UserId)  
+            task.wait(4.5)  
+            sentHistory[currentToolName] = (sentHistory[currentToolName] or 0) + 1
+            sentCount = sentCount + 1  
+        end  
+    end  
+    
+    GiftingActive = false  
+    PackageStatusLabel:Set({Title = "✅ Delivered", Content = "Transfer finished."})
+    updateInventoryDisplay()
+    if sentCount > 0 then showReceiptOverlay(TargetPlayerName, sentCount, sentHistory) end
+end
+
+TabBundle:CreateBut
