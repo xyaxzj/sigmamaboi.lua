@@ -1,5 +1,5 @@
 -- ==========================================================
--- MOCTA TRADE AUTOMATOR V14.1 (FULL HANDS-FREE EDITION)
+-- MOCTA TRADE AUTOMATOR V14.2 (VERBOSE & FAILSAFE EDITION)
 -- ==========================================================
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
@@ -24,11 +24,18 @@ local InsertDelay = 0.3
 local InventoryConnections = {}
 
 -- // Helper Functions // --
+-- [DIPERBAIKI] Sekarang mendeteksi barang di Tas DAN di Tangan karakter
 local function getAllTools()
     local tools = {}
     local bp = localPlayer:FindFirstChild("Backpack")
     if bp then
         for _, t in ipairs(bp:GetChildren()) do
+            if t:IsA("Tool") then table.insert(tools, t) end
+        end
+    end
+    local char = localPlayer.Character
+    if char then
+        for _, t in ipairs(char:GetChildren()) do
             if t:IsA("Tool") then table.insert(tools, t) end
         end
     end
@@ -104,24 +111,23 @@ local function isOpponentConfirmed(tradeFrame)
     return p2Confirm and p2Confirm.Visible or false
 end
 
--- [FITUR BARU V14.1] Fungsi Auto-Accept Undangan Trade Masuk via UI
+-- [DIPERKUAT] Fungsi Auto-Accept Undangan Trade untuk Executor Mobile
 local function scanAndAcceptTradeRequest()
     local pGui = localPlayer:FindFirstChild("PlayerGui")
     if not pGui then return end
     
-    -- Memeriksa seluruh ScreenGui untuk mencari pop-up invite
     for _, gui in ipairs(pGui:GetChildren()) do
         if gui:IsA("ScreenGui") and gui.Name ~= "Rayfield" then
-            -- Cari frame undangan trade (mencari nama yang umum dipakai developer)
             local inviteFrame = gui:FindFirstChild("TradeInvite", true) or gui:FindFirstChild("InviteFrame", true) or gui:FindFirstChild("RequestFrame", true) or gui:FindFirstChild("TradeRequest", true)
             
             if inviteFrame and inviteFrame.Visible then
-                -- Cari tombol terima di dalam frame tersebut
                 local acceptBtn = inviteFrame:FindFirstChild("Accept", true) or inviteFrame:FindFirstChild("Yes", true) or inviteFrame:FindFirstChild("Confirm", true) or inviteFrame:FindFirstChild("Button", true)
                 if acceptBtn then
                     pcall(function()
-                        -- Gunakan firesignal bawaan executor untuk klik instan tanpa lag
-                        if firesignal then
+                        if getconnections then
+                            for _, conn in ipairs(getconnections(acceptBtn.MouseButton1Click)) do conn:Fire() end
+                            for _, conn in ipairs(getconnections(acceptBtn.Activated)) do conn:Fire() end
+                        elseif firesignal then
                             firesignal(acceptBtn.MouseButton1Click)
                             firesignal(acceptBtn.Activated)
                         end
@@ -134,9 +140,9 @@ end
 
 -- // UI Initialization // --
 local Window = Rayfield:CreateWindow({
-    Name = "Mocta Trade V14.1 (Hands-Free)",
-    LoadingTitle = "Connecting Ecosystem...",
-    LoadingSubtitle = "Loading Hands-Free Logic",
+    Name = "Mocta Trade V14.2 (Failsafe)",
+    LoadingTitle = "Securing Systems...",
+    LoadingSubtitle = "Loading Error Detection",
     ConfigurationSaving = { Enabled = false },
     Theme = "DarkBlue"
 })
@@ -183,21 +189,31 @@ local QueueStatus = TabQueue:CreateParagraph({Title = "📋 Queue Status", Conte
 TabQueue:CreateButton({
     Name = "🚀 GENERATE QUEUE DARI KERANJANG",
     Callback = function()
-        if TargetPlayerName == "" then return Rayfield:Notify({Title = "Error", Content = "Pilih pembeli dulu!", Duration = 2}) end
+        if TargetPlayerName == "" then return Rayfield:Notify({Title = "Gagal", Content = "Pilih pembeli dulu di menu paling atas!", Duration = 3}) end
         CurrentQueue = {}
         ItemsProcessed = 0
         local neededItems = {}
         for k, v in pairs(ShoppingCart) do neededItems[k] = v end
+        
+        local itemsFound = 0
         for _, tool in ipairs(getAllTools()) do  
             if isTradeable(tool) then  
                 local displayName = getFullItemName(tool)  
                 if neededItems[displayName] and neededItems[displayName] > 0 then 
                     table.insert(CurrentQueue, tool) 
                     neededItems[displayName] = neededItems[displayName] - 1
+                    itemsFound = itemsFound + 1
                 end  
             end  
         end  
-        QueueStatus:Set({Title = "📋 Queue Status", Content = string.format("✅ Ready! %d items queued.", #CurrentQueue)})
+        
+        if itemsFound == 0 then
+            Rayfield:Notify({Title = "Peringatan", Content = "Tidak ada item yang ditemukan. Pastikan item ada di Tas/Tangan.", Duration = 4})
+            QueueStatus:Set({Title = "📋 Queue Status", Content = "❌ Gagal. Antrean kosong."})
+        else
+            QueueStatus:Set({Title = "📋 Queue Status", Content = string.format("✅ Ready! %d items queued untuk %s.", #CurrentQueue, TargetPlayerName)})
+            Rayfield:Notify({Title = "Sukses", Content = itemsFound .. " item berhasil masuk antrean!", Duration = 2})
+        end
     end,
 })
 
@@ -211,12 +227,26 @@ local function updateProgressUI() LiveProgress:Set({Title = "⚡ Auto Sender Pro
 TabControl:CreateSlider({Name = "Insert Delay", Range = {0.1, 1.0}, Increment = 0.1, CurrentValue = 0.3, Callback = function(Value) InsertDelay = Value end})
 
 local function executeSenderBatch()
-    if IsProcessing or #CurrentQueue == 0 then return false end
-    IsProcessing = true
+    -- [DIPERBAIKI] Pengecekan Notifikasi Error Bisu
+    if IsProcessing then
+        Rayfield:Notify({Title="Sabar Bos", Content="Skrip masih memproses operasi sebelumnya!", Duration=2})
+        return false 
+    end
+    if #CurrentQueue == 0 then 
+        Rayfield:Notify({Title="Antrean Kosong", Content="Silakan 'Generate Queue' dulu di Tab 1!", Duration=3})
+        return false 
+    end
+    
     local target = Players:FindFirstChild(TargetPlayerName)
-    if not target then IsProcessing = false return false end
+    if not target then 
+        Rayfield:Notify({Title="Target Hilang", Content="Pemain '"..tostring(TargetPlayerName).."' tidak ada di server!", Duration=4})
+        return false 
+    end
+
+    IsProcessing = true
 
     -- 1. Invite Target
+    Rayfield:Notify({Title = "Fase 1", Content = "Mengirim Invite ke " .. target.Name, Duration = 2})
     task.spawn(function() pcall(function() f_trade_r:InvokeServer(target.UserId) end) end)
 
     -- 2. Wait UI Open
@@ -227,7 +257,11 @@ local function executeSenderBatch()
         if tradeFrame and tradeFrame.Visible then break end
         task.wait(1) timer = timer + 1
     end
-    if not (tradeFrame and tradeFrame.Visible) then IsProcessing = false return false end
+    if not (tradeFrame and tradeFrame.Visible) then 
+        Rayfield:Notify({Title="Timeout", Content="Target tidak accept invite dalam 15 detik.", Duration=3})
+        IsProcessing = false 
+        return false 
+    end
 
     -- 3. Insert Items
     local batchSize = math.min(10, #CurrentQueue)
@@ -278,7 +312,11 @@ TabControl:CreateToggle({
         if AutoLoopEnabled then
             task.spawn(function()
                 while AutoLoopEnabled do
-                    if #CurrentQueue == 0 then AutoLoopEnabled = false break end
+                    if #CurrentQueue == 0 then 
+                        Rayfield:Notify({Title="Selesai", Content="Antrean habis!", Duration=3})
+                        AutoLoopEnabled = false 
+                        break 
+                    end
                     local success = executeSenderBatch()
                     if not success then task.wait(3) else task.wait(2.5) end 
                 end
@@ -302,15 +340,12 @@ TabReceiver:CreateToggle({
             Rayfield:Notify({Title = "Receiver Aktif", Content = "Mulai memantau Layar & Request...", Duration = 3})
             task.spawn(function()
                 while AutoReceiverEnabled do
-                    -- [DI-UPDATE] Selalu scan undangan trade yang masuk jika UI trade utama belum terbuka
                     local tradeFrame = localPlayer.PlayerGui:FindFirstChild("TradingFrame", true)
                     
                     if not (tradeFrame and tradeFrame.Visible) then
                         scanAndAcceptTradeRequest()
                     else
-                        -- JIKA UI TRADE SUDAH TERBUKA (PROSES TRANSAKSI JALAN)
-                        
-                        -- TAHAP 1: Tunggu P1 Accept
+                        -- JIKA UI TRADE SUDAH TERBUKA
                         while tradeFrame.Visible and not isOpponentConfirmed(tradeFrame) do task.wait(0.2) end
                         
                         if tradeFrame.Visible and isOpponentConfirmed(tradeFrame) then
@@ -320,23 +355,19 @@ TabReceiver:CreateToggle({
                             task.wait(1)
                         end
 
-                        -- TAHAP 2: Tunggu Layar Reset (Transisi)
                         while tradeFrame.Visible and isOpponentConfirmed(tradeFrame) do task.wait(0.2) end
-
-                        -- TAHAP 3: Tunggu P1 Final Confirm
                         while tradeFrame.Visible and not isOpponentConfirmed(tradeFrame) do task.wait(0.2) end
 
                         if tradeFrame.Visible and isOpponentConfirmed(tradeFrame) then
-                            Rayfield:Notify({Title = "P2 Lock 2", Content = "Final step! Menunggu 5.5s...", Duration = 5--[[Sec]]})
+                            Rayfield:Notify({Title = "P2 Lock 2", Content = "Final step! Menunggu 5.5s...", Duration = 5})
                             task.wait(5.5)
                             r_trade_i:FireServer("Confirm") -- P2 Final Confirm
                         end
 
-                        -- Tunggu sampai layar tertutup murni
                         while tradeFrame.Visible do task.wait(0.5) end
                         Rayfield:Notify({Title = "Selesai", Content = "Trade sukses diterima!", Duration = 2})
                     end
-                    task.wait(0.5) -- Standby Loop Scanner
+                    task.wait(0.5)
                 end
             end)
         end
