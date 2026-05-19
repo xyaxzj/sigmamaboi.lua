@@ -1,5 +1,5 @@
 -- ==========================================================
--- MOCTA TRADE AUTOMATOR V15.8 (THE PERFECT METRONOME)
+-- MOCTA TRADE AUTOMATOR V16.0 (THE FINAL MASTERPIECE)
 -- ==========================================================
 
 local success, errorMessage = pcall(function()
@@ -26,7 +26,6 @@ local success, errorMessage = pcall(function()
     local InsertDelay = 0.3 
     local InventoryConnections = {}
 
-    -- Daftar Bacon Event Materials
     local BaconEventItems = {
         ["Chicleteira Bicicleteira"] = true,
         ["Agarrini La Palini"] = true,
@@ -102,54 +101,10 @@ local success, errorMessage = pcall(function()
         return p2Confirm and p2Confirm.Visible or false
     end
 
-    -- Scanner Universal Auto-Accept
-    local function universalAutoAccept()
-        local pGui = localPlayer:FindFirstChild("PlayerGui")
-        if not pGui then return end
-        for _, gui in ipairs(pGui:GetChildren()) do
-            if gui:IsA("ScreenGui") and gui.Name ~= "Rayfield" then
-                for _, desc in ipairs(gui:GetDescendants()) do
-                    if (desc:IsA("TextButton") or desc:IsA("ImageButton")) and desc.Visible then
-                        local text = string.lower(desc:IsA("TextButton") and desc.Text or desc.Name)
-                        if string.find(text, "accept") or string.find(text, "yes") or string.find(text, "trade") then
-                            pcall(function()
-                                if getconnections then
-                                    local conns1 = getconnections(desc.MouseButton1Click)
-                                    if conns1 then for _, conn in ipairs(conns1) do pcall(function() conn:Fire() end) end end
-                                    local conns2 = getconnections(desc.Activated)
-                                    if conns2 then for _, conn in ipairs(conns2) do pcall(function() conn:Fire() end) end end
-                                end
-                                if firesignal then
-                                    firesignal(desc.MouseButton1Click)
-                                    firesignal(desc.Activated)
-                                end
-                            end)
-                        end
-                    end
-                end
-            end
-        end
-        if rev_trade_start then
-            for _, desc in ipairs(pGui:GetDescendants()) do
-                if desc:IsA("TextLabel") and desc.Visible then
-                    local txt = string.lower(desc.Text)
-                    if string.find(txt, "trade") or string.find(txt, "request") or string.find(txt, "wants") then
-                        for _, p in ipairs(Players:GetPlayers()) do
-                            if p ~= localPlayer and (string.find(desc.Text, p.Name) or string.find(desc.Text, p.DisplayName)) then
-                                pcall(function() rev_trade_start:InvokeServer(p.UserId) end)
-                                pcall(function() rev_trade_start:FireServer(p.UserId) end)
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-
-    -- // UI Initialization // --
+    -- // UI // --
     local Window = Rayfield:CreateWindow({
-        Name = "Mocta Trade V15.8", 
-        LoadingTitle = "Perfect Ping-Pong Mode...", 
+        Name = "Mocta Trade V16.0", 
+        LoadingTitle = "Universal God-Sync Mode...", 
         ConfigurationSaving = { Enabled = false }, 
         Theme = "DarkBlue"
     })
@@ -159,10 +114,7 @@ local success, errorMessage = pcall(function()
     -- ==========================================
     local TabQueue = Window:CreateTab("1. Queue", 4483362458)
     local PlayerDropdown = TabQueue:CreateDropdown({
-        Name = "Pilih Pembeli (P2)", 
-        Options = getPlayerList(), 
-        CurrentOption = {""}, 
-        MultipleOptions = false, 
+        Name = "Pilih Pembeli (P2)", Options = getPlayerList(), CurrentOption = {""}, MultipleOptions = false, 
         Callback = function(Option) TargetPlayerName = Option[1] end
     })
 
@@ -170,7 +122,7 @@ local success, errorMessage = pcall(function()
     TabQueue:CreateButton({
         Name = "🚀 GENERATE QUEUE: ALL BACON MATERIALS",
         Callback = function()
-            if TargetPlayerName == "" then return Rayfield:Notify({Title = "Error", Content = "Pilih pembeli dulu di atas!", Duration = 2}) end
+            if TargetPlayerName == "" then return Rayfield:Notify({Title = "Error", Content = "Pilih pembeli dulu!", Duration = 2}) end
             CurrentQueue = {} ItemsProcessed = 0 local itemsFound = 0
             for _, tool in ipairs(getAllTools()) do  
                 if isTradeable(tool) then  
@@ -265,16 +217,13 @@ local success, errorMessage = pcall(function()
 
     TabControl:CreateSlider({Name = "Insert Delay", Range = {0.1, 1.0}, Increment = 0.1, CurrentValue = 0.3, Callback = function(Value) InsertDelay = Value end})
 
-    -- [DIPERBAIKI] P1 SEKARANG MENGGUNAKAN TIMER METRONOME (SAMA SEPERTI V15.3)
+    -- LOGIKA PING-PONG P1 (VERSI WORKS)
     local function executeSenderBatch()
         if IsProcessing or #CurrentQueue == 0 then return false end
         IsProcessing = true
         
         local target = Players:FindFirstChild(TargetPlayerName)
-        if not target then 
-            setLog("❌ ERROR: Target tidak ditemukan di server!") 
-            IsProcessing = false return false 
-        end
+        if not target then setLog("❌ ERROR: Target hilang!") IsProcessing = false return false end
         
         setLog("Fase 1: Mengirim Invite ke " .. target.Name .. "...")
         task.spawn(function() pcall(function() f_trade_r:InvokeServer(target.UserId) end) end)
@@ -286,42 +235,49 @@ local success, errorMessage = pcall(function()
             if tradeFrame and tradeFrame.Visible then break end
             task.wait(1) timer = timer + 1
         end
+        if not (tradeFrame and tradeFrame.Visible) then setLog("❌ ERROR: Timeout Invite!") IsProcessing = false return false end
         
-        if not (tradeFrame and tradeFrame.Visible) then 
-            setLog("❌ ERROR: Timeout! Target tidak merespon invite.") 
-            IsProcessing = false return false 
-        end
-        
-        setLog("Fase 2: UI Terbuka. Memasukkan item...")
+        setLog("Fase 2: Memasukkan item...")
         local batchSize = math.min(10, #CurrentQueue)
         local batch = {}
         for i = 1, batchSize do table.insert(batch, table.remove(CurrentQueue, 1)) end
-        
-        for _, tool in ipairs(batch) do 
-            local guid = getToolGUID(tool) 
-            if guid then r_trade_i:FireServer("AddItem", tostring(guid)) task.wait(InsertDelay) end 
+        for _, tool in ipairs(batch) do
+            local guid = getToolGUID(tool)
+            if guid then r_trade_i:FireServer("AddItem", tostring(guid)) task.wait(InsertDelay) end
         end
         
-        setLog("Fase 3: Item masuk. Lock Pertama (Tunggu 5.5s)...")
+        setLog("Fase 3: Lock 1 (Tunggu 5.5s)...")
         task.wait(5.5)
         
-        setLog("Fase 4: Accept 1 Dikirim! (Menunggu P2 merespon 6.5s)...")
-        r_trade_i:FireServer("Confirm")
-        
-        -- STATIC TIMER: P1 Cukup diam dan biarkan P2 mengejar ketertinggalan
-        task.wait(6.5)
+        setLog("Fase 4: Accept 1. Menunggu Transisi Layar...")
+        r_trade_i:FireServer("Confirm") 
+        task.wait(0.5)
+
+        local waitTimeout = 0
+        while tradeFrame and tradeFrame.Parent and tradeFrame.Visible do
+            local p1Frame = tradeFrame:FindFirstChild("P1_Frame")
+            if p1Frame then
+                local p1Confirm = p1Frame:FindFirstChild("Confirmed")
+                if p1Confirm and not p1Confirm.Visible then break end 
+            end
+            task.wait(0.2)
+            waitTimeout = waitTimeout + 0.2
+            if waitTimeout > 60 then setLog("❌ ERROR: Stuck menunggu transisi!") IsProcessing = false return false end
+        end
 
         if tradeFrame and tradeFrame.Parent and tradeFrame.Visible then
-            setLog("Fase 5: Menekan Final Confirm! Selesai.")
+            setLog("Fase 5: Transisi Berhasil! Lock 2 (Tunggu 5.5s)...")
+            task.wait(5.5)
+            
+            setLog("Fase 6: Final Confirm!")
             r_trade_i:FireServer("Confirm") 
-            while tradeFrame and tradeFrame.Parent and tradeFrame.Visible do 
-                task.wait(0.5) 
-            end
+            
+            while tradeFrame and tradeFrame.Parent and tradeFrame.Visible do task.wait(0.5) end
         end
         
         ItemsProcessed = ItemsProcessed + batchSize
         updateProgressUI()
-        setLog("✅ TRADE SUKSES: " .. batchSize .. " item terkirim!")
+        setLog("✅ TRADE SUKSES!")
         IsProcessing = false
         return true
     end
@@ -334,7 +290,7 @@ local success, errorMessage = pcall(function()
             if AutoLoopEnabled then 
                 task.spawn(function() 
                     while AutoLoopEnabled do 
-                        if #CurrentQueue == 0 then setLog("🏁 Antrean kosong. Loop berhenti.") AutoLoopEnabled = false break end 
+                        if #CurrentQueue == 0 then setLog("🏁 Antrean habis.") AutoLoopEnabled = false break end 
                         executeSenderBatch() 
                         task.wait(2.5) 
                     end 
@@ -347,6 +303,8 @@ local success, errorMessage = pcall(function()
     -- TAB 3: RECEIVER MODE (P2 - PENERIMA UNIVERSAL)
     -- ==========================================
     local TabReceiver = Window:CreateTab("3. Receiver (P2)", 4483362458)
+    TabReceiver:CreateParagraph({Title = "🤖 Mode Penerima Universal (Gaib)", Content = "Tidak perlu milih nama lagi. Bot akan menyadap semua request yang masuk dari siapapun dan langsung auto-accept!"})
+    
     local ReceiverLog = TabReceiver:CreateParagraph({Title = "📡 Status P2", Content = "Menunggu dihidupkan..."})
 
     TabReceiver:CreateToggle({
@@ -354,15 +312,57 @@ local success, errorMessage = pcall(function()
         Callback = function(Value)
             AutoReceiverEnabled = Value
             if AutoReceiverEnabled then
-                ReceiverLog:Set({Title = "📡 Status P2", Content = "✅ Aktif. Memantau request masuk..."})
+                ReceiverLog:Set({Title = "📡 Status P2", Content = "✅ Universal Bypass Aktif! Memantau request..."})
+                
                 task.spawn(function()
                     while AutoReceiverEnabled do
                         local tradeFrame = localPlayer.PlayerGui:FindFirstChild("TradingFrame", true)
                         
                         if not (tradeFrame and tradeFrame.Visible) then
-                            universalAutoAccept()
+                            -- SCANNER UNIVERSAL: Cari pop-up invite dari siapapun
+                            local pGui = localPlayer:FindFirstChild("PlayerGui")
+                            if pGui then
+                                -- Trik 1: Cari Tombol Accept fisik
+                                for _, gui in ipairs(pGui:GetChildren()) do
+                                    if gui:IsA("ScreenGui") and gui.Name ~= "Rayfield" then
+                                        for _, desc in ipairs(gui:GetDescendants()) do
+                                            if (desc:IsA("TextButton") or desc:IsA("ImageButton")) and desc.Visible then
+                                                local text = string.lower(desc:IsA("TextButton") and desc.Text or desc.Name)
+                                                if string.find(text, "accept") or string.find(text, "yes") or string.find(text, "trade") then
+                                                    pcall(function()
+                                                        if getconnections then
+                                                            local c = getconnections(desc.MouseButton1Click)
+                                                            if c then for _, conn in ipairs(c) do pcall(function() conn:Fire() end) end end
+                                                        end
+                                                        if firesignal then firesignal(desc.MouseButton1Click) end
+                                                    end)
+                                                end
+                                            end
+                                        end
+                                    end
+                                end
+                                
+                                -- Trik 2: Trik Gaib (Cari tulisan nama, tembak server)
+                                if rev_trade_start then
+                                    for _, desc in ipairs(pGui:GetDescendants()) do
+                                        if desc:IsA("TextLabel") and desc.Visible then
+                                            local txt = string.lower(desc.Text)
+                                            if string.find(txt, "trade") or string.find(txt, "request") or string.find(txt, "wants") then
+                                                for _, p in ipairs(Players:GetPlayers()) do
+                                                    if p ~= localPlayer and (string.find(desc.Text, p.Name) or string.find(desc.Text, p.DisplayName)) then
+                                                        -- Temukan target! Langsung bypass!
+                                                        pcall(function() rev_trade_start:InvokeServer(p.UserId) end)
+                                                        pcall(function() rev_trade_start:FireServer(p.UserId) end)
+                                                    end
+                                                end
+                                            end
+                                        end
+                                    end
+                                end
+                            end
                             task.wait(1)
                         else
+                            -- LOGIKA PING-PONG P2 (VERSI WORKS)
                             ReceiverLog:Set({Title = "📡 Status P2", Content = "📥 UI Terbuka! Menunggu P1 Accept..."})
                             while tradeFrame.Visible and not isOpponentConfirmed(tradeFrame) do task.wait(0.2) end
                             
@@ -383,11 +383,10 @@ local success, errorMessage = pcall(function()
                                 r_trade_i:FireServer("Confirm")
                             end
 
-                            ReceiverLog:Set({Title = "📡 Status P2", Content = "✅ Menyelesaikan..."})
+                            ReceiverLog:Set({Title = "📡 Status P2", Content = "✅ Menyelesaikan Trade..."})
                             while tradeFrame.Visible do task.wait(0.5) end
-                            ReceiverLog:Set({Title = "📡 Status P2", Content = "✅ Trade sukses! Kembali memantau..."})
+                            ReceiverLog:Set({Title = "📡 Status P2", Content = "✅ Trade sukses diterima secara gaib!"})
                         end
-                        task.wait(0.2)
                     end
                 end)
             else
