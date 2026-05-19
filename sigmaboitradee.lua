@@ -1,8 +1,9 @@
 -- ==========================================================
--- MOCTA TRADE AUTOMATOR V15.4 (ULTIMATE UNIVERSAL BYPASS)
+-- MOCTA TRADE AUTOMATOR V15.5 (ABSOLUTE COMPLETE EDITION)
 -- ==========================================================
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+local StarterGui = game:GetService("StarterGui")
 local Players = game:GetService("Players")
 local localPlayer = Players.LocalPlayer
 
@@ -10,7 +11,7 @@ local localPlayer = Players.LocalPlayer
 local networkFolder = game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Packages"):WaitForChild("Network")
 local f_trade_r = networkFolder:WaitForChild("ref_trade_r") 
 local r_trade_i = networkFolder:WaitForChild("rev_trade_i") 
-local rev_trade_start = networkFolder:FindFirstChild("rev_trade_start") -- Remote gaib P2
+local rev_trade_start = networkFolder:FindFirstChild("rev_trade_start") 
 
 -- // State Variables // --
 local TargetPlayerName = ""
@@ -75,12 +76,11 @@ local function isOpponentConfirmed(tradeFrame)
     return p2Confirm and p2Confirm.Visible or false
 end
 
--- [FUNGSI BARU] Text-to-UserId Bypass Scanner (Sangat Kuat & Universal)
+-- Scanner Universal Auto-Accept
 local function universalAutoAccept()
     local pGui = localPlayer:FindFirstChild("PlayerGui")
     if not pGui then return end
     
-    -- 1. Coba klik fisik (Failsafe)
     for _, gui in ipairs(pGui:GetChildren()) do
         if gui:IsA("ScreenGui") and gui.Name ~= "Rayfield" then
             for _, desc in ipairs(gui:GetDescendants()) do
@@ -103,7 +103,6 @@ local function universalAutoAccept()
         end
     end
     
-    -- 2. Trik Gaib (Baca teks layar, cari nama, tembak server)
     if rev_trade_start then
         for _, desc in ipairs(pGui:GetDescendants()) do
             if desc:IsA("TextLabel") and desc.Visible then
@@ -111,7 +110,6 @@ local function universalAutoAccept()
                 if string.find(txt, "trade") or string.find(txt, "request") or string.find(txt, "wants") then
                     for _, p in ipairs(Players:GetPlayers()) do
                         if p ~= localPlayer and (string.find(desc.Text, p.Name) or string.find(desc.Text, p.DisplayName)) then
-                            -- Bingo! Nama pengirim ditemukan di layar, langsung bypass ke server!
                             pcall(function() rev_trade_start:InvokeServer(p.UserId) end)
                             pcall(function() rev_trade_start:FireServer(p.UserId) end)
                         end
@@ -123,9 +121,11 @@ local function universalAutoAccept()
 end
 
 -- // UI // --
-local Window = Rayfield:CreateWindow({Name = "Mocta Trade V15.4", LoadingTitle = "Loading Bypass Logic...", ConfigurationSaving = { Enabled = false }, Theme = "DarkBlue"})
+local Window = Rayfield:CreateWindow({Name = "Mocta Trade V15.5", LoadingTitle = "Restoring Every Feature...", ConfigurationSaving = { Enabled = false }, Theme = "DarkBlue"})
 
--- Tab 1: Queue & Pack Mix
+-- ==========================================
+-- TAB 1: PACK MIX & QUEUE
+-- ==========================================
 local TabQueue = Window:CreateTab("1. Queue", 4483362458)
 local PlayerDropdown = TabQueue:CreateDropdown({Name = "Pilih Pembeli (P2)", Options = getPlayerList(), CurrentOption = {""}, MultipleOptions = false, Callback = function(Option) TargetPlayerName = Option[1] end})
 
@@ -184,10 +184,16 @@ TabQueue:CreateButton({Name = "🚀 GENERATE QUEUE DARI KERANJANG", Callback = f
     Rayfield:Notify({Title = "Ready", Content = itemsFound .. " custom items queued.", Duration = 2})
 end})
 
--- Tab 2: Sender (P1)
+-- ==========================================
+-- TAB 2: SENDER MODE (P1 - PENGIRIM)
+-- ==========================================
 local TabControl = Window:CreateTab("2. Sender (P1)", 4483362458)
 local LiveProgress = TabControl:CreateParagraph({Title = "⚡ Auto Sender Progress", Content = "Sisa Item: 0\nTerkirim: 0"})
+-- [FITUR HILANG DIKEMBALIKAN: LOG DISPLAY]
+local ActionLog = TabControl:CreateParagraph({Title = "📜 Live Trade Log", Content = "Menunggu perintah..."})
+
 local function updateProgressUI() LiveProgress:Set({Title = "⚡ Auto Sender Progress", Content = string.format("Sisa Item di Antrean: %d\nItem Terkirim: %d", #CurrentQueue, ItemsProcessed)}) end
+local function setLog(txt) ActionLog:Set({Title = "📜 Live Trade Log", Content = txt}) end
 
 TabControl:CreateSlider({Name = "Insert Delay", Range = {0.1, 1.0}, Increment = 0.1, CurrentValue = 0.3, Callback = function(Value) InsertDelay = Value end})
 
@@ -195,8 +201,11 @@ local function executeSenderBatch()
     if IsProcessing or #CurrentQueue == 0 then return false end
     IsProcessing = true
     local target = Players:FindFirstChild(TargetPlayerName)
-    if not target then IsProcessing = false return false end
+    if not target then setLog("❌ ERROR: Target tidak ditemukan di server!") IsProcessing = false return false end
+    
+    setLog("Fase 1: Mengirim Invite ke " .. target.Name .. "...")
     task.spawn(function() pcall(function() f_trade_r:InvokeServer(target.UserId) end) end)
+    
     local tradeFrame = nil
     local timer = 0
     while timer < 15 do
@@ -204,14 +213,18 @@ local function executeSenderBatch()
         if tradeFrame and tradeFrame.Visible then break end
         task.wait(1) timer = timer + 1
     end
-    if not (tradeFrame and tradeFrame.Visible) then IsProcessing = false return false end
+    if not (tradeFrame and tradeFrame.Visible) then setLog("❌ ERROR: Timeout! Target tidak merespon invite.") IsProcessing = false return false end
     
+    setLog("Fase 2: UI Terbuka. Memasukkan item ke dalam slot...")
     local batchSize = math.min(10, #CurrentQueue)
     local batch = {}
     for i = 1, batchSize do table.insert(batch, table.remove(CurrentQueue, 1)) end
     for _, tool in ipairs(batch) do local guid = getToolGUID(tool) if guid then r_trade_i:FireServer("AddItem", tostring(guid)) task.wait(InsertDelay) end end
     
+    setLog("Fase 3: Item masuk. Menunggu Lock 5.5 detik pertama...")
     task.wait(5.5)
+    
+    setLog("Fase 4: Menekan Accept Pertama. Menunggu respon P2...")
     r_trade_i:FireServer("Confirm")
     
     local waitTimeout = 0
@@ -219,70 +232,102 @@ local function executeSenderBatch()
         local p1Frame = tradeFrame:FindFirstChild("P1_Frame")
         local p1Confirm = p1Frame and p1Frame:FindFirstChild("Confirmed")
         if p1Confirm and not p1Confirm.Visible then break end 
-        task.wait(0.2) waitTimeout = waitTimeout + 0.2 if waitTimeout > 60 then IsProcessing = false return false end
+        task.wait(0.2) waitTimeout = waitTimeout + 0.2 if waitTimeout > 60 then setLog("❌ ERROR: Stuck di Fase 4 kelamaan!") IsProcessing = false return false end
     end
 
     if tradeFrame and tradeFrame.Parent and tradeFrame.Visible then
+        setLog("Fase 5: P2 telah Accept. Menunggu Lock 5.5 detik kedua (Final)...")
         task.wait(5.5)
+        
+        setLog("Fase 6: Menekan Final Confirm! Menyelesaikan trade...")
         r_trade_i:FireServer("Confirm") 
         while tradeFrame and tradeFrame.Parent and tradeFrame.Visible do task.wait(0.5) end
     end
+    
     ItemsProcessed = ItemsProcessed + batchSize
     updateProgressUI()
+    setLog("✅ TRADE SUKSES: " .. batchSize .. " item terkirim!")
     IsProcessing = false
     return true
 end
 
 TabControl:CreateButton({Name = "▶️ RUN 1 BATCH SEBAGAI P1", Callback = function() task.spawn(executeSenderBatch) end})
-TabControl:CreateToggle({Name = "🔁 FULL AUTO LOOP (P1)", CurrentValue = false, Callback = function(Value) AutoLoopEnabled = Value if AutoLoopEnabled then task.spawn(function() while AutoLoopEnabled do if #CurrentQueue == 0 then AutoLoopEnabled = false break end executeSenderBatch() task.wait(2.5) end end) end end})
+TabControl:CreateToggle({Name = "🔁 FULL AUTO LOOP (P1)", CurrentValue = false, Callback = function(Value) AutoLoopEnabled = Value if AutoLoopEnabled then task.spawn(function() while AutoLoopEnabled do if #CurrentQueue == 0 then setLog("🏁 Antrean kosong. Auto Loop berhenti.") AutoLoopEnabled = false break end executeSenderBatch() task.wait(2.5) end end) end end})
 
--- Tab 3: Receiver (P2)
+-- ==========================================
+-- TAB 3: RECEIVER MODE (P2 - PENERIMA UNIVERSAL)
+-- ==========================================
 local TabReceiver = Window:CreateTab("3. Receiver (P2)", 4483362458)
+local ReceiverLog = TabReceiver:CreateParagraph({Title = "📡 Status P2", Content = "Menunggu dihidupkan..."})
+
 TabReceiver:CreateToggle({
     Name = "🤖 ENABLE UNIVERSAL AUTO-ACCEPT",
     CurrentValue = false,
     Callback = function(Value)
         AutoReceiverEnabled = Value
         if AutoReceiverEnabled then
-            Rayfield:Notify({Title = "Receiver Aktif", Content = "Memantau segala request masuk...", Duration = 3})
+            ReceiverLog:Set({Title = "📡 Status P2", Content = "✅ Aktif. Memantau segala request masuk..."})
             task.spawn(function()
                 while AutoReceiverEnabled do
                     local tradeFrame = localPlayer.PlayerGui:FindFirstChild("TradingFrame", true)
                     
                     if not (tradeFrame and tradeFrame.Visible) then
-                        -- SCANNER DIMASUKKAN KEMBALI DI SINI (Universal Bypass)
                         universalAutoAccept()
                         task.wait(1)
                     else
-                        -- JIKA UI TRADE SUDAH TERBUKA
+                        ReceiverLog:Set({Title = "📡 Status P2", Content = "📥 UI Terbuka! Menunggu P1 menekan Accept..."})
                         while tradeFrame.Visible and not isOpponentConfirmed(tradeFrame) do task.wait(0.2) end
                         
                         if tradeFrame.Visible and isOpponentConfirmed(tradeFrame) then
+                            ReceiverLog:Set({Title = "📡 Status P2", Content = "🔒 P1 Accept. Lock 1 (5.5 detik)..."})
                             task.wait(5.5)
                             r_trade_i:FireServer("Confirm")
                             task.wait(1)
                         end
 
+                        ReceiverLog:Set({Title = "📡 Status P2", Content = "⏳ Menunggu transisi ke Final Confirm..."})
                         while tradeFrame.Visible and isOpponentConfirmed(tradeFrame) do task.wait(0.2) end
                         while tradeFrame.Visible and not isOpponentConfirmed(tradeFrame) do task.wait(0.2) end
 
                         if tradeFrame.Visible and isOpponentConfirmed(tradeFrame) then
+                            ReceiverLog:Set({Title = "📡 Status P2", Content = "🔒 Masuk Final. Lock 2 (5.5 detik)..."})
                             task.wait(5.5)
                             r_trade_i:FireServer("Confirm")
                         end
 
+                        ReceiverLog:Set({Title = "📡 Status P2", Content = "✅ Menyelesaikan..."})
                         while tradeFrame.Visible do task.wait(0.5) end
-                        Rayfield:Notify({Title = "Selesai", Content = "Trade sukses diterima!", Duration = 2})
+                        ReceiverLog:Set({Title = "📡 Status P2", Content = "✅ Trade sukses diterima! Kembali memantau..."})
                     end
                     task.wait(0.2)
                 end
             end)
+        else
+            ReceiverLog:Set({Title = "📡 Status P2", Content = "❌ Non-aktif."})
         end
     end,
 })
 
--- Tab 4: Inventory
+-- ==========================================
+-- TAB 4: DATABASE INVENTORY & SETTINGS
+-- ==========================================
 local TabInventory = Window:CreateTab("4. Inventory", 4483362458)
+
+-- [FITUR HILANG DIKEMBALIKAN: CLEAN UI MODE]
+TabInventory:CreateToggle({
+    Name = "👁️ Enable Clean UI Mode (Anti-Lag)", CurrentValue = false,
+    Callback = function(Value)
+        StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, not Value)
+        local pGui = localPlayer:WaitForChild("PlayerGui")  
+        for _, gui in ipairs(pGui:GetChildren()) do  
+            if gui:IsA("ScreenGui") and gui.Name ~= "Rayfield" then  
+                if Value then gui:SetAttribute("WasEnabled", gui.Enabled); gui.Enabled = false  
+                else gui.Enabled = gui:GetAttribute("WasEnabled") or true end  
+            end  
+        end  
+    end,
+})
+
 local FullInventoryLabel = TabInventory:CreateParagraph({Title = "🎒 Inventory", Content = "Syncing..."})
 
 function updateInventoryDisplay()
@@ -337,20 +382,4 @@ function updateInventoryDisplay()
     FullInventoryLabel:Set({Title = "🎒 Inventory", Content = displayString})
 end
 
-TabInventory:CreateButton({Name = "🔄 Refresh Inventory", Callback = function() updateInventoryDisplay(); PlayerDropdown:Refresh(getPlayerList()) end})
-
-local function connect()
-    local backpack = localPlayer:WaitForChild("Backpack")
-    table.insert(InventoryConnections, backpack.ChildAdded:Connect(updateInventoryDisplay))
-    table.insert(InventoryConnections, backpack.ChildRemoved:Connect(updateInventoryDisplay))
-    local char = localPlayer.Character or localPlayer.CharacterAdded:Wait()
-    table.insert(InventoryConnections, char.ChildAdded:Connect(updateInventoryDisplay))
-    table.insert(InventoryConnections, char.ChildRemoved:Connect(updateInventoryDisplay))
-    localPlayer.CharacterAdded:Connect(function(newChar)
-        table.insert(InventoryConnections, newChar.ChildAdded:Connect(updateInventoryDisplay))
-        table.insert(InventoryConnections, newChar.ChildRemoved:Connect(updateInventoryDisplay))
-    end)
-    task.wait(0.5)
-    updateInventoryDisplay()
-end
-connect()
+TabInventory:CreateButton({Name = "🔄 Refresh Inventory", Callback =
