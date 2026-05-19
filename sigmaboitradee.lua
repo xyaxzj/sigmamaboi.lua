@@ -1,5 +1,5 @@
 -- ==========================================================
--- MOCTA TRADE AUTOMATOR V14.2 (VERBOSE & FAILSAFE EDITION)
+-- MOCTA TRADE AUTOMATOR V15.0 (ABSOLUTE GOD-SYNC EDITION)
 -- ==========================================================
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
@@ -11,9 +11,11 @@ local localPlayer = Players.LocalPlayer
 local networkFolder = game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Packages"):WaitForChild("Network")
 local f_trade_r = networkFolder:WaitForChild("ref_trade_r") 
 local r_trade_i = networkFolder:WaitForChild("rev_trade_i") 
+local rev_trade_start = networkFolder:WaitForChild("rev_trade_start") -- [KODE SAKTI BARU DARI LOG]
 
 -- // State Variables // --
-local TargetPlayerName = ""
+local TargetPlayerName = "" -- Untuk P1 ngirim ke siapa
+local TargetP1Name = ""     -- Untuk P2 menerima dari siapa
 local ShoppingCart = {} 
 local CurrentQueue = {}
 local ItemsProcessed = 0
@@ -24,7 +26,6 @@ local InsertDelay = 0.3
 local InventoryConnections = {}
 
 -- // Helper Functions // --
--- [DIPERBAIKI] Sekarang mendeteksi barang di Tas DAN di Tangan karakter
 local function getAllTools()
     local tools = {}
     local bp = localPlayer:FindFirstChild("Backpack")
@@ -111,38 +112,11 @@ local function isOpponentConfirmed(tradeFrame)
     return p2Confirm and p2Confirm.Visible or false
 end
 
--- [DIPERKUAT] Fungsi Auto-Accept Undangan Trade untuk Executor Mobile
-local function scanAndAcceptTradeRequest()
-    local pGui = localPlayer:FindFirstChild("PlayerGui")
-    if not pGui then return end
-    
-    for _, gui in ipairs(pGui:GetChildren()) do
-        if gui:IsA("ScreenGui") and gui.Name ~= "Rayfield" then
-            local inviteFrame = gui:FindFirstChild("TradeInvite", true) or gui:FindFirstChild("InviteFrame", true) or gui:FindFirstChild("RequestFrame", true) or gui:FindFirstChild("TradeRequest", true)
-            
-            if inviteFrame and inviteFrame.Visible then
-                local acceptBtn = inviteFrame:FindFirstChild("Accept", true) or inviteFrame:FindFirstChild("Yes", true) or inviteFrame:FindFirstChild("Confirm", true) or inviteFrame:FindFirstChild("Button", true)
-                if acceptBtn then
-                    pcall(function()
-                        if getconnections then
-                            for _, conn in ipairs(getconnections(acceptBtn.MouseButton1Click)) do conn:Fire() end
-                            for _, conn in ipairs(getconnections(acceptBtn.Activated)) do conn:Fire() end
-                        elseif firesignal then
-                            firesignal(acceptBtn.MouseButton1Click)
-                            firesignal(acceptBtn.Activated)
-                        end
-                    end)
-                end
-            end
-        end
-    end
-end
-
 -- // UI Initialization // --
 local Window = Rayfield:CreateWindow({
-    Name = "Mocta Trade V14.2 (Failsafe)",
-    LoadingTitle = "Securing Systems...",
-    LoadingSubtitle = "Loading Error Detection",
+    Name = "Mocta Trade V15 (God-Sync)",
+    LoadingTitle = "Bypassing Server Security...",
+    LoadingSubtitle = "Loading God-Sync Engine",
     ConfigurationSaving = { Enabled = false },
     Theme = "DarkBlue"
 })
@@ -151,7 +125,7 @@ local Window = Rayfield:CreateWindow({
 -- TAB 1: PACK MIX & QUEUE
 -- ==========================================
 local TabQueue = Window:CreateTab("1. Pack Mix", 4483362458)
-local PlayerDropdown = TabQueue:CreateDropdown({Name = "Pilih Pembeli", Options = getPlayerList(), CurrentOption = {""}, MultipleOptions = false, Callback = function(Option) TargetPlayerName = Option[1] end})
+local PlayerDropdown = TabQueue:CreateDropdown({Name = "Pilih Pembeli (P2)", Options = getPlayerList(), CurrentOption = {""}, MultipleOptions = false, Callback = function(Option) TargetPlayerName = Option[1] end})
 TabQueue:CreateSection("Keranjang Belanja (Pack Mix)")
 local SelectedMixItem = ""
 local SelectedMixQty = 0
@@ -227,21 +201,11 @@ local function updateProgressUI() LiveProgress:Set({Title = "⚡ Auto Sender Pro
 TabControl:CreateSlider({Name = "Insert Delay", Range = {0.1, 1.0}, Increment = 0.1, CurrentValue = 0.3, Callback = function(Value) InsertDelay = Value end})
 
 local function executeSenderBatch()
-    -- [DIPERBAIKI] Pengecekan Notifikasi Error Bisu
-    if IsProcessing then
-        Rayfield:Notify({Title="Sabar Bos", Content="Skrip masih memproses operasi sebelumnya!", Duration=2})
-        return false 
-    end
-    if #CurrentQueue == 0 then 
-        Rayfield:Notify({Title="Antrean Kosong", Content="Silakan 'Generate Queue' dulu di Tab 1!", Duration=3})
-        return false 
-    end
+    if IsProcessing then Rayfield:Notify({Title="Sabar Bos", Content="Skrip masih memproses operasi sebelumnya!", Duration=2}) return false end
+    if #CurrentQueue == 0 then Rayfield:Notify({Title="Antrean Kosong", Content="Silakan 'Generate Queue' dulu di Tab 1!", Duration=3}) return false end
     
     local target = Players:FindFirstChild(TargetPlayerName)
-    if not target then 
-        Rayfield:Notify({Title="Target Hilang", Content="Pemain '"..tostring(TargetPlayerName).."' tidak ada di server!", Duration=4})
-        return false 
-    end
+    if not target then Rayfield:Notify({Title="Target Hilang", Content="Pemain '"..tostring(TargetPlayerName).."' tidak ada di server!", Duration=4}) return false end
 
     IsProcessing = true
 
@@ -275,7 +239,7 @@ local function executeSenderBatch()
     -- 4. P1 LOCK 1
     Rayfield:Notify({Title = "P1 Lock", Content = "Menunggu 5.5s...", Duration = 5})
     task.wait(5.5)
-    r_trade_i:FireServer("Confirm") -- P1 Accept
+    r_trade_i:FireServer("Confirm") 
     task.wait(0.5)
 
     -- 5. WAIT TRANSITION TO FINAL
@@ -329,23 +293,41 @@ TabControl:CreateToggle({
 -- TAB 3: RECEIVER MODE (P2 - PENERIMA BOT)
 -- ==========================================
 local TabReceiver = Window:CreateTab("3. Receiver (P2)", 4483362458)
-TabReceiver:CreateParagraph({Title = "🤖 Mode Penerima Otomatis", Content = "Nyalakan ini di akun pembeli. Akun ini akan otomatis menerima request invite masuk dan menekan klik Confirm mengikuti ritme P1."})
+TabReceiver:CreateParagraph({Title = "🤖 Mode Penerima Super (Gaib)", Content = "Pilih nama P1. Bot akan otomatis 'nembak' server untuk menerima invite tanpa butuh UI popup, lalu sinkronisasi otomatis."})
 
-TabReceiver:CreateToggle({
+local P1Dropdown = TabReceiver:CreateDropdown({
+    Name = "Pilih Pengirim (P1)", Options = getPlayerList(), CurrentOption = {""}, MultipleOptions = false, 
+    Callback = function(Option) TargetP1Name = Option[1] end
+})
+
+local ToggleReceiver = TabReceiver:CreateToggle({
     Name = "🤖 ENABLE AUTO RECEIVER (P2 MODE)",
     CurrentValue = false,
     Callback = function(Value)
         AutoReceiverEnabled = Value
         if AutoReceiverEnabled then
-            Rayfield:Notify({Title = "Receiver Aktif", Content = "Mulai memantau Layar & Request...", Duration = 3})
+            if TargetP1Name == "" then
+                Rayfield:Notify({Title="Error", Content="Pilih dulu Pengirim (P1) di atas!", Duration=3})
+                AutoReceiverEnabled = false
+                return
+            end
+            
+            Rayfield:Notify({Title = "Receiver Aktif", Content = "Bypass Server berjalan! Menunggu invite dari " .. TargetP1Name, Duration = 3})
+            
             task.spawn(function()
                 while AutoReceiverEnabled do
+                    local targetP1 = Players:FindFirstChild(TargetP1Name)
                     local tradeFrame = localPlayer.PlayerGui:FindFirstChild("TradingFrame", true)
                     
                     if not (tradeFrame and tradeFrame.Visible) then
-                        scanAndAcceptTradeRequest()
+                        -- [Trik Curang V15.0] Tembak langsung UserId P1 ke server pakai kode rahasia dari log
+                        if targetP1 then
+                            pcall(function() rev_trade_start:InvokeServer(targetP1.UserId) end)
+                            pcall(function() rev_trade_start:FireServer(targetP1.UserId) end)
+                        end
+                        task.wait(1.5) -- Spam santai setiap 1.5 detik
                     else
-                        -- JIKA UI TRADE SUDAH TERBUKA
+                        -- JIKA UI TRADE SUDAH TERBUKA (Koneksi Sukses)
                         while tradeFrame.Visible and not isOpponentConfirmed(tradeFrame) do task.wait(0.2) end
                         
                         if tradeFrame.Visible and isOpponentConfirmed(tradeFrame) then
@@ -365,9 +347,8 @@ TabReceiver:CreateToggle({
                         end
 
                         while tradeFrame.Visible do task.wait(0.5) end
-                        Rayfield:Notify({Title = "Selesai", Content = "Trade sukses diterima!", Duration = 2})
+                        Rayfield:Notify({Title = "Selesai", Content = "Trade sukses diterima secara gaib!", Duration = 2})
                     end
-                    task.wait(0.5)
                 end
             end)
         end
@@ -412,7 +393,7 @@ function updateInventoryDisplay()
     end
     FullInventoryLabel:Set({Title = "🎒 Database", Content = displayString})
 end
-TabInventory:CreateButton({Name = "🔄 Refresh Database", Callback = function() updateInventoryDisplay(); PlayerDropdown:Refresh(getPlayerList()); ItemDropdown:Refresh(getInventoryList()) end})
+TabInventory:CreateButton({Name = "🔄 Refresh Database", Callback = function() updateInventoryDisplay(); PlayerDropdown:Refresh(getPlayerList()); ItemDropdown:Refresh(getInventoryList()); P1Dropdown:Refresh(getPlayerList()) end})
 
 local function connect()
     local backpack = localPlayer:WaitForChild("Backpack")
