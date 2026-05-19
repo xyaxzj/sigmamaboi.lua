@@ -298,35 +298,42 @@ TabReceiver:CreateParagraph({Title = "🤖 Mode Penerima Super (Gaib)", Content 
 local P1Dropdown = TabReceiver:CreateDropdown({
     Name = "Pilih Pengirim (P1)", Options = getPlayerList(), CurrentOption = {""}, MultipleOptions = false, 
     Callback = function(Option) TargetP1Name = Option[1] end
--- // TAB 3: RECEIVER MODE (P2 - PENERIMA UNIVERSAL)
-local TabReceiver = Window:CreateTab("3. Receiver (P2)", 4483362458)
-TabReceiver:CreateParagraph({Title = "🤖 Mode Penerima Universal", Content = "Bot ini akan otomatis menerima undangan dari SIAPA SAJA. Tidak perlu setting nama pengirim lagi."})
+})
 
 local ToggleReceiver = TabReceiver:CreateToggle({
-    Name = "🤖 ENABLE UNIVERSAL AUTO-ACCEPT",
+    Name = "🤖 ENABLE AUTO RECEIVER (P2 MODE)",
     CurrentValue = false,
     Callback = function(Value)
         AutoReceiverEnabled = Value
         if AutoReceiverEnabled then
-            Rayfield:Notify({Title = "Receiver Aktif", Content = "Memantau semua request masuk...", Duration = 3})
+            if TargetP1Name == "" then
+                Rayfield:Notify({Title="Error", Content="Pilih dulu Pengirim (P1) di atas!", Duration=3})
+                AutoReceiverEnabled = false
+                return
+            end
+            
+            Rayfield:Notify({Title = "Receiver Aktif", Content = "Bypass Server berjalan! Menunggu invite dari " .. TargetP1Name, Duration = 3})
             
             task.spawn(function()
                 while AutoReceiverEnabled do
+                    local targetP1 = Players:FindFirstChild(TargetP1Name)
                     local tradeFrame = localPlayer.PlayerGui:FindFirstChild("TradingFrame", true)
                     
                     if not (tradeFrame and tradeFrame.Visible) then
-                        -- [Trik Universal] Tidak perlu target ID, 
-                        -- Kita pasang "listener" kalau ada yang kirim request
-                        -- Karena game ini kirim request via Invoke, kita cukup tunggu tradeFrame muncul
-                        task.wait(1)
+                        -- [Trik Curang V15.0] Tembak langsung UserId P1 ke server pakai kode rahasia dari log
+                        if targetP1 then
+                            pcall(function() rev_trade_start:InvokeServer(targetP1.UserId) end)
+                            pcall(function() rev_trade_start:FireServer(targetP1.UserId) end)
+                        end
+                        task.wait(1.5) -- Spam santai setiap 1.5 detik
                     else
-                        -- JIKA UI TRADE SUDAH TERBUKA (Otomatis dari siapa saja)
+                        -- JIKA UI TRADE SUDAH TERBUKA (Koneksi Sukses)
                         while tradeFrame.Visible and not isOpponentConfirmed(tradeFrame) do task.wait(0.2) end
                         
                         if tradeFrame.Visible and isOpponentConfirmed(tradeFrame) then
-                            Rayfield:Notify({Title = "P2 Lock 1", Content = "Barang masuk! Menunggu 5.5s...", Duration = 5})
+                            Rayfield:Notify({Title = "P2 Lock 1", Content = "Sender siap! Menunggu 5.5s...", Duration = 5})
                             task.wait(5.5)
-                            r_trade_i:FireServer("Confirm") 
+                            r_trade_i:FireServer("Confirm") -- P2 Accept
                             task.wait(1)
                         end
 
@@ -336,11 +343,11 @@ local ToggleReceiver = TabReceiver:CreateToggle({
                         if tradeFrame.Visible and isOpponentConfirmed(tradeFrame) then
                             Rayfield:Notify({Title = "P2 Lock 2", Content = "Final step! Menunggu 5.5s...", Duration = 5})
                             task.wait(5.5)
-                            r_trade_i:FireServer("Confirm") 
+                            r_trade_i:FireServer("Confirm") -- P2 Final Confirm
                         end
 
                         while tradeFrame.Visible do task.wait(0.5) end
-                        Rayfield:Notify({Title = "Selesai", Content = "Trade sukses diterima!", Duration = 2})
+                        Rayfield:Notify({Title = "Selesai", Content = "Trade sukses diterima secara gaib!", Duration = 2})
                     end
                 end
             end)
