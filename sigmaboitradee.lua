@@ -507,3 +507,123 @@ TabReceiver:CreateToggle({
     end,
 })
 
+-- ==========================================
+-- TAB 4: INVENTORY & SETTINGS
+-- ==========================================
+local TabInventory = Window:CreateTab("4. Inventory", 4483362458)
+
+TabInventory:CreateToggle({
+    Name = "👁️ Enable Clean UI Mode (Anti-Lag)", 
+    CurrentValue = false,
+    Callback = function(Value)
+        StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, not Value)
+        local pGui = localPlayer:WaitForChild("PlayerGui")  
+        for _, gui in ipairs(pGui:GetChildren()) do  
+            if gui:IsA("ScreenGui") and gui.Name ~= "Rayfield" then  
+                if Value then 
+                    gui:SetAttribute("WasEnabled", gui.Enabled)
+                    gui.Enabled = false  
+                else 
+                    gui.Enabled = gui:GetAttribute("WasEnabled") or true 
+                end  
+            end  
+        end  
+    end,
+})
+
+local FullInventoryLabel = TabInventory:CreateParagraph({Title = "🎒 Inventory", Content = "Syncing..."})
+
+local function updateInventoryDisplay()
+    local inventoryData = {}
+    local totalCount = 0
+    
+    for _, tool in pairs(getAllTools()) do  
+        if isTradeable(tool) then
+            local displayName = getFullItemName(tool)  
+            inventoryData[displayName] = (inventoryData[displayName] or 0) + 1  
+            totalCount = totalCount + 1  
+        end
+    end  
+    
+    local itemsList = {"[ANY ASSET]"}  
+    for name, count in pairs(inventoryData) do 
+        table.insert(itemsList, name .. " | Qty: " .. count) 
+    end  
+    
+    table.sort(itemsList, function(a, b) 
+        if a == "[ANY ASSET]" then return true end 
+        if b == "[ANY ASSET]" then return false end 
+        return a < b 
+    end)  
+    
+    ItemDropdown:Refresh(itemsList)
+    
+    local displayString = "Total Tradeable Assets: " .. totalCount .. "\n\n"  
+    if totalCount == 0 then 
+        displayString = displayString .. "Inventory is empty." 
+    else
+        local categorizedItems = {}
+        for itemName, amount in pairs(inventoryData) do
+            local category = "📦 NORMAL / BASE"
+            local mutMatch = string.match(itemName, "%[(.-)%]")
+            
+            local baseNameOnly = string.split(itemName, " [")[1]
+            baseNameOnly = string.split(baseNameOnly, " (Lv")[1]
+            
+            if BaconEventItems[baseNameOnly] or BaconEventItems[itemName] then
+                category = "🥓 BACON EVENT MATERIALS"
+            elseif mutMatch then 
+                category = "✨ " .. string.upper(mutMatch) 
+            end
+            
+            if not categorizedItems[category] then 
+                categorizedItems[category] = {} 
+            end
+            table.insert(categorizedItems[category], {name = itemName, qty = amount})
+        end
+        
+        local sortedCategories = {}
+        for cat, _ in pairs(categorizedItems) do 
+            table.insert(sortedCategories, cat) 
+        end
+        table.sort(sortedCategories)
+        
+        for _, cat in ipairs(sortedCategories) do
+            displayString = displayString .. "=== " .. cat .. " ===\n"
+            table.sort(categorizedItems[cat], function(a, b) return a.name < b.name end)
+            for _, item in ipairs(categorizedItems[cat]) do 
+                displayString = displayString .. string.format(" • %s  |  Qty: %d\n", item.name, item.qty) 
+            end
+            displayString = displayString .. "\n"
+        end
+    end
+    FullInventoryLabel:Set({Title = "🎒 Inventory", Content = displayString})
+end
+
+TabInventory:CreateButton({
+    Name = "🔄 Refresh Inventory", 
+    Callback = function() 
+        updateInventoryDisplay() 
+        PlayerDropdown:Refresh(getPlayerList()) 
+    end
+})
+
+local function connectInventory()
+    local backpack = localPlayer:WaitForChild("Backpack")
+    table.insert(InventoryConnections, backpack.ChildAdded:Connect(updateInventoryDisplay))
+    table.insert(InventoryConnections, backpack.ChildRemoved:Connect(updateInventoryDisplay))
+    
+    local char = localPlayer.Character or localPlayer.CharacterAdded:Wait()
+    table.insert(InventoryConnections, char.ChildAdded:Connect(updateInventoryDisplay))
+    table.insert(InventoryConnections, char.ChildRemoved:Connect(updateInventoryDisplay))
+    
+    localPlayer.CharacterAdded:Connect(function(newChar)
+        table.insert(InventoryConnections, newChar.ChildAdded:Connect(updateInventoryDisplay))
+        table.insert(InventoryConnections, newChar.ChildRemoved:Connect(updateInventoryDisplay))
+    end)
+    
+    task.wait(0.5)
+    updateInventoryDisplay()
+end
+
+connectInventory()
