@@ -1,5 +1,5 @@
 -- ==========================================================
--- MOCTA TRADE AUTOMATOR V15.3 (BACON EVENT EDITION)
+-- MOCTA TRADE AUTOMATOR V15.4 (ULTIMATE UNIVERSAL BYPASS)
 -- ==========================================================
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
@@ -10,6 +10,7 @@ local localPlayer = Players.LocalPlayer
 local networkFolder = game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Packages"):WaitForChild("Network")
 local f_trade_r = networkFolder:WaitForChild("ref_trade_r") 
 local r_trade_i = networkFolder:WaitForChild("rev_trade_i") 
+local rev_trade_start = networkFolder:FindFirstChild("rev_trade_start") -- Remote gaib P2
 
 -- // State Variables // --
 local TargetPlayerName = ""
@@ -74,8 +75,55 @@ local function isOpponentConfirmed(tradeFrame)
     return p2Confirm and p2Confirm.Visible or false
 end
 
+-- [FUNGSI BARU] Text-to-UserId Bypass Scanner (Sangat Kuat & Universal)
+local function universalAutoAccept()
+    local pGui = localPlayer:FindFirstChild("PlayerGui")
+    if not pGui then return end
+    
+    -- 1. Coba klik fisik (Failsafe)
+    for _, gui in ipairs(pGui:GetChildren()) do
+        if gui:IsA("ScreenGui") and gui.Name ~= "Rayfield" then
+            for _, desc in ipairs(gui:GetDescendants()) do
+                if (desc:IsA("TextButton") or desc:IsA("ImageButton")) and desc.Visible then
+                    local text = string.lower(desc:IsA("TextButton") and desc.Text or desc.Name)
+                    if string.find(text, "accept") or string.find(text, "yes") or string.find(text, "trade") then
+                        pcall(function()
+                            if getconnections then
+                                for _, conn in ipairs(getconnections(desc.MouseButton1Click)) do conn:Fire() end
+                                for _, conn in ipairs(getconnections(desc.Activated)) do conn:Fire() end
+                            end
+                            if firesignal then
+                                firesignal(desc.MouseButton1Click)
+                                firesignal(desc.Activated)
+                            end
+                        end)
+                    end
+                end
+            end
+        end
+    end
+    
+    -- 2. Trik Gaib (Baca teks layar, cari nama, tembak server)
+    if rev_trade_start then
+        for _, desc in ipairs(pGui:GetDescendants()) do
+            if desc:IsA("TextLabel") and desc.Visible then
+                local txt = string.lower(desc.Text)
+                if string.find(txt, "trade") or string.find(txt, "request") or string.find(txt, "wants") then
+                    for _, p in ipairs(Players:GetPlayers()) do
+                        if p ~= localPlayer and (string.find(desc.Text, p.Name) or string.find(desc.Text, p.DisplayName)) then
+                            -- Bingo! Nama pengirim ditemukan di layar, langsung bypass ke server!
+                            pcall(function() rev_trade_start:InvokeServer(p.UserId) end)
+                            pcall(function() rev_trade_start:FireServer(p.UserId) end)
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
 -- // UI // --
-local Window = Rayfield:CreateWindow({Name = "Mocta Trade V15.3", LoadingTitle = "Loading Event Data...", ConfigurationSaving = { Enabled = false }, Theme = "DarkBlue"})
+local Window = Rayfield:CreateWindow({Name = "Mocta Trade V15.4", LoadingTitle = "Loading Bypass Logic...", ConfigurationSaving = { Enabled = false }, Theme = "DarkBlue"})
 
 -- Tab 1: Queue & Pack Mix
 local TabQueue = Window:CreateTab("1. Queue", 4483362458)
@@ -86,28 +134,19 @@ TabQueue:CreateButton({
     Name = "🚀 GENERATE QUEUE: ALL BACON MATERIALS",
     Callback = function()
         if TargetPlayerName == "" then return Rayfield:Notify({Title = "Error", Content = "Pilih pembeli dulu di atas!", Duration = 2}) end
-        CurrentQueue = {}
-        ItemsProcessed = 0
-        local itemsFound = 0
-        
+        CurrentQueue = {} ItemsProcessed = 0 local itemsFound = 0
         for _, tool in ipairs(getAllTools()) do  
             if isTradeable(tool) then  
                 local displayName = getFullItemName(tool)
                 local baseNameOnly = string.split(displayName, " [")[1]
                 baseNameOnly = string.split(baseNameOnly, " (Lv")[1]
-                
                 if BaconEventItems[baseNameOnly] or BaconEventItems[displayName] then
-                    table.insert(CurrentQueue, tool) 
-                    itemsFound = itemsFound + 1
+                    table.insert(CurrentQueue, tool) itemsFound = itemsFound + 1
                 end  
             end  
         end  
-        
-        if itemsFound == 0 then
-            Rayfield:Notify({Title = "Kosong", Content = "Tidak ada Bacon Materials di tas kamu.", Duration = 3})
-        else
-            Rayfield:Notify({Title = "Ready", Content = itemsFound .. " Bacon Materials masuk antrean!", Duration = 2})
-        end
+        if itemsFound == 0 then Rayfield:Notify({Title = "Kosong", Content = "Tidak ada Bacon Materials.", Duration = 3})
+        else Rayfield:Notify({Title = "Ready", Content = itemsFound .. " Bacon Materials masuk antrean!", Duration = 2}) end
     end
 })
 
@@ -147,6 +186,11 @@ end})
 
 -- Tab 2: Sender (P1)
 local TabControl = Window:CreateTab("2. Sender (P1)", 4483362458)
+local LiveProgress = TabControl:CreateParagraph({Title = "⚡ Auto Sender Progress", Content = "Sisa Item: 0\nTerkirim: 0"})
+local function updateProgressUI() LiveProgress:Set({Title = "⚡ Auto Sender Progress", Content = string.format("Sisa Item di Antrean: %d\nItem Terkirim: %d", #CurrentQueue, ItemsProcessed)}) end
+
+TabControl:CreateSlider({Name = "Insert Delay", Range = {0.1, 1.0}, Increment = 0.1, CurrentValue = 0.3, Callback = function(Value) InsertDelay = Value end})
+
 local function executeSenderBatch()
     if IsProcessing or #CurrentQueue == 0 then return false end
     IsProcessing = true
@@ -154,17 +198,42 @@ local function executeSenderBatch()
     if not target then IsProcessing = false return false end
     task.spawn(function() pcall(function() f_trade_r:InvokeServer(target.UserId) end) end)
     local tradeFrame = nil
-    repeat task.wait(1) tradeFrame = localPlayer.PlayerGui:FindFirstChild("TradingFrame", true) until tradeFrame and tradeFrame.Visible
+    local timer = 0
+    while timer < 15 do
+        tradeFrame = localPlayer.PlayerGui:FindFirstChild("TradingFrame", true)
+        if tradeFrame and tradeFrame.Visible then break end
+        task.wait(1) timer = timer + 1
+    end
+    if not (tradeFrame and tradeFrame.Visible) then IsProcessing = false return false end
+    
+    local batchSize = math.min(10, #CurrentQueue)
     local batch = {}
-    for i = 1, math.min(10, #CurrentQueue) do table.insert(batch, table.remove(CurrentQueue, 1)) end
-    for _, tool in ipairs(batch) do local guid = getToolGUID(tool) if guid then r_trade_i:FireServer("AddItem", tostring(guid)) task.wait(0.3) end end
+    for i = 1, batchSize do table.insert(batch, table.remove(CurrentQueue, 1)) end
+    for _, tool in ipairs(batch) do local guid = getToolGUID(tool) if guid then r_trade_i:FireServer("AddItem", tostring(guid)) task.wait(InsertDelay) end end
+    
     task.wait(5.5)
     r_trade_i:FireServer("Confirm")
-    task.wait(6.0)
-    r_trade_i:FireServer("Confirm")
+    
+    local waitTimeout = 0
+    while tradeFrame and tradeFrame.Parent and tradeFrame.Visible do
+        local p1Frame = tradeFrame:FindFirstChild("P1_Frame")
+        local p1Confirm = p1Frame and p1Frame:FindFirstChild("Confirmed")
+        if p1Confirm and not p1Confirm.Visible then break end 
+        task.wait(0.2) waitTimeout = waitTimeout + 0.2 if waitTimeout > 60 then IsProcessing = false return false end
+    end
+
+    if tradeFrame and tradeFrame.Parent and tradeFrame.Visible then
+        task.wait(5.5)
+        r_trade_i:FireServer("Confirm") 
+        while tradeFrame and tradeFrame.Parent and tradeFrame.Visible do task.wait(0.5) end
+    end
+    ItemsProcessed = ItemsProcessed + batchSize
+    updateProgressUI()
     IsProcessing = false
+    return true
 end
-TabControl:CreateButton({Name = "▶️ RUN 1 BATCH", Callback = function() task.spawn(executeSenderBatch) end})
+
+TabControl:CreateButton({Name = "▶️ RUN 1 BATCH SEBAGAI P1", Callback = function() task.spawn(executeSenderBatch) end})
 TabControl:CreateToggle({Name = "🔁 FULL AUTO LOOP (P1)", CurrentValue = false, Callback = function(Value) AutoLoopEnabled = Value if AutoLoopEnabled then task.spawn(function() while AutoLoopEnabled do if #CurrentQueue == 0 then AutoLoopEnabled = false break end executeSenderBatch() task.wait(2.5) end end) end end})
 
 -- Tab 3: Receiver (P2)
@@ -175,18 +244,37 @@ TabReceiver:CreateToggle({
     Callback = function(Value)
         AutoReceiverEnabled = Value
         if AutoReceiverEnabled then
+            Rayfield:Notify({Title = "Receiver Aktif", Content = "Memantau segala request masuk...", Duration = 3})
             task.spawn(function()
                 while AutoReceiverEnabled do
                     local tradeFrame = localPlayer.PlayerGui:FindFirstChild("TradingFrame", true)
-                    if tradeFrame and tradeFrame.Visible then
+                    
+                    if not (tradeFrame and tradeFrame.Visible) then
+                        -- SCANNER DIMASUKKAN KEMBALI DI SINI (Universal Bypass)
+                        universalAutoAccept()
+                        task.wait(1)
+                    else
+                        -- JIKA UI TRADE SUDAH TERBUKA
                         while tradeFrame.Visible and not isOpponentConfirmed(tradeFrame) do task.wait(0.2) end
-                        if tradeFrame.Visible and isOpponentConfirmed(tradeFrame) then task.wait(5.5) r_trade_i:FireServer("Confirm") task.wait(1) end
+                        
+                        if tradeFrame.Visible and isOpponentConfirmed(tradeFrame) then
+                            task.wait(5.5)
+                            r_trade_i:FireServer("Confirm")
+                            task.wait(1)
+                        end
+
                         while tradeFrame.Visible and isOpponentConfirmed(tradeFrame) do task.wait(0.2) end
                         while tradeFrame.Visible and not isOpponentConfirmed(tradeFrame) do task.wait(0.2) end
-                        if tradeFrame.Visible and isOpponentConfirmed(tradeFrame) then task.wait(5.5) r_trade_i:FireServer("Confirm") end
+
+                        if tradeFrame.Visible and isOpponentConfirmed(tradeFrame) then
+                            task.wait(5.5)
+                            r_trade_i:FireServer("Confirm")
+                        end
+
                         while tradeFrame.Visible do task.wait(0.5) end
+                        Rayfield:Notify({Title = "Selesai", Content = "Trade sukses diterima!", Duration = 2})
                     end
-                    task.wait(0.5)
+                    task.wait(0.2)
                 end
             end)
         end
@@ -200,8 +288,6 @@ local FullInventoryLabel = TabInventory:CreateParagraph({Title = "🎒 Inventory
 function updateInventoryDisplay()
     local inventoryData = {}
     local totalCount = 0
-    local rawInventoryList = {}
-    
     for _, tool in pairs(getAllTools()) do  
         if isTradeable(tool) then
             local displayName = getFullItemName(tool)  
@@ -210,13 +296,11 @@ function updateInventoryDisplay()
         end
     end  
     
-    -- Update Item Dropdown in Tab 1
     local itemsList = {"[ANY ASSET]"}  
     for name, count in pairs(inventoryData) do table.insert(itemsList, name .. " | Qty: " .. count) end  
     table.sort(itemsList, function(a, b) if a == "[ANY ASSET]" then return true end if b == "[ANY ASSET]" then return false end return a < b end)  
     ItemDropdown:Refresh(itemsList)
     
-    -- Display
     local displayString = "Total Tradeable Assets: " .. totalCount .. "\n\n"  
     if totalCount == 0 then 
         displayString = displayString .. "Inventory is empty." 
@@ -226,7 +310,6 @@ function updateInventoryDisplay()
             local category = "📦 NORMAL / BASE"
             local mutMatch = string.match(itemName, "%[(.-)%]")
             
-            -- Filter untuk Bacon Event
             local baseNameOnly = string.split(itemName, " [")[1]
             baseNameOnly = string.split(baseNameOnly, " (Lv")[1]
             
