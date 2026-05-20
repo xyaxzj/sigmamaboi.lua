@@ -1,5 +1,5 @@
 -- ==========================================================
--- MOCTA TRADE AUTOMATOR V16.1 (MUTATION FILTER EDITION)
+-- MOCTA TRADE AUTOMATOR V16.4 (THE P1 EXECUTIONER)
 -- ==========================================================
 
 local success, errorMessage = pcall(function()
@@ -7,6 +7,7 @@ local success, errorMessage = pcall(function()
     local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
     local StarterGui = game:GetService("StarterGui")
     local Players = game:GetService("Players")
+    local TeleportService = game:GetService("TeleportService")
     local localPlayer = Players.LocalPlayer
 
     -- // Services & Remotes // --
@@ -23,6 +24,7 @@ local success, errorMessage = pcall(function()
     local IsProcessing = false 
     local AutoLoopEnabled = false
     local AutoReceiverEnabled = false
+    local GlitchModeEnabled = false 
     local InsertDelay = 0.3 
     local InventoryConnections = {}
     local SelectedMutation = ""
@@ -69,7 +71,6 @@ local success, errorMessage = pcall(function()
         return tbl
     end
 
-    -- [BARU] Fungsi mengambil daftar Mutasi yang ada di inventory
     local function getMutationList()
         local muts = {}
         local hasMut = false
@@ -118,6 +119,7 @@ local success, errorMessage = pcall(function()
         return count
     end
 
+    -- Membaca status konfirmasi Lawan
     local function isOpponentConfirmed(tradeFrame)
         if not tradeFrame then return false end
         local p2Frame = tradeFrame:FindFirstChild("P2_Frame")
@@ -126,10 +128,19 @@ local success, errorMessage = pcall(function()
         return p2Confirm and p2Confirm.Visible or false
     end
 
+    -- [BARU] Membaca status konfirmasi Diri Sendiri (Sangat akurat untuk deteksi transisi)
+    local function isLocalConfirmed(tradeFrame)
+        if not tradeFrame then return false end
+        local p1Frame = tradeFrame:FindFirstChild("P1_Frame")
+        if not p1Frame then return false end
+        local p1Confirm = p1Frame:FindFirstChild("Confirmed")
+        return p1Confirm and p1Confirm.Visible or false
+    end
+
     -- // UI // --
     local Window = Rayfield:CreateWindow({
-        Name = "Mocta Trade V16.1", 
-        LoadingTitle = "Loading Mutation Filters...", 
+        Name = "Mocta Trade V16.4", 
+        LoadingTitle = "P1 Executioner Protocol...", 
         ConfigurationSaving = { Enabled = false }, 
         Theme = "DarkBlue"
     })
@@ -143,7 +154,6 @@ local success, errorMessage = pcall(function()
         Callback = function(Option) TargetPlayerName = Option[1] end
     })
 
-    -- [BARU] Section Khusus Kirim Berdasarkan Mutasi
     TabQueue:CreateSection("Mutation Quick-Trade")
     local MutationDropdown = TabQueue:CreateDropdown({
         Name = "Pilih Mutasi", Options = getMutationList(), CurrentOption = {""}, MultipleOptions = false, 
@@ -154,7 +164,7 @@ local success, errorMessage = pcall(function()
         Name = "🚀 GENERATE QUEUE: BY MUTATION",
         Callback = function()
             if TargetPlayerName == "" then return Rayfield:Notify({Title = "Error", Content = "Pilih pembeli dulu!", Duration = 2}) end
-            if SelectedMutation == "" or SelectedMutation == "[TIDAK ADA MUTASI]" then return Rayfield:Notify({Title = "Error", Content = "Pilih mutasi yang valid!", Duration = 2}) end
+            if SelectedMutation == "" or SelectedMutation == "[TIDAK ADA MUTASI]" then return Rayfield:Notify({Title = "Error", Content = "Pilih mutasi valid!", Duration = 2}) end
             
             CurrentQueue = {} ItemsProcessed = 0 local itemsFound = 0
             for _, tool in ipairs(getAllTools()) do  
@@ -263,7 +273,7 @@ local success, errorMessage = pcall(function()
     })
 
     -- ==========================================
-    -- TAB 2: SENDER MODE (P1 - PENGIRIM)
+    -- TAB 2: SENDER MODE (P1 - PENGIRIM & EKSEKUTOR)
     -- ==========================================
     local TabControl = Window:CreateTab("2. Sender (P1)", 4483362458)
     local LiveProgress = TabControl:CreateParagraph({Title = "⚡ Auto Sender Progress", Content = "Sisa Item: 0\nTerkirim: 0"})
@@ -273,6 +283,16 @@ local success, errorMessage = pcall(function()
     local function setLog(txt) ActionLog:Set({Title = "📜 Live Trade Log", Content = txt}) end
 
     TabControl:CreateSlider({Name = "Insert Delay", Range = {0.1, 1.0}, Increment = 0.1, CurrentValue = 0.3, Callback = function(Value) InsertDelay = Value end})
+
+    TabControl:CreateToggle({
+        Name = "⚠️ GLITCH MODE: Auto-Rejoin Server", CurrentValue = false, 
+        Callback = function(Value) 
+            GlitchModeEnabled = Value 
+            if GlitchModeEnabled then
+                Rayfield:Notify({Title = "WARNING", Content = "P1 akan bertindak sebagai Eksekutor Terakhir dan SPAM REJOIN!", Duration = 3})
+            end
+        end
+    })
 
     local function executeSenderBatch()
         if IsProcessing or #CurrentQueue == 0 then return false end
@@ -307,28 +327,46 @@ local success, errorMessage = pcall(function()
         
         setLog("Fase 4: Accept 1. Menunggu Transisi Layar...")
         r_trade_i:FireServer("Confirm") 
-        task.wait(0.5)
+        task.wait(1) -- Beri waktu 1 detik agar UI berubah jadi hijau (Confirmed)
 
+        -- [P1 MENUNGGU TRANSISI DENGAN MEMBACA STATUS DIRI SENDIRI]
         local waitTimeout = 0
         while tradeFrame and tradeFrame.Parent and tradeFrame.Visible do
-            local p1Frame = tradeFrame:FindFirstChild("P1_Frame")
-            if p1Frame then
-                local p1Confirm = p1Frame:FindFirstChild("Confirmed")
-                if p1Confirm and not p1Confirm.Visible then break end 
-            end
+            if not isLocalConfirmed(tradeFrame) then break end -- Jika status Confirm kita hilang, berarti layar sedang transisi!
             task.wait(0.2)
             waitTimeout = waitTimeout + 0.2
             if waitTimeout > 60 then setLog("❌ ERROR: Stuck menunggu transisi!") IsProcessing = false return false end
         end
 
         if tradeFrame and tradeFrame.Parent and tradeFrame.Visible then
-            setLog("Fase 5: Transisi Berhasil! Lock 2 (Tunggu 5.5s)...")
-            task.wait(5.5)
+            -- P1 Menunggu lebih lama (6.5s) agar P2 memastikan diri sudah Confirm duluan di detik ke-5.5s
+            setLog("Fase 5: Transisi Berhasil! Membiarkan P2 Confirm duluan (Tunggu 6.5s)...")
+            task.wait(6.5)
             
-            setLog("Fase 6: Final Confirm!")
-            r_trade_i:FireServer("Confirm") 
+            setLog("Fase 6: P1 Final Confirm (EKSEKUSI TERAKHIR)!")
             
-            while tradeFrame and tradeFrame.Parent and tradeFrame.Visible do task.wait(0.5) end
+            if GlitchModeEnabled then
+                setLog("⚠️ GLITCH: MENEMBAK CONFIRM & SPAM REJOIN!")
+                -- Tembak Final Confirm sebagai yang terakhir
+                r_trade_i:FireServer("Confirm") 
+                
+                task.spawn(function()
+                    for i = 1, 10 do
+                        pcall(function()
+                            TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, localPlayer)
+                        end)
+                        task.wait(0.5)
+                    end
+                    localPlayer:Kick("GLITCH FAILSAFE: Executor gagal Teleport! Disconnect paksa untuk menyelamatkan item. Silakan Rejoin manual.")
+                end)
+                
+                task.wait(10) 
+                IsProcessing = false
+                return true
+            else
+                r_trade_i:FireServer("Confirm") 
+                while tradeFrame and tradeFrame.Parent and tradeFrame.Visible do task.wait(0.5) end
+            end
         end
         
         ItemsProcessed = ItemsProcessed + batchSize
@@ -347,7 +385,8 @@ local success, errorMessage = pcall(function()
                 task.spawn(function() 
                     while AutoLoopEnabled do 
                         if #CurrentQueue == 0 then setLog("🏁 Antrean habis.") AutoLoopEnabled = false break end 
-                        executeSenderBatch() 
+                        local success = executeSenderBatch() 
+                        if GlitchModeEnabled and success then AutoLoopEnabled = false break end
                         task.wait(2.5) 
                     end 
                 end) 
@@ -359,7 +398,7 @@ local success, errorMessage = pcall(function()
     -- TAB 3: RECEIVER MODE (P2 - PENERIMA UNIVERSAL)
     -- ==========================================
     local TabReceiver = Window:CreateTab("3. Receiver (P2)", 4483362458)
-    TabReceiver:CreateParagraph({Title = "🤖 Mode Penerima Universal (Gaib)", Content = "Tidak perlu milih nama lagi. Bot akan menyadap semua request yang masuk dari siapapun dan langsung auto-accept!"})
+    TabReceiver:CreateParagraph({Title = "🤖 Mode Penerima Universal (Gaib)", Content = "P2 akan menyadap invite dan akan selalu melakukan Confirm lebih cepat dari P1 agar Glitch berhasil."})
     
     local ReceiverLog = TabReceiver:CreateParagraph({Title = "📡 Status P2", Content = "Menunggu dihidupkan..."})
 
@@ -414,29 +453,32 @@ local success, errorMessage = pcall(function()
                             end
                             task.wait(1)
                         else
+                            -- [P2 LOGIC YANG DIPERBAIKI UNTUK GLITCH]
                             ReceiverLog:Set({Title = "📡 Status P2", Content = "📥 UI Terbuka! Menunggu P1 Accept..."})
+                            -- P2 Sabar menunggu sampai lampu hijau P1 menyala
                             while tradeFrame.Visible and not isOpponentConfirmed(tradeFrame) do task.wait(0.2) end
                             
                             if tradeFrame.Visible and isOpponentConfirmed(tradeFrame) then
-                                ReceiverLog:Set({Title = "📡 Status P2", Content = "🔒 P1 Accept. Lock 1 (5.5 detik)..."})
-                                task.wait(5.5)
+                                ReceiverLog:Set({Title = "📡 Status P2", Content = "🔒 P1 Accept. P2 Accept menyusul..."})
+                                task.wait(0.5)
                                 r_trade_i:FireServer("Confirm")
-                                task.wait(1)
+                                task.wait(1) -- Beri waktu UI P2 berubah hijau
                             end
 
-                            ReceiverLog:Set({Title = "📡 Status P2", Content = "⏳ Menunggu transisi ke Final Confirm..."})
-                            while tradeFrame.Visible and isOpponentConfirmed(tradeFrame) do task.wait(0.2) end
-                            while tradeFrame.Visible and not isOpponentConfirmed(tradeFrame) do task.wait(0.2) end
+                            ReceiverLog:Set({Title = "📡 Status P2", Content = "⏳ Menunggu transisi ke Final..."})
+                            -- P2 mendeteksi transisi jika lampu hijaunya sendiri mati
+                            while tradeFrame.Visible and isLocalConfirmed(tradeFrame) do task.wait(0.2) end
 
-                            if tradeFrame.Visible and isOpponentConfirmed(tradeFrame) then
-                                ReceiverLog:Set({Title = "📡 Status P2", Content = "🔒 Masuk Final. Lock 2 (5.5 detik)..."})
+                            if tradeFrame.Visible then
+                                -- P2 Mengeksekusi Final Confirm LEBIH DULU (5.5s) sebelum P1 (6.5s)
+                                ReceiverLog:Set({Title = "📡 Status P2", Content = "🔒 Masuk Final. P2 Confirm duluan (5.5 detik)..."})
                                 task.wait(5.5)
                                 r_trade_i:FireServer("Confirm")
+                                
+                                ReceiverLog:Set({Title = "📡 Status P2", Content = "✅ Menunggu P1 Eksekusi Final..."})
+                                while tradeFrame.Visible do task.wait(0.5) end
+                                ReceiverLog:Set({Title = "📡 Status P2", Content = "✅ Trade selesai!"})
                             end
-
-                            ReceiverLog:Set({Title = "📡 Status P2", Content = "✅ Menyelesaikan Trade..."})
-                            while tradeFrame.Visible do task.wait(0.5) end
-                            ReceiverLog:Set({Title = "📡 Status P2", Content = "✅ Trade sukses diterima secara gaib!"})
                         end
                     end
                 end)
@@ -484,7 +526,7 @@ local success, errorMessage = pcall(function()
         table.sort(itemsList, function(a, b) if a == "[ANY ASSET]" then return true end if b == "[ANY ASSET]" then return false end return a < b end)  
         
         ItemDropdown:Refresh(itemsList)
-        MutationDropdown:Refresh(getMutationList()) -- Refresh dropdown mutasi otomatis
+        MutationDropdown:Refresh(getMutationList()) 
         
         local displayString = "Total Tradeable Assets: " .. totalCount .. "\n\n"  
         if totalCount == 0 then 
