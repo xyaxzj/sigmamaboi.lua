@@ -1,5 +1,5 @@
 -- ==========================================================
--- MOCTA TRADE AUTOMATOR V16.5 (THE PING BUFFER EDITION)
+-- MOCTA TRADE AUTOMATOR V16.6 (ULTIMATE GLITCH PRECISION)
 -- ==========================================================
 
 local success, errorMessage = pcall(function()
@@ -26,6 +26,7 @@ local success, errorMessage = pcall(function()
     local AutoReceiverEnabled = false
     local GlitchModeEnabled = false 
     local InsertDelay = 0.3 
+    local GlitchDelay = 0.6 -- [BARU] Waktu jeda untuk glitch
     local InventoryConnections = {}
     local SelectedMutation = ""
 
@@ -137,8 +138,8 @@ local success, errorMessage = pcall(function()
 
     -- // UI // --
     local Window = Rayfield:CreateWindow({
-        Name = "Mocta Trade V16.5", 
-        LoadingTitle = "Applying Ping Buffer...", 
+        Name = "Mocta Trade V16.6", 
+        LoadingTitle = "Ultimate Glitch Precision...", 
         ConfigurationSaving = { Enabled = false }, 
         Theme = "DarkBlue"
     })
@@ -287,8 +288,19 @@ local success, errorMessage = pcall(function()
         Callback = function(Value) 
             GlitchModeEnabled = Value 
             if GlitchModeEnabled then
-                Rayfield:Notify({Title = "WARNING", Content = "P1 akan SPAM REJOIN setelah Final Confirm!", Duration = 3})
+                Rayfield:Notify({Title = "WARNING", Content = "Glitch aktif! Pastikan atur Ping Buffer agar pas dengan lag kamu.", Duration = 4})
             end
+        end
+    })
+    
+    -- [BARU] Slider Pengaturan Jeda Waktu (Ping Buffer)
+    TabControl:CreateSlider({
+        Name = "Glitch Delay (Ping Buffer)", 
+        Range = {0.1, 2.0}, 
+        Increment = 0.1, 
+        CurrentValue = 0.6, 
+        Callback = function(Value) 
+            GlitchDelay = Value 
         end
     })
 
@@ -327,6 +339,7 @@ local success, errorMessage = pcall(function()
         r_trade_i:FireServer("Confirm") 
         task.wait(1)
 
+        -- TUNGGU TRANSISI (MEMBACA STATUS DIRI SENDIRI)
         local waitTimeout = 0
         while tradeFrame and tradeFrame.Parent and tradeFrame.Visible do
             if not isLocalConfirmed(tradeFrame) then break end 
@@ -336,35 +349,45 @@ local success, errorMessage = pcall(function()
         end
 
         if tradeFrame and tradeFrame.Parent and tradeFrame.Visible then
-            setLog("Fase 5: Transisi Berhasil! Membiarkan P2 Confirm duluan (Tunggu 6.5s)...")
-            task.wait(6.5)
+            -- [PERBAIKAN TOTAL] P1 MENUNGGU P2 CONFIRM DULU
+            setLog("Fase 5: Menunggu P2 Menyelesaikan Confirmnya...")
+            local waitP2 = 0
+            while tradeFrame and tradeFrame.Parent and tradeFrame.Visible do
+                if isOpponentConfirmed(tradeFrame) then break end -- Lampu hijau P2 menyala!
+                task.wait(0.2)
+                waitP2 = waitP2 + 0.2
+                if waitP2 > 30 then setLog("❌ ERROR: P2 kelamaan / macet!") break end
+            end
             
-            setLog("Fase 6: P1 Final Confirm (EKSEKUSI TERAKHIR)!")
-            
+            -- Kasih napas sedikit biar server sinkron sebelum P1 nge-hit
+            task.wait(0.5)
+
             if GlitchModeEnabled then
-                setLog("⚠️ GLITCH: MENEMBAK CONFIRM & REJOIN!")
-                -- P1 Menembak Final Confirm
+                setLog("⚠️ GLITCH: P2 SUDAH CONFIRM! EKSEKUSI P1 & REJOIN!")
+                
+                -- P1 Menembak Final Confirm (2x biar pasti nyampe)
+                r_trade_i:FireServer("Confirm") 
+                task.wait(0.1)
                 r_trade_i:FireServer("Confirm") 
                 
-                -- [PERBAIKAN KRUSIAL] JEDA JARINGAN! 
-                -- Jangan langsung Teleport, tunggu 0.4 detik agar sinyal masuk ke server!
-                task.wait(0.4) 
+                -- [JEDA JARINGAN BERDASARKAN SLIDER UI]
+                setLog("⏳ Glitch Buffer: Menunggu " .. tostring(GlitchDelay) .. "s...")
+                task.wait(GlitchDelay) 
                 
+                -- EKSEKUSI TELEPORT & KICK
                 task.spawn(function()
-                    for i = 1, 8 do
-                        pcall(function()
-                            TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, localPlayer)
-                        end)
-                        task.wait(0.5)
-                    end
-                    -- Failsafe Kick setelah 4 detik mencoba Teleport
-                    localPlayer:Kick("GLITCH FAILSAFE: Server terputus secara paksa! Barang aman. Silakan Rejoin manual.")
+                    pcall(function() TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, localPlayer) end)
+                    
+                    -- Failsafe jika teleport nyangkut di Executor
+                    task.wait(2.5) 
+                    localPlayer:Kick("GLITCH FAILSAFE: Transaksi sudah masuk tapi executor gagal Rejoin! Disconnect paksa untuk menyelamatkan item.")
                 end)
                 
                 task.wait(10) 
                 IsProcessing = false
                 return true
             else
+                setLog("Fase 6: P1 Final Confirm!")
                 r_trade_i:FireServer("Confirm") 
                 while tradeFrame and tradeFrame.Parent and tradeFrame.Visible do task.wait(0.5) end
             end
@@ -472,7 +495,7 @@ local success, errorMessage = pcall(function()
                                 task.wait(5.5)
                                 r_trade_i:FireServer("Confirm")
                                 
-                                ReceiverLog:Set({Title = "📡 Status P2", Content = "✅ Menunggu P1 Eksekusi Final..."})
+                                ReceiverLog:Set({Title = "📡 Status P2", Content = "✅ P2 Selesai! Menunggu P1 Eksekusi Glitch..."})
                                 while tradeFrame.Visible do task.wait(0.5) end
                                 ReceiverLog:Set({Title = "📡 Status P2", Content = "✅ Trade selesai!"})
                             end
