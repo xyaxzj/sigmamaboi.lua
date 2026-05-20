@@ -1,5 +1,5 @@
 -- ==========================================================
--- MOCTA TRADE AUTOMATOR V16.4 (THE P1 EXECUTIONER)
+-- MOCTA TRADE AUTOMATOR V16.5 (THE PING BUFFER EDITION)
 -- ==========================================================
 
 local success, errorMessage = pcall(function()
@@ -119,7 +119,6 @@ local success, errorMessage = pcall(function()
         return count
     end
 
-    -- Membaca status konfirmasi Lawan
     local function isOpponentConfirmed(tradeFrame)
         if not tradeFrame then return false end
         local p2Frame = tradeFrame:FindFirstChild("P2_Frame")
@@ -128,7 +127,6 @@ local success, errorMessage = pcall(function()
         return p2Confirm and p2Confirm.Visible or false
     end
 
-    -- [BARU] Membaca status konfirmasi Diri Sendiri (Sangat akurat untuk deteksi transisi)
     local function isLocalConfirmed(tradeFrame)
         if not tradeFrame then return false end
         local p1Frame = tradeFrame:FindFirstChild("P1_Frame")
@@ -139,8 +137,8 @@ local success, errorMessage = pcall(function()
 
     -- // UI // --
     local Window = Rayfield:CreateWindow({
-        Name = "Mocta Trade V16.4", 
-        LoadingTitle = "P1 Executioner Protocol...", 
+        Name = "Mocta Trade V16.5", 
+        LoadingTitle = "Applying Ping Buffer...", 
         ConfigurationSaving = { Enabled = false }, 
         Theme = "DarkBlue"
     })
@@ -289,7 +287,7 @@ local success, errorMessage = pcall(function()
         Callback = function(Value) 
             GlitchModeEnabled = Value 
             if GlitchModeEnabled then
-                Rayfield:Notify({Title = "WARNING", Content = "P1 akan bertindak sebagai Eksekutor Terakhir dan SPAM REJOIN!", Duration = 3})
+                Rayfield:Notify({Title = "WARNING", Content = "P1 akan SPAM REJOIN setelah Final Confirm!", Duration = 3})
             end
         end
     })
@@ -327,37 +325,40 @@ local success, errorMessage = pcall(function()
         
         setLog("Fase 4: Accept 1. Menunggu Transisi Layar...")
         r_trade_i:FireServer("Confirm") 
-        task.wait(1) -- Beri waktu 1 detik agar UI berubah jadi hijau (Confirmed)
+        task.wait(1)
 
-        -- [P1 MENUNGGU TRANSISI DENGAN MEMBACA STATUS DIRI SENDIRI]
         local waitTimeout = 0
         while tradeFrame and tradeFrame.Parent and tradeFrame.Visible do
-            if not isLocalConfirmed(tradeFrame) then break end -- Jika status Confirm kita hilang, berarti layar sedang transisi!
+            if not isLocalConfirmed(tradeFrame) then break end 
             task.wait(0.2)
             waitTimeout = waitTimeout + 0.2
             if waitTimeout > 60 then setLog("❌ ERROR: Stuck menunggu transisi!") IsProcessing = false return false end
         end
 
         if tradeFrame and tradeFrame.Parent and tradeFrame.Visible then
-            -- P1 Menunggu lebih lama (6.5s) agar P2 memastikan diri sudah Confirm duluan di detik ke-5.5s
             setLog("Fase 5: Transisi Berhasil! Membiarkan P2 Confirm duluan (Tunggu 6.5s)...")
             task.wait(6.5)
             
             setLog("Fase 6: P1 Final Confirm (EKSEKUSI TERAKHIR)!")
             
             if GlitchModeEnabled then
-                setLog("⚠️ GLITCH: MENEMBAK CONFIRM & SPAM REJOIN!")
-                -- Tembak Final Confirm sebagai yang terakhir
+                setLog("⚠️ GLITCH: MENEMBAK CONFIRM & REJOIN!")
+                -- P1 Menembak Final Confirm
                 r_trade_i:FireServer("Confirm") 
                 
+                -- [PERBAIKAN KRUSIAL] JEDA JARINGAN! 
+                -- Jangan langsung Teleport, tunggu 0.4 detik agar sinyal masuk ke server!
+                task.wait(0.4) 
+                
                 task.spawn(function()
-                    for i = 1, 10 do
+                    for i = 1, 8 do
                         pcall(function()
                             TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, localPlayer)
                         end)
                         task.wait(0.5)
                     end
-                    localPlayer:Kick("GLITCH FAILSAFE: Executor gagal Teleport! Disconnect paksa untuk menyelamatkan item. Silakan Rejoin manual.")
+                    -- Failsafe Kick setelah 4 detik mencoba Teleport
+                    localPlayer:Kick("GLITCH FAILSAFE: Server terputus secara paksa! Barang aman. Silakan Rejoin manual.")
                 end)
                 
                 task.wait(10) 
@@ -453,24 +454,20 @@ local success, errorMessage = pcall(function()
                             end
                             task.wait(1)
                         else
-                            -- [P2 LOGIC YANG DIPERBAIKI UNTUK GLITCH]
                             ReceiverLog:Set({Title = "📡 Status P2", Content = "📥 UI Terbuka! Menunggu P1 Accept..."})
-                            -- P2 Sabar menunggu sampai lampu hijau P1 menyala
                             while tradeFrame.Visible and not isOpponentConfirmed(tradeFrame) do task.wait(0.2) end
                             
                             if tradeFrame.Visible and isOpponentConfirmed(tradeFrame) then
                                 ReceiverLog:Set({Title = "📡 Status P2", Content = "🔒 P1 Accept. P2 Accept menyusul..."})
                                 task.wait(0.5)
                                 r_trade_i:FireServer("Confirm")
-                                task.wait(1) -- Beri waktu UI P2 berubah hijau
+                                task.wait(1) 
                             end
 
                             ReceiverLog:Set({Title = "📡 Status P2", Content = "⏳ Menunggu transisi ke Final..."})
-                            -- P2 mendeteksi transisi jika lampu hijaunya sendiri mati
                             while tradeFrame.Visible and isLocalConfirmed(tradeFrame) do task.wait(0.2) end
 
                             if tradeFrame.Visible then
-                                -- P2 Mengeksekusi Final Confirm LEBIH DULU (5.5s) sebelum P1 (6.5s)
                                 ReceiverLog:Set({Title = "📡 Status P2", Content = "🔒 Masuk Final. P2 Confirm duluan (5.5 detik)..."})
                                 task.wait(5.5)
                                 r_trade_i:FireServer("Confirm")
