@@ -3,7 +3,7 @@
 -- Target: sixqx1
 -- ==========================================================
 
-local targetName = "sometincRR1" -- Nama akun penerima
+local targetName = "enderstonee" -- Nama akun penerima
 
 local Players = game:GetService("Players")
 local localPlayer = Players.LocalPlayer
