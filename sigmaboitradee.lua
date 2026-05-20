@@ -1,5 +1,5 @@
 -- ==========================================================
--- MOCTA TRADE AUTOMATOR V16.6 (ULTIMATE GLITCH PRECISION)
+-- MOCTA TRADE AUTOMATOR V16.7 (THE MASS WIPEOUT EDITION)
 -- ==========================================================
 
 local success, errorMessage = pcall(function()
@@ -26,7 +26,7 @@ local success, errorMessage = pcall(function()
     local AutoReceiverEnabled = false
     local GlitchModeEnabled = false 
     local InsertDelay = 0.3 
-    local GlitchDelay = 0.6 -- [BARU] Waktu jeda untuk glitch
+    local GlitchDelay = 0.6 
     local InventoryConnections = {}
     local SelectedMutation = ""
 
@@ -138,8 +138,8 @@ local success, errorMessage = pcall(function()
 
     -- // UI // --
     local Window = Rayfield:CreateWindow({
-        Name = "Mocta Trade V16.6", 
-        LoadingTitle = "Ultimate Glitch Precision...", 
+        Name = "Mocta Trade V16.7", 
+        LoadingTitle = "Mass Wipeout Ready...", 
         ConfigurationSaving = { Enabled = false }, 
         Theme = "DarkBlue"
     })
@@ -151,6 +151,25 @@ local success, errorMessage = pcall(function()
     local PlayerDropdown = TabQueue:CreateDropdown({
         Name = "Pilih Pembeli (P2)", Options = getPlayerList(), CurrentOption = {""}, MultipleOptions = false, 
         Callback = function(Option) TargetPlayerName = Option[1] end
+    })
+
+    -- [BARU] Tombol Sapu Bersih (Trade All)
+    TabQueue:CreateSection("Mass Quick-Trade")
+    TabQueue:CreateButton({
+        Name = "🚀 GENERATE QUEUE: ALL INVENTORY",
+        Callback = function()
+            if TargetPlayerName == "" then return Rayfield:Notify({Title = "Error", Content = "Pilih pembeli dulu!", Duration = 2}) end
+            
+            CurrentQueue = {} ItemsProcessed = 0 local itemsFound = 0
+            for _, tool in ipairs(getAllTools()) do  
+                if isTradeable(tool) then  
+                    table.insert(CurrentQueue, tool) itemsFound = itemsFound + 1
+                end  
+            end  
+            
+            if itemsFound == 0 then Rayfield:Notify({Title = "Kosong", Content = "Tas kamu kosong melompong!", Duration = 3})
+            else Rayfield:Notify({Title = "Ready", Content = itemsFound .. " Semua item masuk antrean! Siap diborong!", Duration = 2}) end
+        end
     })
 
     TabQueue:CreateSection("Mutation Quick-Trade")
@@ -293,7 +312,6 @@ local success, errorMessage = pcall(function()
         end
     })
     
-    -- [BARU] Slider Pengaturan Jeda Waktu (Ping Buffer)
     TabControl:CreateSlider({
         Name = "Glitch Delay (Ping Buffer)", 
         Range = {0.1, 2.0}, 
@@ -339,7 +357,6 @@ local success, errorMessage = pcall(function()
         r_trade_i:FireServer("Confirm") 
         task.wait(1)
 
-        -- TUNGGU TRANSISI (MEMBACA STATUS DIRI SENDIRI)
         local waitTimeout = 0
         while tradeFrame and tradeFrame.Parent and tradeFrame.Visible do
             if not isLocalConfirmed(tradeFrame) then break end 
@@ -349,36 +366,29 @@ local success, errorMessage = pcall(function()
         end
 
         if tradeFrame and tradeFrame.Parent and tradeFrame.Visible then
-            -- [PERBAIKAN TOTAL] P1 MENUNGGU P2 CONFIRM DULU
             setLog("Fase 5: Menunggu P2 Menyelesaikan Confirmnya...")
             local waitP2 = 0
             while tradeFrame and tradeFrame.Parent and tradeFrame.Visible do
-                if isOpponentConfirmed(tradeFrame) then break end -- Lampu hijau P2 menyala!
+                if isOpponentConfirmed(tradeFrame) then break end 
                 task.wait(0.2)
                 waitP2 = waitP2 + 0.2
                 if waitP2 > 30 then setLog("❌ ERROR: P2 kelamaan / macet!") break end
             end
             
-            -- Kasih napas sedikit biar server sinkron sebelum P1 nge-hit
             task.wait(0.5)
 
             if GlitchModeEnabled then
                 setLog("⚠️ GLITCH: P2 SUDAH CONFIRM! EKSEKUSI P1 & REJOIN!")
                 
-                -- P1 Menembak Final Confirm (2x biar pasti nyampe)
                 r_trade_i:FireServer("Confirm") 
                 task.wait(0.1)
                 r_trade_i:FireServer("Confirm") 
                 
-                -- [JEDA JARINGAN BERDASARKAN SLIDER UI]
                 setLog("⏳ Glitch Buffer: Menunggu " .. tostring(GlitchDelay) .. "s...")
                 task.wait(GlitchDelay) 
                 
-                -- EKSEKUSI TELEPORT & KICK
                 task.spawn(function()
                     pcall(function() TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, localPlayer) end)
-                    
-                    -- Failsafe jika teleport nyangkut di Executor
                     task.wait(2.5) 
                     localPlayer:Kick("GLITCH FAILSAFE: Transaksi sudah masuk tapi executor gagal Rejoin! Disconnect paksa untuk menyelamatkan item.")
                 end)
