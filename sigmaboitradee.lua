@@ -1,5 +1,5 @@
 -- ==========================================================
--- MOCTA TRADE AUTOMATOR V16.0 (THE FINAL MASTERPIECE)
+-- MOCTA TRADE AUTOMATOR V16.1 (MUTATION FILTER EDITION)
 -- ==========================================================
 
 local success, errorMessage = pcall(function()
@@ -25,6 +25,7 @@ local success, errorMessage = pcall(function()
     local AutoReceiverEnabled = false
     local InsertDelay = 0.3 
     local InventoryConnections = {}
+    local SelectedMutation = ""
 
     local BaconEventItems = {
         ["Chicleteira Bicicleteira"] = true,
@@ -68,6 +69,30 @@ local success, errorMessage = pcall(function()
         return tbl
     end
 
+    -- [BARU] Fungsi mengambil daftar Mutasi yang ada di inventory
+    local function getMutationList()
+        local muts = {}
+        local hasMut = false
+        for _, tool in ipairs(getAllTools()) do
+            if isTradeable(tool) then
+                local m = tool:GetAttribute("Mutation") or tool:GetAttribute("Variant")
+                if not m then
+                    local mObj = tool:FindFirstChild("Mutation")
+                    if mObj then m = mObj.Value end
+                end
+                if m then
+                    muts[tostring(m)] = true
+                    hasMut = true
+                end
+            end
+        end
+        local list = {}
+        if not hasMut then return {"[TIDAK ADA MUTASI]"} end
+        for k, _ in pairs(muts) do table.insert(list, k) end
+        table.sort(list)
+        return list
+    end
+
     local function getFullItemName(tool)
         local displayName = tool.Name
         local mutValue = tool:GetAttribute("Mutation") or tool:GetAttribute("Variant")
@@ -103,8 +128,8 @@ local success, errorMessage = pcall(function()
 
     -- // UI // --
     local Window = Rayfield:CreateWindow({
-        Name = "Mocta Trade V16.0", 
-        LoadingTitle = "Universal God-Sync Mode...", 
+        Name = "Mocta Trade V16.1", 
+        LoadingTitle = "Loading Mutation Filters...", 
         ConfigurationSaving = { Enabled = false }, 
         Theme = "DarkBlue"
     })
@@ -116,6 +141,38 @@ local success, errorMessage = pcall(function()
     local PlayerDropdown = TabQueue:CreateDropdown({
         Name = "Pilih Pembeli (P2)", Options = getPlayerList(), CurrentOption = {""}, MultipleOptions = false, 
         Callback = function(Option) TargetPlayerName = Option[1] end
+    })
+
+    -- [BARU] Section Khusus Kirim Berdasarkan Mutasi
+    TabQueue:CreateSection("Mutation Quick-Trade")
+    local MutationDropdown = TabQueue:CreateDropdown({
+        Name = "Pilih Mutasi", Options = getMutationList(), CurrentOption = {""}, MultipleOptions = false, 
+        Callback = function(Option) SelectedMutation = Option[1] end
+    })
+    
+    TabQueue:CreateButton({
+        Name = "🚀 GENERATE QUEUE: BY MUTATION",
+        Callback = function()
+            if TargetPlayerName == "" then return Rayfield:Notify({Title = "Error", Content = "Pilih pembeli dulu!", Duration = 2}) end
+            if SelectedMutation == "" or SelectedMutation == "[TIDAK ADA MUTASI]" then return Rayfield:Notify({Title = "Error", Content = "Pilih mutasi yang valid!", Duration = 2}) end
+            
+            CurrentQueue = {} ItemsProcessed = 0 local itemsFound = 0
+            for _, tool in ipairs(getAllTools()) do  
+                if isTradeable(tool) then  
+                    local m = tool:GetAttribute("Mutation") or tool:GetAttribute("Variant")
+                    if not m then
+                        local mObj = tool:FindFirstChild("Mutation")
+                        if mObj then m = mObj.Value end
+                    end
+                    if m and tostring(m) == SelectedMutation then
+                        table.insert(CurrentQueue, tool) itemsFound = itemsFound + 1
+                    end
+                end  
+            end  
+            
+            if itemsFound == 0 then Rayfield:Notify({Title = "Kosong", Content = "Tidak ada item dengan mutasi " .. SelectedMutation, Duration = 3})
+            else Rayfield:Notify({Title = "Ready", Content = itemsFound .. " Item " .. SelectedMutation .. " masuk antrean!", Duration = 2}) end
+        end
     })
 
     TabQueue:CreateSection("Bacon Event Quick-Trade")
@@ -217,7 +274,6 @@ local success, errorMessage = pcall(function()
 
     TabControl:CreateSlider({Name = "Insert Delay", Range = {0.1, 1.0}, Increment = 0.1, CurrentValue = 0.3, Callback = function(Value) InsertDelay = Value end})
 
-    -- LOGIKA PING-PONG P1 (VERSI WORKS)
     local function executeSenderBatch()
         if IsProcessing or #CurrentQueue == 0 then return false end
         IsProcessing = true
@@ -319,10 +375,8 @@ local success, errorMessage = pcall(function()
                         local tradeFrame = localPlayer.PlayerGui:FindFirstChild("TradingFrame", true)
                         
                         if not (tradeFrame and tradeFrame.Visible) then
-                            -- SCANNER UNIVERSAL: Cari pop-up invite dari siapapun
                             local pGui = localPlayer:FindFirstChild("PlayerGui")
                             if pGui then
-                                -- Trik 1: Cari Tombol Accept fisik
                                 for _, gui in ipairs(pGui:GetChildren()) do
                                     if gui:IsA("ScreenGui") and gui.Name ~= "Rayfield" then
                                         for _, desc in ipairs(gui:GetDescendants()) do
@@ -342,7 +396,6 @@ local success, errorMessage = pcall(function()
                                     end
                                 end
                                 
-                                -- Trik 2: Trik Gaib (Cari tulisan nama, tembak server)
                                 if rev_trade_start then
                                     for _, desc in ipairs(pGui:GetDescendants()) do
                                         if desc:IsA("TextLabel") and desc.Visible then
@@ -350,7 +403,6 @@ local success, errorMessage = pcall(function()
                                             if string.find(txt, "trade") or string.find(txt, "request") or string.find(txt, "wants") then
                                                 for _, p in ipairs(Players:GetPlayers()) do
                                                     if p ~= localPlayer and (string.find(desc.Text, p.Name) or string.find(desc.Text, p.DisplayName)) then
-                                                        -- Temukan target! Langsung bypass!
                                                         pcall(function() rev_trade_start:InvokeServer(p.UserId) end)
                                                         pcall(function() rev_trade_start:FireServer(p.UserId) end)
                                                     end
@@ -362,7 +414,6 @@ local success, errorMessage = pcall(function()
                             end
                             task.wait(1)
                         else
-                            -- LOGIKA PING-PONG P2 (VERSI WORKS)
                             ReceiverLog:Set({Title = "📡 Status P2", Content = "📥 UI Terbuka! Menunggu P1 Accept..."})
                             while tradeFrame.Visible and not isOpponentConfirmed(tradeFrame) do task.wait(0.2) end
                             
@@ -431,7 +482,9 @@ local success, errorMessage = pcall(function()
         local itemsList = {"[ANY ASSET]"}  
         for name, count in pairs(inventoryData) do table.insert(itemsList, name .. " | Qty: " .. count) end  
         table.sort(itemsList, function(a, b) if a == "[ANY ASSET]" then return true end if b == "[ANY ASSET]" then return false end return a < b end)  
+        
         ItemDropdown:Refresh(itemsList)
+        MutationDropdown:Refresh(getMutationList()) -- Refresh dropdown mutasi otomatis
         
         local displayString = "Total Tradeable Assets: " .. totalCount .. "\n\n"  
         if totalCount == 0 then 
