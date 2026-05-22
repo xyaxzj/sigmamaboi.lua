@@ -1,6 +1,6 @@
 -- ==========================================================
--- MOCTA TRADE AUTOMATOR V17.0 (STABLE MASTERPIECE EDITION)
--- Build: Clean Rewrite, God-Sync Restored, No Glitch
+-- MOCTA TRADE AUTOMATOR V18.0 (THE ANALYTICS EDITION)
+-- Build: Stable God-Sync + Live Analytics Dashboard
 -- ==========================================================
 
 local success, errorMessage = pcall(function()
@@ -10,17 +10,19 @@ local success, errorMessage = pcall(function()
     local StarterGui = game:GetService("StarterGui")
     local Players = game:GetService("Players")
     local localPlayer = Players.LocalPlayer
+    local RunService = game:GetService("RunService")
 
     local networkFolder = game:GetService("ReplicatedStorage"):WaitForChild("Shared", 10):WaitForChild("Packages", 10):WaitForChild("Network", 10)
     local f_trade_r = networkFolder:WaitForChild("ref_trade_r", 5) 
     local r_trade_i = networkFolder:WaitForChild("rev_trade_i", 5) 
     local rev_trade_start = networkFolder:WaitForChild("rev_trade_start", 5) 
 
-    -- // Variabel State // --
+    -- // Variabel State & Analytics // --
     local TargetPlayerName = ""
     local SelectedMutation = ""
     local ShoppingCart = {} 
     local CurrentQueue = {}
+    
     local ItemsProcessed = 0
     local IsProcessing = false 
     local AutoLoopEnabled = false
@@ -28,7 +30,12 @@ local success, errorMessage = pcall(function()
     local InsertDelay = 0.3 
     local InventoryConnections = {}
 
-    -- Database Event Bacon
+    -- Analytics Tracking
+    local SessionStartTime = tick()
+    local P1TradesCompleted = 0
+    local P2TradesCompleted = 0
+    local TotalItemsSent = 0
+
     local BaconEventItems = {
         ["Chicleteira Bicicleteira"] = true,
         ["Agarrini La Palini"] = true,
@@ -37,8 +44,15 @@ local success, errorMessage = pcall(function()
     }
 
     -- ==========================================
-    -- FUNGSI HELPER (INVENTORY & ITEM)
+    -- FUNGSI HELPER
     -- ==========================================
+    local function formatTime(seconds)
+        local h = math.floor(seconds / 3600)
+        local m = math.floor((seconds % 3600) / 60)
+        local s = math.floor(seconds % 60)
+        return string.format("%02d:%02d:%02d", h, m, s)
+    end
+
     local function getAllTools()
         local tools = {}
         local bp = localPlayer:FindFirstChild("Backpack")
@@ -104,9 +118,6 @@ local success, errorMessage = pcall(function()
         return count
     end
 
-    -- ==========================================
-    -- FUNGSI HELPER (DETEKSI UI TRADE)
-    -- ==========================================
     local function isOpponentConfirmed(tradeFrame)
         if not tradeFrame then return false end
         local p2Confirm = tradeFrame:FindFirstChild("P2_Frame") and tradeFrame.P2_Frame:FindFirstChild("Confirmed")
@@ -123,8 +134,8 @@ local success, errorMessage = pcall(function()
     -- INISIALISASI UI
     -- ==========================================
     local Window = Rayfield:CreateWindow({
-        Name = "Mocta Trade V17.0", 
-        LoadingTitle = "Loading Stable Masterpiece...", 
+        Name = "Mocta Trade V18.0", 
+        LoadingTitle = "Loading Live Analytics...", 
         ConfigurationSaving = { Enabled = false }, 
         Theme = "DarkBlue"
     })
@@ -173,24 +184,6 @@ local success, errorMessage = pcall(function()
             end  
             if itemsFound == 0 then Rayfield:Notify({Title = "Kosong", Content = "Tidak ada item " .. SelectedMutation, Duration = 3})
             else Rayfield:Notify({Title = "Ready", Content = itemsFound .. " Item " .. SelectedMutation .. " masuk antrean!", Duration = 2}) end
-        end
-    })
-
-    TabQueue:CreateSection("Filter Bacon Event")
-    TabQueue:CreateButton({
-        Name = "🚀 GENERATE QUEUE: ALL BACON MATERIALS",
-        Callback = function()
-            if TargetPlayerName == "" then return Rayfield:Notify({Title = "Error", Content = "Pilih pembeli dulu!", Duration = 2}) end
-            CurrentQueue = {}; ItemsProcessed = 0; local itemsFound = 0
-            for _, tool in ipairs(getAllTools()) do  
-                if isTradeable(tool) then  
-                    local displayName = getFullItemName(tool)
-                    local baseNameOnly = string.split(string.split(displayName, " [")[1], " (Lv")[1]
-                    if BaconEventItems[baseNameOnly] or BaconEventItems[displayName] then table.insert(CurrentQueue, tool); itemsFound = itemsFound + 1 end  
-                end  
-            end  
-            if itemsFound == 0 then Rayfield:Notify({Title = "Kosong", Content = "Tidak ada Bacon Materials.", Duration = 3})
-            else Rayfield:Notify({Title = "Ready", Content = itemsFound .. " Bacon Materials masuk antrean!", Duration = 2}) end
         end
     })
 
@@ -296,7 +289,6 @@ local success, errorMessage = pcall(function()
         r_trade_i:FireServer("Confirm") 
         task.wait(0.5)
 
-        -- Pantau sampai status Confirmed lokal menghilang (tanda layar beralih ke Final)
         local waitTimeout = 0
         while tradeFrame and tradeFrame.Parent and tradeFrame.Visible do
             if not isLocalConfirmed(tradeFrame) then break end 
@@ -314,7 +306,11 @@ local success, errorMessage = pcall(function()
             while tradeFrame and tradeFrame.Parent and tradeFrame.Visible do task.wait(0.5) end
         end
         
+        -- Update Analytics
         ItemsProcessed = ItemsProcessed + batchSize
+        TotalItemsSent = TotalItemsSent + batchSize
+        P1TradesCompleted = P1TradesCompleted + 1
+        
         updateProgressUI()
         setLog("✅ TRADE SUKSES: " .. batchSize .. " item terkirim!")
         IsProcessing = false
@@ -357,7 +353,6 @@ local success, errorMessage = pcall(function()
                     while AutoReceiverEnabled do
                         local tradeFrame = localPlayer.PlayerGui:FindFirstChild("TradingFrame", true)
                         
-                        -- Scanner Bypass Universal
                         if not (tradeFrame and tradeFrame.Visible) then
                             local pGui = localPlayer:FindFirstChild("PlayerGui")
                             if pGui then
@@ -398,7 +393,6 @@ local success, errorMessage = pcall(function()
                             end
                             task.wait(1)
                         else
-                            -- Logika Ping-Pong Stabil P2
                             ReceiverLog:Set({Title = "📡 Status P2", Content = "📥 UI Terbuka! Menunggu P1 Accept..."})
                             while tradeFrame.Visible and not isOpponentConfirmed(tradeFrame) do task.wait(0.2) end
                             
@@ -421,6 +415,10 @@ local success, errorMessage = pcall(function()
 
                             ReceiverLog:Set({Title = "📡 Status P2", Content = "✅ Menyelesaikan..."})
                             while tradeFrame.Visible do task.wait(0.5) end
+                            
+                            -- Update P2 Analytics
+                            P2TradesCompleted = P2TradesCompleted + 1
+                            
                             ReceiverLog:Set({Title = "📡 Status P2", Content = "✅ Trade beres! Kembali memantau..."})
                         end
                     end
@@ -432,10 +430,32 @@ local success, errorMessage = pcall(function()
     })
 
     -- ==========================================
-    -- TAB 4: INVENTORY & SETTINGS
+    -- TAB 4: DASHBOARD & INVENTORY
     -- ==========================================
-    local TabInventory = Window:CreateTab("4. Inventory", 4483362458)
+    local TabInventory = Window:CreateTab("4. Dash & Inv", 4483362458)
+    
+    TabInventory:CreateSection("Live Analytics Dashboard")
+    local AnalyticsLabel = TabInventory:CreateParagraph({Title = "📊 Session Stats", Content = "Memuat..."})
+    
+    -- Loop untuk memperbarui jam uptime dan statistik
+    task.spawn(function()
+        while task.wait(1) do
+            local currentUptime = tick() - SessionStartTime
+            local statsText = string.format(
+                "⏱️ Session Uptime: %s\n" ..
+                "📈 Total P1 Trades: %d\n" ..
+                "📥 Total P2 Trades: %d\n" ..
+                "📦 Total Items Sent: %d",
+                formatTime(currentUptime),
+                P1TradesCompleted,
+                P2TradesCompleted,
+                TotalItemsSent
+            )
+            AnalyticsLabel:Set({Title = "📊 Session Stats", Content = statsText})
+        end
+    end)
 
+    TabInventory:CreateSection("Inventory Settings")
     TabInventory:CreateToggle({
         Name = "👁️ Enable Clean UI Mode (Anti-Lag)", CurrentValue = false,
         Callback = function(Value)
