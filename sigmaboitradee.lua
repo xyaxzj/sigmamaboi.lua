@@ -1,23 +1,26 @@
 -- ==========================================================
--- MOCTA TRADE AUTOMATOR V18.0 (THE ANALYTICS EDITION)
--- Build: Stable God-Sync + Live Analytics Dashboard
+-- MOCTA TRADE AUTOMATOR V18.0 (LINORIA STABLE EDITION)
+-- Build: Clean UI Migration to LinoriaLib + Full Features Intact
 -- ==========================================================
 
 local success, errorMessage = pcall(function()
     
-    -- // Dependensi & Layanan // --
-    local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+    -- // Memuat LinoriaLib & Addons // --
+    local repo = 'https://raw.githubusercontent.com/wally-rblx/LinoriaLib/main/'
+    local Library = loadstring(game:HttpGet(repo .. 'Library.lua'))()
+    local ThemeManager = loadstring(game:HttpGet(repo .. 'addons/ThemeManager.lua'))()
+
     local StarterGui = game:GetService("StarterGui")
     local Players = game:GetService("Players")
     local localPlayer = Players.LocalPlayer
-    local RunService = game:GetService("RunService")
 
+    -- Folder Network & Remotes (Murni God-Sync)
     local networkFolder = game:GetService("ReplicatedStorage"):WaitForChild("Shared", 10):WaitForChild("Packages", 10):WaitForChild("Network", 10)
     local f_trade_r = networkFolder:WaitForChild("ref_trade_r", 5) 
     local r_trade_i = networkFolder:WaitForChild("rev_trade_i", 5) 
     local rev_trade_start = networkFolder:WaitForChild("rev_trade_start", 5) 
 
-    -- // Variabel State & Analytics // --
+    -- // Variabel State & Analitik // --
     local TargetPlayerName = ""
     local SelectedMutation = ""
     local ShoppingCart = {} 
@@ -30,7 +33,7 @@ local success, errorMessage = pcall(function()
     local InsertDelay = 0.3 
     local InventoryConnections = {}
 
-    -- Analytics Tracking
+    -- Tracker Statistik Sesi
     local SessionStartTime = tick()
     local P1TradesCompleted = 0
     local P2TradesCompleted = 0
@@ -44,7 +47,7 @@ local success, errorMessage = pcall(function()
     }
 
     -- ==========================================
-    -- FUNGSI HELPER
+    -- FUNGSI HELPER (LOGIKA TAS & WAKTU)
     -- ==========================================
     local function formatTime(seconds)
         local h = math.floor(seconds / 3600)
@@ -76,6 +79,7 @@ local success, errorMessage = pcall(function()
         for _, p in ipairs(Players:GetPlayers()) do 
             if p ~= localPlayer then table.insert(tbl, p.Name) end 
         end
+        if #tbl == 0 then return {"Tidak ada player lain"} end
         return tbl
     end
 
@@ -131,49 +135,57 @@ local success, errorMessage = pcall(function()
     end
 
     -- ==========================================
-    -- INISIALISASI UI
+    -- STRUKTUR WINDOW & TAB LINORIALIB
     -- ==========================================
-    local Window = Rayfield:CreateWindow({
-        Name = "Mocta Trade V18.0", 
-        LoadingTitle = "Loading Live Analytics...", 
-        ConfigurationSaving = { Enabled = false }, 
-        Theme = "DarkBlue"
+    local Window = Library:CreateWindow({
+        Title = 'Mocta Trade Automator V18.0',
+        Center = true,
+        AutoShow = true,
+        TabPadding = 8,
+        MenuFadeTime = 0.2
     })
 
+    local Tabs = {
+        Main = Window:AddTab('1. Queue Generator'),
+        Sender = Window:AddTab('2. Sender Mode (P1)'),
+        Receiver = Window:AddTab('3. Receiver Mode (P2)'),
+        Analytics = Window:AddTab('4. Dash & Inventory')
+    }
+
     -- ==========================================
-    -- TAB 1: ANTARA & PACK MIX
+    -- TAB 1: QUEUE GENERATOR (BANYAK SEKSI PANEL)
     -- ==========================================
-    local TabQueue = Window:CreateTab("1. Queue", 4483362458)
-    local PlayerDropdown = TabQueue:CreateDropdown({
-        Name = "Pilih Pembeli (P2)", Options = getPlayerList(), CurrentOption = {""}, MultipleOptions = false, 
-        Callback = function(Option) TargetPlayerName = Option[1] end
+    local LeftBox = Tabs.Main:AddLeftGroupbox('Target & Mass Operation')
+    
+    LeftBox:AddDropdown('PlayerDropdown', {
+        Values = getPlayerList(), Default = 1, Multi = false, Text = 'Pilih Pembeli (P2)',
+        Callback = function(Value) TargetPlayerName = Value end
     })
 
-    TabQueue:CreateSection("Sapujagat (Mass Wipeout)")
-    TabQueue:CreateButton({
-        Name = "🚀 GENERATE QUEUE: ALL INVENTORY",
-        Callback = function()
-            if TargetPlayerName == "" then return Rayfield:Notify({Title = "Error", Content = "Pilih pembeli dulu!", Duration = 2}) end
+    LeftBox:AddButton({
+        Text = '🚀 GENERATE QUEUE: ALL INVENTORY',
+        Func = function()
+            if TargetPlayerName == "" or TargetPlayerName == "Tidak ada player lain" then return Library:Notify("Pilih pembeli yang valid dulu!") end
             CurrentQueue = {}; ItemsProcessed = 0; local itemsFound = 0
             for _, tool in ipairs(getAllTools()) do  
                 if isTradeable(tool) then table.insert(CurrentQueue, tool); itemsFound = itemsFound + 1 end  
             end  
-            if itemsFound == 0 then Rayfield:Notify({Title = "Kosong", Content = "Tas kosong!", Duration = 3})
-            else Rayfield:Notify({Title = "Ready", Content = itemsFound .. " item siap diborong!", Duration = 2}) end
+            Library:Notify("Ready! " .. itemsFound .. " item masuk antrean massal.")
         end
     })
 
-    TabQueue:CreateSection("Filter Mutasi Khusus")
-    local MutationDropdown = TabQueue:CreateDropdown({
-        Name = "Pilih Mutasi", Options = getMutationList(), CurrentOption = {""}, MultipleOptions = false, 
-        Callback = function(Option) SelectedMutation = Option[1] end
-    })
+    local MutationBox = Tabs.Main:AddLeftGroupbox('Mutation & Event Filters')
     
-    TabQueue:CreateButton({
-        Name = "🚀 GENERATE QUEUE: BY MUTATION",
-        Callback = function()
-            if TargetPlayerName == "" then return Rayfield:Notify({Title = "Error", Content = "Pilih pembeli dulu!", Duration = 2}) end
-            if SelectedMutation == "" or SelectedMutation == "[TIDAK ADA MUTASI]" then return Rayfield:Notify({Title = "Error", Content = "Pilih mutasi valid!", Duration = 2}) end
+    MutationBox:AddDropdown('MutationDropdown', {
+        Values = getMutationList(), Default = 1, Multi = false, Text = 'Pilih Kategori Mutasi',
+        Callback = function(Value) SelectedMutation = Value end
+    })
+
+    MutationBox:AddButton({
+        Text = '🚀 GENERATE BY MUTATION',
+        Func = function()
+            if TargetPlayerName == "" or TargetPlayerName == "Tidak ada player lain" then return Library:Notify("Pilih pembeli dulu!") end
+            if SelectedMutation == "" or SelectedMutation == "[TIDAK ADA MUTASI]" then return Library:Notify("Tidak ada mutasi valid!") end
             
             CurrentQueue = {}; ItemsProcessed = 0; local itemsFound = 0
             for _, tool in ipairs(getAllTools()) do  
@@ -182,38 +194,55 @@ local success, errorMessage = pcall(function()
                     if m and tostring(m) == SelectedMutation then table.insert(CurrentQueue, tool); itemsFound = itemsFound + 1 end
                 end  
             end  
-            if itemsFound == 0 then Rayfield:Notify({Title = "Kosong", Content = "Tidak ada item " .. SelectedMutation, Duration = 3})
-            else Rayfield:Notify({Title = "Ready", Content = itemsFound .. " Item " .. SelectedMutation .. " masuk antrean!", Duration = 2}) end
+            Library:Notify("Sukses! " .. itemsFound .. " Item " .. SelectedMutation .. " masuk antrean.")
         end
     })
 
-    TabQueue:CreateSection("Keranjang Custom Mix")
+    MutationBox:AddButton({
+        Text = '🚀 GENERATE ALL BACON MATERIALS',
+        Func = function()
+            if TargetPlayerName == "" or TargetPlayerName == "Tidak ada player lain" then return Library:Notify("Pilih pembeli dulu!") end
+            CurrentQueue = {}; ItemsProcessed = 0; local itemsFound = 0
+            for _, tool in ipairs(getAllTools()) do  
+                if isTradeable(tool) then  
+                    local displayName = getFullItemName(tool)
+                    local baseNameOnly = string.split(string.split(displayName, " [")[1], " (Lv")[1]
+                    if BaconEventItems[baseNameOnly] or BaconEventItems[displayName] then table.insert(CurrentQueue, tool); itemsFound = itemsFound + 1 end  
+                end  
+            end  
+            Library:Notify("Sukses! " .. itemsFound .. " Bacon Materials masuk antrean.")
+        end
+    })
+
+    -- Sisi Kanan Tab 1: Custom Basket Mix
+    local RightBox = Tabs.Main:AddRightGroupbox('Custom Pack Mix')
+    
     local SelectedMixItem = ""
     local SelectedMixQty = 0
     local function getBaseName(dropdownString) return string.split(dropdownString, " | Qty:")[1] or dropdownString end
 
-    local ItemDropdown = TabQueue:CreateDropdown({
-        Name = "Pilih Item", Options = {"[ANY ASSET]"}, CurrentOption = {"[ANY ASSET]"}, MultipleOptions = false, 
-        Callback = function(Option) SelectedMixItem = getBaseName(Option[1]) end
+    RightBox:AddDropdown('ItemDropdown', {
+        Values = {"[ANY ASSET]"}, Default = 1, Multi = false, Text = 'Pilih Item',
+        Callback = function(Value) SelectedMixItem = getBaseName(Value) end
     })
-    
-    TabQueue:CreateInput({
-        Name = "Jumlah (Qty)", PlaceholderText = "Berapa banyak?", RemoveTextAfterFocusLost = false, 
-        Callback = function(Text) SelectedMixQty = tonumber(Text) or 0 end
+
+    RightBox:AddInput('QtyInput', {
+        Default = '', Numeric = true, Finished = true, Text = 'Jumlah (Qty)', Placeholder = 'Berapa banyak?',
+        Callback = function(Value) SelectedMixQty = tonumber(Value) or 0 end
     })
-    
-    local CartStatus = TabQueue:CreateParagraph({Title = "🛒 Isi Keranjang", Content = "Keranjang kosong."})
+
+    local CartStatusLabel = RightBox:AddLabel('🛒 Keranjang kosong.')
 
     local function updateCartDisplay()
-        local text = ""; local total = 0
+        local text = "🛒 ISI KERANJANG:\n" local total = 0
         for name, qty in pairs(ShoppingCart) do text = text .. "- " .. name .. " (x" .. qty .. ")\n"; total = total + qty end
-        if total == 0 then text = "Keranjang kosong." else text = text .. "\nTotal Item: " .. total end
-        CartStatus:Set({Title = "🛒 Isi Keranjang", Content = text})
+        if total == 0 then text = "🛒 Keranjang kosong." else text = text .. "Total Item: " .. total end
+        CartStatusLabel:SetText(text)
     end
 
-    TabQueue:CreateButton({
-        Name = "➕ Tambah Sesuai Qty", 
-        Callback = function() 
+    RightBox:AddButton({
+        Text = '➕ Tambah Sesuai Qty',
+        Func = function()
             if SelectedMixItem ~= "" and SelectedMixItem ~= "[ANY ASSET]" and SelectedMixQty > 0 then 
                 local rs = getRealStock(SelectedMixItem) 
                 local cur = ShoppingCart[SelectedMixItem] or 0 
@@ -222,14 +251,14 @@ local success, errorMessage = pcall(function()
             end 
         end
     })
-    
-    TabQueue:CreateButton({Name = "➕ Tambah MAX", Callback = function() if SelectedMixItem ~= "" and SelectedMixItem ~= "[ANY ASSET]" then ShoppingCart[SelectedMixItem] = getRealStock(SelectedMixItem); updateCartDisplay() end end})
-    TabQueue:CreateButton({Name = "🗑️ Kosongkan Keranjang", Callback = function() ShoppingCart = {}; updateCartDisplay() end})
 
-    TabQueue:CreateButton({
-        Name = "🚀 GENERATE QUEUE DARI KERANJANG", 
-        Callback = function() 
-            if TargetPlayerName == "" then return Rayfield:Notify({Title = "Error", Content = "Pilih pembeli dulu!", Duration = 2}) end
+    RightBox:AddButton({Text = '➕ Tambah MAX', Func = function() if SelectedMixItem ~= "" and SelectedMixItem ~= "[ANY ASSET]" then ShoppingCart[SelectedMixItem] = getRealStock(SelectedMixItem); updateCartDisplay() end end})
+    RightBox:AddButton({Text = '🗑️ Kosongkan Keranjang', Func = function() ShoppingCart = {}; updateCartDisplay() end})
+    
+    RightBox:AddButton({
+        Text = '🚀 GENERATE QUEUE DARI KERANJANG',
+        Func = function()
+            if TargetPlayerName == "" or TargetPlayerName == "Tidak ada player lain" then return Library:Notify("Pilih pembeli dulu!") end
             CurrentQueue = {}; ItemsProcessed = 0; local needed = {}; for k,v in pairs(ShoppingCart) do needed[k] = v end
             local itemsFound = 0
             for _, tool in ipairs(getAllTools()) do 
@@ -238,21 +267,26 @@ local success, errorMessage = pcall(function()
                     if needed[name] and needed[name] > 0 then table.insert(CurrentQueue, tool); needed[name] = needed[name] - 1; itemsFound = itemsFound + 1 end 
                 end 
             end
-            Rayfield:Notify({Title = "Ready", Content = itemsFound .. " custom items queued.", Duration = 2})
+            Library:Notify("Basket Ready! " .. itemsFound .. " item custom diantrekan.")
         end
     })
 
     -- ==========================================
-    -- TAB 2: SENDER (P1) - STABLE GOD-SYNC
+    -- TAB 2: SENDER CONTROL PANEL (P1)
     -- ==========================================
-    local TabControl = Window:CreateTab("2. Sender (P1)", 4483362458)
-    local LiveProgress = TabControl:CreateParagraph({Title = "⚡ Progress P1", Content = "Sisa: 0\nTerkirim: 0"})
-    local ActionLog = TabControl:CreateParagraph({Title = "📜 Live Log", Content = "Menunggu perintah..."})
+    local SenderBox = Tabs.Sender:AddLeftGroupbox('Execution Command')
+    local ProgressLabel = SenderBox:AddLabel('⚡ Progress P1:\nSisa Antrean: 0\nTerkirim Sesi Ini: 0')
+    local LogLabel = SenderBox:AddLabel('📜 Log Status:\nMenunggu perintah...')
 
-    local function updateProgressUI() LiveProgress:Set({Title = "⚡ Progress P1", Content = string.format("Sisa Item Antrean: %d\nItem Terkirim: %d", #CurrentQueue, ItemsProcessed)}) end
-    local function setLog(txt) ActionLog:Set({Title = "📜 Live Log", Content = txt}) end
+    local function updateProgressUI() 
+        ProgressLabel:SetText(string.format("⚡ Progress P1:\nSisa Item Antrean: %d\nTerkirim Sesi Ini: %d", #CurrentQueue, ItemsProcessed)) 
+    end
+    local function setLog(txt) LogLabel:SetText("📜 Log Status:\n" .. txt) end
 
-    TabControl:CreateSlider({Name = "Insert Delay", Range = {0.1, 1.0}, Increment = 0.1, CurrentValue = 0.3, Callback = function(Value) InsertDelay = Value end})
+    SenderBox:AddSlider('DelaySlider', {
+        Text = 'Insert Delay (Detik)', Default = 0.3, Min = 0.1, Max = 1.0, Rounding = 1, Compact = false,
+        Callback = function(Value) InsertDelay = Value end
+    })
 
     local function executeSenderBatch()
         if IsProcessing or #CurrentQueue == 0 then return false end
@@ -306,26 +340,27 @@ local success, errorMessage = pcall(function()
             while tradeFrame and tradeFrame.Parent and tradeFrame.Visible do task.wait(0.5) end
         end
         
-        -- Update Analytics
+        -- Sinkronisasi Tracker Analytics Sesi
         ItemsProcessed = ItemsProcessed + batchSize
         TotalItemsSent = TotalItemsSent + batchSize
         P1TradesCompleted = P1TradesCompleted + 1
         
         updateProgressUI()
-        setLog("✅ TRADE SUKSES: " .. batchSize .. " item terkirim!")
+        setLog("✅ BATCH SUKSES: " .. batchSize .. " item aman!")
         IsProcessing = false
         return true
     end
 
-    TabControl:CreateButton({Name = "▶️ RUN 1 BATCH SEBAGAI P1", Callback = function() task.spawn(executeSenderBatch) end})
-    TabControl:CreateToggle({
-        Name = "🔁 FULL AUTO LOOP (P1)", CurrentValue = false, 
-        Callback = function(Value) 
+    SenderBox:AddButton({Text = '▶️ RUN 1 BATCH SEBAGAI P1', Func = function() task.spawn(executeSenderBatch) end})
+    
+    SenderBox:AddToggle('AutoLoopToggle', {
+        Text = '🔁 ENABLE FULL AUTO LOOP (P1)', Default = false,
+        Callback = function(Value)
             AutoLoopEnabled = Value 
             if AutoLoopEnabled then 
                 task.spawn(function() 
                     while AutoLoopEnabled do 
-                        if #CurrentQueue == 0 then setLog("🏁 Antrean kosong. Loop berhenti."); AutoLoopEnabled = false; break end 
+                        if #CurrentQueue == 0 then setLog("🏁 Antrean kosong. Loop selesai."); Toggles.AutoLoopToggle:SetValue(false); break end 
                         executeSenderBatch() 
                         task.wait(2.5) 
                     end 
@@ -335,29 +370,29 @@ local success, errorMessage = pcall(function()
     })
 
     -- ==========================================
-    -- TAB 3: RECEIVER (P2) - UNIVERSAL GAIB
+    -- TAB 3: RECEIVER MODE PANEL (P2)
     -- ==========================================
-    local TabReceiver = Window:CreateTab("3. Receiver (P2)", 4483362458)
-    TabReceiver:CreateParagraph({Title = "🤖 Mode Penerima Universal (Gaib)", Content = "P2 akan menyadap semua request yang masuk dari siapapun dan memprosesnya secara otomatis."})
-    
-    local ReceiverLog = TabReceiver:CreateParagraph({Title = "📡 Status P2", Content = "Menunggu dihidupkan..."})
+    local ReceiverBox = Tabs.Receiver:AddLeftGroupbox('Universal Receiver Engine')
+    ReceiverBox:AddLabel('🤖 Mode Penerima Universal (Gaib):\nMenyadap semua ajakan trade secara otomatis tanpa memilih nama.')
+    local ReceiverLogLabel = ReceiverBox:AddLabel('📡 Status P2:\nMenunggu mesin diaktifkan...')
 
-    TabReceiver:CreateToggle({
-        Name = "🤖 ENABLE UNIVERSAL AUTO-ACCEPT", CurrentValue = false,
+    ReceiverBox:AddToggle('UniversalReceiverToggle', {
+        Text = '🤖 ACTIVATE AUTO-ACCEPT ENGINE', Default = false,
         Callback = function(Value)
             AutoReceiverEnabled = Value
             if AutoReceiverEnabled then
-                ReceiverLog:Set({Title = "📡 Status P2", Content = "✅ Memantau request yang masuk..."})
+                ReceiverLogLabel:SetText("📡 Status P2:\n✅ Engine Aktif! Memantau request...")
                 
                 task.spawn(function()
                     while AutoReceiverEnabled do
                         local tradeFrame = localPlayer.PlayerGui:FindFirstChild("TradingFrame", true)
                         
+                        -- Penyadap Sinyal Request Masuk
                         if not (tradeFrame and tradeFrame.Visible) then
                             local pGui = localPlayer:FindFirstChild("PlayerGui")
                             if pGui then
                                 for _, gui in ipairs(pGui:GetChildren()) do
-                                    if gui:IsA("ScreenGui") and gui.Name ~= "Rayfield" then
+                                    if gui:IsA("ScreenGui") and gui.Name ~= "Library" then
                                         for _, desc in ipairs(gui:GetDescendants()) do
                                             if (desc:IsA("TextButton") or desc:IsA("ImageButton")) and desc.Visible then
                                                 local text = string.lower(desc:IsA("TextButton") and desc.Text or desc.Name)
@@ -393,84 +428,82 @@ local success, errorMessage = pcall(function()
                             end
                             task.wait(1)
                         else
-                            ReceiverLog:Set({Title = "📡 Status P2", Content = "📥 UI Terbuka! Menunggu P1 Accept..."})
+                            -- Alur Penguncian Otomatis God-Sync P2
+                            ReceiverLogLabel:SetText("📡 Status P2:\n📥 UI Terbuka! Menunggu P1 Accept...")
                             while tradeFrame.Visible and not isOpponentConfirmed(tradeFrame) do task.wait(0.2) end
                             
                             if tradeFrame.Visible and isOpponentConfirmed(tradeFrame) then
-                                ReceiverLog:Set({Title = "📡 Status P2", Content = "🔒 P1 Accept. P2 Lock Fase 1 (5.5 detik)..."})
+                                ReceiverLogLabel:SetText("📡 Status P2:\n🔒 P1 Accept. Lock Fase 1 (5.5 detik)...")
                                 task.wait(5.5)
                                 r_trade_i:FireServer("Confirm")
                                 task.wait(1) 
                             end
 
-                            ReceiverLog:Set({Title = "📡 Status P2", Content = "⏳ Menunggu layar Transisi Final..."})
+                            ReceiverLogLabel:SetText("📡 Status P2:\n⏳ Menunggu transisi layar ke Final...")
                             while tradeFrame.Visible and isOpponentConfirmed(tradeFrame) do task.wait(0.2) end
                             while tradeFrame.Visible and not isOpponentConfirmed(tradeFrame) do task.wait(0.2) end
 
                             if tradeFrame.Visible and isOpponentConfirmed(tradeFrame) then
-                                ReceiverLog:Set({Title = "📡 Status P2", Content = "🔒 Masuk Final. P2 Lock Fase 2 (5.5 detik)..."})
+                                ReceiverLogLabel:SetText("📡 Status P2:\n🔒 Masuk Final. Lock Fase 2 (5.5 detik)...")
                                 task.wait(5.5)
                                 r_trade_i:FireServer("Confirm")
                             end
 
-                            ReceiverLog:Set({Title = "📡 Status P2", Content = "✅ Menyelesaikan..."})
+                            ReceiverLogLabel:SetText("📡 Status P2:\n✅ Menyelesaikan transaksi...")
                             while tradeFrame.Visible do task.wait(0.5) end
                             
-                            -- Update P2 Analytics
                             P2TradesCompleted = P2TradesCompleted + 1
-                            
-                            ReceiverLog:Set({Title = "📡 Status P2", Content = "✅ Trade beres! Kembali memantau..."})
+                            ReceiverLogLabel:SetText("📡 Status P2:\n✅ Transaksi Sukses! Standby kembali...")
                         end
                     end
                 end)
             else
-                ReceiverLog:Set({Title = "📡 Status P2", Content = "❌ Non-aktif."})
+                ReceiverLogLabel:SetText("📡 Status P2:\n❌ Engine Non-aktif.")
             end
-        end,
+        end
     })
 
     -- ==========================================
-    -- TAB 4: DASHBOARD & INVENTORY
+    -- TAB 4: LIVE DASHBOARD & DATABASE INVENTORY
     -- ==========================================
-    local TabInventory = Window:CreateTab("4. Dash & Inv", 4483362458)
+    local DashBox = Tabs.Analytics:AddLeftGroupbox('Live Statistics Command Center')
+    local LiveStatsLabel = DashBox:AddLabel('Memuat data statistik...')
     
-    TabInventory:CreateSection("Live Analytics Dashboard")
-    local AnalyticsLabel = TabInventory:CreateParagraph({Title = "📊 Session Stats", Content = "Memuat..."})
-    
-    -- Loop untuk memperbarui jam uptime dan statistik
+    -- Loop Refresh Indikator Analitik Real-Time
     task.spawn(function()
         while task.wait(1) do
             local currentUptime = tick() - SessionStartTime
             local statsText = string.format(
-                "⏱️ Session Uptime: %s\n" ..
-                "📈 Total P1 Trades: %d\n" ..
-                "📥 Total P2 Trades: %d\n" ..
-                "📦 Total Items Sent: %d",
+                "⏱️ SESSION UPTIME:  %s\n\n" ..
+                "📈 SUCCESS P1 TRADES:  %d\n" ..
+                "📥 SUCCESS P2 TRADES:  %d\n" ..
+                "📦 TOTAL ITEMS MOVED:  %d",
                 formatTime(currentUptime),
                 P1TradesCompleted,
                 P2TradesCompleted,
                 TotalItemsSent
             )
-            AnalyticsLabel:Set({Title = "📊 Session Stats", Content = statsText})
+            LiveStatsLabel:SetText(statsText)
         end
     end)
 
-    TabInventory:CreateSection("Inventory Settings")
-    TabInventory:CreateToggle({
-        Name = "👁️ Enable Clean UI Mode (Anti-Lag)", CurrentValue = false,
+    local InvBox = Tabs.Analytics:AddRightGroupbox('Database Management')
+    
+    InvBox:AddToggle('CleanUIToggle', {
+        Text = '👁️ Clean UI Mode (Anti-Lag)', Default = false,
         Callback = function(Value)
             StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, not Value)
             local pGui = localPlayer:WaitForChild("PlayerGui")  
             for _, gui in ipairs(pGui:GetChildren()) do  
-                if gui:IsA("ScreenGui") and gui.Name ~= "Rayfield" then  
+                if gui:IsA("ScreenGui") and gui.Name ~= "Library" then  
                     if Value then gui:SetAttribute("WasEnabled", gui.Enabled); gui.Enabled = false  
                     else gui.Enabled = gui:GetAttribute("WasEnabled") or true end  
                 end  
             end  
-        end,
+        end
     })
 
-    local FullInventoryLabel = TabInventory:CreateParagraph({Title = "🎒 Database Inventory", Content = "Menyelaraskan data..."})
+    local FullInventoryLabel = InvBox:AddLabel('Menyinkronkan data tas...')
 
     local function updateInventoryDisplay()
         local inventoryData = {}
@@ -484,24 +517,26 @@ local success, errorMessage = pcall(function()
             end
         end  
         
+        -- Pembaruan Elemen Dropdown Dinamis di LinoriaLib
         local itemsList = {"[ANY ASSET]"}  
         for name, count in pairs(inventoryData) do table.insert(itemsList, name .. " | Qty: " .. count) end  
         table.sort(itemsList, function(a, b) if a == "[ANY ASSET]" then return true end if b == "[ANY ASSET]" then return false end return a < b end)  
         
-        ItemDropdown:Refresh(itemsList)
-        MutationDropdown:Refresh(getMutationList()) 
+        Options.ItemDropdown:SetValues(itemsList)
+        Options.MutationDropdown:SetValues(getMutationList())
+        Options.PlayerDropdown:SetValues(getPlayerList())
         
-        local displayString = "Total Item Tradeable: " .. totalCount .. "\n\n"  
+        local displayString = "TOTAL TRADABLE: " .. totalCount .. "\n\n"  
         if totalCount == 0 then 
-            displayString = displayString .. "Tas kamu kosong." 
+            displayString = displayString .. "Tas kosong melompong." 
         else
             local categorizedItems = {}
             for itemName, amount in pairs(inventoryData) do
-                local category = "📦 NORMAL / BASE"
+                local category = "📦 NORMAL ASSETS"
                 local mutMatch = string.match(itemName, "%[(.-)%]")
                 local baseNameOnly = string.split(string.split(itemName, " [")[1], " (Lv")[1]
                 
-                if BaconEventItems[baseNameOnly] or BaconEventItems[itemName] then category = "🥓 BACON EVENT MATERIALS"
+                if BaconEventItems[baseNameOnly] or BaconEventItems[itemName] then category = "🥓 BACON MATERIALS"
                 elseif mutMatch then category = "✨ " .. string.upper(mutMatch) end
                 
                 if not categorizedItems[category] then categorizedItems[category] = {} end
@@ -515,15 +550,16 @@ local success, errorMessage = pcall(function()
             for _, cat in ipairs(sortedCategories) do
                 displayString = displayString .. "=== " .. cat .. " ===\n"
                 table.sort(categorizedItems[cat], function(a, b) return a.name < b.name end)
-                for _, item in ipairs(categorizedItems[cat]) do displayString = displayString .. string.format(" • %s  |  Qty: %d\n", item.name, item.qty) end
+                for _, item in ipairs(categorizedItems[cat]) do displayString = displayString .. string.format(" • %s (x%d)\n", item.name, item.qty) end
                 displayString = displayString .. "\n"
             end
         end
-        FullInventoryLabel:Set({Title = "🎒 Database Inventory", Content = displayString})
+        FullInventoryLabel:SetText(displayString)
     end
 
-    TabInventory:CreateButton({Name = "🔄 Refresh Database", Callback = function() updateInventoryDisplay(); PlayerDropdown:Refresh(getPlayerList()) end})
+    InvBox:AddButton({Text = '🔄 Refresh Database System', Func = function() updateInventoryDisplay() end})
 
+    -- Sinkronisasi Otomatis saat Item Bertambah/Berkurang
     local function connectInventory()
         local backpack = localPlayer:WaitForChild("Backpack")
         table.insert(InventoryConnections, backpack.ChildAdded:Connect(updateInventoryDisplay))
@@ -533,17 +569,21 @@ local success, errorMessage = pcall(function()
         table.insert(InventoryConnections, char.ChildRemoved:Connect(updateInventoryDisplay))
         localPlayer.CharacterAdded:Connect(function(newChar)
             table.insert(InventoryConnections, newChar.ChildAdded:Connect(updateInventoryDisplay))
-            table.insert(InventoryConnections, newChar.ChildRemoved:Connect(updateInventoryDisplay))
+            table.insert(InventoryConnections, newChar.CharacterRemoved:Connect(updateInventoryDisplay))
         end)
         task.wait(0.5)
         updateInventoryDisplay()
     end
+    
+    -- Juru Kunci UI & Event Binding
+    ThemeManager:SetLibrary(Library)
+    ThemeManager:ApplyToTab(Tabs.Analytics)
     connectInventory()
 
 end)
 
 if not success then
-    warn("MOCTA SCRIPT ERROR: " .. tostring(errorMessage))
+    warn("MOCTA LINORIA EXTENSION ERROR: " .. tostring(errorMessage))
     if not game:IsLoaded() then game.Loaded:Wait() end
-    pcall(function() game.StarterGui:SetCore("SendNotification", {Title = "🚨 Fatal Error", Text = tostring(errorMessage), Duration = 20}) end)
+    pcall(function() StarterGui:SetCore("SendNotification", {Title = "🚨 Fatal Error", Text = tostring(errorMessage), Duration = 10}) end)
 end
