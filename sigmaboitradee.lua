@@ -1,11 +1,11 @@
 -- ==========================================================
--- MOCTA TRADE AUTOMATOR V18.2 (FLUENT PREMIUM EDITION)
--- Build: Single-File UI (Anti 404), Live Analytics, God-Sync
+-- MOCTA TRADE AUTOMATOR V18.3 (MOBILE OPTIMIZED EDITION)
+-- Build: Mobile Resized UI, True Blackout Anti-Lag, God-Sync
 -- ==========================================================
 
 local success, errorMessage = pcall(function()
     
-    -- // Memuat Fluent UI (Single-File Release) // --
+    -- // Memuat Fluent UI (Single-File) // --
     local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
     
     local StarterGui = game:GetService("StarterGui")
@@ -131,13 +131,13 @@ local success, errorMessage = pcall(function()
     end
 
     -- ==========================================
-    -- INISIALISASI FLUENT UI
+    -- INISIALISASI FLUENT UI (UKURAN MOBILE)
     -- ==========================================
     local Window = Fluent:CreateWindow({
         Title = "Mocta Trade Automator",
-        SubTitle = "V18.2 (Fluent Edition)",
-        TabWidth = 160,
-        Size = UDim2.fromOffset(580, 460),
+        SubTitle = "V18.3 Mobile",
+        TabWidth = 130, -- Dipersempit
+        Size = UDim2.fromOffset(450, 260), -- Jauh lebih kecil & pas untuk layar HP
         Acrylic = false, 
         Theme = "Darker",
         MinimizeKey = Enum.KeyCode.RightControl
@@ -448,7 +448,7 @@ local success, errorMessage = pcall(function()
     })
 
     -- ==========================================
-    -- TAB 4: LIVE DASHBOARD & DATABASE INVENTORY
+    -- TAB 4: LIVE DASHBOARD & TRUE ANTI-LAG
     -- ==========================================
     local LiveStatsLabel = Tabs.Dash:AddParagraph({Title = "📊 Live Statistics", Content = "Memuat data..."})
     
@@ -469,13 +469,37 @@ local success, errorMessage = pcall(function()
         end
     end)
 
+    -- [BARU] Setup Layar Blackout untuk True Anti-Lag
+    local BlackoutGui = Instance.new("ScreenGui")
+    BlackoutGui.Name = "MoctaBlackout"
+    BlackoutGui.IgnoreGuiInset = true
+    BlackoutGui.DisplayOrder = 99999 -- Di atas game, tapi di bawah Executor UI
+    local bgFrame = Instance.new("Frame", BlackoutGui)
+    bgFrame.Size = UDim2.new(1, 0, 1, 0)
+    bgFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15) -- Hitam pekat
+    bgFrame.BorderSizePixel = 0
+
     Tabs.Dash:AddToggle("CleanUI", {
-        Title = "👁️ Clean UI Mode (Anti-Lag)", Default = false,
+        Title = "👁️ Clean UI (True Anti-Lag)", Default = false,
         Callback = function(Value)
             StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, not Value)
+            
+            if Value then
+                -- Pasang Layar Hitam (Blackout)
+                pcall(function() BlackoutGui.Parent = game:GetService("CoreGui") end)
+                if not BlackoutGui.Parent then BlackoutGui.Parent = localPlayer:WaitForChild("PlayerGui") end
+                -- Matikan Render 3D (Didukung Fluxus/Delta dll)
+                pcall(function() RunService:Set3dRenderingEnabled(false) end)
+            else
+                -- Lepas Layar Hitam
+                BlackoutGui.Parent = nil
+                pcall(function() RunService:Set3dRenderingEnabled(true) end)
+            end
+
+            -- Matikan UI bawaan game sebagai backup
             local pGui = localPlayer:WaitForChild("PlayerGui")  
             for _, gui in ipairs(pGui:GetChildren()) do  
-                if gui:IsA("ScreenGui") and gui.Name ~= "Fluent" then  
+                if gui:IsA("ScreenGui") and gui.Name ~= "Fluent" and gui.Name ~= "MoctaBlackout" then  
                     if Value then gui:SetAttribute("WasEnabled", gui.Enabled); gui.Enabled = false  
                     else gui.Enabled = gui:GetAttribute("WasEnabled") or true end  
                 end  
@@ -555,7 +579,7 @@ local success, errorMessage = pcall(function()
     
     Window:SelectTab(1)
     connectInventory()
-    Fluent:Notify({Title="Berhasil!", Content="Mocta Trade V18.2 siap digunakan.", Duration=5})
+    Fluent:Notify({Title="Berhasil!", Content="Mocta Trade V18.3 Mobile siap digunakan.", Duration=5})
 
 end)
 
