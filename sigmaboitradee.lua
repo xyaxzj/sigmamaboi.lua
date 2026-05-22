@@ -1,6 +1,6 @@
 -- ==========================================================
--- MOCTA TRADE AUTOMATOR V18.4 (RAYFIELD RESURRECTION)
--- Build: Stable Rayfield UI, Aggressive Clean UI, Live Analytics
+-- MOCTA TRADE AUTOMATOR V18.5 (SMOOTH RESTORE EDITION)
+-- Build: Stable Rayfield UI, Smooth Restore Anti-Lag, Live Analytics
 -- ==========================================================
 
 local success, errorMessage = pcall(function()
@@ -130,7 +130,7 @@ local success, errorMessage = pcall(function()
     -- INISIALISASI UI
     -- ==========================================
     local Window = Rayfield:CreateWindow({
-        Name = "Mocta Trade V18.4", 
+        Name = "Mocta Trade V18.5", 
         LoadingTitle = "Loading System...", 
         ConfigurationSaving = { Enabled = false }, 
         Theme = "DarkBlue"
@@ -436,7 +436,7 @@ local success, errorMessage = pcall(function()
     })
 
     -- ==========================================
-    -- TAB 4: DASHBOARD & TRUE CLEAN UI
+    -- TAB 4: DASHBOARD & SMOOTH CLEAN UI
     -- ==========================================
     local TabDash = Window:CreateTab("4. Dash & Inv", 4483362458)
     
@@ -455,41 +455,35 @@ local success, errorMessage = pcall(function()
         end
     end)
 
-    -- [SISTEM ANTI LAG AGRESIF]
+    -- [SISTEM ANTI LAG AGRESIF - SMOOTH RESTORE]
     TabDash:CreateToggle({
         Name = "👁️ Clean UI (Aggressive Blocker)", 
         CurrentValue = false,
         Callback = function(Value)
+            local pGui = localPlayer:WaitForChild("PlayerGui")
+            
             if Value then
                 StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false)
-                -- Loop agresif untuk membunuh UI yang baru muncul setiap frame
                 RunService:BindToRenderStep("MoctaAggressiveCleanUI", 1, function()
-                    local pGui = localPlayer:FindFirstChild("PlayerGui")
-                    if pGui then
-                        for _, gui in ipairs(pGui:GetChildren()) do
-                            -- Sembunyikan semua ScreenGui KECUALI Rayfield
-                            if gui:IsA("ScreenGui") and gui.Name ~= "Rayfield" and gui.Enabled then
-                                gui:SetAttribute("WasEnabled", true)
-                                gui.Enabled = false
-                            end
+                    for _, gui in ipairs(pGui:GetChildren()) do
+                        if gui:IsA("ScreenGui") and gui.Name ~= "Rayfield" and gui.Enabled then
+                            gui:SetAttribute("WasEnabled", true)
+                            gui.Enabled = false
                         end
                     end
                 end)
             else
-                StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, true)
                 RunService:UnbindFromRenderStep("MoctaAggressiveCleanUI")
+                StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, true)
                 
-                -- Kembalikan UI seperti semula
-                local pGui = localPlayer:FindFirstChild("PlayerGui")
-                if pGui then
-                    for _, gui in ipairs(pGui:GetChildren()) do
-                        if gui:IsA("ScreenGui") and gui.Name ~= "Rayfield" then
-                            if gui:GetAttribute("WasEnabled") then
+                for _, gui in ipairs(pGui:GetChildren()) do
+                    if gui:IsA("ScreenGui") and gui.Name ~= "Rayfield" then
+                        if gui:GetAttribute("WasEnabled") then
+                            task.spawn(function()
+                                task.wait(0.5) -- Jeda halus agar UI tidak meledak di layar
                                 gui.Enabled = true
                                 gui:SetAttribute("WasEnabled", nil)
-                            else
-                                gui.Enabled = true
-                            end
+                            end)
                         end
                     end
                 end
