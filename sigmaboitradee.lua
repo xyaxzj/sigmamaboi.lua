@@ -1,12 +1,12 @@
 -- ==========================================================
--- MOCTA TRADE AUTOMATOR V18.0 (LINORIA STABLE EDITION)
--- Build: Clean UI Migration to LinoriaLib + Full Features Intact
+-- MOCTA TRADE AUTOMATOR V18.1 (LINORIA STABLE EDITION)
+-- Build: Fixed HTTP 404 GitHub Repository Link
 -- ==========================================================
 
 local success, errorMessage = pcall(function()
     
-    -- // Memuat LinoriaLib & Addons // --
-    local repo = 'https://raw.githubusercontent.com/wally-rblx/LinoriaLib/main/'
+    -- // Memuat LinoriaLib & Addons (LINK REPO DIPERBAIKI) // --
+    local repo = 'https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/'
     local Library = loadstring(game:HttpGet(repo .. 'Library.lua'))()
     local ThemeManager = loadstring(game:HttpGet(repo .. 'addons/ThemeManager.lua'))()
 
@@ -138,7 +138,7 @@ local success, errorMessage = pcall(function()
     -- STRUKTUR WINDOW & TAB LINORIALIB
     -- ==========================================
     local Window = Library:CreateWindow({
-        Title = 'Mocta Trade Automator V18.0',
+        Title = 'Mocta Trade Automator V18.1',
         Center = true,
         AutoShow = true,
         TabPadding = 8,
