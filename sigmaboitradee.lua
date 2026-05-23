@@ -1,11 +1,13 @@
 -- ==========================================================
--- MOCTA TRADE AUTOMATOR V18.6 (HISTORY LEDGER EDITION)
--- Build: Stable Rayfield, Aggressive Blocker, Live Trade History
+-- MOCTA TRADE AUTOMATOR V18.7 (CLOUD LOADER EDITION)
+-- Build: Auto-Update System, Rayfield UI, Smooth Anti-Lag, Ledger
 -- ==========================================================
+
+-- !!! MASUKKAN LINK RAW GITHUB KAMU DI BAWAH INI !!!
+local SCRIPT_URL = "PASTE_LINK_RAW_GITHUB_KAMU_DISINI"
 
 local success, errorMessage = pcall(function()
     
-    -- // Dependensi UI yang 100% Work (Rayfield) // --
     local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
     local StarterGui = game:GetService("StarterGui")
     local Players = game:GetService("Players")
@@ -17,7 +19,6 @@ local success, errorMessage = pcall(function()
     local r_trade_i = networkFolder:WaitForChild("rev_trade_i", 5) 
     local rev_trade_start = networkFolder:WaitForChild("rev_trade_start", 5) 
 
-    -- // Variabel State // --
     local TargetPlayerName = ""
     local SelectedMutation = ""
     local ShoppingCart = {} 
@@ -43,9 +44,6 @@ local success, errorMessage = pcall(function()
         ["Strawberry Elephant"] = true
     }
 
-    -- ==========================================
-    -- FUNGSI HELPER
-    -- ==========================================
     local function formatTime(seconds)
         local h = math.floor(seconds / 3600)
         local m = math.floor((seconds % 3600) / 60)
@@ -128,11 +126,11 @@ local success, errorMessage = pcall(function()
     end
 
     -- ==========================================
-    -- INISIALISASI UI
+    -- INISIALISASI UI RAYFIELD
     -- ==========================================
     local Window = Rayfield:CreateWindow({
-        Name = "Mocta Trade V18.6", 
-        LoadingTitle = "Loading System...", 
+        Name = "Mocta Trade V18.7", 
+        LoadingTitle = "Loading Cloud System...", 
         ConfigurationSaving = { Enabled = false }, 
         Theme = "DarkBlue"
     })
@@ -288,7 +286,7 @@ local success, errorMessage = pcall(function()
         setLog("2️⃣ Memasukkan max 10 item...")
         local batchSize = math.min(10, #CurrentQueue)
         local batch = {}
-        local itemNamesTbl = {} -- Array penampung nama item untuk log harian
+        local itemNamesTbl = {} 
         
         for i = 1, batchSize do 
             local tool = table.remove(CurrentQueue, 1)
@@ -327,26 +325,16 @@ local success, errorMessage = pcall(function()
             while tradeFrame and tradeFrame.Parent and tradeFrame.Visible do task.wait(0.5) end
         end
         
-        -- // PROSES PEMBUATAN STRUK LOG RIWAYAT KOMPLET // --
         P1TradesCompleted = P1TradesCompleted + 1
         ItemsProcessed = ItemsProcessed + batchSize
         TotalItemsSent = TotalItemsSent + batchSize
         
         local entry = string.format("📌 TRADE #%03d | Sesi: %s\nTarget Penerima: %s\nJumlah (Qty): %d Item\nDaftar Aset:\n • %s\n--------------------------------------------\n", 
-            P1TradesCompleted,
-            formatTime(tick() - SessionStartTime),
-            TargetPlayerName, 
-            batchSize, 
-            itemListText
+            P1TradesCompleted, formatTime(tick() - SessionStartTime), TargetPlayerName, batchSize, itemListText
         )
         
-        if TradeHistoryString == "Belum ada riwayat transaksi." then
-            TradeHistoryString = entry
-        else
-            TradeHistoryString = entry .. TradeHistoryString
-        end
+        if TradeHistoryString == "Belum ada riwayat transaksi." then TradeHistoryString = entry else TradeHistoryString = entry .. TradeHistoryString end
         
-        -- Update UI Secara Real-Time
         HistoryLogLabel:Set({Title = "📜 History Ledger (P1)", Content = TradeHistoryString})
         updateProgressUI()
         setLog("✅ TRADE SUKSES: " .. batchSize .. " item terkirim!")
@@ -463,9 +451,27 @@ local success, errorMessage = pcall(function()
     })
 
     -- ==========================================
-    -- TAB 4: DASHBOARD & SMOOTH CLEAN UI
+    -- TAB 4: DASHBOARD & CLOUD LOADER
     -- ==========================================
-    local TabDash = Window:CreateTab("4. Dash & Inv", 4483362458)
+    local TabDash = Window:CreateTab("4. Dash & Tools", 4483362458)
+    
+    -- [BARU] SISTEM HOT-RELOAD UPDATE --
+    TabDash:CreateSection("System Management")
+    TabDash:CreateButton({
+        Name = "🔄 Update / Refresh Script ke Versi Terbaru", 
+        Callback = function() 
+            if SCRIPT_URL == "PASTE_LINK_RAW_GITHUB_KAMU_DISINI" then
+                Rayfield:Notify({Title = "Error", Content = "Link GitHub belum disetting di dalam kode!", Duration = 4})
+                return
+            end
+            
+            Rayfield:Notify({Title = "Updating...", Content = "Menarik script versi terbaru dari awan...", Duration = 2})
+            task.wait(1.5)
+            Rayfield:Destroy() 
+            task.wait(0.5)
+            loadstring(game:HttpGet(SCRIPT_URL))()
+        end
+    })
     
     local AnalyticsLabel = TabDash:CreateParagraph({Title = "📊 Session Stats", Content = "Memuat..."})
     task.spawn(function()
@@ -482,17 +488,15 @@ local success, errorMessage = pcall(function()
         end
     end)
 
-    -- Panel Monitor Struk Digital / Riwayat Masuk Keluar Barang
     TabDash:CreateSection("Digital Receipt & Trade History")
     HistoryLogLabel = TabDash:CreateParagraph({Title = "📜 History Ledger (P1)", Content = TradeHistoryString})
 
-    TabDash:CreateSection("Inventory Settings")
+    TabDash:CreateSection("Inventory & Visual Settings")
     TabDash:CreateToggle({
         Name = "👁️ Clean UI (Aggressive Blocker)", 
         CurrentValue = false,
         Callback = function(Value)
             local pGui = localPlayer:WaitForChild("PlayerGui")
-            
             if Value then
                 StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false)
                 RunService:BindToRenderStep("MoctaAggressiveCleanUI", 1, function()
@@ -506,7 +510,6 @@ local success, errorMessage = pcall(function()
             else
                 RunService:UnbindFromRenderStep("MoctaAggressiveCleanUI")
                 StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, true)
-                
                 for _, gui in ipairs(pGui:GetChildren()) do
                     if gui:IsA("ScreenGui") and gui.Name ~= "Rayfield" then
                         if gui:GetAttribute("WasEnabled") then
