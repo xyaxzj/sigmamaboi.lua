@@ -3,7 +3,7 @@
 -- Build: Auto-Update System, Rayfield UI, Smooth Anti-Lag, Ledger
 -- ==========================================================
 
--- !!! MASUKKAN LINK RAW GITHUB KAMU DI BAWAH INI !!!
+-- Link Raw GitHub Utama Mocta Trade
 local SCRIPT_URL = "https://raw.githubusercontent.com/xyaxzj/sigmamaboi.lua/refs/heads/main/sigmaboitradee.lua"
 
 local success, errorMessage = pcall(function()
@@ -455,13 +455,12 @@ local success, errorMessage = pcall(function()
     -- ==========================================
     local TabDash = Window:CreateTab("4. Dash & Tools", 4483362458)
     
-    -- [BARU] SISTEM HOT-RELOAD UPDATE --
     TabDash:CreateSection("System Management")
     TabDash:CreateButton({
         Name = "🔄 Update / Refresh Script ke Versi Terbaru", 
         Callback = function() 
-            if SCRIPT_URL == "PASTE_LINK_RAW_GITHUB_KAMU_DISINI" then
-                Rayfield:Notify({Title = "Error", Content = "Link GitHub belum disetting di dalam kode!", Duration = 4})
+            if SCRIPT_URL == "" then
+                Rayfield:Notify({Title = "Error", Content = "Link GitHub belum diatur!", Duration = 4})
                 return
             end
             
