@@ -4,7 +4,7 @@
 -- ==========================================================
 
 -- !!! MASUKKAN LINK RAW GITHUB KAMU DI BAWAH INI !!!
-local SCRIPT_URL = "PASTE_LINK_RAW_GITHUB_KAMU_DISINI"
+local SCRIPT_URL = "https://raw.githubusercontent.com/xyaxzj/sigmamaboi.lua/refs/heads/main/sigmaboitradee.lua"
 
 local success, errorMessage = pcall(function()
     
