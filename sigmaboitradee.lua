@@ -1,6 +1,6 @@
 -- ==========================================================
--- MOCTA TRADE AUTOMATOR V18.5 (SMOOTH RESTORE EDITION)
--- Build: Stable Rayfield UI, Smooth Restore Anti-Lag, Live Analytics
+-- MOCTA TRADE AUTOMATOR V18.6 (HISTORY LEDGER EDITION)
+-- Build: Stable Rayfield, Aggressive Blocker, Live Trade History
 -- ==========================================================
 
 local success, errorMessage = pcall(function()
@@ -34,6 +34,7 @@ local success, errorMessage = pcall(function()
     local P1TradesCompleted = 0
     local P2TradesCompleted = 0
     local TotalItemsSent = 0
+    local TradeHistoryString = "Belum ada riwayat transaksi."
 
     local BaconEventItems = {
         ["Chicleteira Bicicleteira"] = true,
@@ -130,7 +131,7 @@ local success, errorMessage = pcall(function()
     -- INISIALISASI UI
     -- ==========================================
     local Window = Rayfield:CreateWindow({
-        Name = "Mocta Trade V18.5", 
+        Name = "Mocta Trade V18.6", 
         LoadingTitle = "Loading System...", 
         ConfigurationSaving = { Enabled = false }, 
         Theme = "DarkBlue"
@@ -287,7 +288,16 @@ local success, errorMessage = pcall(function()
         setLog("2️⃣ Memasukkan max 10 item...")
         local batchSize = math.min(10, #CurrentQueue)
         local batch = {}
-        for i = 1, batchSize do table.insert(batch, table.remove(CurrentQueue, 1)) end
+        local itemNamesTbl = {} -- Array penampung nama item untuk log harian
+        
+        for i = 1, batchSize do 
+            local tool = table.remove(CurrentQueue, 1)
+            table.insert(batch, tool)
+            table.insert(itemNamesTbl, getFullItemName(tool))
+        end
+        
+        local itemListText = table.concat(itemNamesTbl, "\n • ")
+        
         for _, tool in ipairs(batch) do
             local guid = getToolGUID(tool)
             if guid then r_trade_i:FireServer("AddItem", tostring(guid)); task.wait(InsertDelay) end
@@ -317,10 +327,27 @@ local success, errorMessage = pcall(function()
             while tradeFrame and tradeFrame.Parent and tradeFrame.Visible do task.wait(0.5) end
         end
         
+        -- // PROSES PEMBUATAN STRUK LOG RIWAYAT KOMPLET // --
+        P1TradesCompleted = P1TradesCompleted + 1
         ItemsProcessed = ItemsProcessed + batchSize
         TotalItemsSent = TotalItemsSent + batchSize
-        P1TradesCompleted = P1TradesCompleted + 1
         
+        local entry = string.format("📌 TRADE #%03d | Sesi: %s\nTarget Penerima: %s\nJumlah (Qty): %d Item\nDaftar Aset:\n • %s\n--------------------------------------------\n", 
+            P1TradesCompleted,
+            formatTime(tick() - SessionStartTime),
+            TargetPlayerName, 
+            batchSize, 
+            itemListText
+        )
+        
+        if TradeHistoryString == "Belum ada riwayat transaksi." then
+            TradeHistoryString = entry
+        else
+            TradeHistoryString = entry .. TradeHistoryString
+        end
+        
+        -- Update UI Secara Real-Time
+        HistoryLogLabel:Set({Title = "📜 History Ledger (P1)", Content = TradeHistoryString})
         updateProgressUI()
         setLog("✅ TRADE SUKSES: " .. batchSize .. " item terkirim!")
         IsProcessing = false
@@ -455,7 +482,11 @@ local success, errorMessage = pcall(function()
         end
     end)
 
-    -- [SISTEM ANTI LAG AGRESIF - SMOOTH RESTORE]
+    -- Panel Monitor Struk Digital / Riwayat Masuk Keluar Barang
+    TabDash:CreateSection("Digital Receipt & Trade History")
+    HistoryLogLabel = TabDash:CreateParagraph({Title = "📜 History Ledger (P1)", Content = TradeHistoryString})
+
+    TabDash:CreateSection("Inventory Settings")
     TabDash:CreateToggle({
         Name = "👁️ Clean UI (Aggressive Blocker)", 
         CurrentValue = false,
@@ -480,7 +511,7 @@ local success, errorMessage = pcall(function()
                     if gui:IsA("ScreenGui") and gui.Name ~= "Rayfield" then
                         if gui:GetAttribute("WasEnabled") then
                             task.spawn(function()
-                                task.wait(0.5) -- Jeda halus agar UI tidak meledak di layar
+                                task.wait(0.5) 
                                 gui.Enabled = true
                                 gui:SetAttribute("WasEnabled", nil)
                             end)
