@@ -128,7 +128,7 @@ local success, errorMessage = pcall(function()
     -- RAYFIELD WINDOW INITIALIZATION
     -- ==========================================
     local Window = Rayfield:CreateWindow({
-        Name = "Mocta Trade Automator", 
+        Name = "Mocta Auto Trade System", 
         LoadingTitle = "Initializing Systems...", 
         ConfigurationSaving = { Enabled = false }, 
         Theme = "DarkBlue"
