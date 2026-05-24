@@ -1,6 +1,6 @@
 -- ==========================================================
--- MOCTA TRADE AUTOMATOR V18.8 (ENTERPRISE UI REVAMP)
--- Build: Clean Layout, Professional Naming, DarkBlue Theme
+-- MOCTA TRADE AUTOMATOR V18.9 (CONSOLIDATED ENGINE)
+-- Build: Multi-Select Mutation, Live Stock Dropdown, Grouped Ledger
 -- ==========================================================
 
 local SCRIPT_URL = "https://raw.githubusercontent.com/xyaxzj/sigmamaboi.lua/refs/heads/main/sigmaboitradee.lua"
@@ -19,7 +19,7 @@ local success, errorMessage = pcall(function()
     local rev_trade_start = networkFolder:WaitForChild("rev_trade_start", 5) 
 
     local TargetPlayerName = ""
-    local SelectedMutation = ""
+    local SelectedMutations = {}
     local ShoppingCart = {} 
     local CurrentQueue = {}
     
@@ -34,14 +34,10 @@ local success, errorMessage = pcall(function()
     local P1TradesCompleted = 0
     local P2TradesCompleted = 0
     local TotalItemsSent = 0
+    
+    -- Tracker Riwayat Terkonsolidasi
+    local SentAssetsRecord = {} 
     local TradeHistoryString = "No transaction history available."
-
-    local BaconEventItems = {
-        ["Chicleteira Bicicleteira"] = true,
-        ["Agarrini La Palini"] = true,
-        ["Trippi Troppi"] = true,
-        ["Strawberry Elephant"] = true
-    }
 
     local function formatTime(seconds)
         local h = math.floor(seconds / 3600)
@@ -75,17 +71,23 @@ local success, errorMessage = pcall(function()
     end
 
     local function getMutationList()
-        local muts = {}
+        local mutCounts = {}
         local hasMut = false
         for _, tool in ipairs(getAllTools()) do
             if isTradeable(tool) then
                 local m = tool:GetAttribute("Mutation") or tool:GetAttribute("Variant") or (tool:FindFirstChild("Mutation") and tool:FindFirstChild("Mutation").Value)
-                if m then muts[tostring(m)] = true; hasMut = true end
+                if m then 
+                    m = tostring(m)
+                    mutCounts[m] = (mutCounts[m] or 0) + 1
+                    hasMut = true 
+                end
             end
         end
         local list = {}
         if not hasMut then return {"[NO MUTATION]"} end
-        for k, _ in pairs(muts) do table.insert(list, k) end
+        for k, v in pairs(mutCounts) do 
+            table.insert(list, k .. " | Stock: " .. v) 
+        end
         table.sort(list)
         return list
     end
@@ -128,7 +130,7 @@ local success, errorMessage = pcall(function()
     -- RAYFIELD WINDOW INITIALIZATION
     -- ==========================================
     local Window = Rayfield:CreateWindow({
-        Name = "Mocta Auto Trade System", 
+        Name = "Mocta Smaert Trade System", 
         LoadingTitle = "Initializing Systems...", 
         ConfigurationSaving = { Enabled = false }, 
         Theme = "DarkBlue"
@@ -159,40 +161,35 @@ local success, errorMessage = pcall(function()
 
     TabCart:CreateSection("Categorized Filters")
     local MutationDropdown = TabCart:CreateDropdown({
-        Name = "Mutation Filter", Options = getMutationList(), CurrentOption = {""}, MultipleOptions = false, 
-        Callback = function(Option) SelectedMutation = Option[1] end
+        Name = "Mutation Filter (Multi-Select)", Options = getMutationList(), CurrentOption = {}, MultipleOptions = true, 
+        Callback = function(Options) SelectedMutations = Options end
     })
     
     TabCart:CreateButton({
-        Name = "Queue by Mutation",
+        Name = "Queue by Selected Mutations",
         Callback = function()
             if TargetPlayerName == "" then return Rayfield:Notify({Title = "Notice", Content = "Select a target player first.", Duration = 2}) end
-            if SelectedMutation == "" or SelectedMutation == "[NO MUTATION]" then return Rayfield:Notify({Title = "Notice", Content = "Select a valid mutation.", Duration = 2}) end
+            if #SelectedMutations == 0 or SelectedMutations[1] == "[NO MUTATION]" then 
+                return Rayfield:Notify({Title = "Notice", Content = "Select at least one valid mutation filter.", Duration = 2}) 
+            end
+            
+            local targetMuts = {}
+            for _, optionStr in ipairs(SelectedMutations) do
+                local baseMut = string.split(optionStr, " | Stock:")[1]
+                if baseMut then targetMuts[baseMut] = true end
+            end
             
             CurrentQueue = {}; ItemsProcessed = 0; local itemsFound = 0
             for _, tool in ipairs(getAllTools()) do  
                 if isTradeable(tool) then  
                     local m = tool:GetAttribute("Mutation") or tool:GetAttribute("Variant") or (tool:FindFirstChild("Mutation") and tool:FindFirstChild("Mutation").Value)
-                    if m and tostring(m) == SelectedMutation then table.insert(CurrentQueue, tool); itemsFound = itemsFound + 1 end
+                    if m and targetMuts[tostring(m)] then 
+                        table.insert(CurrentQueue, tool)
+                        itemsFound = itemsFound + 1 
+                    end
                 end  
             end  
-            Rayfield:Notify({Title = "Queued", Content = itemsFound .. " " .. SelectedMutation .. " items ready.", Duration = 2})
-        end
-    })
-
-    TabCart:CreateButton({
-        Name = "Queue Event Materials (Bacon)",
-        Callback = function()
-            if TargetPlayerName == "" then return Rayfield:Notify({Title = "Notice", Content = "Select a target player first.", Duration = 2}) end
-            CurrentQueue = {}; ItemsProcessed = 0; local itemsFound = 0
-            for _, tool in ipairs(getAllTools()) do  
-                if isTradeable(tool) then  
-                    local displayName = getFullItemName(tool)
-                    local baseNameOnly = string.split(string.split(displayName, " [")[1], " (Lv")[1]
-                    if BaconEventItems[baseNameOnly] or BaconEventItems[displayName] then table.insert(CurrentQueue, tool); itemsFound = itemsFound + 1 end  
-                end  
-            end  
-            Rayfield:Notify({Title = "Queued", Content = itemsFound .. " Event Materials ready.", Duration = 2})
+            Rayfield:Notify({Title = "Queued", Content = itemsFound .. " items matching selected filters ready.", Duration = 2})
         end
     })
 
@@ -251,7 +248,6 @@ local success, errorMessage = pcall(function()
         end
     })
 
-    -- Live Inventory Viewer (Dipindah ke Tab 1)
     TabCart:CreateSection("Live Database Inventory")
     local FullInventoryLabel = TabCart:CreateParagraph({Title = "Local Asset Database", Content = "Synchronizing data..."})
 
@@ -297,8 +293,6 @@ local success, errorMessage = pcall(function()
             table.insert(itemNamesTbl, getFullItemName(tool))
         end
         
-        local itemListText = table.concat(itemNamesTbl, "\n • ")
-        
         for _, tool in ipairs(batch) do
             local guid = getToolGUID(tool)
             if guid then r_trade_i:FireServer("AddItem", tostring(guid)); task.wait(InsertDelay) end
@@ -332,11 +326,21 @@ local success, errorMessage = pcall(function()
         ItemsProcessed = ItemsProcessed + batchSize
         TotalItemsSent = TotalItemsSent + batchSize
         
-        local entry = string.format("📌 TRANSACTION #%03d | Uptime: %s\nTarget: %s\nAssets Moved (%d):\n • %s\n--------------------------------------------\n", 
-            P1TradesCompleted, formatTime(tick() - SessionStartTime), TargetPlayerName, batchSize, itemListText
-        )
+        -- // PROSES STRUK KONSOLIDASI AKUMULATIF // --
+        for _, name in ipairs(itemNamesTbl) do
+            SentAssetsRecord[name] = (SentAssetsRecord[name] or 0) + 1
+        end
         
-        if TradeHistoryString == "No transaction history available." then TradeHistoryString = entry else TradeHistoryString = entry .. TradeHistoryString end
+        local historyLines = {}
+        for name, qty in pairs(SentAssetsRecord) do
+            table.insert(historyLines, string.format(" • %s (x%d)", name, qty))
+        end
+        table.sort(historyLines)
+        
+        TradeHistoryString = string.format("Latest Receiver: %s\n\nTotal Dispatched Assets (Session Wide):\n%s", 
+            TargetPlayerName, 
+            table.concat(historyLines, "\n")
+        )
         
         HistoryLogLabel:Set({Title = "Trade History Ledger", Content = TradeHistoryString})
         updateProgressUI()
@@ -488,7 +492,6 @@ local success, errorMessage = pcall(function()
                 Rayfield:Notify({Title = "Error", Content = "GitHub link is not configured.", Duration = 4})
                 return
             end
-            
             Rayfield:Notify({Title = "Updating", Content = "Fetching the latest script version...", Duration = 2})
             task.wait(1.5)
             Rayfield:Destroy() 
@@ -560,10 +563,8 @@ local success, errorMessage = pcall(function()
             for itemName, amount in pairs(inventoryData) do
                 local category = "📦 STANDARD ASSETS"
                 local mutMatch = string.match(itemName, "%[(.-)%]")
-                local baseNameOnly = string.split(string.split(itemName, " [")[1], " (Lv")[1]
                 
-                if BaconEventItems[baseNameOnly] or BaconEventItems[itemName] then category = "🥓 EVENT MATERIALS"
-                elseif mutMatch then category = "✨ " .. string.upper(mutMatch) end
+                if mutMatch then category = "✨ " .. string.upper(mutMatch) end
                 
                 if not categorizedItems[category] then categorizedItems[category] = {} end
                 table.insert(categorizedItems[category], {name = itemName, qty = amount})
