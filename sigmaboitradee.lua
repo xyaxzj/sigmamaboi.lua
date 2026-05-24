@@ -1,6 +1,6 @@
 -- ==========================================================
--- MOCTA TRADE AUTOMATOR V18.10 (MULTI-SELECT BASKET EDITION)
--- Build: Multi-Select Custom Basket, Live Stock, Grouped Ledger
+-- MOCTA TRADE AUTOMATOR V18.11 (MULTI-SELECT FIX EDITION)
+-- Build: Auto-Parser Multi-Select, Live Stock, Grouped Ledger
 -- ==========================================================
 
 local SCRIPT_URL = "https://raw.githubusercontent.com/xyaxzj/sigmamaboi.lua/refs/heads/main/sigmaboitradee.lua"
@@ -37,6 +37,23 @@ local success, errorMessage = pcall(function()
     
     local SentAssetsRecord = {} 
     local TradeHistoryString = "No transaction history available."
+
+    -- // AUTO-PARSER UNTUK MEMPERBAIKI BUG MULTI-SELECT EKSEKUTOR HP // --
+    local function parseMultiSelect(payload)
+        local results = {}
+        if type(payload) == "table" then
+            for k, v in pairs(payload) do
+                if type(k) == "number" and type(v) == "string" then
+                    table.insert(results, v)
+                elseif type(k) == "string" and v == true then
+                    table.insert(results, k)
+                end
+            end
+        elseif type(payload) == "string" then
+            table.insert(results, payload)
+        end
+        return results
+    end
 
     local function formatTime(seconds)
         local h = math.floor(seconds / 3600)
@@ -161,7 +178,9 @@ local success, errorMessage = pcall(function()
     TabCart:CreateSection("Categorized Filters")
     local MutationDropdown = TabCart:CreateDropdown({
         Name = "Mutation Filter (Multi-Select)", Options = getMutationList(), CurrentOption = {}, MultipleOptions = true, 
-        Callback = function(Options) SelectedMutations = Options end
+        Callback = function(Options) 
+            SelectedMutations = parseMultiSelect(Options) 
+        end
     })
     
     TabCart:CreateButton({
@@ -193,13 +212,15 @@ local success, errorMessage = pcall(function()
     })
 
     TabCart:CreateSection("Custom Basket Builder")
-    local SelectedMixItems = {} -- Diubah menjadi Array/Table untuk Multi-Select
+    local SelectedMixItems = {} 
     local SelectedMixQty = 0
     local function getBaseName(dropdownString) return string.split(dropdownString, " | Stock:")[1] or dropdownString end
 
     local ItemDropdown = TabCart:CreateDropdown({
         Name = "Select Assets (Multi-Select)", Options = {"[ANY ASSET]"}, CurrentOption = {}, MultipleOptions = true, 
-        Callback = function(Options) SelectedMixItems = Options end
+        Callback = function(Options) 
+            SelectedMixItems = parseMultiSelect(Options) 
+        end
     })
     
     TabCart:CreateInput({
@@ -229,6 +250,8 @@ local success, errorMessage = pcall(function()
                     end
                 end
                 updateCartDisplay() 
+            else
+                Rayfield:Notify({Title = "Action Failed", Content = "Please select at least 1 item and input a valid quantity.", Duration = 3})
             end 
         end
     })
@@ -244,6 +267,8 @@ local success, errorMessage = pcall(function()
                     end
                 end
                 updateCartDisplay() 
+            else
+                Rayfield:Notify({Title = "Action Failed", Content = "Please select at least 1 item from the dropdown.", Duration = 3})
             end 
         end
     })
@@ -344,7 +369,6 @@ local success, errorMessage = pcall(function()
         ItemsProcessed = ItemsProcessed + batchSize
         TotalItemsSent = TotalItemsSent + batchSize
         
-        -- // PROSES STRUK KONSOLIDASI AKUMULATIF // --
         for _, name in ipairs(itemNamesTbl) do
             SentAssetsRecord[name] = (SentAssetsRecord[name] or 0) + 1
         end
