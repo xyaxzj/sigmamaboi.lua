@@ -1,6 +1,6 @@
 -- ==========================================================
--- MOCTA TRADE AUTOMATOR V18.9 (CONSOLIDATED ENGINE)
--- Build: Multi-Select Mutation, Live Stock Dropdown, Grouped Ledger
+-- MOCTA TRADE AUTOMATOR V18.10 (MULTI-SELECT BASKET EDITION)
+-- Build: Multi-Select Custom Basket, Live Stock, Grouped Ledger
 -- ==========================================================
 
 local SCRIPT_URL = "https://raw.githubusercontent.com/xyaxzj/sigmamaboi.lua/refs/heads/main/sigmaboitradee.lua"
@@ -35,7 +35,6 @@ local success, errorMessage = pcall(function()
     local P2TradesCompleted = 0
     local TotalItemsSent = 0
     
-    -- Tracker Riwayat Terkonsolidasi
     local SentAssetsRecord = {} 
     local TradeHistoryString = "No transaction history available."
 
@@ -130,7 +129,7 @@ local success, errorMessage = pcall(function()
     -- RAYFIELD WINDOW INITIALIZATION
     -- ==========================================
     local Window = Rayfield:CreateWindow({
-        Name = "Mocta Smaert Trade System", 
+        Name = "Mocta Trade Automator", 
         LoadingTitle = "Initializing Systems...", 
         ConfigurationSaving = { Enabled = false }, 
         Theme = "DarkBlue"
@@ -194,17 +193,17 @@ local success, errorMessage = pcall(function()
     })
 
     TabCart:CreateSection("Custom Basket Builder")
-    local SelectedMixItem = ""
+    local SelectedMixItems = {} -- Diubah menjadi Array/Table untuk Multi-Select
     local SelectedMixQty = 0
     local function getBaseName(dropdownString) return string.split(dropdownString, " | Stock:")[1] or dropdownString end
 
     local ItemDropdown = TabCart:CreateDropdown({
-        Name = "Select Asset", Options = {"[ANY ASSET]"}, CurrentOption = {"[ANY ASSET]"}, MultipleOptions = false, 
-        Callback = function(Option) SelectedMixItem = getBaseName(Option[1]) end
+        Name = "Select Assets (Multi-Select)", Options = {"[ANY ASSET]"}, CurrentOption = {}, MultipleOptions = true, 
+        Callback = function(Options) SelectedMixItems = Options end
     })
     
     TabCart:CreateInput({
-        Name = "Input Quantity", PlaceholderText = "Amount to add...", RemoveTextAfterFocusLost = false, 
+        Name = "Input Quantity", PlaceholderText = "Amount to apply to selected...", RemoveTextAfterFocusLost = false, 
         Callback = function(Text) SelectedMixQty = tonumber(Text) or 0 end
     })
     
@@ -218,18 +217,37 @@ local success, errorMessage = pcall(function()
     end
 
     TabCart:CreateButton({
-        Name = "Add Specified Quantity", 
+        Name = "Add Specified Quantity to Selected", 
         Callback = function() 
-            if SelectedMixItem ~= "" and SelectedMixItem ~= "[ANY ASSET]" and SelectedMixQty > 0 then 
-                local rs = getRealStock(SelectedMixItem) 
-                local cur = ShoppingCart[SelectedMixItem] or 0 
-                ShoppingCart[SelectedMixItem] = (cur + SelectedMixQty > rs) and rs or (cur + SelectedMixQty)
+            if #SelectedMixItems > 0 and SelectedMixQty > 0 then 
+                for _, optionStr in ipairs(SelectedMixItems) do
+                    local itemName = getBaseName(optionStr)
+                    if itemName ~= "[ANY ASSET]" then
+                        local rs = getRealStock(itemName) 
+                        local cur = ShoppingCart[itemName] or 0 
+                        ShoppingCart[itemName] = (cur + SelectedMixQty > rs) and rs or (cur + SelectedMixQty)
+                    end
+                end
                 updateCartDisplay() 
             end 
         end
     })
     
-    TabCart:CreateButton({Name = "Add Maximum Stock", Callback = function() if SelectedMixItem ~= "" and SelectedMixItem ~= "[ANY ASSET]" then ShoppingCart[SelectedMixItem] = getRealStock(SelectedMixItem); updateCartDisplay() end end})
+    TabCart:CreateButton({
+        Name = "Add Maximum Stock for Selected", 
+        Callback = function() 
+            if #SelectedMixItems > 0 then 
+                for _, optionStr in ipairs(SelectedMixItems) do
+                    local itemName = getBaseName(optionStr)
+                    if itemName ~= "[ANY ASSET]" then
+                        ShoppingCart[itemName] = getRealStock(itemName)
+                    end
+                end
+                updateCartDisplay() 
+            end 
+        end
+    })
+    
     TabCart:CreateButton({Name = "Clear Basket", Callback = function() ShoppingCart = {}; updateCartDisplay() end})
 
     TabCart:CreateButton({
