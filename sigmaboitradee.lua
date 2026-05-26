@@ -1,6 +1,6 @@
 -- ==========================================================
--- MOCTA TRADE AUTOMATOR V18.13 (CHILL UI EDITION)
--- Build: Bahasa Santai, Ramah Pemula, Logika Anti-Bug
+-- MOCTA TRADE AUTOMATOR V18.14 (INVENTORY MANAGER EDITION)
+-- Build: Separate Inventory Tab, Category Totals, Chill UI
 -- ==========================================================
 
 local SCRIPT_URL = "https://raw.githubusercontent.com/xyaxzj/sigmamaboi.lua/refs/heads/main/sigmaboitradee.lua"
@@ -141,6 +141,9 @@ local success, errorMessage = pcall(function()
         return p1Confirm and p1Confirm.Visible or false
     end
 
+    -- Deklarasi fungsi di awal agar bisa dipanggil antar tab
+    local updateInventoryDisplay
+
     -- ==========================================
     -- RAYFIELD WINDOW INITIALIZATION
     -- ==========================================
@@ -152,7 +155,7 @@ local success, errorMessage = pcall(function()
     })
 
     -- ==========================================
-    -- TAB 1: CART SETUP & INVENTORY
+    -- TAB 1: CART SETUP 
     -- ==========================================
     local TabCart = Window:CreateTab("🛒 Siapin Barang", 4483362458)
     
@@ -307,12 +310,18 @@ local success, errorMessage = pcall(function()
         end
     })
 
-    TabCart:CreateSection("Isi Tas Kamu Sekarang (Live)")
-    local FullInventoryLabel = TabCart:CreateParagraph({Title = "Daftar Barang", Content = "Lagi ngecek tas..."})
-    TabCart:CreateButton({Name = "🔄 Update Manual Isi Tas", Callback = function() updateInventoryDisplay() end})
+    -- ==========================================
+    -- TAB 2: INVENTORY MANAGER (BARU)
+    -- ==========================================
+    local TabInventory = Window:CreateTab("🎒 Cek Tas", 4483362458)
+    
+    TabInventory:CreateSection("Isi Tas Kamu Sekarang (Live)")
+    local FullInventoryLabel = TabInventory:CreateParagraph({Title = "Daftar Barang & Total", Content = "Lagi ngecek tas..."})
+    
+    TabInventory:CreateButton({Name = "🔄 Update Manual Isi Tas", Callback = function() updateInventoryDisplay() end})
 
     -- ==========================================
-    -- TAB 2: AUTO DISPATCHER (P1)
+    -- TAB 3: AUTO DISPATCHER (P1)
     -- ==========================================
     local TabDispatch = Window:CreateTab("📤 Kirim Barang (P1)", 4483362458)
     local LiveProgress = TabDispatch:CreateParagraph({Title = "Progress Pengiriman", Content = "Sisa Antrean: 0\nSukses Terkirim: 0"})
@@ -427,7 +436,7 @@ local success, errorMessage = pcall(function()
     })
 
     -- ==========================================
-    -- TAB 3: INBOUND ENGINE (P2)
+    -- TAB 4: INBOUND ENGINE (P2)
     -- ==========================================
     local TabInbound = Window:CreateTab("📥 Terima Barang (P2)", 4483362458)
     local ReceiverLog = TabInbound:CreateParagraph({Title = "Status Bot Penerima", Content = "Lagi mati. Belum dihidupin."})
@@ -518,7 +527,7 @@ local success, errorMessage = pcall(function()
     })
 
     -- ==========================================
-    -- TAB 4: ANALYTICS & LOGS
+    -- TAB 5: ANALYTICS & LOGS
     -- ==========================================
     local TabAnalytics = Window:CreateTab("📊 Info & Riwayat", 4483362458)
     
@@ -540,7 +549,7 @@ local success, errorMessage = pcall(function()
     HistoryLogLabel = TabAnalytics:CreateParagraph({Title = "Riwayat Struk (P1)", Content = TradeHistoryString})
 
     -- ==========================================
-    -- TAB 5: SYSTEM SETTINGS
+    -- TAB 6: SYSTEM SETTINGS
     -- ==========================================
     local TabSettings = Window:CreateTab("⚙️ Pengaturan", 4483362458)
 
@@ -617,17 +626,23 @@ local success, errorMessage = pcall(function()
         MutationDropdown:Refresh(getMutationList()) 
         PlayerDropdown:Refresh(getPlayerList())
         
-        local displayString = "Total Barang Bisa Di-Trade: " .. totalCount .. "\n\n"  
+        local displayString = "Total Semua Barang: " .. totalCount .. "\n\n"  
         if totalCount == 0 then displayString = displayString .. "Tas kamu masih kosong melompong nih." else
             local categorizedItems = {}
+            local categoryTotals = {}
+            
             for itemName, amount in pairs(inventoryData) do
                 local category = "📦 BARANG BIASA"
                 local mutMatch = string.match(itemName, "%[(.-)%]")
                 
                 if mutMatch then category = "✨ " .. string.upper(mutMatch) end
                 
-                if not categorizedItems[category] then categorizedItems[category] = {} end
+                if not categorizedItems[category] then 
+                    categorizedItems[category] = {} 
+                    categoryTotals[category] = 0
+                end
                 table.insert(categorizedItems[category], {name = itemName, qty = amount})
+                categoryTotals[category] = categoryTotals[category] + amount
             end
             
             local sortedCategories = {}
@@ -635,13 +650,16 @@ local success, errorMessage = pcall(function()
             table.sort(sortedCategories)
             
             for _, cat in ipairs(sortedCategories) do
-                displayString = displayString .. "=== " .. cat .. " ===\n"
+                -- Ini tambahan total qty permutasinya
+                displayString = displayString .. "=== " .. cat .. " (Total: " .. categoryTotals[cat] .. ") ===\n"
                 table.sort(categorizedItems[cat], function(a, b) return a.name < b.name end)
-                for _, item in ipairs(categorizedItems[cat]) do displayString = displayString .. string.format(" • %s  (Stok: %d)\n", item.name, item.qty) end
+                for _, item in ipairs(categorizedItems[cat]) do 
+                    displayString = displayString .. string.format(" • %s  (Stok: %d)\n", item.name, item.qty) 
+                end
                 displayString = displayString .. "\n"
             end
         end
-        FullInventoryLabel:Set({Title = "Daftar Barang", Content = displayString})
+        FullInventoryLabel:Set({Title = "Daftar Barang & Total", Content = displayString})
     end
 
     local function connectInventory()
