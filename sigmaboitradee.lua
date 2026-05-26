@@ -1,6 +1,6 @@
 -- ==========================================================
--- MOCTA TRADE AUTOMATOR V18.11 (MULTI-SELECT FIX EDITION)
--- Build: Auto-Parser Multi-Select, Live Stock, Grouped Ledger
+-- MOCTA TRADE AUTOMATOR V18.12 (BULLETPROOF LOGIC EDITION)
+-- Build: Direct-Read Dropdown Fix, Flawless Multi-Select
 -- ==========================================================
 
 local SCRIPT_URL = "https://raw.githubusercontent.com/xyaxzj/sigmamaboi.lua/refs/heads/main/sigmaboitradee.lua"
@@ -18,8 +18,6 @@ local success, errorMessage = pcall(function()
     local r_trade_i = networkFolder:WaitForChild("rev_trade_i", 5) 
     local rev_trade_start = networkFolder:WaitForChild("rev_trade_start", 5) 
 
-    local TargetPlayerName = ""
-    local SelectedMutations = {}
     local ShoppingCart = {} 
     local CurrentQueue = {}
     
@@ -37,23 +35,6 @@ local success, errorMessage = pcall(function()
     
     local SentAssetsRecord = {} 
     local TradeHistoryString = "No transaction history available."
-
-    -- // AUTO-PARSER UNTUK MEMPERBAIKI BUG MULTI-SELECT EKSEKUTOR HP // --
-    local function parseMultiSelect(payload)
-        local results = {}
-        if type(payload) == "table" then
-            for k, v in pairs(payload) do
-                if type(k) == "number" and type(v) == "string" then
-                    table.insert(results, v)
-                elseif type(k) == "string" and v == true then
-                    table.insert(results, k)
-                end
-            end
-        elseif type(payload) == "string" then
-            table.insert(results, payload)
-        end
-        return results
-    end
 
     local function formatTime(seconds)
         local h = math.floor(seconds / 3600)
@@ -159,13 +140,14 @@ local success, errorMessage = pcall(function()
     
     local PlayerDropdown = TabCart:CreateDropdown({
         Name = "Target Player (P2)", Options = getPlayerList(), CurrentOption = {""}, MultipleOptions = false, 
-        Callback = function(Option) TargetPlayerName = Option[1] end
+        Callback = function() end -- Kosong agar kita mengambil data live dari Dropdown.CurrentOption
     })
 
     TabCart:CreateSection("Mass Operations")
     TabCart:CreateButton({
         Name = "Queue Full Inventory",
         Callback = function()
+            local TargetPlayerName = PlayerDropdown.CurrentOption[1] or ""
             if TargetPlayerName == "" then return Rayfield:Notify({Title = "Notice", Content = "Select a target player first.", Duration = 2}) end
             CurrentQueue = {}; ItemsProcessed = 0; local itemsFound = 0
             for _, tool in ipairs(getAllTools()) do  
@@ -178,23 +160,30 @@ local success, errorMessage = pcall(function()
     TabCart:CreateSection("Categorized Filters")
     local MutationDropdown = TabCart:CreateDropdown({
         Name = "Mutation Filter (Multi-Select)", Options = getMutationList(), CurrentOption = {}, MultipleOptions = true, 
-        Callback = function(Options) 
-            SelectedMutations = parseMultiSelect(Options) 
-        end
+        Callback = function() end
     })
     
     TabCart:CreateButton({
         Name = "Queue by Selected Mutations",
         Callback = function()
+            local TargetPlayerName = PlayerDropdown.CurrentOption[1] or ""
             if TargetPlayerName == "" then return Rayfield:Notify({Title = "Notice", Content = "Select a target player first.", Duration = 2}) end
-            if #SelectedMutations == 0 or SelectedMutations[1] == "[NO MUTATION]" then 
-                return Rayfield:Notify({Title = "Notice", Content = "Select at least one valid mutation filter.", Duration = 2}) 
-            end
+            
+            -- DIRECT READ FIX: Ambil langsung dari UI Dropdown yang berjalan
+            local liveSelectedMutations = MutationDropdown.CurrentOption
+            if type(liveSelectedMutations) ~= "table" then liveSelectedMutations = {liveSelectedMutations} end
             
             local targetMuts = {}
-            for _, optionStr in ipairs(SelectedMutations) do
-                local baseMut = string.split(optionStr, " | Stock:")[1]
-                if baseMut then targetMuts[baseMut] = true end
+            local hasValid = false
+            for _, optionStr in pairs(liveSelectedMutations) do
+                if type(optionStr) == "string" and optionStr ~= "[NO MUTATION]" and optionStr ~= "" then
+                    local baseMut = string.split(optionStr, " | Stock:")[1]
+                    if baseMut then targetMuts[baseMut] = true; hasValid = true end
+                end
+            end
+
+            if not hasValid then 
+                return Rayfield:Notify({Title = "Notice", Content = "Select at least one valid mutation filter.", Duration = 2}) 
             end
             
             CurrentQueue = {}; ItemsProcessed = 0; local itemsFound = 0
@@ -212,15 +201,12 @@ local success, errorMessage = pcall(function()
     })
 
     TabCart:CreateSection("Custom Basket Builder")
-    local SelectedMixItems = {} 
     local SelectedMixQty = 0
     local function getBaseName(dropdownString) return string.split(dropdownString, " | Stock:")[1] or dropdownString end
 
     local ItemDropdown = TabCart:CreateDropdown({
         Name = "Select Assets (Multi-Select)", Options = {"[ANY ASSET]"}, CurrentOption = {}, MultipleOptions = true, 
-        Callback = function(Options) 
-            SelectedMixItems = parseMultiSelect(Options) 
-        end
+        Callback = function() end
     })
     
     TabCart:CreateInput({
@@ -240,18 +226,30 @@ local success, errorMessage = pcall(function()
     TabCart:CreateButton({
         Name = "Add Specified Quantity to Selected", 
         Callback = function() 
-            if #SelectedMixItems > 0 and SelectedMixQty > 0 then 
-                for _, optionStr in ipairs(SelectedMixItems) do
-                    local itemName = getBaseName(optionStr)
-                    if itemName ~= "[ANY ASSET]" then
-                        local rs = getRealStock(itemName) 
-                        local cur = ShoppingCart[itemName] or 0 
-                        ShoppingCart[itemName] = (cur + SelectedMixQty > rs) and rs or (cur + SelectedMixQty)
+            -- DIRECT READ FIX
+            local liveSelectedItems = ItemDropdown.CurrentOption
+            if type(liveSelectedItems) ~= "table" then liveSelectedItems = {liveSelectedItems} end
+            
+            local addedItems = 0
+            if SelectedMixQty > 0 then 
+                for _, optionStr in pairs(liveSelectedItems) do
+                    if type(optionStr) == "string" then
+                        local itemName = getBaseName(optionStr)
+                        if itemName ~= "" and itemName ~= "[ANY ASSET]" then
+                            local rs = getRealStock(itemName) 
+                            local cur = ShoppingCart[itemName] or 0 
+                            ShoppingCart[itemName] = (cur + SelectedMixQty > rs) and rs or (cur + SelectedMixQty)
+                            addedItems = addedItems + 1
+                        end
                     end
                 end
-                updateCartDisplay() 
+                if addedItems > 0 then
+                    updateCartDisplay()
+                else
+                    Rayfield:Notify({Title = "Action Failed", Content = "Please check items from the dropdown.", Duration = 3})
+                end
             else
-                Rayfield:Notify({Title = "Action Failed", Content = "Please select at least 1 item and input a valid quantity.", Duration = 3})
+                Rayfield:Notify({Title = "Action Failed", Content = "Input quantity must be more than 0.", Duration = 3})
             end 
         end
     })
@@ -259,13 +257,22 @@ local success, errorMessage = pcall(function()
     TabCart:CreateButton({
         Name = "Add Maximum Stock for Selected", 
         Callback = function() 
-            if #SelectedMixItems > 0 then 
-                for _, optionStr in ipairs(SelectedMixItems) do
+            -- DIRECT READ FIX
+            local liveSelectedItems = ItemDropdown.CurrentOption
+            if type(liveSelectedItems) ~= "table" then liveSelectedItems = {liveSelectedItems} end
+            
+            local addedItems = 0
+            for _, optionStr in pairs(liveSelectedItems) do
+                if type(optionStr) == "string" then
                     local itemName = getBaseName(optionStr)
-                    if itemName ~= "[ANY ASSET]" then
+                    if itemName ~= "" and itemName ~= "[ANY ASSET]" then
                         ShoppingCart[itemName] = getRealStock(itemName)
+                        addedItems = addedItems + 1
                     end
                 end
+            end
+            
+            if addedItems > 0 then
                 updateCartDisplay() 
             else
                 Rayfield:Notify({Title = "Action Failed", Content = "Please select at least 1 item from the dropdown.", Duration = 3})
@@ -278,7 +285,9 @@ local success, errorMessage = pcall(function()
     TabCart:CreateButton({
         Name = "Generate Queue from Basket", 
         Callback = function() 
+            local TargetPlayerName = PlayerDropdown.CurrentOption[1] or ""
             if TargetPlayerName == "" then return Rayfield:Notify({Title = "Notice", Content = "Select a target player first.", Duration = 2}) end
+            
             CurrentQueue = {}; ItemsProcessed = 0; local needed = {}; for k,v in pairs(ShoppingCart) do needed[k] = v end
             local itemsFound = 0
             for _, tool in ipairs(getAllTools()) do 
@@ -308,11 +317,12 @@ local success, errorMessage = pcall(function()
 
     local function executeSenderBatch()
         if IsProcessing or #CurrentQueue == 0 then return false end
-        IsProcessing = true
         
+        local TargetPlayerName = PlayerDropdown.CurrentOption[1] or ""
         local target = Players:FindFirstChild(TargetPlayerName)
-        if not target then setLog("[ERROR] Target player left the server!"); IsProcessing = false; return false end
+        if not target then setLog("[ERROR] Target player left the server!"); return false end
         
+        IsProcessing = true
         setLog("[1/6] Transmitting trade request to " .. target.Name .. "...")
         task.spawn(function() pcall(function() f_trade_r:InvokeServer(target.UserId) end) end)
         
