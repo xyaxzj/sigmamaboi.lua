@@ -1,6 +1,6 @@
 -- ==========================================================
--- MOCTA 2-HOUR FARMING POTION (SIMPLE & ROBUST)
--- Build: Auto Buy -> Auto Use (Khusus Farming Potion)
+-- MOCTA 2-HOUR FARMING POTION (ANTI-FREEZE EDITION)
+-- Build: Simple UI, Absolute Timestamp Logic (os.time)
 -- ==========================================================
 
 local success, errorMessage = pcall(function()
@@ -17,7 +17,7 @@ local success, errorMessage = pcall(function()
     local TargetPotion = "Farming Potion"
 
     local Window = Rayfield:CreateWindow({
-        Name = "Auto Potion Logic", 
+        Name = "Mocta Auto Potion", 
         LoadingTitle = "Memuat Skrip Simple...", 
         ConfigurationSaving = { Enabled = false }, 
         Theme = "DarkBlue"
@@ -31,6 +31,7 @@ local success, errorMessage = pcall(function()
     })
 
     local function formatTime(seconds)
+        if seconds < 0 then seconds = 0 end
         local h = math.floor(seconds / 3600)
         local m = math.floor((seconds % 3600) / 60)
         local s = math.floor(seconds % 60)
@@ -51,7 +52,7 @@ local success, errorMessage = pcall(function()
                         -- 1. Beli Potion
                         pcall(function() remoteBuy:FireServer(TargetPotion) end)
                         
-                        -- Jeda 1.5 detik biar server sempat ngasih barangnya ke tas sebelum diminum
+                        -- Jeda 1.5 detik biar masuk ke tas dulu
                         task.wait(1.5) 
                         
                         -- 2. Minum Potion
@@ -63,15 +64,26 @@ local success, errorMessage = pcall(function()
                             Duration = 3
                         })
 
-                        -- 3. Hitung Mundur 2 Jam
-                        local timeLeft = LoopDelay
-                        while AutoFarmingEnabled and timeLeft > 0 do
+                        -- 3. Hitung Mundur 2 Jam (ANTI-FREEZE LOGIC)
+                        -- Kita kunci waktu targetnya (Waktu Sekarang + 2 Jam)
+                        local targetTime = os.time() + LoopDelay
+                        
+                        while AutoFarmingEnabled do
+                            local currentTime = os.time()
+                            local timeLeft = targetTime - currentTime
+                            
+                            -- Kalau waktu sudah habis, keluar dari loop nunggu dan mulai eksekusi lagi
+                            if timeLeft <= 0 then
+                                break 
+                            end
+
                             StatusLabel:Set({
                                 Title = "Status Bot", 
                                 Content = "Aktif.\nMenunggu giliran berikutnya dalam: " .. formatTime(timeLeft)
                             })
-                            task.wait(1)
-                            timeLeft = timeLeft - 1
+                            
+                            -- Jeda 1 detik. Biarpun HP lag, timeLeft tetap dihitung dari os.time() yang mutlak.
+                            task.wait(1) 
                         end
                     end
                 end)
