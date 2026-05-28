@@ -1,94 +1,145 @@
 -- ==========================================================
--- MOCTA 2-HOUR FARMING POTION (ANTI-FREEZE EDITION)
--- Build: Simple UI, Absolute Timestamp Logic (os.time)
+-- MOCTA POTION SCHEDULER (GLOBAL UTC CRON JOB)
+-- Build: Server Time Sync, Anti-Freeze Window
 -- ==========================================================
 
 local success, errorMessage = pcall(function()
     local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
     local ReplicatedStorage = game:GetService("ReplicatedStorage")
     
-    -- Sambung ke remote dari log
     local Network = ReplicatedStorage:WaitForChild("Shared", 10):WaitForChild("Packages", 10):WaitForChild("Network", 10)
     local remoteBuy = Network:WaitForChild("rev_VolcanicShop_Buy", 5)
     local remoteUse = Network:WaitForChild("rev_VolcanicShop_UsePotion", 5)
 
-    local AutoFarmingEnabled = false
-    local LoopDelay = 7200 -- 2 Jam = 7200 Detik
     local TargetPotion = "Farming Potion"
+    local SchedulerEnabled = false
+    local LastTriggeredHour = -1 -- Menyimpan jam terakhir kali minum biar gak dobel
+
+    -- Fungsi perbaikan Multi-Select untuk HP
+    local function parseMultiSelect(payload)
+        local results = {}
+        if type(payload) == "table" then
+            for k, v in pairs(payload) do
+                if type(k) == "number" and type(v) == "string" then
+                    table.insert(results, v)
+                elseif type(k) == "string" and v == true then
+                    table.insert(results, k)
+                end
+            end
+        elseif type(payload) == "string" then
+            table.insert(results, payload)
+        end
+        return results
+    end
+
+    -- Membuat daftar Jam dari 00:00 sampai 23:00
+    local HoursOptions = {}
+    for i = 0, 23 do
+        table.insert(HoursOptions, string.format("%02d:00", i))
+    end
 
     local Window = Rayfield:CreateWindow({
-        Name = "Mocta Auto Potion", 
-        LoadingTitle = "Memuat Skrip Simple...", 
+        Name = "Mocta Potion Scheduler", 
+        LoadingTitle = "Memuat Jadwal Global...", 
         ConfigurationSaving = { Enabled = false }, 
         Theme = "DarkBlue"
     })
 
-    local Tab = Window:CreateTab("🧪 Farming Potion", 4483362458)
-    
-    local StatusLabel = Tab:CreateParagraph({
-        Title = "Status Bot", 
-        Content = "Bot sedang tidur."
+    local Tab = Window:CreateTab("⏰ Jadwal Potion", 4483362458)
+
+    local ClockLabel = Tab:CreateParagraph({
+        Title = "🕒 Waktu Sinkronisasi", 
+        Content = "Memuat jam server..."
     })
 
-    local function formatTime(seconds)
-        if seconds < 0 then seconds = 0 end
-        local h = math.floor(seconds / 3600)
-        local m = math.floor((seconds % 3600) / 60)
-        local s = math.floor(seconds % 60)
-        return string.format("%02d Jam %02d Menit %02d Detik", h, m, s)
-    end
+    -- Update Jam Real-Time di UI (Menampilkan Lokal & UTC)
+    task.spawn(function()
+        while task.wait(1) do
+            local timeLocal = os.date("*t") -- Jam HP
+            local timeUTC = os.date("!*t") -- Jam Global Server (UTC)
+            
+            ClockLabel:Set({
+                Title = "🕒 Waktu Sinkronisasi", 
+                Content = string.format("Jam Lokal HP: %02d:%02d:%02d\nJam Server Global (UTC): %02d:%02d:%02d\n\n📌 Script akan patuh pada Jam Server Global (UTC).", 
+                timeLocal.hour, timeLocal.min, timeLocal.sec, 
+                timeUTC.hour, timeUTC.min, timeUTC.sec)
+            })
+        end
+    end)
+
+    Tab:CreateSection("Pengaturan Jadwal")
+
+    local HourDropdown = Tab:CreateDropdown({
+        Name = "Pilih Jam Eksekusi (PILIH SESUAI JAM UTC!)", 
+        Options = HoursOptions, 
+        CurrentOption = {}, 
+        MultipleOptions = true, 
+        Callback = function(Options) 
+            -- Hanya update pas diklik, data asli ditarik nanti
+        end
+    })
+
+    local StatusLabel = Tab:CreateParagraph({
+        Title = "Status Bot", 
+        Content = "Bot sedang dimatikan."
+    })
 
     Tab:CreateToggle({
-        Name = "▶️ Nyalakan Auto Potion (Setiap 2 Jam)",
+        Name = "▶️ Nyalakan Jadwal Potion",
         CurrentValue = false,
         Callback = function(Value)
-            AutoFarmingEnabled = Value
+            SchedulerEnabled = Value
             
-            if AutoFarmingEnabled then
+            if SchedulerEnabled then
                 task.spawn(function()
-                    while AutoFarmingEnabled do
-                        StatusLabel:Set({Title = "Status Bot", Content = "Sedang mengeksekusi Beli & Minum..."})
+                    while SchedulerEnabled do
+                        -- PATOKAN MENGGUNAKAN JAM GLOBAL (UTC)
+                        local timeUTC = os.date("!*t")
+                        local currentHour = timeUTC.hour
+                        local currentMin = timeUTC.min
                         
-                        -- 1. Beli Potion
-                        pcall(function() remoteBuy:FireServer(TargetPotion) end)
+                        -- Tarik data jam yang dicentang
+                        local liveSelected = HourDropdown.CurrentOption
+                        if type(liveSelected) ~= "table" then liveSelected = {liveSelected} end
                         
-                        -- Jeda 1.5 detik biar masuk ke tas dulu
-                        task.wait(1.5) 
-                        
-                        -- 2. Minum Potion
-                        pcall(function() remoteUse:FireServer(TargetPotion) end)
-                        
-                        Rayfield:Notify({
-                            Title = "Eksekusi Berhasil", 
-                            Content = "Telah membeli dan meminum 1x Farming Potion.", 
-                            Duration = 3
-                        })
-
-                        -- 3. Hitung Mundur 2 Jam (ANTI-FREEZE LOGIC)
-                        -- Kita kunci waktu targetnya (Waktu Sekarang + 2 Jam)
-                        local targetTime = os.time() + LoopDelay
-                        
-                        while AutoFarmingEnabled do
-                            local currentTime = os.time()
-                            local timeLeft = targetTime - currentTime
-                            
-                            -- Kalau waktu sudah habis, keluar dari loop nunggu dan mulai eksekusi lagi
-                            if timeLeft <= 0 then
-                                break 
+                        local targetHoursDict = {}
+                        for _, opt in pairs(liveSelected) do
+                            if type(opt) == "string" and opt ~= "" then
+                                local hourNum = tonumber(string.sub(opt, 1, 2))
+                                if hourNum then targetHoursDict[hourNum] = true end
                             end
-
-                            StatusLabel:Set({
-                                Title = "Status Bot", 
-                                Content = "Aktif.\nMenunggu giliran berikutnya dalam: " .. formatTime(timeLeft)
-                            })
-                            
-                            -- Jeda 1 detik. Biarpun HP lag, timeLeft tetap dihitung dari os.time() yang mutlak.
-                            task.wait(1) 
                         end
+
+                        -- LOGIKA EKSEKUSI (ANTI-FREEZE WINDOW)
+                        -- Mengecek dari menit 00 sampai 02 (Toleransi 2 menit kalau HP freeze/lag)
+                        if targetHoursDict[currentHour] and currentMin >= 0 and currentMin <= 2 then
+                            
+                            -- Pastikan di jam yang sama tidak dieksekusi berkali-kali
+                            if LastTriggeredHour ~= currentHour then
+                                StatusLabel:Set({Title = "Status Bot", Content = "🔔 Waktunya Event! Mengeksekusi Beli & Minum..."})
+                                
+                                pcall(function() remoteBuy:FireServer(TargetPotion) end)
+                                task.wait(1.5)
+                                pcall(function() remoteUse:FireServer(TargetPotion) end)
+                                
+                                Rayfield:Notify({
+                                    Title = "Eksekusi Terjadwal", 
+                                    Content = string.format("Farming Potion sukses diminum pada %02d:%02d UTC!", currentHour, currentMin), 
+                                    Duration = 4
+                                })
+
+                                LastTriggeredHour = currentHour
+                            end
+                        else
+                            StatusLabel:Set({Title = "Status Bot", Content = "Siaga. Menunggu jadwal event berikutnya..."})
+                        end
+                        
+                        -- Cek waktu setiap 1 detik
+                        task.wait(1)
                     end
                 end)
             else
-                StatusLabel:Set({Title = "Status Bot", Content = "Bot dihentikan."})
+                StatusLabel:Set({Title = "Status Bot", Content = "Bot dimatikan."})
             end
         end
     })
