@@ -39,7 +39,7 @@ local success, errorMessage = pcall(function()
     end
 
     local Window = Rayfield:CreateWindow({
-        Name = "Mocta Potion Scheduler", 
+        Name = "Mocta Auto Potion Scheduler", 
         LoadingTitle = "Memuat Jadwal Global...", 
         ConfigurationSaving = { Enabled = false }, 
         Theme = "DarkBlue"
