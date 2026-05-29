@@ -1,6 +1,6 @@
 -- ==========================================================
--- MOCTA POTION SCHEDULER (GLOBAL UTC CRON JOB)
--- Build: Server Time Sync, Anti-Freeze Window
+-- MOCTA POTION SCHEDULER (EVEN UTC HOURS EDITION)
+-- Build: Server Time Sync, Auto Even Hours Logic (00, 02, 04)
 -- ==========================================================
 
 local success, errorMessage = pcall(function()
@@ -13,71 +13,38 @@ local success, errorMessage = pcall(function()
 
     local TargetPotion = "Farming Potion"
     local SchedulerEnabled = false
-    local LastTriggeredHour = -1 -- Menyimpan jam terakhir kali minum biar gak dobel
-
-    -- Fungsi perbaikan Multi-Select untuk HP
-    local function parseMultiSelect(payload)
-        local results = {}
-        if type(payload) == "table" then
-            for k, v in pairs(payload) do
-                if type(k) == "number" and type(v) == "string" then
-                    table.insert(results, v)
-                elseif type(k) == "string" and v == true then
-                    table.insert(results, k)
-                end
-            end
-        elseif type(payload) == "string" then
-            table.insert(results, payload)
-        end
-        return results
-    end
-
-    -- Membuat daftar Jam dari 00:00 sampai 23:00
-    local HoursOptions = {}
-    for i = 0, 23 do
-        table.insert(HoursOptions, string.format("%02d:00", i))
-    end
+    local LastTriggeredHour = -1 -- Menyimpan jam terakhir agar tidak dobel eksekusi
 
     local Window = Rayfield:CreateWindow({
-        Name = "Mocta Auto Potion Scheduler", 
-        LoadingTitle = "Memuat Jadwal Global...", 
+        Name = "Mocta Auto Potion", 
+        LoadingTitle = "Memuat Jadwal Genap UTC...", 
         ConfigurationSaving = { Enabled = false }, 
         Theme = "DarkBlue"
     })
 
-    local Tab = Window:CreateTab("⏰ Jadwal Potion", 4483362458)
+    local Tab = Window:CreateTab("⏰ Jadwal Genap", 4483362458)
 
     local ClockLabel = Tab:CreateParagraph({
         Title = "🕒 Waktu Sinkronisasi", 
         Content = "Memuat jam server..."
     })
 
-    -- Update Jam Real-Time di UI (Menampilkan Lokal & UTC)
+    -- Update Jam Real-Time di UI
     task.spawn(function()
         while task.wait(1) do
             local timeLocal = os.date("*t") -- Jam HP
-            local timeUTC = os.date("!*t") -- Jam Global Server (UTC)
+            local timeUTC = os.date("!*t")  -- Jam Server (UTC)
             
             ClockLabel:Set({
                 Title = "🕒 Waktu Sinkronisasi", 
-                Content = string.format("Jam Lokal HP: %02d:%02d:%02d\nJam Server Global (UTC): %02d:%02d:%02d\n\n📌 Script akan patuh pada Jam Server Global (UTC).", 
+                Content = string.format("Jam Lokal HP: %02d:%02d:%02d\nJam Global (UTC): %02d:%02d:%02d\n\n📌 Script otomatis mengeksekusi setiap JAM GENAP UTC.", 
                 timeLocal.hour, timeLocal.min, timeLocal.sec, 
                 timeUTC.hour, timeUTC.min, timeUTC.sec)
             })
         end
     end)
 
-    Tab:CreateSection("Pengaturan Jadwal")
-
-    local HourDropdown = Tab:CreateDropdown({
-        Name = "Pilih Jam Eksekusi (PILIH SESUAI JAM UTC!)", 
-        Options = HoursOptions, 
-        CurrentOption = {}, 
-        MultipleOptions = true, 
-        Callback = function(Options) 
-            -- Hanya update pas diklik, data asli ditarik nanti
-        end
-    })
+    Tab:CreateSection("Mode Otomatis")
 
     local StatusLabel = Tab:CreateParagraph({
         Title = "Status Bot", 
@@ -85,7 +52,7 @@ local success, errorMessage = pcall(function()
     })
 
     Tab:CreateToggle({
-        Name = "▶️ Nyalakan Jadwal Potion",
+        Name = "▶️ Nyalakan Auto Potion (Jam Genap)",
         CurrentValue = false,
         Callback = function(Value)
             SchedulerEnabled = Value
@@ -93,30 +60,16 @@ local success, errorMessage = pcall(function()
             if SchedulerEnabled then
                 task.spawn(function()
                     while SchedulerEnabled do
-                        -- PATOKAN MENGGUNAKAN JAM GLOBAL (UTC)
                         local timeUTC = os.date("!*t")
                         local currentHour = timeUTC.hour
                         local currentMin = timeUTC.min
                         
-                        -- Tarik data jam yang dicentang
-                        local liveSelected = HourDropdown.CurrentOption
-                        if type(liveSelected) ~= "table" then liveSelected = {liveSelected} end
-                        
-                        local targetHoursDict = {}
-                        for _, opt in pairs(liveSelected) do
-                            if type(opt) == "string" and opt ~= "" then
-                                local hourNum = tonumber(string.sub(opt, 1, 2))
-                                if hourNum then targetHoursDict[hourNum] = true end
-                            end
-                        end
-
-                        -- LOGIKA EKSEKUSI (ANTI-FREEZE WINDOW)
-                        -- Mengecek dari menit 00 sampai 02 (Toleransi 2 menit kalau HP freeze/lag)
-                        if targetHoursDict[currentHour] and currentMin >= 0 and currentMin <= 2 then
+                        -- LOGIKA INTI: CEK APAKAH JAM SAAT INI ADALAH JAM GENAP
+                        if currentHour % 2 == 0 and currentMin >= 0 and currentMin <= 2 then
                             
-                            -- Pastikan di jam yang sama tidak dieksekusi berkali-kali
+                            -- Pastikan di jam genap yang sama tidak dieksekusi berkali-kali
                             if LastTriggeredHour ~= currentHour then
-                                StatusLabel:Set({Title = "Status Bot", Content = "🔔 Waktunya Event! Mengeksekusi Beli & Minum..."})
+                                StatusLabel:Set({Title = "Status Bot", Content = "🔔 Waktunya Event Genap! Mengeksekusi..."})
                                 
                                 pcall(function() remoteBuy:FireServer(TargetPotion) end)
                                 task.wait(1.5)
@@ -124,17 +77,16 @@ local success, errorMessage = pcall(function()
                                 
                                 Rayfield:Notify({
                                     Title = "Eksekusi Terjadwal", 
-                                    Content = string.format("Farming Potion sukses diminum pada %02d:%02d UTC!", currentHour, currentMin), 
+                                    Content = string.format("Potion diminum otomatis pada %02d:%02d UTC!", currentHour, currentMin), 
                                     Duration = 4
                                 })
 
                                 LastTriggeredHour = currentHour
                             end
                         else
-                            StatusLabel:Set({Title = "Status Bot", Content = "Siaga. Menunggu jadwal event berikutnya..."})
+                            StatusLabel:Set({Title = "Status Bot", Content = "Siaga. Menunggu jam genap UTC berikutnya..."})
                         end
                         
-                        -- Cek waktu setiap 1 detik
                         task.wait(1)
                     end
                 end)
