@@ -1,5 +1,5 @@
 -- ==========================================================
--- MOCTA ALL-IN-ONE (POTION SCHEDULER + KAMIKAZE 16:00 UTC)
+-- MOCTA ALL-IN-ONE (POTION SCHEDULER + KAMIKAZE 16:30 UTC)
 -- Build: Multi-Threading, Server Time Sync, Zero-Delay Opener
 -- ==========================================================
 
@@ -115,16 +115,16 @@ local success, errorMessage = pcall(function()
     })
 
     -- ==========================================================
-    -- TAB 2: KAMIKAZE OPENER (AUTO 16:00 UTC)
+    -- TAB 2: KAMIKAZE OPENER (AUTO 16:30 UTC)
     -- ==========================================================
     local TabKamikaze = Window:CreateTab("☠️ Kamikaze V4", 4483362458)
     
     local AutoOpenEnabled = false
     local TargetToolName = "Volcanic"
     
-    -- Waktu sudah diset ke 16:00 UTC (23:00 WIB)
+    -- Waktu sudah diset ke 16:30 UTC (23:30 WIB)
     local TargetUTCHourKami = 16
-    local TargetUTCMinuteKami = 0
+    local TargetUTCMinuteKami = 30
     local TimerEnabledKami = false
     local KamikazeToggle 
 
@@ -157,11 +157,11 @@ local success, errorMessage = pcall(function()
         end
     end
 
-    TabKamikaze:CreateSection("Alarm 16:00 UTC")
+    TabKamikaze:CreateSection("Alarm 16:30 UTC")
 
     TabKamikaze:CreateParagraph({
         Title = "Info Alarm", 
-        Content = "Bot terkunci otomatis meledak pada 16:00 UTC. Tinggal nyalakan timer di bawah!"
+        Content = "Bot terkunci otomatis meledak pada 16:30 UTC. Tinggal nyalakan timer di bawah!"
     })
 
     TabKamikaze:CreateToggle({
@@ -178,7 +178,7 @@ local success, errorMessage = pcall(function()
                         
                         if currentUTC.hour == TargetUTCHourKami and currentUTC.min == TargetUTCMinuteKami then
                             if not AutoOpenEnabled and KamikazeToggle then
-                                Rayfield:Notify({Title = "WAKTU TIBA!", Content = "Memicu Eksekusi Kamikaze!", Duration = 5})
+                                Rayfield:Notify({Title = "WAKTU TIBA!", Content = "Memicu Eksekusi Kamikaze 16:30!", Duration = 5})
                                 KamikazeToggle:Set(true) 
                             end
                             task.wait(60) 
