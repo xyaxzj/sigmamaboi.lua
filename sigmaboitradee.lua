@@ -1,6 +1,6 @@
 -- ==========================================================
--- MOCTA TRADE & SELL AUTOMATIC V18.15 (ULTIMATE INTEGRATION)
--- Build: Natural Indonesian, Inventory Totals, Smart Sell V3
+-- MOCTA TRADE & SELL AUTOMATIC V18.15 (CART EDITION)
+-- Build: Sell Cart System, Real-Time Deduction, Safety Checks
 -- ==========================================================
 
 local SCRIPT_URL = "https://raw.githubusercontent.com/xyaxzj/sigmamaboi.lua/refs/heads/main/sigmaboitradee.lua"
@@ -22,7 +22,6 @@ local success, errorMessage = pcall(function()
     local r_trade_i = networkFolder:WaitForChild("rev_trade_i", 5) 
     local rev_trade_start = networkFolder:WaitForChild("rev_trade_start", 5) 
 
-    -- Melacak Remote Sell secara dinamis
     local ref_B_Sell = nil
     for _, v in pairs(ReplicatedStorage:GetDescendants()) do
         if v.Name == "ref_B_Sell" and v:IsA("RemoteFunction") then
@@ -55,10 +54,10 @@ local success, errorMessage = pcall(function()
 
     -- Variabel Smart Sell
     local SelectedSellItems = {}
+    local SellCart = {}
+    local SelectedSellMixQty = 0
     local AutoSellEnabled = false
     local SellAllEnabled = false
-    local TargetSellQty = 0
-    local CurrentSold = 0
     local SellToggle
 
     -- ==========================================
@@ -175,9 +174,9 @@ local success, errorMessage = pcall(function()
     })
 
     -- ==========================================
-    -- TAB 1: CART SETUP 
+    -- TAB 1: CART SETUP (TRADE)
     -- ==========================================
-    local TabCart = Window:CreateTab("🛒 Pilih Barang", 4483362458)
+    local TabCart = Window:CreateTab("🛒 Trade Cart", 4483362458)
     
     local PlayerDropdown = TabCart:CreateDropdown({
         Name = "Target Penerima (P2)", Options = getPlayerList(), CurrentOption = {""}, MultipleOptions = false, 
@@ -250,13 +249,13 @@ local success, errorMessage = pcall(function()
         Callback = function(Text) SelectedMixQty = tonumber(Text) or 0 end
     })
     
-    local CartStatus = TabCart:CreateParagraph({Title = "Isi Keranjang", Content = "Keranjang masih kosong."})
+    local CartStatus = TabCart:CreateParagraph({Title = "Isi Keranjang Trade", Content = "Keranjang masih kosong."})
 
     local function updateCartDisplay()
         local text = ""; local total = 0
         for name, qty in pairs(ShoppingCart) do text = text .. "- " .. name .. " (x" .. qty .. ")\n"; total = total + qty end
         if total == 0 then text = "Keranjang masih kosong." else text = text .. "\nTotal Item: " .. total end
-        CartStatus:Set({Title = "Isi Keranjang", Content = text})
+        CartStatus:Set({Title = "Isi Keranjang Trade", Content = text})
     end
 
     TabCart:CreateButton({
@@ -334,7 +333,7 @@ local success, errorMessage = pcall(function()
     TabInventory:CreateButton({Name = "🔄 Update Manual Data Tas", Callback = function() updateInventoryDisplay() end})
 
     -- ==========================================
-    -- TAB 3: SMART SELL (JUAL CERDAS)
+    -- TAB 3: SMART SELL (KERANJANG JUAL)
     -- ==========================================
     local TabSell = Window:CreateTab("💰 Jual Cerdas", 4483362458)
     
@@ -342,35 +341,91 @@ local success, errorMessage = pcall(function()
         TabSell:CreateParagraph({Title = "⚠️ Peringatan", Content = "Remote 'ref_B_Sell' tidak ditemukan. Pastikan game sudah memuat sepenuhnya."})
     end
 
-    TabSell:CreateSection("1. Pengaturan Target Jual")
+    TabSell:CreateSection("1. Pilih Barang untuk Dijual")
     
-    -- Dropdown ini akan di-refresh bersamaan dengan sistem Inventory Trade
     local SellItemDropdown = TabSell:CreateDropdown({
-        Name = "Pilih Item yang Akan Dijual", Options = {"[ANY ASSET]"}, CurrentOption = {}, MultipleOptions = true, 
+        Name = "Pilih Item (Bisa pilih lebih dari satu)", Options = {"[ANY ASSET]"}, CurrentOption = {}, MultipleOptions = true, 
         Flag = "SmartSellDrop",
         Callback = function(Options) SelectedSellItems = Options end,
     })
 
-    TabSell:CreateSection("2. Mode Ekstra")
+    TabSell:CreateInput({
+        Name = "Jumlah barang yang ingin dijual:", PlaceholderText = "Masukkan jumlah...", RemoveTextAfterFocusLost = false,
+        Callback = function(Text) SelectedSellMixQty = tonumber(Text) or 0 end
+    })
+
+    local SellCartStatus = TabSell:CreateParagraph({Title = "🛒 Keranjang Jual", Content = "Keranjang jual masih kosong."})
+
+    local function updateSellCartDisplay()
+        local text = ""; local total = 0
+        for name, qty in pairs(SellCart) do 
+            if qty > 0 then
+                text = text .. "- " .. name .. " (x" .. qty .. ")\n"; total = total + qty 
+            end
+        end
+        if total == 0 then text = "Keranjang jual masih kosong." else text = text .. "\nTotal Item: " .. total end
+        SellCartStatus:Set({Title = "🛒 Keranjang Jual", Content = text})
+    end
+
+    TabSell:CreateButton({
+        Name = "➕ Tambah Sesuai Jumlah", 
+        Callback = function() 
+            local liveSelectedItems = SelectedSellItems
+            if type(liveSelectedItems) ~= "table" then liveSelectedItems = {liveSelectedItems} end
+            
+            local addedItems = 0
+            if SelectedSellMixQty > 0 then 
+                for _, optionStr in pairs(liveSelectedItems) do
+                    if type(optionStr) == "string" then
+                        local itemName = getBaseName(optionStr)
+                        if itemName ~= "" and itemName ~= "[ANY ASSET]" then
+                            local rs = getRealStock(itemName) 
+                            local cur = SellCart[itemName] or 0 
+                            SellCart[itemName] = (cur + SelectedSellMixQty > rs) and rs or (cur + SelectedSellMixQty)
+                            addedItems = addedItems + 1
+                        end
+                    end
+                end
+                if addedItems > 0 then updateSellCartDisplay() else Rayfield:Notify({Title = "Gagal", Content = "Harap centang minimal satu barang.", Duration = 3}) end
+            else
+                Rayfield:Notify({Title = "Gagal", Content = "Jumlah barang harus lebih dari 0.", Duration = 3})
+            end 
+        end
+    })
+
+    TabSell:CreateButton({
+        Name = "➕ Tambah Semua Stok (Maksimal)", 
+        Callback = function() 
+            local liveSelectedItems = SelectedSellItems
+            if type(liveSelectedItems) ~= "table" then liveSelectedItems = {liveSelectedItems} end
+            
+            local addedItems = 0
+            for _, optionStr in pairs(liveSelectedItems) do
+                if type(optionStr) == "string" then
+                    local itemName = getBaseName(optionStr)
+                    if itemName ~= "" and itemName ~= "[ANY ASSET]" then
+                        SellCart[itemName] = getRealStock(itemName)
+                        addedItems = addedItems + 1
+                    end
+                end
+            end
+            if addedItems > 0 then updateSellCartDisplay() else Rayfield:Notify({Title = "Gagal", Content = "Harap centang minimal satu barang.", Duration = 3}) end 
+        end
+    })
+
+    TabSell:CreateButton({Name = "🗑️ Kosongkan Keranjang Jual", Callback = function() SellCart = {}; updateSellCartDisplay() end})
+
+    TabSell:CreateSection("2. Mode Bahaya")
 
     TabSell:CreateToggle({
-        Name = "🔥 Sell All (Jual Semua Barang Tradeable)", CurrentValue = false,
+        Name = "🔥 Sell All (JUAL SEMUA ISI TAS tanpa keranjang)", CurrentValue = false,
         Callback = function(Value)
             SellAllEnabled = Value
-            if Value then Rayfield:Notify({Title = "Peringatan", Content = "Mode Jual Semua Aktif! Pilihan di atas diabaikan.", Duration = 3}) end
+            if Value then Rayfield:Notify({Title = "Peringatan", Content = "Mode Jual Semua Aktif! Keranjang di atas akan diabaikan.", Duration = 3}) end
         end
     })
 
-    TabSell:CreateInput({
-        Name = "Batasi Jumlah Jual (0 = Tanpa Batas)", PlaceholderText = "Contoh: 10", RemoveTextAfterFocusLost = false,
-        Callback = function(Text)
-            TargetSellQty = tonumber(Text) or 0
-            if TargetSellQty > 0 then Rayfield:Notify({Title = "Limit Diatur", Content = "Bot berhenti setelah menjual " .. TargetSellQty .. " item.", Duration = 3})
-            else Rayfield:Notify({Title = "Mode Spam", Content = "Limit dimatikan. Bot menjual terus-menerus.", Duration = 3}) end
-        end
-    })
-
-    TabSell:CreateSection("3. Eksekutor Jual")
+    TabSell:CreateSection("3. Eksekusi Penjualan")
 
     local function processSmartSell()
         local character = localPlayer.Character
@@ -379,29 +434,37 @@ local success, errorMessage = pcall(function()
 
         if not humanoid or not backpack or not ref_B_Sell then return false end
 
-        local itemsToProcess = {}
         local allTools = getAllTools() 
+        local itemsToProcess = {}
 
         if SellAllEnabled then
             for _, tool in ipairs(allTools) do
                 if isTradeable(tool) then table.insert(itemsToProcess, tool) end
             end
         else
-            local targetMap = {}
-            for _, optionStr in pairs(SelectedSellItems) do
-                local baseName = getBaseName(optionStr)
-                if baseName and baseName ~= "[ANY ASSET]" and baseName ~= "" then targetMap[baseName] = true end
-            end
+            -- Menyalin keranjang agar bisa dilacak
+            local tempCart = {}
+            for k,v in pairs(SellCart) do tempCart[k] = v end
 
             for _, tool in ipairs(allTools) do
                 if isTradeable(tool) then
-                    if targetMap[getFullItemName(tool)] then table.insert(itemsToProcess, tool) end
+                    local name = getFullItemName(tool)
+                    if tempCart[name] and tempCart[name] > 0 then
+                        table.insert(itemsToProcess, tool)
+                        tempCart[name] = tempCart[name] - 1
+                    end
                 end
             end
         end
 
+        local soldAnything = false
         for _, toolToSell in ipairs(itemsToProcess) do
-            if TargetSellQty > 0 and CurrentSold >= TargetSellQty then return true end
+            local toolName = getFullItemName(toolToSell)
+            
+            -- Pengecekan real-time sebelum menjual
+            if not SellAllEnabled then
+                if not SellCart[toolName] or SellCart[toolName] <= 0 then continue end
+            end
 
             if toolToSell.Parent == backpack then
                 humanoid:EquipTool(toolToSell)
@@ -409,10 +472,28 @@ local success, errorMessage = pcall(function()
             end
 
             local didSell = pcall(function() return ref_B_Sell:InvokeServer() end)
-            if didSell then CurrentSold = CurrentSold + 1 end
+            if didSell then 
+                soldAnything = true
+                -- Update keranjang UI secara live!
+                if not SellAllEnabled and SellCart[toolName] then
+                    SellCart[toolName] = SellCart[toolName] - 1
+                end
+            end
             task.wait(0.1) 
         end
-        return false 
+        
+        if not SellAllEnabled then
+            updateSellCartDisplay()
+            local totalLeft = 0
+            for _, qty in pairs(SellCart) do totalLeft = totalLeft + qty end
+            if totalLeft <= 0 then return true end 
+        end
+
+        if SellAllEnabled and not soldAnything then
+            return true 
+        end
+
+        return false
     end
 
     SellToggle = TabSell:CreateToggle({
@@ -421,23 +502,20 @@ local success, errorMessage = pcall(function()
             AutoSellEnabled = Value
             if AutoSellEnabled then
                 if not SellAllEnabled then
-                    local validSelection = false
-                    for _, item in pairs(SelectedSellItems) do
-                        if item ~= "" and item ~= "[ANY ASSET]" then validSelection = true; break end
-                    end
-                    if not validSelection then
-                        Rayfield:Notify({Title = "⚠️ Gagal", Content = "Pilih item dulu, atau nyalakan Sell All!", Duration = 3})
+                    local totalLeft = 0
+                    for _, qty in pairs(SellCart) do totalLeft = totalLeft + qty end
+                    if totalLeft <= 0 then
+                        Rayfield:Notify({Title = "⚠️ Gagal", Content = "Keranjang Jual kosong! Tambahkan barang terlebih dahulu.", Duration = 3})
                         if SellToggle then SellToggle:Set(false) end
                         return
                     end
                 end
 
-                CurrentSold = 0
                 task.spawn(function()
                     while AutoSellEnabled do
                         local limitReached = processSmartSell()
                         if limitReached then
-                            Rayfield:Notify({Title = "✅ Selesai!", Content = "Target " .. TargetSellQty .. " item berhasil terjual.", Duration = 4})
+                            Rayfield:Notify({Title = "✅ Selesai!", Content = "Semua target penjualan telah berhasil dilebur menjadi koin.", Duration = 4})
                             if SellToggle then SellToggle:Set(false) end
                             break
                         end
