@@ -1,6 +1,6 @@
 -- ==========================================================
--- MOCTA TRADE & SELL AUTOMATIC V18.15 (CART EDITION)
--- Build: Sell Cart System, Real-Time Deduction, Safety Checks
+-- MOCTA TRADE & SELL AUTOMATIC V18.15 (SAFE CART EDITION)
+-- Build: Sell Cart System, Real-Time Deduction, No Sell-All
 -- ==========================================================
 
 local SCRIPT_URL = "https://raw.githubusercontent.com/xyaxzj/sigmamaboi.lua/refs/heads/main/sigmaboitradee.lua"
@@ -57,7 +57,6 @@ local success, errorMessage = pcall(function()
     local SellCart = {}
     local SelectedSellMixQty = 0
     local AutoSellEnabled = false
-    local SellAllEnabled = false
     local SellToggle
 
     -- ==========================================
@@ -415,17 +414,7 @@ local success, errorMessage = pcall(function()
 
     TabSell:CreateButton({Name = "🗑️ Kosongkan Keranjang Jual", Callback = function() SellCart = {}; updateSellCartDisplay() end})
 
-    TabSell:CreateSection("2. Mode Bahaya")
-
-    TabSell:CreateToggle({
-        Name = "🔥 Sell All (JUAL SEMUA ISI TAS tanpa keranjang)", CurrentValue = false,
-        Callback = function(Value)
-            SellAllEnabled = Value
-            if Value then Rayfield:Notify({Title = "Peringatan", Content = "Mode Jual Semua Aktif! Keranjang di atas akan diabaikan.", Duration = 3}) end
-        end
-    })
-
-    TabSell:CreateSection("3. Eksekusi Penjualan")
+    TabSell:CreateSection("2. Eksekusi Penjualan")
 
     local function processSmartSell()
         local character = localPlayer.Character
@@ -437,34 +426,25 @@ local success, errorMessage = pcall(function()
         local allTools = getAllTools() 
         local itemsToProcess = {}
 
-        if SellAllEnabled then
-            for _, tool in ipairs(allTools) do
-                if isTradeable(tool) then table.insert(itemsToProcess, tool) end
-            end
-        else
-            -- Menyalin keranjang agar bisa dilacak
-            local tempCart = {}
-            for k,v in pairs(SellCart) do tempCart[k] = v end
+        -- Menyalin keranjang agar bisa dilacak
+        local tempCart = {}
+        for k,v in pairs(SellCart) do tempCart[k] = v end
 
-            for _, tool in ipairs(allTools) do
-                if isTradeable(tool) then
-                    local name = getFullItemName(tool)
-                    if tempCart[name] and tempCart[name] > 0 then
-                        table.insert(itemsToProcess, tool)
-                        tempCart[name] = tempCart[name] - 1
-                    end
+        for _, tool in ipairs(allTools) do
+            if isTradeable(tool) then
+                local name = getFullItemName(tool)
+                if tempCart[name] and tempCart[name] > 0 then
+                    table.insert(itemsToProcess, tool)
+                    tempCart[name] = tempCart[name] - 1
                 end
             end
         end
 
-        local soldAnything = false
         for _, toolToSell in ipairs(itemsToProcess) do
             local toolName = getFullItemName(toolToSell)
             
             -- Pengecekan real-time sebelum menjual
-            if not SellAllEnabled then
-                if not SellCart[toolName] or SellCart[toolName] <= 0 then continue end
-            end
+            if not SellCart[toolName] or SellCart[toolName] <= 0 then continue end
 
             if toolToSell.Parent == backpack then
                 humanoid:EquipTool(toolToSell)
@@ -473,25 +453,18 @@ local success, errorMessage = pcall(function()
 
             local didSell = pcall(function() return ref_B_Sell:InvokeServer() end)
             if didSell then 
-                soldAnything = true
                 -- Update keranjang UI secara live!
-                if not SellAllEnabled and SellCart[toolName] then
+                if SellCart[toolName] then
                     SellCart[toolName] = SellCart[toolName] - 1
                 end
             end
             task.wait(0.1) 
         end
         
-        if not SellAllEnabled then
-            updateSellCartDisplay()
-            local totalLeft = 0
-            for _, qty in pairs(SellCart) do totalLeft = totalLeft + qty end
-            if totalLeft <= 0 then return true end 
-        end
-
-        if SellAllEnabled and not soldAnything then
-            return true 
-        end
+        updateSellCartDisplay()
+        local totalLeft = 0
+        for _, qty in pairs(SellCart) do totalLeft = totalLeft + qty end
+        if totalLeft <= 0 then return true end 
 
         return false
     end
@@ -501,14 +474,12 @@ local success, errorMessage = pcall(function()
         Callback = function(Value)
             AutoSellEnabled = Value
             if AutoSellEnabled then
-                if not SellAllEnabled then
-                    local totalLeft = 0
-                    for _, qty in pairs(SellCart) do totalLeft = totalLeft + qty end
-                    if totalLeft <= 0 then
-                        Rayfield:Notify({Title = "⚠️ Gagal", Content = "Keranjang Jual kosong! Tambahkan barang terlebih dahulu.", Duration = 3})
-                        if SellToggle then SellToggle:Set(false) end
-                        return
-                    end
+                local totalLeft = 0
+                for _, qty in pairs(SellCart) do totalLeft = totalLeft + qty end
+                if totalLeft <= 0 then
+                    Rayfield:Notify({Title = "⚠️ Gagal", Content = "Keranjang Jual kosong! Tambahkan barang terlebih dahulu.", Duration = 3})
+                    if SellToggle then SellToggle:Set(false) end
+                    return
                 end
 
                 task.spawn(function()
