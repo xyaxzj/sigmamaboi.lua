@@ -334,7 +334,7 @@ local success, errorMessage = pcall(function()
     -- ==========================================
     -- TAB 3: SMART SELL (KERANJANG JUAL)
     -- ==========================================
-    local TabSell = Window:CreateTab("💰 Jual Cerdas", 4483362458)
+    local TabSell = Window:CreateTab("SELL BRAINROT", 4483362458)
     
     if not ref_B_Sell then
         TabSell:CreateParagraph({Title = "⚠️ Peringatan", Content = "Remote 'ref_B_Sell' tidak ditemukan. Pastikan game sudah memuat sepenuhnya."})
