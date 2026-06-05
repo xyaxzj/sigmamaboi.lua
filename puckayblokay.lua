@@ -6,23 +6,25 @@ local vu = game:GetService("VirtualUser")
 local players = game:GetService("Players")
 local tpService = game:GetService("TeleportService")
 local http = game:GetService("HttpService")
-local tweenService = game:GetService("TweenService")
 local lp = players.LocalPlayer
 
 -- ==========================================================
--- KONFIGURASI UTAMA
+-- KONFIGURASI & STATE MACHINE GLOBAL
 -- ==========================================================
 _G.autoFarm = true 
-_G.serverHop = true
-_G.useWebhook = true
-_G.dashSpeed = 0.08 
-_G.stackLimit = 5 
+_G.stackLimit = 10 
+
+-- Variabel ini dipindah ke atas agar bisa di-reset oleh Pengintai Gacha
+local isFarmingStack = false
+local currentLoop = 1
+local arenaStartCF = nil
+local lobbyPos = nil
 
 local webhookURL = "https://discord.com/api/webhooks/1414935491773468713/0_7onZYQPn4c7Anlv_9gZPNjF-xuZq5ESHjU1F0PujgvYSyZp38iopQ3QfJTSA9MO4ms"
 local allowedMutations = {"lava", "galaxy", "rainbow"}
 
 -- ==========================================================
--- WEBHOOK & HTTP REQUEST HANDLER
+-- WEBHOOK HANDLER
 -- ==========================================================
 local httprequest = nil
 pcall(function()
@@ -38,7 +40,7 @@ local function sendToDiscord(itemName)
             ["embeds"] = {
                 {
                     ["title"] = "MUTASI LANGKA DIDAPATKAN!",
-                    ["description"] = "Pemain **" .. lp.Name .. "** berhasil menyelesaikan **" .. tostring(_G.stackLimit) .. "x Putaran Stacking** dan mendapatkan:",
+                    ["description"] = "Pemain **" .. lp.Name .. "** berhasil nge-Gacha dan mendapatkan:",
                     ["color"] = 16711680,
                     ["fields"] = {
                         {
@@ -48,7 +50,7 @@ local function sendToDiscord(itemName)
                         }
                     },
                     ["footer"] = {
-                        ["text"] = "Auto Farm V39 - Fish It"
+                        ["text"] = "Auto Farm V43 (Adaptive Reset) - Fish It"
                     },
                     ["timestamp"] = DateTime.now():ToIsoDate()
                 }
@@ -65,7 +67,7 @@ local function sendToDiscord(itemName)
 end
 
 -- ==========================================================
--- ANIMATION SILENCER & MUTATION FILTER TRACKER
+-- PENGINTAI GACHA (SEQUENCE EVENT) + FAILSAFE RESET
 -- ==========================================================
 task.spawn(function()
     pcall(function()
@@ -76,6 +78,11 @@ task.spawn(function()
                 end
                 
                 v.OnClientEvent:Connect(function(arg1, itemName, arg3)
+                    -- [LOGIKA PENTING]: GACHA KEDETEKSI!
+                    -- Memaksa script mereset loop dari awal dan kembali ke Lobi
+                    currentLoop = 1
+                    isFarmingStack = false
+                    
                     if itemName and type(itemName) == "string" then
                         local lowerName = string.lower(itemName)
                         local isTargetMutation = false
@@ -122,34 +129,34 @@ lp.Idled:Connect(function()
 end)
 
 -- ==========================================================
--- MENU UI RAYFIELD
+-- MENU UI RAYFIELD (DENGAN SLIDER AKTIF)
 -- ==========================================================
 local library = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
-local win = library:CreateWindow({Name = "Auto Farm (V39 Clean)", LoadingTitle = "Loading Clean Script...", ConfigurationSaving = {Enabled = false}, KeySystem = false})
+local win = library:CreateWindow({Name = "Auto Farm (V43 Adaptive)", LoadingTitle = "Setting Failsafe...", ConfigurationSaving = {Enabled = false}, KeySystem = false})
 local tab = win:CreateTab("Main", 4483362458)
 
 tab:CreateToggle({Name = "Auto Farm (God Glide)", CurrentValue = true, Callback = function(val) _G.autoFarm = val end})
+
+-- SLIDER INI SEKARANG MENGATUR _G.stackLimit SECARA LANGSUNG
 tab:CreateSlider({
-    Name = "Jumlah Stacking (Putaran)",
+    Name = "Jumlah Stacking (Respawn)",
     Range = {1, 50},
     Increment = 1,
-    Suffix = "x Putaran",
-    CurrentValue = 5,
+    Suffix = "x Respawn",
+    CurrentValue = 10,
     Flag = "StackSlider",
-    Callback = function(Value) _G.stackLimit = Value end,
+    Callback = function(Value) 
+        _G.stackLimit = Value 
+    end,
 })
-tab:CreateToggle({Name = "Kirim Mutasi Langka ke Webhook", CurrentValue = true, Callback = function(val) _G.useWebhook = val end})
+
+tab:CreateToggle({Name = "Kirim Mutasi ke Webhook", CurrentValue = true, Callback = function(val) _G.useWebhook = val end})
 tab:CreateToggle({Name = "Auto Hop (Max 2 Player)", CurrentValue = true, Callback = function(val) _G.serverHop = val end})
 
 -- ==========================================================
--- LOOP UTAMA AUTO FARM (STATE MACHINE)
+-- LOOP UTAMA AUTO FARM (DENGAN Z-BUFFER 5100)
 -- ==========================================================
 task.spawn(function()
-    local isFarmingStack = false
-    local currentLoop = 1
-    local arenaStartCF = nil
-    local lobbyPos = nil
-
     while task.wait(0.5) do
         if _G.serverHop and #players:GetPlayers() > 2 then hopServer() continue end
         if not _G.autoFarm then continue end
@@ -160,7 +167,7 @@ task.spawn(function()
             local humanoid = char and char:FindFirstChild("Humanoid")
             if not hrp or not humanoid or humanoid.Health <= 0 then return end
 
-            -- FASE AWAL: Cek UI Start Run di Lobi
+            -- FASE LOBI
             if not isFarmingStack then
                 for _, obj in pairs(lp.PlayerGui:GetDescendants()) do
                     if obj:IsA("TextLabel") or obj:IsA("TextButton") then
@@ -190,15 +197,15 @@ task.spawn(function()
                 end
             end
 
-            -- FASE STACKING: Karakter sedang di dalam siklus lari
+            -- FASE ARENA
             if isFarmingStack and lobbyPos then
-                -- AUTO KOREKSI: Teleport paksa balik ke arena jika nyasar di lobi
+                -- ANTI-BUG BASE: Tarik paksa ke Arena kalau nyasar
                 if currentLoop > 1 and arenaStartCF and (hrp.Position - lobbyPos).Magnitude < 100 then
                     hrp.CFrame = arenaStartCF
-                    task.wait(0.5)
+                    task.wait(1) 
                 end
 
-                -- Tunggu sampai fisik benar-benar di dalam arena
+                -- Tunggu fisik masuk arena
                 local inArena = false
                 local timeout = 0
                 repeat
@@ -212,8 +219,7 @@ task.spawn(function()
                 until inArena or timeout >= 10
                 
                 if inArena and hrp then
-                    -- Simpan Titik Checkpoint Start Arena saat pertama kali masuk
-                    if currentLoop == 1 then
+                    if currentLoop == 1 and not arenaStartCF then
                         arenaStartCF = hrp.CFrame
                     end
                     
@@ -222,6 +228,7 @@ task.spawn(function()
                     local remote = getRemote()
                     local goodDoors = {}
                     
+                    -- SCAN PINTU
                     for _, obj in pairs(workspace:GetDescendants()) do
                         if obj:IsA("TextLabel") or obj:IsA("TextButton") then
                             local str = string.lower(string.gsub(obj.Text or "", "%s+", ""))
@@ -249,7 +256,7 @@ task.spawn(function()
                         end
                     end
 
-                    -- EKSEKUSI PENYEDOTAN
+                    -- EKSEKUSI PENYEDOTAN (Z-BUFFER MAKSIMAL 5100)
                     if remote and #goodDoors > 0 then
                         table.sort(goodDoors, function(a, b) return a.z < b.z end)
 
@@ -259,28 +266,33 @@ task.spawn(function()
                         end
 
                         for _, door in ipairs(goodDoors) do
-                            local targetPos = Vector3.new(door.part.Position.X, door.part.Position.Y + 3, door.part.Position.Z)
-                            local tween = tweenService:Create(hrp, TweenInfo.new(_G.dashSpeed, Enum.EasingStyle.Linear), {CFrame = CFrame.new(targetPos)})
-                            tween:Play()
-                            tween.Completed:Wait() 
-                            remote:FireServer(door.num, door.op)
+                            if door.z < 5100 then -- Batas pengereman agar tidak nyenggol finish
+                                hrp.CFrame = CFrame.new(door.part.Position.X, hrp.Position.Y, door.z)
+                                task.wait(0.05)
+                                remote:FireServer(door.num, door.op)
+                            end
                         end
                         
-                        -- Pengecekan Target Putaran
+                        -- CEK APAKAH TARGET LOOP SUDAH TERCAPAI (Memakai Variabel dari UI Slider)
                         if currentLoop < _G.stackLimit then
                             currentLoop = currentLoop + 1
                             hrp.Anchored = false
-                            char:BreakJoints()
-                            task.wait(4)
+                            char:BreakJoints() 
+                            
+                            local timeoutRespawn = 0
+                            repeat
+                                task.wait(0.5)
+                                timeoutRespawn = timeoutRespawn + 0.5
+                                char = lp.Character
+                            until (char and char:FindFirstChild("HumanoidRootPart") and char:FindFirstChild("Humanoid") and char.Humanoid.Health > 0) or timeoutRespawn >= 15
+                            
+                            task.wait(1.5) 
                         else
+                            -- TARGET TERCAPAI: TEMBUS FINISH!
                             currentLoop = 1
                             isFarmingStack = false 
                             
-                            local finishCF = CFrame.new(-122.8, hrp.Position.Y, 5200)
-                            local tweenEnd = tweenService:Create(hrp, TweenInfo.new(0.3, Enum.EasingStyle.Linear), {CFrame = finishCF})
-                            tweenEnd:Play()
-                            tweenEnd.Completed:Wait()
-
+                            hrp.CFrame = CFrame.new(-122.8, hrp.Position.Y, 5200)
                             hrp.Anchored = false
                             hrp.Velocity = Vector3.new(0,0,0)
                             task.wait(3.5)
