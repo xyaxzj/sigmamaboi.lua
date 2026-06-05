@@ -13,18 +13,20 @@ local lp = players.LocalPlayer
 -- ==========================================================
 _G.autoFarm = true 
 _G.stackLimit = 10 
+_G.serverHop = true
+_G.useWebhook = true
 
--- Variabel ini dipindah ke atas agar bisa di-reset oleh Pengintai Gacha
 local isFarmingStack = false
 local currentLoop = 1
 local arenaStartCF = nil
 local lobbyPos = nil
+local isHopping = false
 
 local webhookURL = "https://discord.com/api/webhooks/1414935491773468713/0_7onZYQPn4c7Anlv_9gZPNjF-xuZq5ESHjU1F0PujgvYSyZp38iopQ3QfJTSA9MO4ms"
 local allowedMutations = {"lava", "galaxy", "rainbow"}
 
 -- ==========================================================
--- WEBHOOK HANDLER
+-- REQUEST HANDLER (UNTUK WEBHOOK)
 -- ==========================================================
 local httprequest = nil
 pcall(function()
@@ -50,24 +52,60 @@ local function sendToDiscord(itemName)
                         }
                     },
                     ["footer"] = {
-                        ["text"] = "Auto Farm V43 (Adaptive Reset) - Fish It"
+                        ["text"] = "Auto Farm V45 - Fish It"
                     },
                     ["timestamp"] = DateTime.now():ToIsoDate()
                 }
             }
         }
-        
-        httprequest({
-            Url = webhookURL,
-            Method = "POST",
-            Headers = {["Content-Type"] = "application/json"},
-            Body = http:JSONEncode(data)
-        })
+        httprequest({Url = webhookURL, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = http:JSONEncode(data)})
     end)
 end
 
 -- ==========================================================
--- PENGINTAI GACHA (SEQUENCE EVENT) + FAILSAFE RESET
+-- AUTO HOP ENGINE (FIXED & MULTI-THREADED)
+-- ==========================================================
+local function hopServer()
+    if isHopping then return end
+    isHopping = true
+
+    task.spawn(function()
+        pcall(function()
+            -- Gunakan HttpGet murni untuk API Roblox
+            local url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"
+            local reqData = game:HttpGet(url)
+
+            if reqData then
+                local data = http:JSONDecode(reqData)
+                if data and data.data then
+                    local possibleServers = {}
+
+                    for _, v in ipairs(data.data) do
+                        -- Hindari 0 pemain (server error/mati). Cari server berisi 1-3 orang saja.
+                        if type(v) == "table" and tonumber(v.playing) ~= nil and v.id ~= game.JobId then
+                            if tonumber(v.playing) >= 1 and tonumber(v.playing) <= 3 then
+                                table.insert(possibleServers, v.id)
+                            end
+                        end
+                    end
+
+                    -- Jika ada server sehat yang memenuhi syarat, pilih acak lalu teleport
+                    if #possibleServers > 0 then
+                        local randomServer = possibleServers[math.random(1, #possibleServers)]
+                        tpService:TeleportToPlaceInstance(game.PlaceId, randomServer, lp)
+                    end
+                end
+            end
+        end)
+        
+        -- Beri jeda 15 detik sebelum mencoba nyari server lagi jika gagal
+        task.wait(15)
+        isHopping = false
+    end)
+end
+
+-- ==========================================================
+-- PENGINTAI GACHA (FAILSAFE RESET)
 -- ==========================================================
 task.spawn(function()
     pcall(function()
@@ -78,8 +116,6 @@ task.spawn(function()
                 end
                 
                 v.OnClientEvent:Connect(function(arg1, itemName, arg3)
-                    -- [LOGIKA PENTING]: GACHA KEDETEKSI!
-                    -- Memaksa script mereset loop dari awal dan kembali ke Lobi
                     currentLoop = 1
                     isFarmingStack = false
                     
@@ -107,37 +143,19 @@ local function getRemote()
     return nil
 end
 
-local function hopServer()
-    pcall(function()
-        local url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"
-        local req = game:HttpGet(url)
-        local data = http:JSONDecode(req)
-        if data and data.data then
-            for _, v in ipairs(data.data) do
-                if type(v) == "table" and tonumber(v.playing) ~= nil and tonumber(v.playing) < 2 and v.id ~= game.JobId then
-                    tpService:TeleportToPlaceInstance(game.PlaceId, v.id, lp)
-                    task.wait(5)
-                end
-            end
-        end
-    end)
-end
-
 lp.Idled:Connect(function()
     vu:CaptureController()
     vu:ClickButton2(Vector2.new())
 end)
 
 -- ==========================================================
--- MENU UI RAYFIELD (DENGAN SLIDER AKTIF)
+-- MENU UI RAYFIELD
 -- ==========================================================
 local library = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
-local win = library:CreateWindow({Name = "Auto Farm (V43 Adaptive)", LoadingTitle = "Setting Failsafe...", ConfigurationSaving = {Enabled = false}, KeySystem = false})
+local win = library:CreateWindow({Name = "Auto Farm (V45 Perfect)", LoadingTitle = "Multi-Thread Engine...", ConfigurationSaving = {Enabled = false}, KeySystem = false})
 local tab = win:CreateTab("Main", 4483362458)
 
 tab:CreateToggle({Name = "Auto Farm (God Glide)", CurrentValue = true, Callback = function(val) _G.autoFarm = val end})
-
--- SLIDER INI SEKARANG MENGATUR _G.stackLimit SECARA LANGSUNG
 tab:CreateSlider({
     Name = "Jumlah Stacking (Respawn)",
     Range = {1, 50},
@@ -145,20 +163,21 @@ tab:CreateSlider({
     Suffix = "x Respawn",
     CurrentValue = 10,
     Flag = "StackSlider",
-    Callback = function(Value) 
-        _G.stackLimit = Value 
-    end,
+    Callback = function(Value) _G.stackLimit = Value end,
 })
-
 tab:CreateToggle({Name = "Kirim Mutasi ke Webhook", CurrentValue = true, Callback = function(val) _G.useWebhook = val end})
-tab:CreateToggle({Name = "Auto Hop (Max 2 Player)", CurrentValue = true, Callback = function(val) _G.serverHop = val end})
+tab:CreateToggle({Name = "Auto Hop (Max 3 Player)", CurrentValue = true, Callback = function(val) _G.serverHop = val end})
 
 -- ==========================================================
--- LOOP UTAMA AUTO FARM (DENGAN Z-BUFFER 5100)
+-- LOOP UTAMA AUTO FARM 
 -- ==========================================================
 task.spawn(function()
     while task.wait(0.5) do
-        if _G.serverHop and #players:GetPlayers() > 2 then hopServer() continue end
+        -- AUTO HOP (BERJALAN DI BACKGROUND TANPA MENGHENTIKAN FARM)
+        if _G.serverHop and #players:GetPlayers() > 2 then 
+            hopServer() 
+        end
+        
         if not _G.autoFarm then continue end
 
         pcall(function()
@@ -199,15 +218,9 @@ task.spawn(function()
 
             -- FASE ARENA
             if isFarmingStack and lobbyPos then
-                -- ANTI-BUG BASE: Tarik paksa ke Arena kalau nyasar
-                if currentLoop > 1 and arenaStartCF and (hrp.Position - lobbyPos).Magnitude < 100 then
-                    hrp.CFrame = arenaStartCF
-                    task.wait(1) 
-                end
-
-                -- Tunggu fisik masuk arena
                 local inArena = false
                 local timeout = 0
+                
                 repeat
                     task.wait(0.2)
                     timeout = timeout + 0.2
@@ -219,16 +232,11 @@ task.spawn(function()
                 until inArena or timeout >= 10
                 
                 if inArena and hrp then
-                    if currentLoop == 1 and not arenaStartCF then
-                        arenaStartCF = hrp.CFrame
-                    end
-                    
                     task.wait(1.5) 
                     
                     local remote = getRemote()
                     local goodDoors = {}
                     
-                    -- SCAN PINTU
                     for _, obj in pairs(workspace:GetDescendants()) do
                         if obj:IsA("TextLabel") or obj:IsA("TextButton") then
                             local str = string.lower(string.gsub(obj.Text or "", "%s+", ""))
@@ -256,7 +264,7 @@ task.spawn(function()
                         end
                     end
 
-                    -- EKSEKUSI PENYEDOTAN (Z-BUFFER MAKSIMAL 5100)
+                    -- PENYEDOTAN Z-BUFFER 5100
                     if remote and #goodDoors > 0 then
                         table.sort(goodDoors, function(a, b) return a.z < b.z end)
 
@@ -266,14 +274,14 @@ task.spawn(function()
                         end
 
                         for _, door in ipairs(goodDoors) do
-                            if door.z < 5100 then -- Batas pengereman agar tidak nyenggol finish
+                            if door.z < 5100 then 
                                 hrp.CFrame = CFrame.new(door.part.Position.X, hrp.Position.Y, door.z)
                                 task.wait(0.05)
                                 remote:FireServer(door.num, door.op)
                             end
                         end
                         
-                        -- CEK APAKAH TARGET LOOP SUDAH TERCAPAI (Memakai Variabel dari UI Slider)
+                        -- LOGIKA STACKING
                         if currentLoop < _G.stackLimit then
                             currentLoop = currentLoop + 1
                             hrp.Anchored = false
@@ -288,7 +296,7 @@ task.spawn(function()
                             
                             task.wait(1.5) 
                         else
-                            -- TARGET TERCAPAI: TEMBUS FINISH!
+                            -- TARGET TERCAPAI: FINISH
                             currentLoop = 1
                             isFarmingStack = false 
                             
@@ -298,12 +306,10 @@ task.spawn(function()
                             task.wait(3.5)
                         end
                     else
+                        -- [BASE BUG HANDLER]
                         if timeout >= 10 then
                             isFarmingStack = false
                             currentLoop = 1
-                            hrp.Anchored = false
-                            char:BreakJoints()
-                            task.wait(3)
                         end
                     end
                 else
