@@ -37,7 +37,7 @@ local function sendToDiscord(itemName)
             ["avatar_url"] = "https://i.imgur.com/13YMBHT.png",
             ["embeds"] = {
                 {
-                    ["title"] = "✨ MUTASI LANGKA DIDAPATKAN!",
+                    ["title"] = "✨ MUTASI DIDAPATKAN!",
                     ["description"] = "Pemain **" .. lp.Name .. "** berhasil mendapatkan Mutasi Tier Tinggi:",
                     ["color"] = 16711680, -- Warna Merah (Hex: FF0000) biar mencolok
                     ["fields"] = {
@@ -48,7 +48,7 @@ local function sendToDiscord(itemName)
                         }
                     },
                     ["footer"] = {
-                        ["text"] = "Auto Farm V36 Tracker - Fish It"
+                        ["text"] = "Auto Farm Luck Block Game"
                     },
                     ["timestamp"] = DateTime.now():ToIsoDate()
                 }
