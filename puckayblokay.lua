@@ -52,7 +52,7 @@ local function sendToDiscord(itemName)
                         }
                     },
                     ["footer"] = {
-                        ["text"] = "Auto Farm V45 - Fish It"
+                        ["text"] = "Auto Farm V46 - Fish It"
                     },
                     ["timestamp"] = DateTime.now():ToIsoDate()
                 }
@@ -63,7 +63,7 @@ local function sendToDiscord(itemName)
 end
 
 -- ==========================================================
--- AUTO HOP ENGINE (FIXED & MULTI-THREADED)
+-- AUTO HOP ENGINE (STRICT MAX 2 PLAYER)
 -- ==========================================================
 local function hopServer()
     if isHopping then return end
@@ -71,7 +71,6 @@ local function hopServer()
 
     task.spawn(function()
         pcall(function()
-            -- Gunakan HttpGet murni untuk API Roblox
             local url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"
             local reqData = game:HttpGet(url)
 
@@ -81,15 +80,14 @@ local function hopServer()
                     local possibleServers = {}
 
                     for _, v in ipairs(data.data) do
-                        -- Hindari 0 pemain (server error/mati). Cari server berisi 1-3 orang saja.
+                        -- Murni mencari server dengan isi 1 sampai 2 orang saja
                         if type(v) == "table" and tonumber(v.playing) ~= nil and v.id ~= game.JobId then
-                            if tonumber(v.playing) >= 1 and tonumber(v.playing) <= 3 then
+                            if tonumber(v.playing) >= 1 and tonumber(v.playing) <= 2 then
                                 table.insert(possibleServers, v.id)
                             end
                         end
                     end
 
-                    -- Jika ada server sehat yang memenuhi syarat, pilih acak lalu teleport
                     if #possibleServers > 0 then
                         local randomServer = possibleServers[math.random(1, #possibleServers)]
                         tpService:TeleportToPlaceInstance(game.PlaceId, randomServer, lp)
@@ -98,7 +96,6 @@ local function hopServer()
             end
         end)
         
-        -- Beri jeda 15 detik sebelum mencoba nyari server lagi jika gagal
         task.wait(15)
         isHopping = false
     end)
@@ -152,7 +149,7 @@ end)
 -- MENU UI RAYFIELD
 -- ==========================================================
 local library = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
-local win = library:CreateWindow({Name = "Auto Farm (V45 Perfect)", LoadingTitle = "Multi-Thread Engine...", ConfigurationSaving = {Enabled = false}, KeySystem = false})
+local win = library:CreateWindow({Name = "Auto Farm (V46 Strict Duo)", LoadingTitle = "Locking Server Target...", ConfigurationSaving = {Enabled = false}, KeySystem = false})
 local tab = win:CreateTab("Main", 4483362458)
 
 tab:CreateToggle({Name = "Auto Farm (God Glide)", CurrentValue = true, Callback = function(val) _G.autoFarm = val end})
@@ -166,14 +163,14 @@ tab:CreateSlider({
     Callback = function(Value) _G.stackLimit = Value end,
 })
 tab:CreateToggle({Name = "Kirim Mutasi ke Webhook", CurrentValue = true, Callback = function(val) _G.useWebhook = val end})
-tab:CreateToggle({Name = "Auto Hop (Max 3 Player)", CurrentValue = true, Callback = function(val) _G.serverHop = val end})
+tab:CreateToggle({Name = "Auto Hop (Max 2 Player)", CurrentValue = true, Callback = function(val) _G.serverHop = val end})
 
 -- ==========================================================
 -- LOOP UTAMA AUTO FARM 
 -- ==========================================================
 task.spawn(function()
     while task.wait(0.5) do
-        -- AUTO HOP (BERJALAN DI BACKGROUND TANPA MENGHENTIKAN FARM)
+        -- AUTO HOP: Pindah jika di server ada 3 orang atau lebih
         if _G.serverHop and #players:GetPlayers() > 2 then 
             hopServer() 
         end
@@ -264,7 +261,6 @@ task.spawn(function()
                         end
                     end
 
-                    -- PENYEDOTAN Z-BUFFER 5100
                     if remote and #goodDoors > 0 then
                         table.sort(goodDoors, function(a, b) return a.z < b.z end)
 
@@ -281,7 +277,6 @@ task.spawn(function()
                             end
                         end
                         
-                        -- LOGIKA STACKING
                         if currentLoop < _G.stackLimit then
                             currentLoop = currentLoop + 1
                             hrp.Anchored = false
@@ -296,7 +291,6 @@ task.spawn(function()
                             
                             task.wait(1.5) 
                         else
-                            -- TARGET TERCAPAI: FINISH
                             currentLoop = 1
                             isFarmingStack = false 
                             
@@ -306,7 +300,6 @@ task.spawn(function()
                             task.wait(3.5)
                         end
                     else
-                        -- [BASE BUG HANDLER]
                         if timeout >= 10 then
                             isFarmingStack = false
                             currentLoop = 1
