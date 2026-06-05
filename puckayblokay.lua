@@ -33,7 +33,7 @@ local function sendToDiscord(itemName)
     if not httprequest or not _G.useWebhook then return end
     pcall(function()
         local data = {
-            ["username"] = "God Farm Tracker",
+            ["username"] = "Auto Farm Tracker",
             ["avatar_url"] = "https://i.imgur.com/13YMBHT.png",
             ["embeds"] = {
                 {
