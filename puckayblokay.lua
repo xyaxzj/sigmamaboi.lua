@@ -15,6 +15,7 @@ _G.autoFarm = true
 _G.stackLimit = 10 
 _G.serverHop = true
 _G.useWebhook = true
+_G.removeTsunami = true -- Fitur Anti Lag Tsunami
 
 local isFarmingStack = false
 local currentLoop = 1
@@ -24,6 +25,35 @@ local isHopping = false
 
 local webhookURL = "https://discord.com/api/webhooks/1414935491773468713/0_7onZYQPn4c7Anlv_9gZPNjF-xuZq5ESHjU1F0PujgvYSyZp38iopQ3QfJTSA9MO4ms"
 local allowedMutations = {"lava", "galaxy", "rainbow"}
+
+-- ==========================================================
+-- TSUNAMI DESTROYER & ANTI-LAG ENGINE
+-- ==========================================================
+task.spawn(function()
+    while task.wait(1) do
+        if _G.removeTsunami then
+            pcall(function()
+                for _, v in pairs(workspace:GetDescendants()) do
+                    if string.find(string.lower(v.Name), "tsunami") then
+                        v:Destroy()
+                    end
+                end
+            end)
+        end
+    end
+end)
+
+-- Listener ekstra biar Tsunami langsung musnah detik itu juga saat spawn
+workspace.DescendantAdded:Connect(function(v)
+    if _G.removeTsunami then
+        pcall(function()
+            if string.find(string.lower(v.Name), "tsunami") then
+                task.wait()
+                v:Destroy()
+            end
+        end)
+    end
+end)
 
 -- ==========================================================
 -- REQUEST HANDLER (UNTUK WEBHOOK)
@@ -52,7 +82,7 @@ local function sendToDiscord(itemName)
                         }
                     },
                     ["footer"] = {
-                        ["text"] = "Auto Farm V46 - Fish It"
+                        ["text"] = "Auto Farm V47 - Fish It"
                     },
                     ["timestamp"] = DateTime.now():ToIsoDate()
                 }
@@ -80,7 +110,6 @@ local function hopServer()
                     local possibleServers = {}
 
                     for _, v in ipairs(data.data) do
-                        -- Murni mencari server dengan isi 1 sampai 2 orang saja
                         if type(v) == "table" and tonumber(v.playing) ~= nil and v.id ~= game.JobId then
                             if tonumber(v.playing) >= 1 and tonumber(v.playing) <= 2 then
                                 table.insert(possibleServers, v.id)
@@ -149,7 +178,7 @@ end)
 -- MENU UI RAYFIELD
 -- ==========================================================
 local library = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
-local win = library:CreateWindow({Name = "Auto Farm (V46 Strict Duo)", LoadingTitle = "Locking Server Target...", ConfigurationSaving = {Enabled = false}, KeySystem = false})
+local win = library:CreateWindow({Name = "Auto Farm (V47 Anti-Lag)", LoadingTitle = "Destroying Tsunami...", ConfigurationSaving = {Enabled = false}, KeySystem = false})
 local tab = win:CreateTab("Main", 4483362458)
 
 tab:CreateToggle({Name = "Auto Farm (God Glide)", CurrentValue = true, Callback = function(val) _G.autoFarm = val end})
@@ -164,13 +193,13 @@ tab:CreateSlider({
 })
 tab:CreateToggle({Name = "Kirim Mutasi ke Webhook", CurrentValue = true, Callback = function(val) _G.useWebhook = val end})
 tab:CreateToggle({Name = "Auto Hop (Max 2 Player)", CurrentValue = true, Callback = function(val) _G.serverHop = val end})
+tab:CreateToggle({Name = "Hapus Tsunami (Anti Lag)", CurrentValue = true, Callback = function(val) _G.removeTsunami = val end})
 
 -- ==========================================================
 -- LOOP UTAMA AUTO FARM 
 -- ==========================================================
 task.spawn(function()
     while task.wait(0.5) do
-        -- AUTO HOP: Pindah jika di server ada 3 orang atau lebih
         if _G.serverHop and #players:GetPlayers() > 2 then 
             hopServer() 
         end
