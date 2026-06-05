@@ -10,19 +10,19 @@ local tweenService = game:GetService("TweenService")
 local lp = players.LocalPlayer
 
 -- ==========================================================
--- ⚙️ KONFIGURASI UTAMA
+-- KONFIGURASI UTAMA
 -- ==========================================================
 _G.autoFarm = true 
 _G.serverHop = true
 _G.useWebhook = true
 _G.dashSpeed = 0.08 
-local webhookURL = "https://discord.com/api/webhooks/1414935491773468713/0_7onZYQPn4c7Anlv_9gZPNjF-xuZq5ESHjU1F0PujgvYSyZp38iopQ3QfJTSA9MO4ms"
+_G.stackLimit = 5 
 
--- FILTER MUTASI (Bisa ditambah/dikurang, pastikan huruf kecil semua)
+local webhookURL = "https://discord.com/api/webhooks/1414935491773468713/0_7onZYQPn4c7Anlv_9gZPNjF-xuZq5ESHjU1F0PujgvYSyZp38iopQ3QfJTSA9MO4ms"
 local allowedMutations = {"lava", "galaxy", "rainbow"}
 
 -- ==========================================================
--- 🌐 WEBHOOK & HTTP REQUEST HANDLER
+-- WEBHOOK & HTTP REQUEST HANDLER
 -- ==========================================================
 local httprequest = nil
 pcall(function()
@@ -33,22 +33,22 @@ local function sendToDiscord(itemName)
     if not httprequest or not _G.useWebhook then return end
     pcall(function()
         local data = {
-            ["username"] = "Auto Farm Tracker",
+            ["username"] = "God Farm Tracker",
             ["avatar_url"] = "https://i.imgur.com/13YMBHT.png",
             ["embeds"] = {
                 {
-                    ["title"] = "✨ MUTASI DIDAPATKAN!",
-                    ["description"] = "Pemain **" .. lp.Name .. "** berhasil mendapatkan Mutasi Tier Tinggi:",
-                    ["color"] = 16711680, -- Warna Merah (Hex: FF0000) biar mencolok
+                    ["title"] = "MUTASI LANGKA DIDAPATKAN!",
+                    ["description"] = "Pemain **" .. lp.Name .. "** berhasil menyelesaikan **" .. tostring(_G.stackLimit) .. "x Putaran Stacking** dan mendapatkan:",
+                    ["color"] = 16711680,
                     ["fields"] = {
                         {
-                            ["name"] = "📦 Nama Item",
-                            ["value"] = "```" .. tostring(itemName) .. "```",
+                            ["name"] = "Nama Item",
+                            ["value"] = "> " .. tostring(itemName),
                             ["inline"] = false
                         }
                     },
                     ["footer"] = {
-                        ["text"] = "Auto Farm Luck Block Game"
+                        ["text"] = "Auto Farm V39 - Fish It"
                     },
                     ["timestamp"] = DateTime.now():ToIsoDate()
                 }
@@ -65,37 +65,27 @@ local function sendToDiscord(itemName)
 end
 
 -- ==========================================================
--- 🚫 ANIMATION SILENCER & MUTATION FILTER TRACKER
+-- ANIMATION SILENCER & MUTATION FILTER TRACKER
 -- ==========================================================
 task.spawn(function()
     pcall(function()
         for _, v in pairs(rs:GetDescendants()) do
             if v:IsA("RemoteEvent") and string.lower(v.Name) == "sequenceevent" then
-                -- 1. Matikan visual cutscene bawaan game
                 if getconnections then
-                    for _, conn in pairs(getconnections(v.OnClientEvent)) do
-                        conn:Disable()
-                    end
+                    for _, conn in pairs(getconnections(v.OnClientEvent)) do conn:Disable() end
                 end
                 
-                -- 2. Pasang penyadap dengan Sistem Filter Mutasi
                 v.OnClientEvent:Connect(function(arg1, itemName, arg3)
                     if itemName and type(itemName) == "string" then
                         local lowerName = string.lower(itemName)
                         local isTargetMutation = false
-                        
-                        -- Cek apakah nama item mengandung kata Lava, Galaxy, atau Rainbow
                         for _, mutation in ipairs(allowedMutations) do
                             if string.find(lowerName, mutation) then
                                 isTargetMutation = true
                                 break
                             end
                         end
-                        
-                        -- Hanya tembak ke Webhook kalau item tersebut masuk daftar filter
-                        if isTargetMutation then
-                            sendToDiscord(itemName)
-                        end
+                        if isTargetMutation then sendToDiscord(itemName) end
                     end
                 end)
             end
@@ -103,9 +93,6 @@ task.spawn(function()
     end)
 end)
 
--- ==========================================================
--- 🛠️ FUNGSI UTILITAS PENDUKUNG
--- ==========================================================
 local function getRemote()
     for _, v in pairs(rs:GetDescendants()) do
         if v:IsA("RemoteEvent") and string.lower(v.Name) == "doorevent" then return v end
@@ -135,20 +122,34 @@ lp.Idled:Connect(function()
 end)
 
 -- ==========================================================
--- 🖥️ MENU UI RAYFIELD
+-- MENU UI RAYFIELD
 -- ==========================================================
 local library = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
-local win = library:CreateWindow({Name = "Auto Farm (V36 Filtered)", LoadingTitle = "Setting up filters...", ConfigurationSaving = {Enabled = false}, KeySystem = false})
+local win = library:CreateWindow({Name = "Auto Farm (V39 Clean)", LoadingTitle = "Loading Clean Script...", ConfigurationSaving = {Enabled = false}, KeySystem = false})
 local tab = win:CreateTab("Main", 4483362458)
 
-tab:CreateToggle({Name = "Auto Farm (Smart Glide)", CurrentValue = true, Callback = function(val) _G.autoFarm = val end})
-tab:CreateToggle({Name = "Kirim Mutasi Langka ke Discord", CurrentValue = true, Callback = function(val) _G.useWebhook = val end})
+tab:CreateToggle({Name = "Auto Farm (God Glide)", CurrentValue = true, Callback = function(val) _G.autoFarm = val end})
+tab:CreateSlider({
+    Name = "Jumlah Stacking (Putaran)",
+    Range = {1, 50},
+    Increment = 1,
+    Suffix = "x Putaran",
+    CurrentValue = 5,
+    Flag = "StackSlider",
+    Callback = function(Value) _G.stackLimit = Value end,
+})
+tab:CreateToggle({Name = "Kirim Mutasi Langka ke Webhook", CurrentValue = true, Callback = function(val) _G.useWebhook = val end})
 tab:CreateToggle({Name = "Auto Hop (Max 2 Player)", CurrentValue = true, Callback = function(val) _G.serverHop = val end})
 
 -- ==========================================================
--- 🚀 LOOP UTAMA AUTO FARM
+-- LOOP UTAMA AUTO FARM (STATE MACHINE)
 -- ==========================================================
 task.spawn(function()
+    local isFarmingStack = false
+    local currentLoop = 1
+    local arenaStartCF = nil
+    local lobbyPos = nil
+
     while task.wait(0.5) do
         if _G.serverHop and #players:GetPlayers() > 2 then hopServer() continue end
         if not _G.autoFarm then continue end
@@ -156,40 +157,50 @@ task.spawn(function()
         pcall(function()
             local char = lp.Character
             local hrp = char and char:FindFirstChild("HumanoidRootPart")
-            if not hrp then return end
+            local humanoid = char and char:FindFirstChild("Humanoid")
+            if not hrp or not humanoid or humanoid.Health <= 0 then return end
 
-            -- [1] AUTO KLIK START RUN
-            local clickedStart = false
-            for _, obj in pairs(lp.PlayerGui:GetDescendants()) do
-                if obj:IsA("TextLabel") or obj:IsA("TextButton") then
-                    local txt = string.lower(string.gsub(obj.Text or "", "%s+", ""))
-                    local name = string.lower(obj.Name)
-                    
-                    if string.find(txt, "start") or string.find(txt, "run") or string.find(name, "start") then
-                        local btn = obj:IsA("TextButton") and obj or obj:FindFirstAncestorWhichIsA("TextButton") or obj:FindFirstAncestorWhichIsA("ImageButton")
-                        if btn and btn.AbsolutePosition.X > 0 then
-                            if getconnections then
-                                for _, c in pairs(getconnections(btn.MouseButton1Click)) do pcall(function() c:Fire() end) end
-                                for _, c in pairs(getconnections(btn.Activated)) do pcall(function() c:Fire() end) end
+            -- FASE AWAL: Cek UI Start Run di Lobi
+            if not isFarmingStack then
+                for _, obj in pairs(lp.PlayerGui:GetDescendants()) do
+                    if obj:IsA("TextLabel") or obj:IsA("TextButton") then
+                        local txt = string.lower(string.gsub(obj.Text or "", "%s+", ""))
+                        local name = string.lower(obj.Name)
+                        
+                        if string.find(txt, "start") or string.find(txt, "run") or string.find(name, "start") then
+                            local btn = obj:IsA("TextButton") and obj or obj:FindFirstAncestorWhichIsA("TextButton") or obj:FindFirstAncestorWhichIsA("ImageButton")
+                            if btn and btn.AbsolutePosition.X > 0 then
+                                lobbyPos = hrp.Position
+                                
+                                if getconnections then
+                                    for _, c in pairs(getconnections(btn.MouseButton1Click)) do pcall(function() c:Fire() end) end
+                                    for _, c in pairs(getconnections(btn.Activated)) do pcall(function() c:Fire() end) end
+                                end
+                                local ax, ay = btn.AbsolutePosition.X + btn.AbsoluteSize.X/2, btn.AbsolutePosition.Y + btn.AbsoluteSize.Y/2 + 36
+                                vim:SendMouseButtonEvent(ax, ay, 0, true, game, 1)
+                                task.wait(0.05)
+                                vim:SendMouseButtonEvent(ax, ay, 0, false, game, 1)
+                                
+                                isFarmingStack = true
+                                currentLoop = 1
+                                break 
                             end
-                            local ax, ay = btn.AbsolutePosition.X + btn.AbsoluteSize.X/2, btn.AbsolutePosition.Y + btn.AbsoluteSize.Y/2 + 36
-                            vim:SendMouseButtonEvent(ax, ay, 0, true, game, 1)
-                            task.wait(0.05)
-                            vim:SendMouseButtonEvent(ax, ay, 0, false, game, 1)
-                            clickedStart = true
-                            break 
                         end
                     end
                 end
             end
 
-            -- [2] SMART TRANSITION & SAFE GOD MODE
-            if clickedStart then
-                local lobbyPos = hrp.Position
+            -- FASE STACKING: Karakter sedang di dalam siklus lari
+            if isFarmingStack and lobbyPos then
+                -- AUTO KOREKSI: Teleport paksa balik ke arena jika nyasar di lobi
+                if currentLoop > 1 and arenaStartCF and (hrp.Position - lobbyPos).Magnitude < 100 then
+                    hrp.CFrame = arenaStartCF
+                    task.wait(0.5)
+                end
+
+                -- Tunggu sampai fisik benar-benar di dalam arena
                 local inArena = false
                 local timeout = 0
-                
-                -- Tunggu hingga dilempar masuk ke arena
                 repeat
                     task.wait(0.2)
                     timeout = timeout + 0.2
@@ -201,16 +212,19 @@ task.spawn(function()
                 until inArena or timeout >= 10
                 
                 if inArena and hrp then
-                    task.wait(1) 
+                    -- Simpan Titik Checkpoint Start Arena saat pertama kali masuk
+                    if currentLoop == 1 then
+                        arenaStartCF = hrp.CFrame
+                    end
+                    
+                    task.wait(1.5) 
                     
                     local remote = getRemote()
                     local goodDoors = {}
                     
-                    -- Scan & sortir pintu
                     for _, obj in pairs(workspace:GetDescendants()) do
                         if obj:IsA("TextLabel") or obj:IsA("TextButton") then
                             local str = string.lower(string.gsub(obj.Text or "", "%s+", ""))
-                            
                             local hasPlus = string.find(str, "%+")
                             local hasMult = string.find(str, "x") or string.find(str, "%*")
                             local hasMinus = string.find(str, "%-")
@@ -220,13 +234,11 @@ task.spawn(function()
                             local part = obj:FindFirstAncestorWhichIsA("BasePart")
                             if part then
                                 if hasMinus or hasDiv or isDecimal then
-                                    -- Matikan pintu jahat
                                     pcall(function()
                                         part.CanTouch = false
                                         part.CanCollide = false
                                     end)
                                 elseif (hasPlus or hasMult) then
-                                    -- Amankan pintu baik
                                     local num = tonumber(string.match(str, "%d+%.?%d*"))
                                     if num then
                                         local op = hasMult and "mul" or "add"
@@ -237,17 +249,15 @@ task.spawn(function()
                         end
                     end
 
-                    -- [3] EKSEKUSI GLIDE & TELEPORT FINISH
+                    -- EKSEKUSI PENYEDOTAN
                     if remote and #goodDoors > 0 then
                         table.sort(goodDoors, function(a, b) return a.z < b.z end)
 
-                        -- Mode hantu
                         hrp.Anchored = true
                         for _, p in ipairs(char:GetDescendants()) do
                             if p:IsA("BasePart") then p.CanCollide = false end
                         end
 
-                        -- Sapu bersih poin
                         for _, door in ipairs(goodDoors) do
                             local targetPos = Vector3.new(door.part.Position.X, door.part.Position.Y + 3, door.part.Position.Z)
                             local tween = tweenService:Create(hrp, TweenInfo.new(_G.dashSpeed, Enum.EasingStyle.Linear), {CFrame = CFrame.new(targetPos)})
@@ -256,19 +266,37 @@ task.spawn(function()
                             remote:FireServer(door.num, door.op)
                         end
                         
-                        -- Terbang ke Finish (5200)
-                        local finishCF = CFrame.new(-122.8, hrp.Position.Y, 5200)
-                        local tweenEnd = tweenService:Create(hrp, TweenInfo.new(0.3, Enum.EasingStyle.Linear), {CFrame = finishCF})
-                        tweenEnd:Play()
-                        tweenEnd.Completed:Wait()
+                        -- Pengecekan Target Putaran
+                        if currentLoop < _G.stackLimit then
+                            currentLoop = currentLoop + 1
+                            hrp.Anchored = false
+                            char:BreakJoints()
+                            task.wait(4)
+                        else
+                            currentLoop = 1
+                            isFarmingStack = false 
+                            
+                            local finishCF = CFrame.new(-122.8, hrp.Position.Y, 5200)
+                            local tweenEnd = tweenService:Create(hrp, TweenInfo.new(0.3, Enum.EasingStyle.Linear), {CFrame = finishCF})
+                            tweenEnd:Play()
+                            tweenEnd.Completed:Wait()
 
-                        -- Normalisasi karakter
-                        hrp.Anchored = false
-                        hrp.Velocity = Vector3.new(0,0,0)
-                        
-                        -- Jeda menunggu game mencatat gacha (Webhook jalan di background jika mutasi)
-                        task.wait(3.5)
+                            hrp.Anchored = false
+                            hrp.Velocity = Vector3.new(0,0,0)
+                            task.wait(3.5)
+                        end
+                    else
+                        if timeout >= 10 then
+                            isFarmingStack = false
+                            currentLoop = 1
+                            hrp.Anchored = false
+                            char:BreakJoints()
+                            task.wait(3)
+                        end
                     end
+                else
+                    isFarmingStack = false
+                    currentLoop = 1
                 end
             end
         end)
