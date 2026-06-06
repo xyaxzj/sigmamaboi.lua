@@ -1,4 +1,4 @@
-Mutations="None, Golden, Diamond, Plasma,Molten,Radioactive,Shadow, Electrified,Void,Wet,Virus,Bacon,Volcanic,Phantom,Astral,Rainbow";
+Mutations="None, Golden, Diamond, Plasma,Molten,Radioactive,Shadow, Electrified,Void,Wet,Virus,Bacon,Volcanic,Phantom,Astral,Rainbow,Alien,Enchanted";
 
 WhitelistMutations="Volcanic, Phantom, Astral, Rainbow";
 WhitelistItems="Astro Tim, Baba Yaga, Ketupat Kepat, Kicky, Professora 67, Anpali Babel, Beluga Beluga, Chicleteira Bicicleteira, Dragonfrutina Dolphinita, Guerriro Digitale, Krupuk Pagi Pagi, Los Primos, Mastodontico Telepiedone, Pot Hostpot, Tralaledon, Strawberry Elephant";
