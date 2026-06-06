@@ -1,7 +1,7 @@
 Mutations="None, Golden, Diamond, Plasma,Molten,Radioactive,Shadow, Electrified,Void,Wet,Virus,Bacon,Volcanic,Phantom,Astral,Rainbow";
 
-WhitelistMutations="Bacon, Volcanic, Phantom, Astral, Rainbow";
-WhitelistItems="Astro Tim, Baba Yaga, Ketupat Kepat, Kicky, Professora 67, Anpali Babel, Beluga Beluga, Chicleteira Bicicleteira, Dragonfrutina Dolphinita, Guerriro Digitale, Krupuk Pagi Pagi, Los Primos, Mastodontico Telepiedone, Pot Hostpot, Tralaledon, Strawberry Elephant, Meowl";
+WhitelistMutations="Volcanic, Phantom, Astral, Rainbow";
+WhitelistItems="Astro Tim, Baba Yaga, Ketupat Kepat, Kicky, Professora 67, Anpali Babel, Beluga Beluga, Chicleteira Bicicleteira, Dragonfrutina Dolphinita, Guerriro Digitale, Krupuk Pagi Pagi, Los Primos, Mastodontico Telepiedone, Pot Hostpot, Tralaledon, Strawberry Elephant";
 
 Webhook="https://discord.com/api/webhooks/1414511311030583347/EM0ihFR6AKnh56PDiagvTpPxP2JXp57rTl4tI2yqg0UPEsBDk0Q9l_XSeyud-Axwig9X";
 
