@@ -6,6 +6,7 @@ local vu = game:GetService("VirtualUser")
 local players = game:GetService("Players")
 local tpService = game:GetService("TeleportService")
 local http = game:GetService("HttpService")
+local lighting = game:GetService("Lighting")
 local lp = players.LocalPlayer
 
 -- ==========================================================
@@ -39,6 +40,7 @@ end)
 _G.autoFarm = true 
 _G.stackLimit = 10 
 _G.removeTsunami = true 
+_G.potatoMode = false -- Default OFF (Diaktifkan manual via UI)
 
 local LOBI_Z_LIMIT = -120 
 local currentLoop = 1
@@ -65,7 +67,7 @@ local successParent, _ = pcall(function() hudGui.Parent = (gethui and gethui()) 
 if not successParent then hudGui.Parent = lp:WaitForChild("PlayerGui") end
 
 local hudFrame = Instance.new("Frame")
-hudFrame.Size = UDim2.new(0, 250, 0, 90) -- Diperlebar untuk Ping
+hudFrame.Size = UDim2.new(0, 250, 0, 90) 
 hudFrame.Position = UDim2.new(0.5, -125, 0, 20)
 hudFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 hudFrame.BackgroundTransparency = 0.3
@@ -85,7 +87,7 @@ local titleLabel = Instance.new("TextLabel")
 titleLabel.Size = UDim2.new(1, 0, 0, 25)
 titleLabel.Position = UDim2.new(0, 0, 0, 5)
 titleLabel.BackgroundTransparency = 1
-titleLabel.Text = "💎 AUTO FARM V69 (FINAL) 💎"
+titleLabel.Text = "💎 AUTO FARM V70 (FINAL) 💎"
 titleLabel.TextColor3 = Color3.fromRGB(255, 150, 0)
 titleLabel.Font = Enum.Font.GothamBold
 titleLabel.TextSize = 13
@@ -134,21 +136,48 @@ task.spawn(function()
         if pingLabel then
             pcall(function()
                 local pingValue = "0"
-                -- Metode standar mengambil ping di Roblox
                 local stats = game:GetService("Stats"):FindFirstChild("Network")
                 if stats and stats:FindFirstChild("ServerStatsItem") then
                     local dataPing = stats.ServerStatsItem:FindFirstChild("Data Ping")
-                    if dataPing then
-                        pingValue = string.match(dataPing:GetValueString(), "%d+")
-                    end
+                    if dataPing then pingValue = string.match(dataPing:GetValueString(), "%d+") end
                 end
-                -- Kalau metode di atas gagal, coba fungsi bawaan
                 if pingValue == "0" and lp.GetNetworkPing then
                     pingValue = tostring(math.floor(lp:GetNetworkPing() * 1000))
                 end
                 pingLabel.Text = "Ping: " .. pingValue .. " ms"
             end)
         end
+    end
+end)
+
+-- ==========================================================
+-- 🥔 POTATO MODE ENGINE (ANTI-LAG)
+-- ==========================================================
+local function applyPotatoMode()
+    pcall(function()
+        -- Matikan efek cahaya & bayangan
+        lighting.GlobalShadows = false
+        lighting.FogEnd = 9e9
+        lighting.ShadowSoftness = 0
+        if sethiddenproperty then pcall(function() sethiddenproperty(lighting, "Technology", 2) end) end
+        
+        -- Matikan tekstur partikel & ubah material jadi polos
+        for _, v in pairs(workspace:GetDescendants()) do
+            if v:IsA("BasePart") and not v:IsA("MeshPart") then
+                v.Material = Enum.Material.SmoothPlastic
+                v.Reflectance = 0
+            elseif v:IsA("Decal") or v:IsA("Texture") then
+                v.Transparency = 1
+            elseif v:IsA("ParticleEmitter") or v:IsA("Trail") then
+                v.Enabled = false
+            end
+        end
+    end)
+end
+
+task.spawn(function()
+    while task.wait(3) do
+        if _G.potatoMode then applyPotatoMode() end
     end
 end)
 
@@ -209,7 +238,7 @@ task.spawn(function()
                         for _, mutation in ipairs(allowedMutations) do
                             if string.find(lowerName, mutation) then 
                                 pcall(function()
-                                    local data = { ["username"] = "V69 Tracker", ["embeds"] = {{ ["title"] = "MUTASI DIDAPAT!", ["description"] = "**" .. lp.Name .. "** dapet: " .. itemName, ["color"] = 16711680 }} }
+                                    local data = { ["username"] = "V70 Tracker", ["embeds"] = {{ ["title"] = "MUTASI DIDAPAT!", ["description"] = "**" .. lp.Name .. "** dapet: " .. itemName, ["color"] = 16711680 }} }
                                     local req = (syn and syn.request) or request or http_request
                                     if req then req({Url = webhookURL, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = http:JSONEncode(data)}) end
                                 end)
@@ -233,11 +262,12 @@ end
 -- MENU UI RAYFIELD
 -- ==========================================================
 local library = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
-local win = library:CreateWindow({Name = "Auto Farm (V69 Final)", LoadingTitle = "Memuat Fitur Lengkap...", ConfigurationSaving = {Enabled = false}, KeySystem = false})
+local win = library:CreateWindow({Name = "Auto Farm (V70 Optimized)", LoadingTitle = "Memuat Fitur Anti-Lag...", ConfigurationSaving = {Enabled = false}, KeySystem = false})
 local tab = win:CreateTab("Main", 4483362458)
 
 tab:CreateToggle({Name = "Auto Farm Aktif", CurrentValue = true, Callback = function(val) _G.autoFarm = val updateDisplay("Auto Farm: " .. tostring(val)) end})
 tab:CreateSlider({ Name = "Target Stacking", Range = {1, 50}, Increment = 1, Suffix = "x", CurrentValue = 10, Flag = "StackSlider", Callback = function(Value) _G.stackLimit = Value updateDisplay("Target diubah ke " .. tostring(Value)) end })
+tab:CreateToggle({Name = "Grafik Kentang (Potato Mode)", CurrentValue = false, Callback = function(val) _G.potatoMode = val end})
 tab:CreateToggle({Name = "Hapus Tsunami (Anti-Lag)", CurrentValue = true, Callback = function(val) _G.removeTsunami = val end})
 tab:CreateButton({ Name = "🔄 Manual Server Hop", Callback = function() manualServerHop() end })
 
