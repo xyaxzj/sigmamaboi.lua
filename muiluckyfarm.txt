@@ -10,7 +10,7 @@ BoostSpeed=true;
 BoostSpeedValue=150; 
 
 AutoStart="MaxPerformance,BoostFPS,DiscordNotif,Discord20TOnly,TargetMutation";
-AutoRestartHours=0;
+AutoRestartHours=2;
 
 ApiKey="MUIDASH-18695f518a58c3d8";
 
