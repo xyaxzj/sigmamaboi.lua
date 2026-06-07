@@ -1,6 +1,6 @@
 -- ==========================================================
--- MOCTA ULTIMATE HUB V1.5 (THE MASTERPIECE)
--- Build: Trade, Sell Cart, Base Cart, P1/P2, Anti-Lag Sync
+-- MOCTA ULTIMATE HUB V1.6 (THE MASTERPIECE)
+-- Build: Trade, Sell Cart, Base Cart, P1/P2, Max Stock Fixed
 -- ==========================================================
 
 local SCRIPT_URL = "https://raw.githubusercontent.com/xyaxzj/sigmamaboi.lua/refs/heads/main/sigmaboitradee.lua"
@@ -232,6 +232,21 @@ local success, errorMessage = pcall(function()
             updateCartDisplay() 
         end
     })
+
+    TabCart:CreateButton({
+        Name = "➕ Tambah Semua Stok (Maksimal)", 
+        Callback = function() 
+            local liveSelectedItems = ItemDropdown.CurrentOption
+            if type(liveSelectedItems) ~= "table" then liveSelectedItems = {liveSelectedItems} end
+            for _, optionStr in pairs(liveSelectedItems) do
+                local itemName = getBaseName(optionStr)
+                if itemName ~= "" and itemName ~= "[ANY ASSET]" then
+                    ShoppingCart[itemName] = getRealStock(itemName)
+                end
+            end
+            updateCartDisplay() 
+        end
+    })
     
     TabCart:CreateButton({Name = "🗑️ Kosongkan Keranjang", Callback = function() ShoppingCart = {}; updateCartDisplay() end})
     TabCart:CreateButton({
@@ -286,6 +301,20 @@ local success, errorMessage = pcall(function()
                     local rs = getRealStock(itemName) 
                     local cur = SellCart[itemName] or 0 
                     SellCart[itemName] = (cur + SelectedSellMixQty > rs) and rs or (cur + SelectedSellMixQty)
+                end
+            end
+            updateSellCartDisplay() 
+        end
+    })
+
+    TabSell:CreateButton({
+        Name = "➕ Tambah Semua Stok (Maksimal)", 
+        Callback = function() 
+            local lst = type(SelectedSellItems) == "table" and SelectedSellItems or {SelectedSellItems}
+            for _, optionStr in pairs(lst) do
+                local itemName = getBaseName(optionStr)
+                if itemName ~= "" and itemName ~= "[ANY ASSET]" then
+                    SellCart[itemName] = getRealStock(itemName)
                 end
             end
             updateSellCartDisplay() 
@@ -385,6 +414,20 @@ local success, errorMessage = pcall(function()
                     local rs = getRealStock(itemName) 
                     local cur = BaseCart[itemName] or 0 
                     BaseCart[itemName] = (cur + SelectedPlaceMixQty > rs) and rs or (cur + SelectedPlaceMixQty)
+                end
+            end
+            updateBaseCartDisplay() 
+        end
+    })
+
+    TabBase:CreateButton({
+        Name = "➕ Tambah Semua Stok (Maksimal)", 
+        Callback = function() 
+            local lst = type(SelectedPlaceItems) == "table" and SelectedPlaceItems or {SelectedPlaceItems}
+            for _, optionStr in pairs(lst) do
+                local itemName = getBaseName(optionStr)
+                if itemName ~= "" and itemName ~= "[ANY ASSET]" then
+                    BaseCart[itemName] = getRealStock(itemName)
                 end
             end
             updateBaseCartDisplay() 
