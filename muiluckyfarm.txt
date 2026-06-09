@@ -1,3 +1,4 @@
+
 BlacklistMutation="None, Golden, Diamond, Plasma,Molten,Radioactive,Shadow, Electrified,Void,Wet,Virus,Bacon,Volcanic,Phantom,Astral,Rainbow,Alien,Enchanted,Heavenly";
 
 WhitelistMutations="Heavenly, Volcanic, Phantom, Astral, Rainbow";
@@ -8,7 +9,6 @@ Webhook="https://discord.com/api/webhooks/1414511311030583347/EM0ihFR6AKnh56PDia
 
 BoostSpeed=true; 
 BoostSpeedValue=150; 
-
 
 AutoStart="MaxPerformance,BoostFPS,DiscordNotif,Discord20TOnly,TargetMutation,WhiteScreen";
 AutoRestartHours=0;
