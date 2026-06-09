@@ -10,7 +10,7 @@ Webhook="https://discord.com/api/webhooks/1414511311030583347/EM0ihFR6AKnh56PDia
 BoostSpeed=true; 
 BoostSpeedValue=150; 
 
-AutoStart="MaxPerformance,BoostFPS,DiscordNotif,Discord20TOnly,TargetMutation";
+AutoStart="MaxPerformance,BoostFPS,DiscordNotif,Discord20TOnly,TargetMutation,DeleteOtherPlayers";
 AutoRestartHours=0;
 
 ApiKey="MUIDASH-18695f518a58c3d8";
