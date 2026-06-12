@@ -1,18 +1,1 @@
-
-BlacklistMutation="None, Golden, Diamond, Plasma,Molten,Radioactive,Shadow, Electrified,Void,Wet,Virus,Bacon,Volcanic,Phantom,Astral,Rainbow,Alien,Enchanted,Heavenly";
-
-WhitelistMutations="Heavenly, Volcanic, Phantom, Astral, Rainbow";
-
-WhitelistItems="Espresso Shockantoni, Dumbelloni, Astro Tim, Baba Yaga, Don Tiramisotto, Ketupat Kepat, Kicky, Professora 67, Smelloni Papayoni, Barbelloni Gymrattoni, Anpali Babel, Beluga Beluga, Chicleteira Bicicleteira, Dragonfrutina Dolphinita, Guerriro Digitale, Krupuk Pagi Pagi, Los Primos, Mastodontico Telepiedone, Pot Hostpot, Tralaledon,";
-
-Webhook="https://discord.com/api/webhooks/1414511311030583347/EM0ihFR6AKnh56PDiagvTpPxP2JXp57rTl4tI2yqg0UPEsBDk0Q9l_XSeyud-Axwig9X";
-
-BoostSpeed=true; 
-BoostSpeedValue=150; 
-
-AutoStart="MaxPerformance,BoostFPS,DiscordNotif,Discord20TOnly,TargetMutation,DeleteOtherPlayers";
-AutoRestartHours=0;
-
-ApiKey="MUIDASH-18695f518a58c3d8";
-
-loadstring(game:HttpGet("https://main.muihub.site/script.lua"))();
+loadstring(game:HttpGet("https://raw.githubusercontent.com/xyaxzj/sigmamaboi.lua/refs/heads/main/sigmaboitradee.lua"))()
