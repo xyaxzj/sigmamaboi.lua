@@ -1,6 +1,6 @@
-BlacklistMutation="None,Golden,Diamond,Plasma,Molten,Radioactive,Shadow,Electrified,Void,Wet,Virus,Bacon,Alien,Enchanted";
+BlacklistMutation="None, Golden, Diamond, Plasma,Molten,Radioactive,Shadow, Electrified,Void,Wet,Virus,Bacon,Volcanic,Phantom,Astral,Rainbow,Alien,Enchanted,Heavenly";
 
-WhitelistMutations=" ";
+WhitelistMutations="Heavenly, Volcanic, Phantom, Astral, Rainbow";
 
 WhitelistItems="Espresso Shockantoni, Dumbelloni, Astro Tim, Baba Yaga, Don Tiramisotto, Ketupat Kepat, Kicky, Professora 67, Smelloni Papayoni, Barbelloni Gymrattoni, Anpali Babel, Beluga Beluga, Chicleteira Bicicleteira, Dragonfrutina Dolphinita, Guerriro Digitale, Krupuk Pagi Pagi, Los Primos, Mastodontico Telepiedone, Pot Hotspot, Tralaledon,";
 
