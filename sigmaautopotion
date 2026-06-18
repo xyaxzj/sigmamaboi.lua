@@ -1,4 +1,4 @@
--- AUTO POTION 
+-- AUTO POTION SCHEDULER
 
 local success, errorMessage = pcall(function()
     local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
@@ -23,10 +23,10 @@ local success, errorMessage = pcall(function()
         Theme = "DarkBlue"
     })
 
-    local TabPotion = Window:CreateTab("Schedule", 4483362458)
+    local TabPotion = Window:CreateTab(" Schedule", 4483362458)
     
     -- UI Elements
-    local ClockLabel = TabPotion:CreateParagraph({Title = "Time Sync", Content = "Fetching server time..."})
+    local ClockLabel = TabPotion:CreateParagraph({Title = " Time Sync", Content = "Fetching server time..."})
     local StatusLabel = TabPotion:CreateParagraph({Title = "Bot Status", Content = "Initializing..."})
 
     TabPotion:CreateSection("Execution Mode")
@@ -62,13 +62,30 @@ local success, errorMessage = pcall(function()
             local timeUTC = os.date("!*t")
             local currentHour = timeUTC.hour
             local currentMin = timeUTC.min
+            local currentSec = timeUTC.sec
+            
+            -- Countdown Logic Calculation
+            local countdownText = ""
+            if currentHour % 2 == 0 and currentMin >= 0 and currentMin <= 2 then
+                countdownText = "EVENT ACTIVE"
+            else
+                local targetHour = (currentHour % 2 == 0) and (currentHour + 2) or (currentHour + 1)
+                local diffSeconds = (targetHour * 3600) - ((currentHour * 3600) + (currentMin * 60) + currentSec)
+                
+                local h = math.floor(diffSeconds / 3600)
+                local m = math.floor((diffSeconds % 3600) / 60)
+                local s = diffSeconds % 60
+                
+                countdownText = string.format("Next Event in: %02d:%02d:%02d", h, m, s)
+            end
             
             ClockLabel:Set({
                 Title = "Time Sync", 
                 Content = string.format(
-                    "Local Time: %02d:%02d:%02d\nUTC Time: %02d:%02d:%02d\n\n📌 Target: Every EVEN UTC hour (mins 0-2).", 
+                    "Local Time: %02d:%02d:%02d\nUTC Time: %02d:%02d:%02d\n\n📌 %s", 
                     timeLocal.hour, timeLocal.min, timeLocal.sec, 
-                    timeUTC.hour, timeUTC.min, timeUTC.sec
+                    timeUTC.hour, timeUTC.min, timeUTC.sec,
+                    countdownText
                 )
             })
 
