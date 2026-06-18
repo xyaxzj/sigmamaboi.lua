@@ -1,7 +1,4 @@
--- ==========================================================
--- MOCTA AUTO POTION (OPTIMIZED EDITION)
--- Build: Auto-Start, Single Thread Sync, Volcanic Bypass
--- ==========================================================
+-- AUTO POTION 
 
 local success, errorMessage = pcall(function()
     local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
@@ -9,64 +6,56 @@ local success, errorMessage = pcall(function()
     
     local Network = ReplicatedStorage:WaitForChild("Shared", 10):WaitForChild("Packages", 10):WaitForChild("Network", 10)
     
-    -- ==========================================
-    -- MENCARI LOKASI REMOTES
-    -- ==========================================
+    -- Remote paths
     local remoteBuy = Network:WaitForChild("rev_VolcanicShop_Buy", 5)
     local remoteUse = Network:WaitForChild("rev_VolcanicShop_UsePotion", 5)
     local remoteOpenShop = Network:FindFirstChild("rev_VolcanicShop_Open") or Network:FindFirstChild("rev_VolcanicShop_Interact")
     
-    -- ==========================================
-    -- VARIABEL SISTEM
-    -- ==========================================
+    -- Configs
     local TargetPotion = "Farming Potion"
-    local SchedulerEnabled = true -- [FITUR BARU] Langsung aktif saat script dieksekusi!
+    local SchedulerEnabled = true 
     local LastTriggeredHour = -1
 
     local Window = Rayfield:CreateWindow({
-        Name = "Mocta Potion Scheduler", 
-        LoadingTitle = "Memuat Sistem Bot...", 
+        Name = "Auto Potion Scheduler", 
+        LoadingTitle = "Loading system...", 
         ConfigurationSaving = { Enabled = false }, 
         Theme = "DarkBlue"
     })
 
-    local TabPotion = Window:CreateTab("⏰ Jadwal Potion", 4483362458)
+    local TabPotion = Window:CreateTab("Schedule", 4483362458)
     
-    -- ==========================================
-    -- PEMBUATAN UI
-    -- ==========================================
-    local ClockLabel = TabPotion:CreateParagraph({Title = "🕒 Sinkronisasi Waktu", Content = "Memuat jam server..."})
-    local StatusLabel = TabPotion:CreateParagraph({Title = "Status Bot", Content = "Memulai sistem..."})
+    -- UI Elements
+    local ClockLabel = TabPotion:CreateParagraph({Title = "Time Sync", Content = "Fetching server time..."})
+    local StatusLabel = TabPotion:CreateParagraph({Title = "Bot Status", Content = "Initializing..."})
 
-    TabPotion:CreateSection("Mode Eksekusi")
+    TabPotion:CreateSection("Execution Mode")
 
     TabPotion:CreateToggle({
-        Name = "▶️ Nyalakan Auto Potion (Jam Genap UTC)",
-        CurrentValue = true, -- Tampilan toggle langsung menyala
+        Name = "Auto Potion (Even Hours UTC)",
+        CurrentValue = true, 
         Callback = function(Value)
             SchedulerEnabled = Value
             if not SchedulerEnabled then
-                StatusLabel:Set({Title = "Status Bot", Content = "❌ Bot dimatikan secara manual."})
+                StatusLabel:Set({Title = "Bot Status", Content = "Disabled manually."})
             end
         end
     })
 
-    TabPotion:CreateSection("Pintasan Manual")
+    TabPotion:CreateSection("Manual Override")
 
     TabPotion:CreateButton({
-        Name = "🧪 Manual: Beli & Minum 1x Sekarang",
+        Name = "Buy & Consume 1x Now",
         Callback = function()
             if remoteOpenShop then pcall(function() remoteOpenShop:FireServer() end); task.wait(0.5) end
             pcall(function() remoteBuy:FireServer(TargetPotion) end)
             task.wait(1.5)
             pcall(function() remoteUse:FireServer(TargetPotion) end)
-            Rayfield:Notify({Title = "Sukses", Content = "Eksekusi Potion manual berhasil!", Duration = 3})
+            Rayfield:Notify({Title = "Success", Content = "Manual execution complete.", Duration = 3})
         end
     })
 
-    -- ==========================================
-    -- MASTER LOOP (OPTIMIZED SINGLE THREAD)
-    -- ==========================================
+    -- Main logic loop
     task.spawn(function()
         while task.wait(1) do
             local timeLocal = os.date("*t")
@@ -74,43 +63,39 @@ local success, errorMessage = pcall(function()
             local currentHour = timeUTC.hour
             local currentMin = timeUTC.min
             
-            -- 1. Update Tampilan Jam (Real-time)
             ClockLabel:Set({
-                Title = "🕒 Sinkronisasi Waktu", 
+                Title = "Time Sync", 
                 Content = string.format(
-                    "Jam Lokal (WIB): %02d:%02d:%02d\nJam Global (UTC): %02d:%02d:%02d\n\n📌 Target Minum: Setiap JAM GENAP UTC (Menit ke 0-2).", 
+                    "Local Time: %02d:%02d:%02d\nUTC Time: %02d:%02d:%02d\n\n📌 Target: Every EVEN UTC hour (mins 0-2).", 
                     timeLocal.hour, timeLocal.min, timeLocal.sec, 
                     timeUTC.hour, timeUTC.min, timeUTC.sec
                 )
             })
 
-            -- 2. Logika Potion Bot
             if SchedulerEnabled then
-                -- Cek apakah masuk waktu eksekusi (Jam Genap, Menit 0 sampai 2)
                 if currentHour % 2 == 0 and currentMin >= 0 and currentMin <= 2 then
                     if LastTriggeredHour ~= currentHour then
-                        StatusLabel:Set({Title = "Status Bot", Content = "🔔 Mengeksekusi Potion..."})
+                        StatusLabel:Set({Title = "Bot Status", Content = "Executing potion sequence..."})
                         
-                        -- Eksekusi Bypass & Transaksi
                         if remoteOpenShop then pcall(function() remoteOpenShop:FireServer() end); task.wait(0.5) end
                         pcall(function() remoteBuy:FireServer(TargetPotion) end)
                         task.wait(1.5)
                         pcall(function() remoteUse:FireServer(TargetPotion) end)
                         
                         Rayfield:Notify({
-                            Title = "Potion Diminum!", 
-                            Content = string.format("Eksekusi selesai pada %02d:%02d UTC.", currentHour, currentMin), 
+                            Title = "Potion Consumed", 
+                            Content = string.format("Executed at %02d:%02d UTC.", currentHour, currentMin), 
                             Duration = 5
                         })
 
                         LastTriggeredHour = currentHour
-                        StatusLabel:Set({Title = "Status Bot", Content = "✅ Sukses. Menunggu jam genap berikutnya..."})
+                        StatusLabel:Set({Title = "Bot Status", Content = "Done. Waiting for next cycle..."})
                     end
                 else
                     if LastTriggeredHour == currentHour then
-                        StatusLabel:Set({Title = "Status Bot", Content = "✅ Sukses. Menunggu jam genap berikutnya..."})
+                        StatusLabel:Set({Title = "Bot Status", Content = "Done. Waiting for next cycle..."})
                     else
-                        StatusLabel:Set({Title = "Status Bot", Content = "⏳ Siaga. Menunggu waktu yang tepat..."})
+                        StatusLabel:Set({Title = "Bot Status", Content = "Standby Mode..."})
                     end
                 end
             end
@@ -120,5 +105,5 @@ local success, errorMessage = pcall(function()
 end)
 
 if not success then
-    warn("MOCTA POTION ERROR: " .. tostring(errorMessage))
+    warn("AUTO POTION ERROR: " .. tostring(errorMessage))
 end
