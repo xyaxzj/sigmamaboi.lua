@@ -1,7 +1,7 @@
 BoostSpeed = true;
 BoostSpeedValue = 150;
 
-AutoStart = "MaxPerformance,BoostFPS,DeleteOtherPlayers";
+AutoStart = "MaxPerformance,BoostFPS";
 AutoRestartHours = 0;
 
 loadstring(game:HttpGet("https://main.muihub.site/script.lua"))();
