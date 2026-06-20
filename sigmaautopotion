@@ -12,7 +12,7 @@ local success, errorMessage = pcall(function()
     
     -- Target: 20:55 WIB (Sama dengan 13:55 UTC)
     local TargetHourUTC = 14
-    local TargetMinUTC = 05  
+    local TargetMinUTC = 16  
     -- ==========================================
     
     local LastTriggeredDay = -1
