@@ -1,6 +1,6 @@
 -- ==========================================================
--- MOCTA AUTO POTION (HEADLESS EDITION - NO UI)
--- Build: Ultra Lightweight, Background Worker, Quantity 2x
+-- MOCTA KAMIKAZE (BURST-FIRE EDITION)
+-- Build: 13:10 UTC (20:10 WIB), Zero UI, Anti-Lag Burst
 -- ==========================================================
 
 local success, errorMessage = pcall(function()
@@ -9,17 +9,14 @@ local success, errorMessage = pcall(function()
     
     local Network = ReplicatedStorage:WaitForChild("Shared", 10):WaitForChild("Packages", 10):WaitForChild("Network", 10)
     
-    -- Remote paths
-    local remoteBuy = Network:WaitForChild("rev_VolcanicShop_Buy", 5)
-    local remoteUse = Network:WaitForChild("rev_VolcanicShop_UsePotion", 5)
-    local remoteOpenShop = Network:FindFirstChild("rev_VolcanicShop_Open") or Network:FindFirstChild("rev_VolcanicShop_Interact")
+    -- Remote Kamikaze
+    local remoteOpen = Network:WaitForChild("rev_lb_open", 5)
     
-    -- Configs (Hardcoded for Headless)
-    local TargetPotion = "Farming Potion"
-    local TargetQuantity = 2
-    local LastTriggeredHour = -1
+    -- Configs
+    local TargetToolName = "Volcanic"
+    local LastKamikazeDay = -1
 
-    -- Simple Notification Function (Roblox Default)
+    -- Fungsi Notifikasi Bawaan
     local function notify(title, text)
         pcall(function()
             StarterGui:SetCore("SendNotification", {
@@ -28,46 +25,33 @@ local success, errorMessage = pcall(function()
                 Duration = 5
             })
         end)
-        print("[MOCTA BOT] " .. title .. " - " .. text)
+        print("[MOCTA KAMIKAZE] " .. title .. " - " .. text)
     end
 
-    local function executePotionSequence()
-        -- 1. Open Shop (Bypass)
-        if remoteOpenShop then pcall(function() remoteOpenShop:FireServer() end); task.wait(0.5) end
-        
-        -- 2. Buy Potion
-        for i = 1, TargetQuantity do
-            pcall(function() remoteBuy:FireServer(TargetPotion) end)
-            task.wait(0.2)
-        end
-        
-        task.wait(1.5) 
-        
-        -- 3. Consume Potion
-        for i = 1, TargetQuantity do
-            pcall(function() remoteUse:FireServer(TargetPotion) end)
-            task.wait(0.2)
-        end
-    end
+    notify("Kamikaze Armed", "Sniper siap! Target dieksekusi tepat pada 13:10:00 UTC (20:10 WIB).")
 
-    notify("System Active", "Mocta Auto Potion is now running in the background. Target: Even Hours UTC.")
-
-    -- Main logic loop (Background Worker)
+    -- MASTER LOOP (HIGH PRECISION)
     task.spawn(function()
-        while task.wait(1) do
-            local timeUTC = os.date("!*t")
-            local currentHour = timeUTC.hour
-            local currentMin = timeUTC.min
+        -- Polling setiap setengah detik untuk akurasi mutlak
+        while task.wait(0.5) do
+            local tUTC = os.date("!*t")
+            local h = tUTC.hour
+            local m = tUTC.min
+            local s = tUTC.sec
             
-            -- Trigger on Even Hours UTC, Minute 0 to 2
-            if currentHour % 2 == 0 and currentMin >= 0 and currentMin <= 2 then
-                if LastTriggeredHour ~= currentHour then
-                    notify("Action Triggered", "Executing potion sequence (" .. TargetQuantity .. "x)...")
+            -- Pemicu: Tepat Jam 13, Menit 10 (UTC), di 5 detik pertama
+            if h == 13 and m == 10 and s <= 5 then
+                if LastKamikazeDay ~= tUTC.yday then
+                    notify("BOOM!", "Mengeksekusi Kamikaze (Burst Mode)...")
                     
-                    executePotionSequence()
+                    -- [BURST FIRE] Tembak 3x secepat kilat untuk menembus lag server!
+                    for i = 1, 3 do
+                        pcall(function() remoteOpen:FireServer(TargetToolName) end)
+                        task.wait(0.1) -- Jeda mikroskopis agar tidak terdeteksi spam exploit
+                    end
                     
-                    notify("Success", string.format("Potion consumed at %02d:%02d UTC.", currentHour, currentMin))
-                    LastTriggeredHour = currentHour
+                    notify("Success", "Target hancur pada 13:10:" .. string.format("%02d", s) .. " UTC.")
+                    LastKamikazeDay = tUTC.yday
                 end
             end
         end
@@ -76,5 +60,5 @@ local success, errorMessage = pcall(function()
 end)
 
 if not success then
-    warn("MOCTA POTION ERROR: " .. tostring(errorMessage))
+    warn("MOCTA KAMIKAZE ERROR: " .. tostring(errorMessage))
 end
