@@ -1,8 +1,11 @@
--- AUTO POTION SCHEDULER
+-- ==========================================================
+-- MOCTA AUTO POTION (HEADLESS EDITION - NO UI)
+-- Build: Ultra Lightweight, Background Worker, Quantity 2x
+-- ==========================================================
 
 local success, errorMessage = pcall(function()
-    local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
     local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local StarterGui = game:GetService("StarterGui")
     
     local Network = ReplicatedStorage:WaitForChild("Shared", 10):WaitForChild("Packages", 10):WaitForChild("Network", 10)
     
@@ -11,109 +14,60 @@ local success, errorMessage = pcall(function()
     local remoteUse = Network:WaitForChild("rev_VolcanicShop_UsePotion", 5)
     local remoteOpenShop = Network:FindFirstChild("rev_VolcanicShop_Open") or Network:FindFirstChild("rev_VolcanicShop_Interact")
     
-    -- Configs
+    -- Configs (Hardcoded for Headless)
     local TargetPotion = "Farming Potion"
-    local SchedulerEnabled = true 
+    local TargetQuantity = 2
     local LastTriggeredHour = -1
 
-    local Window = Rayfield:CreateWindow({
-        Name = "Auto Potion Scheduler", 
-        LoadingTitle = "Loading system...", 
-        ConfigurationSaving = { Enabled = false }, 
-        Theme = "DarkBlue"
-    })
+    -- Simple Notification Function (Roblox Default)
+    local function notify(title, text)
+        pcall(function()
+            StarterGui:SetCore("SendNotification", {
+                Title = title,
+                Text = text,
+                Duration = 5
+            })
+        end)
+        print("[MOCTA BOT] " .. title .. " - " .. text)
+    end
 
-    local TabPotion = Window:CreateTab(" Schedule", 4483362458)
-    
-    -- UI Elements
-    local ClockLabel = TabPotion:CreateParagraph({Title = " Time Sync", Content = "Fetching server time..."})
-    local StatusLabel = TabPotion:CreateParagraph({Title = "Bot Status", Content = "Initializing..."})
-
-    TabPotion:CreateSection("Execution Mode")
-
-    TabPotion:CreateToggle({
-        Name = "Auto Potion (Even Hours UTC)",
-        CurrentValue = true, 
-        Callback = function(Value)
-            SchedulerEnabled = Value
-            if not SchedulerEnabled then
-                StatusLabel:Set({Title = "Bot Status", Content = "Disabled manually."})
-            end
-        end
-    })
-
-    TabPotion:CreateSection("Manual Override")
-
-    TabPotion:CreateButton({
-        Name = "Buy & Consume 1x Now",
-        Callback = function()
-            if remoteOpenShop then pcall(function() remoteOpenShop:FireServer() end); task.wait(0.5) end
+    local function executePotionSequence()
+        -- 1. Open Shop (Bypass)
+        if remoteOpenShop then pcall(function() remoteOpenShop:FireServer() end); task.wait(0.5) end
+        
+        -- 2. Buy Potion
+        for i = 1, TargetQuantity do
             pcall(function() remoteBuy:FireServer(TargetPotion) end)
-            task.wait(1.5)
-            pcall(function() remoteUse:FireServer(TargetPotion) end)
-            Rayfield:Notify({Title = "Success", Content = "Manual execution complete.", Duration = 3})
+            task.wait(0.2)
         end
-    })
+        
+        task.wait(1.5) 
+        
+        -- 3. Consume Potion
+        for i = 1, TargetQuantity do
+            pcall(function() remoteUse:FireServer(TargetPotion) end)
+            task.wait(0.2)
+        end
+    end
 
-    -- Main logic loop
+    notify("System Active", "Mocta Auto Potion is now running in the background. Target: Even Hours UTC.")
+
+    -- Main logic loop (Background Worker)
     task.spawn(function()
         while task.wait(1) do
-            local timeLocal = os.date("*t")
             local timeUTC = os.date("!*t")
             local currentHour = timeUTC.hour
             local currentMin = timeUTC.min
-            local currentSec = timeUTC.sec
             
-            -- Countdown Logic Calculation
-            local countdownText = ""
+            -- Trigger on Even Hours UTC, Minute 0 to 2
             if currentHour % 2 == 0 and currentMin >= 0 and currentMin <= 2 then
-                countdownText = "EVENT ACTIVE"
-            else
-                local targetHour = (currentHour % 2 == 0) and (currentHour + 2) or (currentHour + 1)
-                local diffSeconds = (targetHour * 3600) - ((currentHour * 3600) + (currentMin * 60) + currentSec)
-                
-                local h = math.floor(diffSeconds / 3600)
-                local m = math.floor((diffSeconds % 3600) / 60)
-                local s = diffSeconds % 60
-                
-                countdownText = string.format("Next Event in: %02d:%02d:%02d", h, m, s)
-            end
-            
-            ClockLabel:Set({
-                Title = "Time Sync", 
-                Content = string.format(
-                    "Local Time: %02d:%02d:%02d\nUTC Time: %02d:%02d:%02d\n\n📌 %s", 
-                    timeLocal.hour, timeLocal.min, timeLocal.sec, 
-                    timeUTC.hour, timeUTC.min, timeUTC.sec,
-                    countdownText
-                )
-            })
-
-            if SchedulerEnabled then
-                if currentHour % 2 == 0 and currentMin >= 0 and currentMin <= 2 then
-                    if LastTriggeredHour ~= currentHour then
-                        StatusLabel:Set({Title = "Bot Status", Content = "Executing potion sequence..."})
-                        
-                        if remoteOpenShop then pcall(function() remoteOpenShop:FireServer() end); task.wait(0.5) end
-                        pcall(function() remoteBuy:FireServer(TargetPotion) end)
-                        task.wait(1.5)
-                        pcall(function() remoteUse:FireServer(TargetPotion) end)
-                        
-                        Rayfield:Notify({
-                            Title = "Potion Consumed", 
-                            Content = string.format("Executed at %02d:%02d UTC.", currentHour, currentMin), 
-                            Duration = 5
-                        })
-
-                        LastTriggeredHour = currentHour
-                        StatusLabel:Set({Title = "Bot Status", Content = "Done. Waiting for next cycle..."})
-                    end
-                else
-                    if LastTriggeredHour == currentHour then
-                        StatusLabel:Set({Title = "Bot Status", Content = "Done. Waiting for next cycle..."})
-                    else
-                        StatusLabel:Set({Title = "Bot Status", Content = "Standby Mode..."})
-                    end
+                if LastTriggeredHour ~= currentHour then
+                    notify("Action Triggered", "Executing potion sequence (" .. TargetQuantity .. "x)...")
+                    
+                    executePotionSequence()
+                    
+                    notify("Success", string.format("Potion consumed at %02d:%02d UTC.", currentHour, currentMin))
+                    LastTriggeredHour = currentHour
                 end
             end
         end
@@ -122,5 +76,5 @@ local success, errorMessage = pcall(function()
 end)
 
 if not success then
-    warn("AUTO POTION ERROR: " .. tostring(errorMessage))
+    warn("MOCTA POTION ERROR: " .. tostring(errorMessage))
 end
