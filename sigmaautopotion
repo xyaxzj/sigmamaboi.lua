@@ -1,4 +1,5 @@
---  OPENER LUCKY BLOCK
+--- Auto Opener Lucky Block
+
 local success, errorMessage = pcall(function()
     local Players = game:GetService("Players")
     local LocalPlayer = Players.LocalPlayer
@@ -10,13 +11,12 @@ local success, errorMessage = pcall(function()
     local TargetToolName = "Block Cup"
     
     -- Target: 20:55 WIB (Sama dengan 13:55 UTC)
-    local TargetHourUTC = 13
-    local TargetMinUTC = 55  
+    local TargetHourUTC = 14
+    local TargetMinUTC = 05  
     -- ==========================================
     
     local LastTriggeredDay = -1
 
-    -- Fungsi Notifikasi Super Ringan (Bawaan Roblox)
     local function notify(title, text)
         pcall(function()
             StarterGui:SetCore("SendNotification", {
@@ -28,11 +28,10 @@ local success, errorMessage = pcall(function()
         print("[MOCTA OPENER] " .. title .. " - " .. text)
     end
 
-    notify("System Armed", "Sistem bersiaga. Target: " .. TargetToolName .. " dieksekusi TEPAT pada 13:55 UTC (20:55 WIB).")
+    notify("System Armed", "Mode UNLIMITED BURST aktif. Target: " .. TargetToolName .. " dieksekusi TEPAT pada 13:55 UTC (20:55 WIB).")
 
     -- MASTER LOOP (HIGH PRECISION TIMER)
     task.spawn(function()
-        -- Polling setiap 0.5 detik untuk akurasi tingkat dewa
         while task.wait(0.5) do
             local tUTC = os.date("!*t")
             local h = tUTC.hour
@@ -42,27 +41,40 @@ local success, errorMessage = pcall(function()
             -- Pemicu: Tepat di Jam 13, Menit 55 (UTC), rentang 0-5 detik pertama
             if h == TargetHourUTC and m == TargetMinUTC and s <= 5 then
                 if LastTriggeredDay ~= tUTC.yday then
-                    notify("ACTION!", "Menarik item dari tas dan mengeksekusi...")
+                    notify("ACTION!", "Memulai pembantaian stok " .. TargetToolName .. "...")
                     
                     local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
                     local humanoid = char:FindFirstChildOfClass("Humanoid")
                     local backpack = LocalPlayer:FindFirstChild("Backpack")
                     
                     if char and humanoid and backpack then
-                        -- Mencari Tool di dalam tas atau yang sedang dipegang
-                        local tool = backpack:FindFirstChild(TargetToolName) or char:FindFirstChild(TargetToolName)
                         
-                        if tool then
-                            -- 1. Paksa karakter memegang Tool (Equip)
-                            humanoid:EquipTool(tool)
+                        -- Cari barangnya
+                        local activeTool = char:FindFirstChild(TargetToolName) or backpack:FindFirstChild(TargetToolName)
+                        local clickCount = 0
+                        
+                        -- [UNLIMITED BURST] Selama barang masih ada, hajar terus!
+                        while activeTool do
+                            -- Pastikan barang ada di tangan (Equipped)
+                            if activeTool.Parent ~= char then
+                                humanoid:EquipTool(activeTool)
+                                task.wait(0.1)
+                            end
                             
-                            -- 2. Jeda super singkat agar server sadar item sudah berpindah ke tangan
-                            task.wait(0.2)
+                            -- Spam klik
+                            activeTool:Activate()
+                            clickCount = clickCount + 1
+                            task.wait(0.1) -- Jeda aman agar tidak nge-freeze
                             
-                            -- 3. Paksa klik (Activate) dari sistem
-                            tool:Activate()
-                            
-                            notify("Sukses!", TargetToolName .. " berhasil dipakai pada " .. string.format("%02d:%02d:%02d", h, m, s) .. " UTC.")
+                            -- Cek apakah barang sudah hancur/terpakai
+                            if not activeTool or not activeTool.Parent or activeTool.Parent == workspace then
+                                -- Jika hilang, sapu ulang tas untuk mencari sisa stok
+                                activeTool = char:FindFirstChild(TargetToolName) or backpack:FindFirstChild(TargetToolName)
+                            end
+                        end
+                        
+                        if clickCount > 0 then
+                            notify("Habis Terkuras!", "Eksekusi selesai. Total klik: " .. clickCount .. "x.")
                         else
                             notify("Gagal!", "Item '" .. TargetToolName .. "' tidak ditemukan di Inventory.")
                         end
