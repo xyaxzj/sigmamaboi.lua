@@ -1,22 +1,25 @@
---- Auto Opener Lucky Block
+-- ==========================================================
+-- MOCTA AUTO POTION (HEADLESS + HIGH PRECISION)
+-- Build: No UI, 0.5s Polling, Exact Time Execution
+-- ==========================================================
 
 local success, errorMessage = pcall(function()
-    local Players = game:GetService("Players")
-    local LocalPlayer = Players.LocalPlayer
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
     local StarterGui = game:GetService("StarterGui")
     
-    -- ==========================================
-    -- ⚙️ CONFIGS (PENGATURAN TARGET)
-    -- ==========================================
-    local TargetToolName = "Block Cup"
+    local Network = ReplicatedStorage:WaitForChild("Shared", 10):WaitForChild("Packages", 10):WaitForChild("Network", 10)
     
-    -- Target: 20:55 WIB (Sama dengan 13:55 UTC)
-    local TargetHourUTC = 14
-    local TargetMinUTC = 16  
-    -- ==========================================
+    -- Remote Paths
+    local remoteBuy = Network:WaitForChild("rev_VolcanicShop_Buy", 5)
+    local remoteUse = Network:WaitForChild("rev_VolcanicShop_UsePotion", 5)
+    local remoteOpenShop = Network:FindFirstChild("rev_VolcanicShop_Open") or Network:FindFirstChild("rev_VolcanicShop_Interact")
     
-    local LastTriggeredDay = -1
+    -- Configs
+    local TargetPotion = "Farming Potion"
+    local TargetQuantity = 2
+    local LastTriggeredHour = -1
 
+    -- Fungsi Notifikasi Bawaan Roblox
     local function notify(title, text)
         pcall(function()
             StarterGui:SetCore("SendNotification", {
@@ -25,62 +28,46 @@ local success, errorMessage = pcall(function()
                 Duration = 5
             })
         end)
-        print("[MOCTA OPENER] " .. title .. " - " .. text)
+        print("[MOCTA PRECISION] " .. title .. " - " .. text)
     end
 
-    notify("System Armed", "Mode UNLIMITED BURST aktif. Target: " .. TargetToolName .. " dieksekusi TEPAT pada 13:55 UTC (20:55 WIB).")
+    -- Fungsi Eksekusi
+    local function executePotionSequence()
+        if remoteOpenShop then pcall(function() remoteOpenShop:FireServer() end); task.wait(0.5) end
+        
+        for i = 1, TargetQuantity do 
+            pcall(function() remoteBuy:FireServer(TargetPotion) end)
+            task.wait(0.2) 
+        end
+        
+        task.wait(1.5) 
+        
+        for i = 1, TargetQuantity do 
+            pcall(function() remoteUse:FireServer(TargetPotion) end)
+            task.wait(0.2) 
+        end
+    end
 
-    -- MASTER LOOP (HIGH PRECISION TIMER)
+    notify("System Online", "Mocta Precision aktif. Mengeksekusi TEPAT di menit 00 detik 00.")
+
+    -- MASTER LOOP (HIGH PRECISION)
     task.spawn(function()
-        while task.wait(0.5) do
-            local tUTC = os.date("!*t")
-            local h = tUTC.hour
-            local m = tUTC.min
-            local s = tUTC.sec
+        -- Mengecek setiap SETENGAH DETIK agar tidak meleset
+        while task.wait(0.5) do 
+            local timeUTC = os.date("!*t")
+            local currentHour = timeUTC.hour
+            local currentMin = timeUTC.min
+            local currentSec = timeUTC.sec
             
-            -- Pemicu: Tepat di Jam 13, Menit 55 (UTC), rentang 0-5 detik pertama
-            if h == TargetHourUTC and m == TargetMinUTC and s <= 5 then
-                if LastTriggeredDay ~= tUTC.yday then
-                    notify("ACTION!", "Memulai pembantaian stok " .. TargetToolName .. "...")
+            -- Pemicu: Jam Genap, TEPAT di Menit 0, dan TEPAT di Detik 0 atau 1
+            if currentHour % 2 == 0 and currentMin == 0 and currentSec <= 1 then
+                if LastTriggeredHour ~= currentHour then
+                    notify("Target Locked!", "Menembak Potion " .. TargetQuantity .. "x Tepat Waktu!")
                     
-                    local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-                    local humanoid = char:FindFirstChildOfClass("Humanoid")
-                    local backpack = LocalPlayer:FindFirstChild("Backpack")
+                    executePotionSequence()
                     
-                    if char and humanoid and backpack then
-                        
-                        -- Cari barangnya
-                        local activeTool = char:FindFirstChild(TargetToolName) or backpack:FindFirstChild(TargetToolName)
-                        local clickCount = 0
-                        
-                        -- [UNLIMITED BURST] Selama barang masih ada, hajar terus!
-                        while activeTool do
-                            -- Pastikan barang ada di tangan (Equipped)
-                            if activeTool.Parent ~= char then
-                                humanoid:EquipTool(activeTool)
-                                task.wait(0.1)
-                            end
-                            
-                            -- Spam klik
-                            activeTool:Activate()
-                            clickCount = clickCount + 1
-                            task.wait(0.1) -- Jeda aman agar tidak nge-freeze
-                            
-                            -- Cek apakah barang sudah hancur/terpakai
-                            if not activeTool or not activeTool.Parent or activeTool.Parent == workspace then
-                                -- Jika hilang, sapu ulang tas untuk mencari sisa stok
-                                activeTool = char:FindFirstChild(TargetToolName) or backpack:FindFirstChild(TargetToolName)
-                            end
-                        end
-                        
-                        if clickCount > 0 then
-                            notify("Habis Terkuras!", "Eksekusi selesai. Total klik: " .. clickCount .. "x.")
-                        else
-                            notify("Gagal!", "Item '" .. TargetToolName .. "' tidak ditemukan di Inventory.")
-                        end
-                    end
-                    
-                    LastTriggeredDay = tUTC.yday
+                    notify("Success", string.format("Eksekusi sempurna pada %02d:%02d:%02d UTC.", currentHour, currentMin, currentSec))
+                    LastTriggeredHour = currentHour
                 end
             end
         end
@@ -89,5 +76,5 @@ local success, errorMessage = pcall(function()
 end)
 
 if not success then
-    warn("MOCTA OPENER ERROR: " .. tostring(errorMessage))
+    warn("MOCTA PRECISION ERROR: " .. tostring(errorMessage))
 end
