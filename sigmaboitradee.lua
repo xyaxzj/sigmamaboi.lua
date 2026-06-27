@@ -1,6 +1,6 @@
 -- ==========================================================
--- MOCTA ULTIMATE HUB V1.6 (THE MASTERPIECE)
--- Build: Trade, Sell Cart, Base Cart, P1/P2, Max Stock Fixed
+-- MOCTA ULTIMATE HUB V1.7 (MUTATION MASTERY)
+-- Build: Full Mutation Filter for Trade, Sell, and Base
 -- ==========================================================
 
 local SCRIPT_URL = "https://raw.githubusercontent.com/xyaxzj/sigmamaboi.lua/refs/heads/main/sigmaboitradee.lua"
@@ -36,7 +36,6 @@ local success, errorMessage = pcall(function()
     local TargetPlayerName = ""
     local CurrentQueue = {}
     
-    -- Keranjang Terpisah
     local ShoppingCart = {}  -- Trade
     local SellCart = {}      -- Jual
     local BaseCart = {}      -- Place Base
@@ -52,10 +51,8 @@ local success, errorMessage = pcall(function()
     local P1TradesCompleted = 0
     local P2TradesCompleted = 0
     local TotalItemsSent = 0
-    local SentAssetsRecord = {} 
     local TradeHistoryString = "Belum ada riwayat transaksi."
 
-    -- Variabel Fitur Khusus
     local SelectedSellItems = {}
     local SelectedSellMixQty = 0
     local AutoSellEnabled = false
@@ -94,6 +91,12 @@ local success, errorMessage = pcall(function()
         return tool:GetAttribute("guid") or tool:GetAttribute("GUID") or tool:GetAttribute("uid")
     end
     
+    local function getToolMutation(tool)
+        if not tool then return nil end
+        local m = tool:GetAttribute("Mutation") or tool:GetAttribute("Variant") or (tool:FindFirstChild("Mutation") and tool:FindFirstChild("Mutation").Value)
+        return m and tostring(m) or nil
+    end
+
     local function isTradeable(tool) return tool and tool:IsA("Tool") and getToolGUID(tool) ~= nil end
     
     local function getPlayerList()
@@ -109,9 +112,8 @@ local success, errorMessage = pcall(function()
         local hasMut = false
         for _, tool in ipairs(getAllTools()) do
             if isTradeable(tool) then
-                local m = tool:GetAttribute("Mutation") or tool:GetAttribute("Variant") or (tool:FindFirstChild("Mutation") and tool:FindFirstChild("Mutation").Value)
+                local m = getToolMutation(tool)
                 if m then 
-                    m = tostring(m)
                     mutCounts[m] = (mutCounts[m] or 0) + 1
                     hasMut = true 
                 end
@@ -126,8 +128,8 @@ local success, errorMessage = pcall(function()
 
     local function getFullItemName(tool)
         local displayName = tool.Name
-        local mutValue = tool:GetAttribute("Mutation") or tool:GetAttribute("Variant") or (tool:FindFirstChild("Mutation") and tool:FindFirstChild("Mutation").Value)
-        if mutValue then displayName = displayName .. " [" .. tostring(mutValue) .. "]" end  
+        local mutValue = getToolMutation(tool)
+        if mutValue then displayName = displayName .. " [" .. mutValue .. "]" end  
         
         local lvlValue = tool:GetAttribute("Level") or tool:GetAttribute("level") or tool:GetAttribute("Lvl")
         if not lvlValue then
@@ -158,14 +160,46 @@ local success, errorMessage = pcall(function()
         return p1Confirm and p1Confirm.Visible or false
     end
 
+    -- FUNGSI HELPER UNTUK MEMASUKKAN BARANG BERDASARKAN MUTASI KE KERANJANG
+    local function addMutationsToCart(TargetCart, SelectedOptions, QtyLimit, IsMax)
+        if type(SelectedOptions) ~= "table" then SelectedOptions = {SelectedOptions} end
+        
+        local activeMutations = {}
+        for _, opt in pairs(SelectedOptions) do
+            local cleanMut = getBaseName(opt)
+            if cleanMut ~= "" and cleanMut ~= "[TIDAK ADA MUTASI]" then activeMutations[cleanMut] = true end
+        end
+
+        local matchingItems = {}
+        for _, tool in ipairs(getAllTools()) do
+            if isTradeable(tool) then
+                local mut = getToolMutation(tool)
+                if mut and activeMutations[mut] then
+                    matchingItems[getFullItemName(tool)] = true
+                end
+            end
+        end
+
+        for itemName, _ in pairs(matchingItems) do
+            local rs = getRealStock(itemName)
+            local cur = TargetCart[itemName] or 0
+            if IsMax then
+                TargetCart[itemName] = rs
+            elseif QtyLimit > 0 then
+                TargetCart[itemName] = (cur + QtyLimit > rs) and rs or (cur + QtyLimit)
+            end
+        end
+    end
+
     local updateInventoryDisplay
+    local updateStatsDisplay 
 
     -- ==========================================
     -- RAYFIELD WINDOW INITIALIZATION
     -- ==========================================
     local Window = Rayfield:CreateWindow({
         Name = "Mocta Ultimate Hub", 
-        LoadingTitle = "Memuat Sistem...", 
+        LoadingTitle = "Memuat Sistem V1.7...", 
         ConfigurationSaving = { Enabled = false }, 
         Theme = "DarkBlue"
     })
@@ -193,9 +227,9 @@ local success, errorMessage = pcall(function()
         end
     })
 
-    TabCart:CreateSection("Filter Mutasi & Custom")
-    local MutationDropdown = TabCart:CreateDropdown({
-        Name = "Pilih Mutasi", Options = getMutationList(), CurrentOption = {}, MultipleOptions = true, Callback = function() end
+    TabCart:CreateSection("Filter Spesifik & Mutasi")
+    local TradeMutationDropdown = TabCart:CreateDropdown({
+        Name = "Pilih Mutasi (Trade)", Options = getMutationList(), CurrentOption = {}, MultipleOptions = true, Callback = function() end
     })
     
     local ItemDropdown = TabCart:CreateDropdown({
@@ -217,7 +251,7 @@ local success, errorMessage = pcall(function()
     end
 
     TabCart:CreateButton({
-        Name = "➕ Tambah Sesuai Jumlah", 
+        Name = "➕ Tambah Custom Sesuai Jumlah", 
         Callback = function() 
             local liveSelectedItems = ItemDropdown.CurrentOption
             if type(liveSelectedItems) ~= "table" then liveSelectedItems = {liveSelectedItems} end
@@ -234,7 +268,7 @@ local success, errorMessage = pcall(function()
     })
 
     TabCart:CreateButton({
-        Name = "➕ Tambah Semua Stok (Maksimal)", 
+        Name = "➕ Tambah Custom Semua Stok (Max)", 
         Callback = function() 
             local liveSelectedItems = ItemDropdown.CurrentOption
             if type(liveSelectedItems) ~= "table" then liveSelectedItems = {liveSelectedItems} end
@@ -246,6 +280,16 @@ local success, errorMessage = pcall(function()
             end
             updateCartDisplay() 
         end
+    })
+
+    -- TOMBOL BARU UNTUK MUTASI (TRADE)
+    TabCart:CreateButton({
+        Name = "✨ Tambah Berdasarkan Mutasi (Sesuai Jumlah)", 
+        Callback = function() addMutationsToCart(ShoppingCart, TradeMutationDropdown.CurrentOption, TradeMixQty, false); updateCartDisplay() end
+    })
+    TabCart:CreateButton({
+        Name = "✨ Tambah Berdasarkan Mutasi (Maksimal Stok)", 
+        Callback = function() addMutationsToCart(ShoppingCart, TradeMutationDropdown.CurrentOption, TradeMixQty, true); updateCartDisplay() end
     })
     
     TabCart:CreateButton({Name = "🗑️ Kosongkan Keranjang", Callback = function() ShoppingCart = {}; updateCartDisplay() end})
@@ -273,9 +317,13 @@ local success, errorMessage = pcall(function()
     if not ref_B_Sell then TabSell:CreateParagraph({Title = "⚠️ Peringatan", Content = "Remote Sell tidak ditemukan."}) end
 
     TabSell:CreateSection("1. Setup Keranjang Jual")
+    
+    local SellMutationDropdown = TabSell:CreateDropdown({
+        Name = "Pilih Mutasi (Jual)", Options = getMutationList(), CurrentOption = {}, MultipleOptions = true, Callback = function() end
+    })
+
     local SellItemDropdown = TabSell:CreateDropdown({
-        Name = "Pilih Item Dijual", Options = {"[ANY ASSET]"}, CurrentOption = {}, MultipleOptions = true, 
-        Callback = function(Options) SelectedSellItems = Options end,
+        Name = "Pilih Item Dijual Custom", Options = {"[ANY ASSET]"}, CurrentOption = {}, MultipleOptions = true, Callback = function(Options) SelectedSellItems = Options end,
     })
 
     TabSell:CreateInput({
@@ -292,7 +340,7 @@ local success, errorMessage = pcall(function()
     end
 
     TabSell:CreateButton({
-        Name = "➕ Tambah Sesuai Jumlah", 
+        Name = "➕ Tambah Custom Sesuai Jumlah", 
         Callback = function() 
             local lst = type(SelectedSellItems) == "table" and SelectedSellItems or {SelectedSellItems}
             for _, optionStr in pairs(lst) do
@@ -308,7 +356,7 @@ local success, errorMessage = pcall(function()
     })
 
     TabSell:CreateButton({
-        Name = "➕ Tambah Semua Stok (Maksimal)", 
+        Name = "➕ Tambah Custom Semua Stok (Max)", 
         Callback = function() 
             local lst = type(SelectedSellItems) == "table" and SelectedSellItems or {SelectedSellItems}
             for _, optionStr in pairs(lst) do
@@ -319,6 +367,16 @@ local success, errorMessage = pcall(function()
             end
             updateSellCartDisplay() 
         end
+    })
+
+    -- TOMBOL BARU UNTUK MUTASI (SELL)
+    TabSell:CreateButton({
+        Name = "✨ Tambah Mutasi (Sesuai Jumlah)", 
+        Callback = function() addMutationsToCart(SellCart, SellMutationDropdown.CurrentOption, SelectedSellMixQty, false); updateSellCartDisplay() end
+    })
+    TabSell:CreateButton({
+        Name = "✨ Tambah Mutasi (Maksimal Stok)", 
+        Callback = function() addMutationsToCart(SellCart, SellMutationDropdown.CurrentOption, SelectedSellMixQty, true); updateSellCartDisplay() end
     })
 
     TabSell:CreateButton({Name = "🗑️ Kosongkan Keranjang Jual", Callback = function() SellCart = {}; updateSellCartDisplay() end})
@@ -361,17 +419,12 @@ local success, errorMessage = pcall(function()
                             local toolName = getFullItemName(toolToSell)
                             if not SellCart[toolName] or SellCart[toolName] <= 0 then continue end
 
-                            if toolToSell.Parent == backpack then
-                                humanoid:EquipTool(toolToSell)
-                                task.wait(0.15) 
-                            end
-
+                            if toolToSell.Parent == backpack then humanoid:EquipTool(toolToSell); task.wait(0.15) end
                             local didSell = pcall(function() return ref_B_Sell:InvokeServer() end)
                             if didSell and SellCart[toolName] then SellCart[toolName] = SellCart[toolName] - 1 end
                             task.wait(0.1) 
                         end
-                        updateSellCartDisplay()
-                        task.wait(0.5) 
+                        updateSellCartDisplay(); task.wait(0.5) 
                     end
                 end)
             end
@@ -385,10 +438,14 @@ local success, errorMessage = pcall(function()
     
     if not rev_S_Interact then TabBase:CreateParagraph({Title = "⚠️ Peringatan", Content = "Remote Interact tidak ditemukan."}) end
 
-    TabBase:CreateSection("1. Setup Keranjang Base (Untuk Place)")
+    TabBase:CreateSection("1. Setup Keranjang Base")
+    
+    local BaseMutationDropdown = TabBase:CreateDropdown({
+        Name = "Pilih Mutasi (Base)", Options = getMutationList(), CurrentOption = {}, MultipleOptions = true, Callback = function() end
+    })
+
     local PlaceItemDropdown = TabBase:CreateDropdown({
-        Name = "Pilih Brainrot", Options = {"[ANY ASSET]"}, CurrentOption = {}, MultipleOptions = true, 
-        Callback = function(Options) SelectedPlaceItems = Options end,
+        Name = "Pilih Brainrot Custom", Options = {"[ANY ASSET]"}, CurrentOption = {}, MultipleOptions = true, Callback = function(Options) SelectedPlaceItems = Options end,
     })
 
     TabBase:CreateInput({
@@ -405,7 +462,7 @@ local success, errorMessage = pcall(function()
     end
 
     TabBase:CreateButton({
-        Name = "➕ Tambah Sesuai Jumlah", 
+        Name = "➕ Tambah Custom Sesuai Jumlah", 
         Callback = function() 
             local lst = type(SelectedPlaceItems) == "table" and SelectedPlaceItems or {SelectedPlaceItems}
             for _, optionStr in pairs(lst) do
@@ -421,7 +478,7 @@ local success, errorMessage = pcall(function()
     })
 
     TabBase:CreateButton({
-        Name = "➕ Tambah Semua Stok (Maksimal)", 
+        Name = "➕ Tambah Custom Semua Stok (Max)", 
         Callback = function() 
             local lst = type(SelectedPlaceItems) == "table" and SelectedPlaceItems or {SelectedPlaceItems}
             for _, optionStr in pairs(lst) do
@@ -434,18 +491,21 @@ local success, errorMessage = pcall(function()
         end
     })
 
+    -- TOMBOL BARU UNTUK MUTASI (BASE)
+    TabBase:CreateButton({
+        Name = "✨ Tambah Mutasi (Sesuai Jumlah)", 
+        Callback = function() addMutationsToCart(BaseCart, BaseMutationDropdown.CurrentOption, SelectedPlaceMixQty, false); updateBaseCartDisplay() end
+    })
+    TabBase:CreateButton({
+        Name = "✨ Tambah Mutasi (Maksimal Stok)", 
+        Callback = function() addMutationsToCart(BaseCart, BaseMutationDropdown.CurrentOption, SelectedPlaceMixQty, true); updateBaseCartDisplay() end
+    })
+
     TabBase:CreateButton({Name = "🗑️ Kosongkan Keranjang Base", Callback = function() BaseCart = {}; updateBaseCartDisplay() end})
 
     TabBase:CreateSection("2. Pengaturan Koordinat Base")
-    TabBase:CreateInput({
-        Name = "Mulai dari Slot Ke-", PlaceholderText = "Default: 1", RemoveTextAfterFocusLost = false,
-        Callback = function(Text) local num = tonumber(Text); if num and num > 0 then StartSlot = num end end
-    })
-
-    TabBase:CreateInput({
-        Name = "Batas Slot Maksimal", PlaceholderText = "Default: 30", RemoveTextAfterFocusLost = false,
-        Callback = function(Text) local num = tonumber(Text); if num and num > 0 then MaxSlots = num end end
-    })
+    TabBase:CreateInput({Name = "Mulai dari Slot Ke-", PlaceholderText = "Default: 1", RemoveTextAfterFocusLost = false, Callback = function(Text) local num = tonumber(Text); if num and num > 0 then StartSlot = num end end})
+    TabBase:CreateInput({Name = "Batas Slot Maksimal", PlaceholderText = "Default: 30", RemoveTextAfterFocusLost = false, Callback = function(Text) local num = tonumber(Text); if num and num > 0 then MaxSlots = num end end})
 
     TabBase:CreateSection("3. Eksekusi Base")
     local PlaceToggle
@@ -463,15 +523,13 @@ local success, errorMessage = pcall(function()
                         if not humanoid or not backpack or not rev_S_Interact then break end
                         if CurrentPlaceSlot > MaxSlots then
                             Rayfield:Notify({Title = "Selesai", Content = "Batas Max Slot Tercapai!", Duration = 3})
-                            PlaceToggle:Set(false)
-                            break
+                            PlaceToggle:Set(false); break
                         end
 
                         local totalLeft = 0; for _, qty in pairs(BaseCart) do totalLeft = totalLeft + qty end
                         if totalLeft <= 0 then
                             Rayfield:Notify({Title = "Selesai", Content = "Keranjang Base Kosong!", Duration = 3})
-                            PlaceToggle:Set(false)
-                            break
+                            PlaceToggle:Set(false); break
                         end
 
                         local placedThisLoop = false
@@ -483,15 +541,11 @@ local success, errorMessage = pcall(function()
                                 end
                                 
                                 if itemToPlace then
-                                    if itemToPlace.Parent ~= character then
-                                        humanoid:EquipTool(itemToPlace)
-                                        task.wait(0.15)
-                                    end
+                                    if itemToPlace.Parent ~= character then humanoid:EquipTool(itemToPlace); task.wait(0.15) end
                                     pcall(function() rev_S_Interact:FireServer(CurrentPlaceSlot) end)
                                     BaseCart[itemName] = BaseCart[itemName] - 1
                                     CurrentPlaceSlot = CurrentPlaceSlot + 1
-                                    placedThisLoop = true
-                                    task.wait(0.15)
+                                    placedThisLoop = true; task.wait(0.15)
                                 end
                             end
                         end
@@ -513,11 +567,9 @@ local success, errorMessage = pcall(function()
                     local humanoid = character and character:FindFirstChildOfClass("Humanoid")
                     if humanoid then humanoid:UnequipTools() end
                     task.wait(0.2)
-                    
                     for i = StartSlot, MaxSlots do
                         if not PickupToggle.CurrentValue then break end
-                        pcall(function() rev_S_Interact:FireServer(i) end)
-                        task.wait(0.15)
+                        pcall(function() rev_S_Interact:FireServer(i) end); task.wait(0.15)
                     end
                     Rayfield:Notify({Title = "Selesai", Content = "Sapu bersih Pickup selesai!", Duration = 3})
                     PickupToggle:Set(false)
@@ -527,19 +579,16 @@ local success, errorMessage = pcall(function()
     })
 
     -- ==========================================
-    -- TAB 4: TAS & STOK (INVENTORY)
+    -- TAB 4 - 8: STATS, P1, P2, INVENTORY
+    -- (TETAP SAMA SEPERTI VERSI SEBELUMNYA)
     -- ==========================================
     local TabInventory = Window:CreateTab("🎒 Tas & Stok", 4483362458)
     local FullInventoryLabel = TabInventory:CreateParagraph({Title = "Daftar Barang & Total", Content = "Menyinkronkan..."})
     TabInventory:CreateButton({Name = "🔄 Update Manual Data Tas", Callback = function() updateInventoryDisplay() end})
 
-    -- ==========================================
-    -- TAB 5: PENGIRIM (P1)
-    -- ==========================================
     local TabDispatch = Window:CreateTab("📤 Pengirim (P1)", 4483362458)
     local LiveProgress = TabDispatch:CreateParagraph({Title = "Status Pengiriman", Content = "Sisa Antrean: 0\nSukses: 0"})
     local ActionLog = TabDispatch:CreateParagraph({Title = "Log Proses", Content = "Menunggu perintah..."})
-
     local function setLog(txt) ActionLog:Set({Title = "Log Proses", Content = txt}) end
     TabDispatch:CreateSlider({Name = "Jeda Input", Range = {0.1, 1.0}, Increment = 0.1, CurrentValue = 0.3, Callback = function(v) InsertDelay = v end})
 
@@ -584,9 +633,13 @@ local success, errorMessage = pcall(function()
             while tradeFrame and tradeFrame.Parent and tradeFrame.Visible do task.wait(0.5) end
         end
         
-        P1TradesCompleted = P1TradesCompleted + 1; ItemsProcessed = ItemsProcessed + batchSize
+        P1TradesCompleted = P1TradesCompleted + 1
+        ItemsProcessed = ItemsProcessed + batchSize
+        TotalItemsSent = TotalItemsSent + batchSize
+        TradeHistoryString = TradeHistoryString .. "\n[" .. os.date("%H:%M:%S") .. "] Mengirim " .. batchSize .. " item ke " .. target.Name
+        
         LiveProgress:Set({Title = "Status", Content = string.format("Sisa: %d\nSukses: %d", #CurrentQueue, ItemsProcessed)})
-        IsProcessing = false; return true
+        updateStatsDisplay(); IsProcessing = false; return true
     end
 
     TabDispatch:CreateButton({Name = "▶️ Kirim 1 Kloter", Callback = function() task.spawn(executeSenderBatch) end})
@@ -595,12 +648,8 @@ local success, errorMessage = pcall(function()
         if V then task.spawn(function() while AutoLoopEnabled do if #CurrentQueue == 0 then AutoLoopEnabled = false; break end executeSenderBatch(); task.wait(2.5) end end) end 
     end})
 
-    -- ==========================================
-    -- TAB 6: PENERIMA (P2)
-    -- ==========================================
     local TabInbound = Window:CreateTab("📥 Penerima (P2)", 4483362458)
     local ReceiverLog = TabInbound:CreateParagraph({Title = "Status", Content = "Nonaktif."})
-
     TabInbound:CreateToggle({
         Name = "🤖 Auto-Accept", CurrentValue = false,
         Callback = function(Value)
@@ -655,7 +704,7 @@ local success, errorMessage = pcall(function()
                             while tradeFrame.Visible and not isOpponentConfirmed(tradeFrame) do task.wait(0.2) end
                             if tradeFrame.Visible and isOpponentConfirmed(tradeFrame) then task.wait(5.5); r_trade_i:FireServer("Confirm") end
                             while tradeFrame.Visible do task.wait(0.5) end
-                            P2TradesCompleted = P2TradesCompleted + 1
+                            P2TradesCompleted = P2TradesCompleted + 1; updateStatsDisplay() 
                         end
                     end
                 end)
@@ -663,21 +712,39 @@ local success, errorMessage = pcall(function()
         end
     })
 
-    -- ==========================================
-    -- TAB 7: SETTINGS
-    -- ==========================================
+    local TabStats = Window:CreateTab("📊 Dashboard", 4483362458)
+    local StatsDisplay = TabStats:CreateParagraph({Title = "Sesi Saat Ini", Content = "Menghitung..."})
+    local HistoryDisplay = TabStats:CreateParagraph({Title = "Log Pengiriman Terakhir", Content = TradeHistoryString})
+    
+    updateStatsDisplay = function()
+        local elapsedTime = tick() - SessionStartTime
+        local str = "Waktu Berjalan: " .. formatTime(elapsedTime) .. "\n"
+        str = str .. "Total Transaksi P1 (Kirim): " .. P1TradesCompleted .. " kali\n"
+        str = str .. "Total Transaksi P2 (Terima): " .. P2TradesCompleted .. " kali\n"
+        str = str .. "Total Item Terkirim: " .. TotalItemsSent .. " barang"
+        
+        StatsDisplay:Set({Title = "Statistik Real-Time", Content = str})
+        
+        local lines = string.split(TradeHistoryString, "\n")
+        if #lines > 15 then
+            local newHistory = ""
+            for i = #lines - 10, #lines do newHistory = newHistory .. lines[i] .. "\n" end
+            TradeHistoryString = newHistory
+        end
+        HistoryDisplay:Set({Title = "Log Pengiriman Terakhir", Content = TradeHistoryString})
+    end
+
+    task.spawn(function() while task.wait(1) do if updateStatsDisplay then updateStatsDisplay() end end end)
+
     local TabSettings = Window:CreateTab("⚙️ Settings", 4483362458)
     TabSettings:CreateButton({Name = "🔄 Update Script", Callback = function() Rayfield:Destroy(); task.wait(0.5); loadstring(game:HttpGet(SCRIPT_URL))() end})
 
-    -- ==========================================
-    -- INVENTORY SYNC ENGINE (ANTI-LAG)
-    -- ==========================================
-    isSyncingUI = false
+    local isSyncingUI = false 
     updateInventoryDisplay = function()
         if isSyncingUI then return end
         isSyncingUI = true
         task.spawn(function()
-            task.wait(1.5) -- Anti-lag debounce
+            task.wait(1.5) 
             local inventoryData = {}; local totalCount = 0
             for _, tool in pairs(getAllTools()) do  
                 if isTradeable(tool) then
@@ -691,10 +758,16 @@ local success, errorMessage = pcall(function()
             for name, count in pairs(inventoryData) do table.insert(itemsList, name .. " | Stok: " .. count) end  
             table.sort(itemsList, function(a, b) if a == "[ANY ASSET]" then return true end if b == "[ANY ASSET]" then return false end return a < b end)  
             
+            local mutList = getMutationList()
             ItemDropdown:Refresh(itemsList)
             SellItemDropdown:Refresh(itemsList)
             PlaceItemDropdown:Refresh(itemsList)
-            MutationDropdown:Refresh(getMutationList()) 
+            
+            -- Update semua dropdown mutasi
+            TradeMutationDropdown:Refresh(mutList) 
+            SellMutationDropdown:Refresh(mutList)
+            BaseMutationDropdown:Refresh(mutList)
+            
             PlayerDropdown:Refresh(getPlayerList())
             
             local displayString = "Total Semua Barang: " .. totalCount .. "\n\n"  
