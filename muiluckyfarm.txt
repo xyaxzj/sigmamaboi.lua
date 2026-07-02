@@ -1,84 +1,215 @@
 -- ==========================================================
--- MOCTA AUTO BARBELL EQUIPPER
--- Build: Auto-ON Execute, Suffix Name Detection, Persistent
+-- MOCTA AUTO TRAIN + TARGET POWER + DISCORD EMBED WEBHOOK
 -- ==========================================================
 
 local success, err = pcall(function()
     local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
     local Players = game:GetService("Players")
     local LocalPlayer = Players.LocalPlayer
+    local HttpService = game:GetService("HttpService")
+
+    -- ===================== KONFIGURASI =====================
+    local TargetPower = 30000000000
+    local WebhookURL = "https://discord.com/api/webhooks/1414511296426021007/B8_cONien59-Ff5QnOds-p6mB7huJa847lSMVGWS7DcvPZmmDH-6iddmjUAEQG4-r-iR" -- TEMPEL LINK WEBHOOK BOS DI SINI
 
     local Window = Rayfield:CreateWindow({
-        Name = "Mocta Auto Barbell", 
-        LoadingTitle = "Memuat Auto Equip...", 
-        ConfigurationSaving = { Enabled = false }, 
+        Name = "Mocta Auto Train",
+        LoadingTitle = "Auto Train + Webhook",
         Theme = "DarkBlue"
     })
 
-    local Tab = Window:CreateTab("🏋️ Auto Equip", 4483362458)
-    
-    -- Variabel pengunci (Langsung TRUE agar jalan otomatis)
-    local AutoEquipEnabled = true 
+    local Tab = Window:CreateTab("🏋️ Auto Train", 4483362458)
 
-    local Toggle = Tab:CreateToggle({
-        Name = "🟢 Auto Pegang Barbell",
-        CurrentValue = true, -- UI Toggle langsung dalam keadaan nyala
+    local AutoTrainEnabled = true
+
+    Tab:CreateToggle({
+        Name = "🟢 Auto Train Aktif",
+        CurrentValue = true,
         Callback = function(Value)
-            AutoEquipEnabled = Value
+            AutoTrainEnabled = Value
         end
     })
 
-    Tab:CreateParagraph({
-        Title = "Info Sistem", 
-        Content = "Fitur ini LANGSUNG AKTIF saat script dijalankan. Sistem akan terus memastikan karaktermu memegang alat yang namanya 'Barbell' atau berakhiran 'Barbell'."
-    })
+    -- ===================== FUNGSI GET POWER =====================
+    local function GetCurrentPower()
+        local textLabel = LocalPlayer:FindFirstChild("PlayerGui")
+        if textLabel then textLabel = textLabel:FindFirstChild("HUD") end
+        if textLabel then textLabel = textLabel:FindFirstChild("BottomLeft") end
+        if textLabel then textLabel = textLabel:FindFirstChild("KickLevel") end
+        if textLabel then textLabel = textLabel:FindFirstChild("TextLabel") end
 
-    -- ==========================================
-    -- LOGIKA BACKGROUND (AUTO EQUIP)
-    -- ==========================================
+        if not textLabel then return 0 end
+
+        local text = textLabel.Text
+        local numberStr, suffix = string.match(text, "([%d%.]+)%s*([KMB]?)")
+
+        if not numberStr then return 0 end
+
+        local number = tonumber(numberStr)
+        if not number then return 0 end
+
+        if suffix == "K" then number = number * 1000 end
+        if suffix == "M" then number = number * 1000000 end
+        if suffix == "B" then number = number * 1000000000 end
+
+        return math.floor(number)
+    end
+
+    -- ===================== FUNGSI WEBHOOK (EMBED & EVERYONE) =====================
+    local function SendWebhook(currentPower)
+        if not WebhookURL or WebhookURL == "" then
+            warn("Webhook URL belum diisi!")
+            return
+        end
+
+        local httprequest = (syn and syn.request) or (http and http.request) or http_request or (fluxus and fluxus.request) or request
+        
+        if not httprequest then
+            warn("❌ Executor Bos tidak mendukung HTTP Request!")
+            return
+        end
+
+        -- Struktur Data Discord Embed yang Elegan
+        local data = {
+            content = "@everyone 🚨 **PEMBERITAHUAN SISTEM AFK**", -- Ping Everyone
+            embeds = {
+                {
+                    title = "🏆 Target Latihan Selesai!",
+                    description = "Karakter telah mencapai batas power yang ditentukan dan mematikan mode latihan (Ganti Tool).",
+                    color = 3066993, -- Warna Hijau Neon (Tanda Sukses)
+                    fields = {
+                        {
+                            name = "👤 Akun Player",
+                            value = "```" .. LocalPlayer.Name .. "```",
+                            inline = false
+                        },
+                        {
+                            name = "⚡ Power Tercapai",
+                            value = "```" .. tostring(currentPower) .. "```",
+                            inline = true
+                        },
+                        {
+                            name = "🎯 Target Power",
+                            value = "```" .. tostring(TargetPower) .. "```",
+                            inline = true
+                        }
+                    },
+                    footer = {
+                        text = "Mocta Ultimate Hub | " .. os.date("%A, %d %B %Y - %H:%M:%S")
+                    }
+                }
+            }
+        }
+        
+        local jsonData = HttpService:JSONEncode(data)
+
+        local successReq, errReq = pcall(function()
+            httprequest({
+                Url = WebhookURL,
+                Method = "POST",
+                Headers = {
+                    ["Content-Type"] = "application/json"
+                },
+                Body = jsonData
+            })
+        end)
+
+        if successReq then
+            print("✅ Webhook Embed berhasil dikirim ke Discord!")
+        else
+            warn("❌ Gagal mengirim webhook: " .. tostring(errReq))
+        end
+    end
+
+    -- ===================== FUNGSI AUTO EQUIP BARBELL =====================
+    local function AutoEquipBarbell()
+        if not AutoTrainEnabled then return end
+
+        local char = LocalPlayer.Character
+        local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+        local backpack = LocalPlayer:FindFirstChild("Backpack")
+        
+        if not char or not humanoid or not backpack then return end
+
+        local currentTool = char:FindFirstChildOfClass("Tool")
+        if currentTool then
+            local name = string.lower(currentTool.Name):gsub("%s+$", "")
+            if string.match(name, "barbell$") then
+                return
+            end
+        end
+
+        for _, tool in ipairs(backpack:GetChildren()) do
+            if tool:IsA("Tool") then
+                local name = string.lower(tool.Name):gsub("%s+$", "")
+                if string.match(name, "barbell$") then
+                    humanoid:EquipTool(tool)
+                    return
+                end
+            end
+        end
+    end
+
+    -- ===================== FUNGSI SELESAI TRAINING =====================
+    local function FinishTraining()
+        local char = LocalPlayer.Character
+        if not char then return end
+
+        local humanoid = char:FindFirstChildOfClass("Humanoid")
+        if not humanoid then return end
+
+        -- Lepas Barbell
+        local currentTool = char:FindFirstChildOfClass("Tool")
+        if currentTool and string.match(string.lower(currentTool.Name), "barbell$") then
+            currentTool.Parent = LocalPlayer.Backpack
+            print("✅ Barbell dilepas")
+        end
+
+        task.wait(0.6)
+
+        -- Ambil tool random (selain barbell)
+        local backpack = LocalPlayer:FindFirstChild("Backpack")
+        if backpack then
+            local tools = {}
+            for _, tool in ipairs(backpack:GetChildren()) do
+                if tool:IsA("Tool") and not string.match(string.lower(tool.Name), "barbell$") then
+                    table.insert(tools, tool)
+                end
+            end
+
+            if #tools > 0 then
+                local randomTool = tools[math.random(#tools)]
+                humanoid:EquipTool(randomTool)
+                print("✅ Memegang tool random: " .. randomTool.Name)
+            end
+        end
+
+        -- Kirim Webhook yang Keren
+        local currentPower = GetCurrentPower()
+        SendWebhook(currentPower)
+
+        print("🎯 Target tercapai! Script dihentikan.")
+        AutoTrainEnabled = false
+    end
+
+    -- ===================== LOOP UTAMA =====================
     task.spawn(function()
-        while task.wait(0.5) do -- Mengecek tangan setiap setengah detik
-            if AutoEquipEnabled then
-                local char = LocalPlayer.Character
-                local humanoid = char and char:FindFirstChildOfClass("Humanoid")
-                local backpack = LocalPlayer:FindFirstChild("Backpack")
+        while task.wait(1) do
+            if AutoTrainEnabled then
+                local currentPower = GetCurrentPower()
 
-                if char and humanoid and backpack then
-                    -- 1. Cek apakah di tangan SUDAH memegang Barbell
-                    local isHoldingBarbell = false
-                    local currentTool = char:FindFirstChildOfClass("Tool")
-                    
-                    if currentTool then
-                        local nameLower = string.lower(currentTool.Name)
-                        -- Hapus spasi gaib di akhir nama (jika developer ceroboh), lalu cek akhiran "barbell"
-                        nameLower = string.gsub(nameLower, "%s+$", "") 
-                        if string.match(nameLower, "barbell$") then
-                            isHoldingBarbell = true
-                        end
-                    end
-
-                    -- 2. Jika di tangan kosong / pegang barang lain, cari Barbell di tas!
-                    if not isHoldingBarbell then
-                        for _, tool in ipairs(backpack:GetChildren()) do
-                            if tool:IsA("Tool") then
-                                local nameLower = string.lower(tool.Name)
-                                nameLower = string.gsub(nameLower, "%s+$", "")
-                                
-                                -- Pengecekan cerdas: Apakah namanya berakhiran "barbell" ?
-                                if string.match(nameLower, "barbell$") then
-                                    -- Paksa pegang barangnya!
-                                    humanoid:EquipTool(tool)
-                                    break -- Langsung keluar dari loop pencarian setelah dapat 1
-                                end
-                            end
-                        end
-                    end
+                if currentPower >= TargetPower and currentPower > 0 then
+                    FinishTraining()
+                else
+                    AutoEquipBarbell()
                 end
             end
         end
     end)
+
+    print("✅ Mocta Auto Train + Webhook aktif!")
 end)
 
-if not success then 
-    warn("MOCTA BARBELL ERROR: " .. tostring(err)) 
+if not success then
+    warn("ERROR: " .. tostring(err))
 end
