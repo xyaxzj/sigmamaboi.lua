@@ -1,7 +1,84 @@
-BoostSpeed = true;
-BoostSpeedValue = 150;
+-- ==========================================================
+-- MOCTA AUTO BARBELL EQUIPPER
+-- Build: Auto-ON Execute, Suffix Name Detection, Persistent
+-- ==========================================================
 
-AutoStart = "MaxPerformance,BoostFPS";
-AutoRestartHours = 0;
+local success, err = pcall(function()
+    local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+    local Players = game:GetService("Players")
+    local LocalPlayer = Players.LocalPlayer
 
-loadstring(game:HttpGet("https://main.muihub.site/script.lua"))();
+    local Window = Rayfield:CreateWindow({
+        Name = "Mocta Auto Barbell", 
+        LoadingTitle = "Memuat Auto Equip...", 
+        ConfigurationSaving = { Enabled = false }, 
+        Theme = "DarkBlue"
+    })
+
+    local Tab = Window:CreateTab("🏋️ Auto Equip", 4483362458)
+    
+    -- Variabel pengunci (Langsung TRUE agar jalan otomatis)
+    local AutoEquipEnabled = true 
+
+    local Toggle = Tab:CreateToggle({
+        Name = "🟢 Auto Pegang Barbell",
+        CurrentValue = true, -- UI Toggle langsung dalam keadaan nyala
+        Callback = function(Value)
+            AutoEquipEnabled = Value
+        end
+    })
+
+    Tab:CreateParagraph({
+        Title = "Info Sistem", 
+        Content = "Fitur ini LANGSUNG AKTIF saat script dijalankan. Sistem akan terus memastikan karaktermu memegang alat yang namanya 'Barbell' atau berakhiran 'Barbell'."
+    })
+
+    -- ==========================================
+    -- LOGIKA BACKGROUND (AUTO EQUIP)
+    -- ==========================================
+    task.spawn(function()
+        while task.wait(0.5) do -- Mengecek tangan setiap setengah detik
+            if AutoEquipEnabled then
+                local char = LocalPlayer.Character
+                local humanoid = char and char:FindFirstChildOfClass("Humanoid")
+                local backpack = LocalPlayer:FindFirstChild("Backpack")
+
+                if char and humanoid and backpack then
+                    -- 1. Cek apakah di tangan SUDAH memegang Barbell
+                    local isHoldingBarbell = false
+                    local currentTool = char:FindFirstChildOfClass("Tool")
+                    
+                    if currentTool then
+                        local nameLower = string.lower(currentTool.Name)
+                        -- Hapus spasi gaib di akhir nama (jika developer ceroboh), lalu cek akhiran "barbell"
+                        nameLower = string.gsub(nameLower, "%s+$", "") 
+                        if string.match(nameLower, "barbell$") then
+                            isHoldingBarbell = true
+                        end
+                    end
+
+                    -- 2. Jika di tangan kosong / pegang barang lain, cari Barbell di tas!
+                    if not isHoldingBarbell then
+                        for _, tool in ipairs(backpack:GetChildren()) do
+                            if tool:IsA("Tool") then
+                                local nameLower = string.lower(tool.Name)
+                                nameLower = string.gsub(nameLower, "%s+$", "")
+                                
+                                -- Pengecekan cerdas: Apakah namanya berakhiran "barbell" ?
+                                if string.match(nameLower, "barbell$") then
+                                    -- Paksa pegang barangnya!
+                                    humanoid:EquipTool(tool)
+                                    break -- Langsung keluar dari loop pencarian setelah dapat 1
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end)
+end)
+
+if not success then 
+    warn("MOCTA BARBELL ERROR: " .. tostring(err)) 
+end
