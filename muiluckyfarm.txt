@@ -1,5 +1,6 @@
 -- ==========================================================
--- MOCTA AUTO TRAIN + TARGET POWER + DISCORD EMBED WEBHOOK
+-- MOCTA AUTO TRAIN V2 (SMART REBIRTH LOGIC & WEBHOOK)
+-- Build: Auto Equip, Target Power, Rebirth Sensor, Discord Embed
 -- ==========================================================
 
 local success, err = pcall(function()
@@ -9,12 +10,12 @@ local success, err = pcall(function()
     local HttpService = game:GetService("HttpService")
 
     -- ===================== KONFIGURASI =====================
-    local TargetPower = 30000000000
-    local WebhookURL = "https://discord.com/api/webhooks/1414511296426021007/B8_cONien59-Ff5QnOds-p6mB7huJa847lSMVGWS7DcvPZmmDH-6iddmjUAEQG4-r-iR" -- TEMPEL LINK WEBHOOK BOS DI SINI
+    local TargetPower = 113000000
+    local WebhookURL = "" -- TEMPEL LINK WEBHOOK BOS DI SINI
 
     local Window = Rayfield:CreateWindow({
         Name = "Mocta Auto Train",
-        LoadingTitle = "Auto Train + Webhook",
+        LoadingTitle = "Smart Train + Webhook",
         Theme = "DarkBlue"
     })
 
@@ -55,8 +56,34 @@ local success, err = pcall(function()
         return math.floor(number)
     end
 
+    -- ===================== FUNGSI GET REBIRTH =====================
+    -- Diambil berdasarkan referensi path gambar 1000405001.jpg
+    local function GetCurrentRebirth()
+        local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+        if not playerGui then return 0 end
+
+        local frames = playerGui:FindFirstChild("Frames")
+        if not frames then return 0 end
+
+        local rebirthFrame = frames:FindFirstChild("Rebirth")
+        if not rebirthFrame then return 0 end
+
+        local rebirthLevelLabel = rebirthFrame:FindFirstChild("RebirthLevel")
+        if not rebirthLevelLabel then return 0 end
+
+        local text = rebirthLevelLabel.Text
+        -- Mengekstrak hanya angka dari teks "Rebirth 1", "Rebirth 8", dll
+        local numberStr = string.match(text, "%d+") 
+
+        if numberStr then
+            return tonumber(numberStr)
+        end
+        
+        return 0
+    end
+
     -- ===================== FUNGSI WEBHOOK (EMBED & EVERYONE) =====================
-    local function SendWebhook(currentPower)
+    local function SendWebhook(currentPower, currentRebirth)
         if not WebhookURL or WebhookURL == "" then
             warn("Webhook URL belum diisi!")
             return
@@ -71,17 +98,22 @@ local success, err = pcall(function()
 
         -- Struktur Data Discord Embed yang Elegan
         local data = {
-            content = "@everyone 🚨 **PEMBERITAHUAN SISTEM AFK**", -- Ping Everyone
+            content = "@everyone 🚨 **PEMBERITAHUAN SISTEM AFK: TARGET TERCAPAI**",
             embeds = {
                 {
-                    title = "🏆 Target Latihan Selesai!",
-                    description = "Karakter telah mencapai batas power yang ditentukan dan mematikan mode latihan (Ganti Tool).",
-                    color = 3066993, -- Warna Hijau Neon (Tanda Sukses)
+                    title = "🏆 Misi Latihan Selesai!",
+                    description = "Karakter telah mencapai Rebirth 9 dan Power target. Mode latihan telah dimatikan dan senjata dilepas.",
+                    color = 3066993, -- Hijau Neon
                     fields = {
                         {
                             name = "👤 Akun Player",
                             value = "```" .. LocalPlayer.Name .. "```",
                             inline = false
+                        },
+                        {
+                            name = "🌀 Rebirth Saat Ini",
+                            value = "```" .. tostring(currentRebirth) .. "```",
+                            inline = true
                         },
                         {
                             name = "⚡ Power Tercapai",
@@ -151,7 +183,7 @@ local success, err = pcall(function()
     end
 
     -- ===================== FUNGSI SELESAI TRAINING =====================
-    local function FinishTraining()
+    local function FinishTraining(currentPower, currentRebirth)
         local char = LocalPlayer.Character
         if not char then return end
 
@@ -184,30 +216,37 @@ local success, err = pcall(function()
             end
         end
 
-        -- Kirim Webhook yang Keren
-        local currentPower = GetCurrentPower()
-        SendWebhook(currentPower)
+        -- Kirim Webhook
+        SendWebhook(currentPower, currentRebirth)
 
         print("🎯 Target tercapai! Script dihentikan.")
         AutoTrainEnabled = false
     end
 
-    -- ===================== LOOP UTAMA =====================
+    -- ===================== LOOP UTAMA (LOGIKA CERDAS) =====================
     task.spawn(function()
         while task.wait(1) do
             if AutoTrainEnabled then
                 local currentPower = GetCurrentPower()
+                local currentRebirth = GetCurrentRebirth()
 
-                if currentPower >= TargetPower and currentPower > 0 then
-                    FinishTraining()
-                else
+                -- Jika Rebirth masih 8 atau di bawahnya, Hajar terus abaikan TargetPower!
+                if currentRebirth < 9 then
                     AutoEquipBarbell()
+                
+                -- Jika Rebirth sudah 9, mulai patuhi aturan TargetPower
+                else
+                    if currentPower >= TargetPower and currentPower > 0 then
+                        FinishTraining(currentPower, currentRebirth)
+                    else
+                        AutoEquipBarbell()
+                    end
                 end
             end
         end
     end)
 
-    print("✅ Mocta Auto Train + Webhook aktif!")
+    print("✅ Mocta Smart Train (Rebirth Engine) + Webhook aktif!")
 end)
 
 if not success then
