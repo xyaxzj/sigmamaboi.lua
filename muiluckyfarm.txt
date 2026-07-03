@@ -1,6 +1,6 @@
 -- ==========================================================
--- MOCTA AUTO TRAIN V2.1 (ANTI-LAG REBIRTH LOGIC & WEBHOOK)
--- Build: 3-Second Validation, Target Power, Discord Embed
+-- MOCTA AUTO TRAIN V2.2 (ANTI-LAG REBIRTH LOGIC & WEBHOOK)
+-- Build: 3-Second Validation, Target Power 35B, Discord Embed
 -- ==========================================================
 
 local success, err = pcall(function()
@@ -10,7 +10,7 @@ local success, err = pcall(function()
     local HttpService = game:GetService("HttpService")
 
     -- ===================== KONFIGURASI =====================
-    local TargetPower = 30000000000 -- Pastikan nol-nya benar (30B Juta)
+    local TargetPower = 35000000000 -- Target langsung dikunci di 35 Miliar
     local WebhookURL = "https://discord.com/api/webhooks/1414511296426021007/B8_cONien59-Ff5QnOds-p6mB7huJa847lSMVGWS7DcvPZmmDH-6iddmjUAEQG4-r-iR" -- TEMPEL LINK WEBHOOK BOS DI SINI
 
     local Window = Rayfield:CreateWindow({
@@ -56,7 +56,7 @@ local success, err = pcall(function()
 
         if suffix == "K" then number = number * 1000 end
         if suffix == "M" then number = number * 1000000 end
-        if suffix == "B" then number = number * 100000000000 end
+        if suffix == "B" then number = number * 1000000000 end
 
         return math.floor(number)
     end
@@ -211,10 +211,9 @@ local success, err = pcall(function()
         end
     end)
 
-    print("✅ Mocta Smart Train V2.1 (Anti-Lag Validation) aktif!")
+    print("✅ Mocta Smart Train V2.2 (Target 35B) aktif!")
 end)
 
 if not success then
     warn("ERROR: " .. tostring(err))
 end
-
