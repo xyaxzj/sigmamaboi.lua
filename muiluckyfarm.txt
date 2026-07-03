@@ -56,7 +56,7 @@ local success, err = pcall(function()
 
         if suffix == "K" then number = number * 1000 end
         if suffix == "M" then number = number * 1000000 end
-        if suffix == "B" then number = number * 1000000000 end
+        if suffix == "B" then number = number * 100000000000 end
 
         return math.floor(number)
     end
