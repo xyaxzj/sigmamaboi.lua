@@ -10,7 +10,7 @@ local success, err = pcall(function()
     local HttpService = game:GetService("HttpService")
 
     -- ===================== KONFIGURASI =====================
-    local TargetPower = 35000000000 -- Target langsung dikunci di 35 Miliar
+    local TargetPower = 30000000000 -- Target langsung dikunci di 35 Miliar
     local WebhookURL = "https://discord.com/api/webhooks/1414511296426021007/B8_cONien59-Ff5QnOds-p6mB7huJa847lSMVGWS7DcvPZmmDH-6iddmjUAEQG4-r-iR" -- TEMPEL LINK WEBHOOK BOS DI SINI
 
     local Window = Rayfield:CreateWindow({
