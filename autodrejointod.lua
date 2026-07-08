@@ -17,7 +17,7 @@ _G.animDelay = 7.3
 _G.blackScreen = true           
 
 -- =============================================
--- 🧠 VARIABEL OTAK UTAA (STATE MACHINE)
+-- 🧠 VARIABEL OTAK UTAMA (STATE MACHINE)
 -- =============================================
 _G.targetAction = "Idle"
 _G.lastAction = "Idle"
