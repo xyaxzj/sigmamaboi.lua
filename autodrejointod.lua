@@ -14,7 +14,7 @@ local lp = Players.LocalPlayer
 _G.autoFarm = true              
 _G.hideOtherPlayers = false      
 _G.animDelay = 7.3              
-_G.blackScreen = false           
+_G.blackScreen = true           
 
 -- =============================================
 -- 🧠 VARIABEL OTAK UTAMA (STATE MACHINE)
