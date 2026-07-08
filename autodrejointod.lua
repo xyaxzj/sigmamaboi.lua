@@ -260,14 +260,14 @@ task.spawn(function()
             if _G.targetAction == "Idle" then
                 if distToSafeZone > 10 then
                     -- TUNGGU 2 DETIK DI SPAWN SEBELUM TELEPORT
-                    if _G.stateTimer >= 2 then
+                    if _G.stateTimer >= 4 then
                         hrp.CFrame = CFrame.new(safeZone)
                         task.wait(0.1) -- Jeda kecil agar physics stabil
                         _G.stateTimer = 0 -- Reset timer untuk persiapan nendang
                     end
                 else
                     -- TUNGGU 2 DETIK DI SAFE ZONE SEBELUM NENDANG
-                    if _G.stateTimer >= 2 then
+                    if _G.stateTimer >= 3.5 then
                         if kickRemote then kickRemote:FireServer(1, 1) end
                         _G.targetAction = "WaitingForDrop"
                     end
