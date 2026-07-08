@@ -98,7 +98,7 @@ if _G.blackScreen then
                 local hours = math.floor(elapsed / 3600)
                 local mins = math.floor((elapsed % 3600) / 60)
                 local secs = elapsed % 60
-                timeLabel.Text = string.format("⏱️ Waktu AFK: %02d:%02d:%02d", hours, mins, secs)
+                timeLabel.Text = string.format("Time Counter: %02d:%02d:%02d", hours, mins, secs)
             end
         end
     end)
