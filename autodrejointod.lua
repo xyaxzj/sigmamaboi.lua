@@ -14,15 +14,18 @@ local lp = Players.LocalPlayer
 _G.autoFarm = true              
 _G.hideOtherPlayers = true      
 _G.animDelay = 7.3              
-_G.blackScreen = true           
+_G.blackScreen = false           
 
--- Variabel Sistem & State Machine
+-- =============================================
+-- 🧠 VARIABEL OTAK UTAMA (STATE MACHINE)
+-- =============================================
 _G.targetAction = "Idle"
-_G.lastAction = "Idle"          
+_G.lastAction = "Idle"
+_G.nextAction = "Idle"          
+_G.stateTimer = 0               -- Penghitung waktu cerdas untuk SEMUA fase
 _G.globalStuckTimer = 0         
-_G.timeoutCounter = 0 
 _G.mutationCount = 0            
-_G.targetItemPos = nil          -- [BARU] Menyimpan lokasi barang jatuh
+_G.targetItemPos = nil          
 local safeZone = Vector3.new(689, 3, 236)
 local startTime = os.time()     
 
@@ -161,22 +164,16 @@ workspace.DescendantAdded:Connect(function(obj)
         pcall(function()
             local itemPos = obj:GetPivot().Position
             if (itemPos - safeZone).Magnitude < 60 then
+                
                 _G.targetAction = "PlayingAnim"
-                _G.timeoutCounter = 0 
                 
                 if mutation == "None" or mutation == "" then
-                    task.spawn(function()
-                        task.wait(_G.animDelay)
-                        _G.targetAction = "Die"
-                    end)
+                    _G.nextAction = "Die"
                 else
-                    -- Simpan lokasi mutasi yang asli sebelum disuruh jalan
                     _G.targetItemPos = itemPos
-                    task.spawn(function()
-                        task.wait(_G.animDelay)
-                        _G.targetAction = "WalkToItem"
-                    end)
+                    _G.nextAction = "WalkToItem"
                 end
+                
             end
         end)
     end
@@ -198,7 +195,6 @@ task.spawn(function()
                         end
                     end
                 end
-                
                 for _, obj in pairs(workspace:GetChildren()) do
                     if obj:IsA("Model") and obj ~= lp.Character and obj:FindFirstChild("Humanoid") and not obj:GetAttribute("Ghosted") then
                         obj:SetAttribute("Ghosted", true) 
@@ -214,7 +210,7 @@ task.spawn(function()
 end)
 
 -- =============================================
--- ⚙️ MAIN LOOP (STATE MACHINE + 25s FAILSAFE)
+-- ⚙️ MAIN LOOP (PERFECT STATE MACHINE)
 -- =============================================
 task.spawn(function()
     while task.wait(0.2) do
@@ -228,70 +224,81 @@ task.spawn(function()
             if not hum or not hrp then return end
 
             if hum.Health <= 0 then
-                _G.targetAction = "Idle"
-                _G.lastAction = "Idle"
+                _G.targetAction = "WaitingRespawn"
+                _G.lastAction = "WaitingRespawn"
                 _G.globalStuckTimer = 0
-                _G.timeoutCounter = 0
-                task.wait(2) 
-                return
+                return 
             end
 
-            -- 🚨 FAILSAFE 25 DETIK
+            if _G.targetAction == "WaitingRespawn" and hum.Health > 0 then
+                _G.targetAction = "Idle"
+                _G.lastAction = "Idle"
+            end
+
+            -- ==========================================
+            -- 🚨 PENGATUR WAKTU OTOMATIS & FAILSAFE
+            -- ==========================================
             if _G.targetAction ~= _G.lastAction then
                 _G.globalStuckTimer = 0
+                _G.stateTimer = 0 -- Reset waktu otomatis setiap ganti fase!
                 _G.lastAction = _G.targetAction
             else
                 _G.globalStuckTimer = _G.globalStuckTimer + 0.2
+                _G.stateTimer = _G.stateTimer + 0.2 -- Hitung durasi di fase saat ini
+                
                 if _G.globalStuckTimer >= 25 then
                     _G.globalStuckTimer = 0
-                    _G.targetAction = "Idle"
+                    _G.targetAction = "WaitingRespawn"
                     hum.Health = 0 
                     return
                 end
             end
+            -- ==========================================
 
             local distToSafeZone = (hrp.Position - safeZone).Magnitude
 
-            -- [ FASE 1: IDLE / NENDANG ]
+            -- [ FASE 1: IDLE / NENDANG (DENGAN JEDA 2 DETIK) ]
             if _G.targetAction == "Idle" then
                 if distToSafeZone > 10 then
                     hrp.CFrame = CFrame.new(safeZone)
                     task.wait(0.3)
+                    _G.stateTimer = 0 -- Ulangi hitungan jika habis teleport
                 else
-                    if kickRemote then kickRemote:FireServer(1, 1) end
-                    _G.targetAction = "WaitingForDrop"
-                    _G.timeoutCounter = 0
+                    -- TUNGGU 2 DETIK DULU SEBELUM NENDANG
+                    if _G.stateTimer >= 2 then
+                        if kickRemote then kickRemote:FireServer(1, 1) end
+                        _G.targetAction = "WaitingForDrop"
+                    end
                 end
 
             -- [ FASE 2: NUNGGU DROP ]
             elseif _G.targetAction == "WaitingForDrop" then
-                _G.timeoutCounter = _G.timeoutCounter + 0.2
-                if _G.timeoutCounter > 15 then
+                if _G.stateTimer > 15 then
                     _G.targetAction = "Idle"
-                    _G.timeoutCounter = 0
                 end
 
-            -- [ FASE 3: NUNGGU ANIMASI KELAR ]
+            -- [ FASE 3: NUNGGU ANIMASI 7.3s ]
             elseif _G.targetAction == "PlayingAnim" then
-                -- Diam mematung
+                if _G.stateTimer >= _G.animDelay then
+                    _G.targetAction = _G.nextAction
+                end
 
             -- [ FASE 4: JALAN MENGAMBIL ITEM MUTASI ]
             elseif _G.targetAction == "WalkToItem" then
                 if _G.targetItemPos then
                     hum:MoveTo(_G.targetItemPos)
                     local distToItem = (hrp.Position - _G.targetItemPos).Magnitude
-                    if distToItem < 8 then -- Jika sudah menyentuh item
+                    if distToItem < 8 then 
                         _G.targetAction = "WalkToSafeZone"
                     end
                 else
-                    _G.targetAction = "Idle" -- Jika error posisi, reset
+                    _G.targetAction = "Idle" 
                 end
 
-            -- [ FASE 5: JALAN BALIK KE SAFE ZONE (PENGHITUNG +1) ]
+            -- [ FASE 5: JALAN BALIK KE SAFE ZONE (+1) ]
             elseif _G.targetAction == "WalkToSafeZone" then
                 hum:MoveTo(safeZone)
                 if distToSafeZone < 8 then
-                    -- MUTASI BENAR-BENAR BERHASIL DIAMANKAN!
                     _G.mutationCount = _G.mutationCount + 1
                     if countLabel then countLabel.Text = "Mutation Counter = " .. tostring(_G.mutationCount) end
                     _G.targetAction = "Idle" 
@@ -300,6 +307,7 @@ task.spawn(function()
             -- [ FASE 6: BUNUH DIRI (AMPAS) ]
             elseif _G.targetAction == "Die" then
                 hum.Health = 0
+                _G.targetAction = "WaitingRespawn" 
             end
         end)
     end
