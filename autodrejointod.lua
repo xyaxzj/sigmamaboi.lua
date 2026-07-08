@@ -22,7 +22,7 @@ _G.blackScreen = false
 _G.targetAction = "Idle"
 _G.lastAction = "Idle"
 _G.nextAction = "Idle"          
-_G.stateTimer = 0               -- Penghitung waktu cerdas untuk SEMUA fase
+_G.stateTimer = 0               
 _G.globalStuckTimer = 0         
 _G.mutationCount = 0            
 _G.targetItemPos = nil          
@@ -150,7 +150,7 @@ for _, r in pairs(ReplicatedStorage:GetDescendants()) do
 end
 
 -- =============================================
--- 👁️ SENSOR 3D (REVISED)
+-- 👁️ SENSOR 3D
 -- =============================================
 workspace.DescendantAdded:Connect(function(obj)
     if not _G.autoFarm or _G.targetAction ~= "WaitingForDrop" then return end
@@ -240,11 +240,11 @@ task.spawn(function()
             -- ==========================================
             if _G.targetAction ~= _G.lastAction then
                 _G.globalStuckTimer = 0
-                _G.stateTimer = 0 -- Reset waktu otomatis setiap ganti fase!
+                _G.stateTimer = 0 
                 _G.lastAction = _G.targetAction
             else
                 _G.globalStuckTimer = _G.globalStuckTimer + 0.2
-                _G.stateTimer = _G.stateTimer + 0.2 -- Hitung durasi di fase saat ini
+                _G.stateTimer = _G.stateTimer + 0.2 
                 
                 if _G.globalStuckTimer >= 25 then
                     _G.globalStuckTimer = 0
@@ -253,18 +253,20 @@ task.spawn(function()
                     return
                 end
             end
-            -- ==========================================
 
             local distToSafeZone = (hrp.Position - safeZone).Magnitude
 
-            -- [ FASE 1: IDLE / NENDANG (DENGAN JEDA 2 DETIK) ]
+            -- [ FASE 1: IDLE / NENDANG (DENGAN JEDA GANDA) ]
             if _G.targetAction == "Idle" then
                 if distToSafeZone > 10 then
-                    hrp.CFrame = CFrame.new(safeZone)
-                    task.wait(0.3)
-                    _G.stateTimer = 0 -- Ulangi hitungan jika habis teleport
+                    -- TUNGGU 2 DETIK DI SPAWN SEBELUM TELEPORT
+                    if _G.stateTimer >= 2 then
+                        hrp.CFrame = CFrame.new(safeZone)
+                        task.wait(0.1) -- Jeda kecil agar physics stabil
+                        _G.stateTimer = 0 -- Reset timer untuk persiapan nendang
+                    end
                 else
-                    -- TUNGGU 2 DETIK DULU SEBELUM NENDANG
+                    -- TUNGGU 2 DETIK DI SAFE ZONE SEBELUM NENDANG
                     if _G.stateTimer >= 2 then
                         if kickRemote then kickRemote:FireServer(1, 1) end
                         _G.targetAction = "WaitingForDrop"
