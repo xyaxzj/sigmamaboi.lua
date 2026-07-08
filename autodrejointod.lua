@@ -10,7 +10,7 @@ local lp = Players.LocalPlayer
 -- =============================================
 -- ⚙️ KONFIGURASI (UBAH DI SINI SEBELUM EXECUTE)
 -- =============================================
-_G.autoFarm = true              -- Ubah ke false kalau mau mematikan auto farm
+_G.autoFarm = true              -- Ubah ke false kalu mau mematikan auto farm
 _G.hideOtherPlayers = true      -- Ubah ke false kalau mau melihat player lain
 _G.animDelay = 7.3              -- Jeda nunggu animasi gacha (Detik)
 
