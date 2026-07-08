@@ -18,15 +18,15 @@ _G.blackScreen = true
 
 -- Variabel Sistem
 _G.targetAction = "Idle"
-_G.lastAction = "Idle"          -- [BARU] Melacak status sebelumnya
-_G.globalStuckTimer = 0         -- [BARU] Timer nyangkut
+_G.lastAction = "Idle"          
+_G.globalStuckTimer = 0         
 _G.timeoutCounter = 0 
 _G.mutationCount = 0            
 local safeZone = Vector3.new(689, 3, 236)
 local startTime = os.time()     
 
 -- =============================================
--- ⬛ SETUP BLACKSCREEN & TRACKER UI
+-- ⬛ SETUP BLACKSCREEN & TRACKER UI (FIXED)
 -- =============================================
 local countLabel = nil 
 
@@ -46,49 +46,49 @@ if _G.blackScreen then
     bg.BackgroundColor3 = Color3.new(0, 0, 0) 
     bg.Parent = screenGui
 
+    -- Label Title (SeNchO)
+    local infoLabel = Instance.new("TextLabel")
+    infoLabel.Size = UDim2.new(1, 0, 0, 40)
+    infoLabel.Position = UDim2.new(0, 0, 0.5, -90)
+    infoLabel.BackgroundTransparency = 1
+    infoLabel.TextColor3 = Color3.new(1, 1, 1) -- Putih
+    infoLabel.TextSize = 35 -- Ukuran Fix
+    infoLabel.Font = Enum.Font.Code
+    infoLabel.Text = "SeNchO | Battlepass Farm Point"
+    infoLabel.Parent = bg
+
     -- Label FPS
     local fpsLabel = Instance.new("TextLabel")
-    fpsLabel.Size = UDim2.new(1, 0, 0, 60)
-    fpsLabel.Position = UDim2.new(0, 0, 0.3, -30)
+    fpsLabel.Size = UDim2.new(1, 0, 0, 30)
+    fpsLabel.Position = UDim2.new(0, 0, 0.5, -30)
     fpsLabel.BackgroundTransparency = 1
-    fpsLabel.TextColor3 = Color3.new(1, 0.8, 0) 
-    fpsLabel.TextScaled = true
+    fpsLabel.TextColor3 = Color3.new(0, 1, 1) -- Cyan
+    fpsLabel.TextSize = 25
     fpsLabel.Font = Enum.Font.Code
-    fpsLabel.Text = "FPS: Menghitung..."
+    fpsLabel.Text = "FPS = Menghitung..."
     fpsLabel.Parent = bg
 
     -- Label Stopwatch
     local timeLabel = Instance.new("TextLabel")
-    timeLabel.Size = UDim2.new(1, 0, 0, 60)
-    timeLabel.Position = UDim2.new(0, 0, 0.4, -30)
+    timeLabel.Size = UDim2.new(1, 0, 0, 30)
+    timeLabel.Position = UDim2.new(0, 0, 0.5, 10)
     timeLabel.BackgroundTransparency = 1
-    timeLabel.TextColor3 = Color3.new(1, 1, 1) 
-    timeLabel.TextScaled = true
+    timeLabel.TextColor3 = Color3.new(1, 1, 0) -- Kuning
+    timeLabel.TextSize = 25
     timeLabel.Font = Enum.Font.Code
-    timeLabel.Text = "Time Counter: 00:00:00"
+    timeLabel.Text = "Time Counter = 00:00:00"
     timeLabel.Parent = bg
 
     -- Label Counter Mutasi
     countLabel = Instance.new("TextLabel")
-    countLabel.Size = UDim2.new(1, 0, 0, 60)
-    countLabel.Position = UDim2.new(0, 0, 0.5, 0)
+    countLabel.Size = UDim2.new(1, 0, 0, 30)
+    countLabel.Position = UDim2.new(0, 0, 0.5, 50)
     countLabel.BackgroundTransparency = 1
-    countLabel.TextColor3 = Color3.new(0, 1, 0) 
-    countLabel.TextScaled = true
+    countLabel.TextColor3 = Color3.new(0, 1, 0) -- Hijau
+    countLabel.TextSize = 25
     countLabel.Font = Enum.Font.Code
-    countLabel.Text = "Mutation Counter: 0"
+    countLabel.Text = "Mutation Counter = 0"
     countLabel.Parent = bg
-
-    -- Label Info
-    local infoLabel = Instance.new("TextLabel")
-    infoLabel.Size = UDim2.new(1, 0, 0, 30)
-    infoLabel.Position = UDim2.new(0, 0, 0.9, 0)
-    infoLabel.BackgroundTransparency = 1
-    infoLabel.TextColor3 = Color3.new(0.5, 0.5, 0.5)
-    infoLabel.TextScaled = true
-    infoLabel.Font = Enum.Font.Code
-    infoLabel.Text = "SeNcHo | Battlepass Point Farm"
-    infoLabel.Parent = bg
 
     -- Mesin Penghitung Waktu (Stopwatch)
     task.spawn(function()
@@ -98,7 +98,7 @@ if _G.blackScreen then
                 local hours = math.floor(elapsed / 3600)
                 local mins = math.floor((elapsed % 3600) / 60)
                 local secs = elapsed % 60
-                timeLabel.Text = string.format("Time Counter: %02d:%02d:%02d", hours, mins, secs)
+                timeLabel.Text = string.format("Time Counter = %02d:%02d:%02d", hours, mins, secs)
             end
         end
     end)
@@ -111,7 +111,7 @@ if _G.blackScreen then
         local now = os.clock()
         if now - lastUpdate >= 1 then
             if fpsLabel and fpsLabel.Parent then
-                fpsLabel.Text = "FPS: " .. frames
+                fpsLabel.Text = "FPS = " .. frames
             end
             frames = 0
             lastUpdate = now
@@ -244,7 +244,6 @@ task.spawn(function()
 
             if not hum or not hrp then return end
 
-            -- Jika sedang mati/respawning
             if hum.Health <= 0 then
                 _G.targetAction = "Idle"
                 _G.lastAction = "Idle"
@@ -258,18 +257,14 @@ task.spawn(function()
             -- 🚨 SISTEM FAILSAFE 25 DETIK (ANTI-NYANGKUT)
             -- ==========================================
             if _G.targetAction ~= _G.lastAction then
-                -- Jika status berubah (berjalan normal), reset timer nyangkut
                 _G.globalStuckTimer = 0
                 _G.lastAction = _G.targetAction
             else
-                -- Jika status tidak berubah sama sekali, tambah timer
                 _G.globalStuckTimer = _G.globalStuckTimer + 0.2
-                
-                -- Jika nyangkut di 1 fase selama 25 detik
                 if _G.globalStuckTimer >= 25 then
                     _G.globalStuckTimer = 0
                     _G.targetAction = "Idle"
-                    hum.Health = 0 -- Reset paksa karakter!
+                    hum.Health = 0 
                     return
                 end
             end
@@ -303,7 +298,7 @@ task.spawn(function()
                 if dist < 8 then
                     _G.mutationCount = _G.mutationCount + 1
                     if countLabel then
-                        countLabel.Text = "🧬 Mutasi Didapat: " .. tostring(_G.mutationCount)
+                        countLabel.Text = "Mutation Counter = " .. tostring(_G.mutationCount)
                     end
                     _G.targetAction = "Idle" 
                 end
