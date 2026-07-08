@@ -12,7 +12,7 @@ local lp = Players.LocalPlayer
 -- ⚙️ KONFIGURASI 
 -- =============================================
 _G.autoFarm = true              
-_G.hideOtherPlayers = true      
+_G.hideOtherPlayers = false      
 _G.animDelay = 7.3              
 _G.blackScreen = false           
 
