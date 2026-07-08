@@ -54,7 +54,7 @@ if _G.blackScreen then
     infoLabel.TextColor3 = Color3.new(1, 1, 1) -- Putih
     infoLabel.TextSize = 35 -- Ukuran Fix
     infoLabel.Font = Enum.Font.Code
-    infoLabel.Text = "SeNchO | Battlepass Farm Point"
+    infoLabel.Text = "SeNcHo | Battlepass Farm Point"
     infoLabel.Parent = bg
 
     -- Label FPS
