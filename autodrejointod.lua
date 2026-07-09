@@ -49,7 +49,7 @@ if _G.blackScreen then
     bg.BackgroundColor3 = Color3.new(0, 0, 0) 
     bg.Parent = screenGui
 
-    -- [1] Judul
+    -- [1] Judul (OTOMATIS MENGGUNAKAN USERNAME AKUN)
     local infoLabel = Instance.new("TextLabel")
     infoLabel.Size = UDim2.new(1, 0, 0, 40)
     infoLabel.Position = UDim2.new(0, 0, 0.5, -100)
@@ -57,7 +57,7 @@ if _G.blackScreen then
     infoLabel.TextColor3 = Color3.new(1, 1, 1)
     infoLabel.TextSize = 35
     infoLabel.Font = Enum.Font.Code
-    infoLabel.Text = "SeNcHo | Battlepass Farm Point"
+    infoLabel.Text = lp.Name .. " | Battlepass Farm Point"
     infoLabel.Parent = bg
 
     -- [2] Stopwatch
@@ -96,12 +96,10 @@ if _G.blackScreen then
     -- MESIN PENCARI GUI BATTLEPASS
     local targetAmountLabel = nil
     local function findBPLabel()
-        -- Kalau sudah ketemu, gak usah cari lagi
         if targetAmountLabel and targetAmountLabel.Parent then return targetAmountLabel end
         
         local pGui = lp:FindFirstChild("PlayerGui")
         if pGui then
-            -- Cari ke seluruh pelosok PlayerGui
             for _, v in pairs(pGui:GetDescendants()) do
                 if v:IsA("Frame") and v.Name == "XPSection" then
                     local amountText = v:FindFirstChild("Amount")
@@ -235,14 +233,12 @@ task.spawn(function()
         -- [ FASE 1: IDLE / NENDANG (JEDA 4 DETIK GANDA) ]
         if _G.targetAction == "Idle" then
             if distToSafeZone > 10 then
-                -- Jeda 4 detik setelah respawn sebelum teleport
-                if _G.stateTimer >= 3.5 then
+                if _G.stateTimer >= 3 then
                     hrp.CFrame = CFrame.new(safeZone)
                     task.wait(0.1) 
                     _G.stateTimer = 0 
                 end
             else
-                -- Jeda 4 detik di safe zone sebelum nendang
                 if _G.stateTimer >= 3 then
                     if kickRemote then kickRemote:FireServer(1, 1) end
                     _G.targetAction = "WaitingForDrop"
