@@ -11,7 +11,7 @@ local lp = Players.LocalPlayer
 -- ⚙️ KONFIGURASI 
 -- =============================================
 _G.autoFarm = true              
-_G.animDelay = 7              
+_G.animDelay = 7.3              
 _G.blackScreen = true           
 
 -- =============================================
@@ -28,7 +28,7 @@ local safeZone = Vector3.new(689, 3, 236)
 local startTime = os.time()     
 
 -- =============================================
--- ⬛ SETUP BLACKSCREEN UI
+-- ⬛ SETUP BLACKSCREEN UI (+ BP TRACKER)
 -- =============================================
 local guiParent = pcall(function() return CoreGui end) and CoreGui or lp:WaitForChild("PlayerGui")
 local oldGui = guiParent:FindFirstChild("AFK_Blackscreen")
@@ -49,44 +49,91 @@ if _G.blackScreen then
     bg.BackgroundColor3 = Color3.new(0, 0, 0) 
     bg.Parent = screenGui
 
+    -- [1] Judul
     local infoLabel = Instance.new("TextLabel")
     infoLabel.Size = UDim2.new(1, 0, 0, 40)
-    infoLabel.Position = UDim2.new(0, 0, 0.5, -60)
+    infoLabel.Position = UDim2.new(0, 0, 0.5, -100)
     infoLabel.BackgroundTransparency = 1
     infoLabel.TextColor3 = Color3.new(1, 1, 1)
     infoLabel.TextSize = 35
     infoLabel.Font = Enum.Font.Code
-    infoLabel.Text = "SeNchO | Battlepass Farm Point"
+    infoLabel.Text = "SeNcHo | Battlepass Farm Point"
     infoLabel.Parent = bg
 
+    -- [2] Stopwatch
     local timeLabel = Instance.new("TextLabel")
     timeLabel.Size = UDim2.new(1, 0, 0, 30)
-    timeLabel.Position = UDim2.new(0, 0, 0.5, -10)
+    timeLabel.Position = UDim2.new(0, 0, 0.5, -40)
     timeLabel.BackgroundTransparency = 1
-    timeLabel.TextColor3 = Color3.new(1, 1, 0)
+    timeLabel.TextColor3 = Color3.new(1, 1, 0) -- Kuning
     timeLabel.TextSize = 25
     timeLabel.Font = Enum.Font.Code
     timeLabel.Text = "Time Counter = 00:00:00"
     timeLabel.Parent = bg
 
+    -- [3] Hitungan Mutasi
     countLabel = Instance.new("TextLabel")
     countLabel.Size = UDim2.new(1, 0, 0, 30)
-    countLabel.Position = UDim2.new(0, 0, 0.5, 30)
+    countLabel.Position = UDim2.new(0, 0, 0.5, 0)
     countLabel.BackgroundTransparency = 1
-    countLabel.TextColor3 = Color3.new(0, 1, 0)
+    countLabel.TextColor3 = Color3.new(0, 1, 0) -- Hijau
     countLabel.TextSize = 25
     countLabel.Font = Enum.Font.Code
     countLabel.Text = "Mutation Counter = 0"
     countLabel.Parent = bg
 
+    -- [4] TRACKER BATTLEPASS EXP
+    local bpLabel = Instance.new("TextLabel")
+    bpLabel.Size = UDim2.new(1, 0, 0, 30)
+    bpLabel.Position = UDim2.new(0, 0, 0.5, 40)
+    bpLabel.BackgroundTransparency = 1
+    bpLabel.TextColor3 = Color3.new(0, 1, 1) -- Cyan / Biru Muda
+    bpLabel.TextSize = 25
+    bpLabel.Font = Enum.Font.Code
+    bpLabel.Text = "BattlePass EXP = Mencari data..."
+    bpLabel.Parent = bg
+
+    -- MESIN PENCARI GUI BATTLEPASS
+    local targetAmountLabel = nil
+    local function findBPLabel()
+        -- Kalau sudah ketemu, gak usah cari lagi
+        if targetAmountLabel and targetAmountLabel.Parent then return targetAmountLabel end
+        
+        local pGui = lp:FindFirstChild("PlayerGui")
+        if pGui then
+            -- Cari ke seluruh pelosok PlayerGui
+            for _, v in pairs(pGui:GetDescendants()) do
+                if v:IsA("Frame") and v.Name == "XPSection" then
+                    local amountText = v:FindFirstChild("Amount")
+                    if amountText and amountText:IsA("TextLabel") then
+                        targetAmountLabel = amountText
+                        return targetAmountLabel
+                    end
+                end
+            end
+        end
+        return nil
+    end
+
+    -- LOOP PEMBARUAN UI (Tiap 1 Detik)
     task.spawn(function()
         while task.wait(1) do
             if not timeLabel or not timeLabel.Parent then break end
+            
+            -- Update Stopwatch
             local elapsed = os.time() - startTime
             local hours = math.floor(elapsed / 3600)
             local mins = math.floor((elapsed % 3600) / 60)
             local secs = elapsed % 60
             timeLabel.Text = string.format("Time Counter = %02d:%02d:%02d", hours, mins, secs)
+
+            -- Update Teks Battlepass EXP
+            local currentBPText = findBPLabel()
+            if currentBPText then
+                bpLabel.Text = "BattlePass EXP = " .. tostring(currentBPText.Text)
+            else
+                bpLabel.Text = "BattlePass EXP = Menunggu UI Asli Load..."
+            end
         end
     end)
 end
@@ -138,7 +185,7 @@ workspace.DescendantAdded:Connect(function(obj)
 end)
 
 -- =============================================
--- ⚙️ MAIN LOOP (STATE MACHINE - OPTIMIZED)
+-- ⚙️ MAIN LOOP (STATE MACHINE DENGAN JEDA 4s)
 -- =============================================
 task.spawn(function()
     while task.wait(0.2) do
@@ -185,18 +232,18 @@ task.spawn(function()
 
         local distToSafeZone = (hrp.Position - safeZone).Magnitude
 
-        -- [ FASE 1: IDLE / NENDANG (JEDA 4 DETIK) ]
+        -- [ FASE 1: IDLE / NENDANG (JEDA 4 DETIK GANDA) ]
         if _G.targetAction == "Idle" then
             if distToSafeZone > 10 then
-                -- Jeda 4 detik setelah hidup di spawn
-                if _G.stateTimer >= 4 then
+                -- Jeda 4 detik setelah respawn sebelum teleport
+                if _G.stateTimer >= 3.5 then
                     hrp.CFrame = CFrame.new(safeZone)
                     task.wait(0.1) 
                     _G.stateTimer = 0 
                 end
             else
-                -- Jeda 4 detik setelah tiba di Safe Zone
-                if _G.stateTimer >= 4 then
+                -- Jeda 4 detik di safe zone sebelum nendang
+                if _G.stateTimer >= 3 then
                     if kickRemote then kickRemote:FireServer(1, 1) end
                     _G.targetAction = "WaitingForDrop"
                 end
