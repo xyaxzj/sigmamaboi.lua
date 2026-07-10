@@ -4,7 +4,6 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local VirtualUser = game:GetService("VirtualUser")
 local CoreGui = game:GetService("CoreGui")
-local RunService = game:GetService("RunService")
 local lp = Players.LocalPlayer
 
 -- =============================================
@@ -12,7 +11,6 @@ local lp = Players.LocalPlayer
 -- =============================================
 _G.autoFarm = true              
 _G.animDelay = 7.3              
-_G.blackScreen = true           
 
 -- =============================================
 -- 🧠 VARIABEL OTAK UTAMA (STATE MACHINE)
@@ -22,119 +20,69 @@ _G.lastAction = "Idle"
 _G.nextAction = "Idle"          
 _G.stateTimer = 0               
 _G.globalStuckTimer = 0         
-_G.mutationCount = 0            
 _G.targetItemPos = nil          
 local safeZone = Vector3.new(689, 3, 236)
-local startTime = os.time()     
 
 -- =============================================
--- ⬛ SETUP BLACKSCREEN UI (+ BP TRACKER)
+-- 📊 SETUP MINI HUD (HANYA BATTLEPASS TRACKER)
 -- =============================================
 local guiParent = pcall(function() return CoreGui end) and CoreGui or lp:WaitForChild("PlayerGui")
-local oldGui = guiParent:FindFirstChild("AFK_Blackscreen")
+local oldGui = guiParent:FindFirstChild("BP_Tracker_HUD")
 if oldGui then oldGui:Destroy() end 
 
-local countLabel = nil 
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "BP_Tracker_HUD"
+screenGui.Parent = guiParent
 
-if _G.blackScreen then
-    pcall(function() RunService:Set3dRenderingEnabled(false) end)
+-- Label Widget Mungil di Atas Layar
+local bpLabel = Instance.new("TextLabel")
+bpLabel.Size = UDim2.new(0, 350, 0, 40)
+bpLabel.Position = UDim2.new(0.5, -175, 0, 20)
+bpLabel.BackgroundTransparency = 0.4 -- Agak tembus pandang
+bpLabel.BackgroundColor3 = Color3.new(0, 0, 0)
+bpLabel.TextColor3 = Color3.new(0, 1, 1) -- Warna Cyan / Biru Muda
+bpLabel.TextSize = 20
+bpLabel.Font = Enum.Font.Code
+bpLabel.Text = lp.Name .. " | BP EXP: Mencari data..."
+bpLabel.Parent = screenGui
 
-    local screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "AFK_Blackscreen"
-    screenGui.IgnoreGuiInset = true
-    screenGui.Parent = guiParent
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 8)
+corner.Parent = bpLabel
 
-    local bg = Instance.new("Frame")
-    bg.Size = UDim2.new(1, 0, 1, 0)
-    bg.BackgroundColor3 = Color3.new(0, 0, 0) 
-    bg.Parent = screenGui
-
-    -- [1] Judul (OTOMATIS MENGGUNAKAN USERNAME AKUN)
-    local infoLabel = Instance.new("TextLabel")
-    infoLabel.Size = UDim2.new(1, 0, 0, 40)
-    infoLabel.Position = UDim2.new(0, 0, 0.5, -100)
-    infoLabel.BackgroundTransparency = 1
-    infoLabel.TextColor3 = Color3.new(1, 1, 1)
-    infoLabel.TextSize = 35
-    infoLabel.Font = Enum.Font.Code
-    infoLabel.Text = lp.Name .. " | Battlepass Farm Point"
-    infoLabel.Parent = bg
-
-    -- [2] Stopwatch
-    local timeLabel = Instance.new("TextLabel")
-    timeLabel.Size = UDim2.new(1, 0, 0, 30)
-    timeLabel.Position = UDim2.new(0, 0, 0.5, -40)
-    timeLabel.BackgroundTransparency = 1
-    timeLabel.TextColor3 = Color3.new(1, 1, 0) -- Kuning
-    timeLabel.TextSize = 25
-    timeLabel.Font = Enum.Font.Code
-    timeLabel.Text = "Time Counter = 00:00:00"
-    timeLabel.Parent = bg
-
-    -- [3] Hitungan Mutasi
-    countLabel = Instance.new("TextLabel")
-    countLabel.Size = UDim2.new(1, 0, 0, 30)
-    countLabel.Position = UDim2.new(0, 0, 0.5, 0)
-    countLabel.BackgroundTransparency = 1
-    countLabel.TextColor3 = Color3.new(0, 1, 0) -- Hijau
-    countLabel.TextSize = 25
-    countLabel.Font = Enum.Font.Code
-    countLabel.Text = "Mutation Counter = 0"
-    countLabel.Parent = bg
-
-    -- [4] TRACKER BATTLEPASS EXP
-    local bpLabel = Instance.new("TextLabel")
-    bpLabel.Size = UDim2.new(1, 0, 0, 30)
-    bpLabel.Position = UDim2.new(0, 0, 0.5, 40)
-    bpLabel.BackgroundTransparency = 1
-    bpLabel.TextColor3 = Color3.new(0, 1, 1) -- Cyan / Biru Muda
-    bpLabel.TextSize = 25
-    bpLabel.Font = Enum.Font.Code
-    bpLabel.Text = "BattlePass EXP = Mencari data..."
-    bpLabel.Parent = bg
-
-    -- MESIN PENCARI GUI BATTLEPASS
-    local targetAmountLabel = nil
-    local function findBPLabel()
-        if targetAmountLabel and targetAmountLabel.Parent then return targetAmountLabel end
-        
-        local pGui = lp:FindFirstChild("PlayerGui")
-        if pGui then
-            for _, v in pairs(pGui:GetDescendants()) do
-                if v:IsA("Frame") and v.Name == "XPSection" then
-                    local amountText = v:FindFirstChild("Amount")
-                    if amountText and amountText:IsA("TextLabel") then
-                        targetAmountLabel = amountText
-                        return targetAmountLabel
-                    end
+-- MESIN PENCARI GUI BATTLEPASS
+local targetAmountLabel = nil
+local function findBPLabel()
+    if targetAmountLabel and targetAmountLabel.Parent then return targetAmountLabel end
+    
+    local pGui = lp:FindFirstChild("PlayerGui")
+    if pGui then
+        for _, v in pairs(pGui:GetDescendants()) do
+            if v:IsA("Frame") and v.Name == "XPSection" then
+                local amountText = v:FindFirstChild("Amount")
+                if amountText and amountText:IsA("TextLabel") then
+                    targetAmountLabel = amountText
+                    return targetAmountLabel
                 end
             end
         end
-        return nil
     end
-
-    -- LOOP PEMBARUAN UI (Tiap 1 Detik)
-    task.spawn(function()
-        while task.wait(1) do
-            if not timeLabel or not timeLabel.Parent then break end
-            
-            -- Update Stopwatch
-            local elapsed = os.time() - startTime
-            local hours = math.floor(elapsed / 3600)
-            local mins = math.floor((elapsed % 3600) / 60)
-            local secs = elapsed % 60
-            timeLabel.Text = string.format("Time Counter = %02d:%02d:%02d", hours, mins, secs)
-
-            -- Update Teks Battlepass EXP
-            local currentBPText = findBPLabel()
-            if currentBPText then
-                bpLabel.Text = "BattlePass EXP = " .. tostring(currentBPText.Text)
-            else
-                bpLabel.Text = "BattlePass EXP = Menunggu UI Asli Load..."
-            end
-        end
-    end)
+    return nil
 end
+
+-- LOOP PEMBARUAN TEKS (Tiap 1 Detik)
+task.spawn(function()
+    while task.wait(1) do
+        if not bpLabel or not bpLabel.Parent then break end
+        
+        local currentBPText = findBPLabel()
+        if currentBPText then
+            bpLabel.Text = lp.Name .. " | BP EXP: " .. tostring(currentBPText.Text)
+        else
+            bpLabel.Text = lp.Name .. " | BP EXP: Menunggu UI..."
+        end
+    end
+end)
 
 -- =============================================
 -- 🛡️ ANTI AFK
@@ -233,12 +181,14 @@ task.spawn(function()
         -- [ FASE 1: IDLE / NENDANG (JEDA 4 DETIK GANDA) ]
         if _G.targetAction == "Idle" then
             if distToSafeZone > 10 then
+                -- Jeda 4 detik setelah respawn sebelum teleport
                 if _G.stateTimer >= 3 then
                     hrp.CFrame = CFrame.new(safeZone)
                     task.wait(0.1) 
                     _G.stateTimer = 0 
                 end
             else
+                -- Jeda 4 detik di safe zone sebelum nendang
                 if _G.stateTimer >= 3 then
                     if kickRemote then kickRemote:FireServer(1, 1) end
                     _G.targetAction = "WaitingForDrop"
@@ -268,12 +218,10 @@ task.spawn(function()
                 _G.targetAction = "Idle" 
             end
 
-        -- [ FASE 5: JALAN BALIK KE SAFE ZONE (+1) ]
+        -- [ FASE 5: JALAN BALIK KE SAFE ZONE ]
         elseif _G.targetAction == "WalkToSafeZone" then
             hum:MoveTo(safeZone)
             if distToSafeZone < 8 then
-                _G.mutationCount = _G.mutationCount + 1
-                if countLabel then countLabel.Text = "Mutation Counter = " .. tostring(_G.mutationCount) end
                 _G.targetAction = "Idle" 
             end
 
