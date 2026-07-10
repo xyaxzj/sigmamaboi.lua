@@ -10,7 +10,7 @@ local lp = Players.LocalPlayer
 -- ⚙️ KONFIGURASI 
 -- =============================================
 _G.autoFarm = true              
-_G.animDelay = 5.5              
+_G.animDelay = 6              
 
 -- =============================================
 -- 🧠 VARIABEL OTAK UTAMA (STATE MACHINE)
