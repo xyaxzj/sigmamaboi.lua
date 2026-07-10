@@ -24,7 +24,7 @@ _G.targetItemPos = nil
 local safeZone = Vector3.new(689, 3, 236)
 
 -- =============================================
--- 📊 SETUP MINI HUD (HANYA BATTLEPASS TRACKER)
+-- 📊 SETUP MINI HUD (HANYA BP TRACKER)
 -- =============================================
 local guiParent = pcall(function() return CoreGui end) and CoreGui or lp:WaitForChild("PlayerGui")
 local oldGui = guiParent:FindFirstChild("BP_Tracker_HUD")
@@ -34,13 +34,12 @@ local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "BP_Tracker_HUD"
 screenGui.Parent = guiParent
 
--- Label Widget Mungil di Atas Layar
 local bpLabel = Instance.new("TextLabel")
 bpLabel.Size = UDim2.new(0, 350, 0, 40)
 bpLabel.Position = UDim2.new(0.5, -175, 0, 20)
-bpLabel.BackgroundTransparency = 0.4 -- Agak tembus pandang
+bpLabel.BackgroundTransparency = 0.4 
 bpLabel.BackgroundColor3 = Color3.new(0, 0, 0)
-bpLabel.TextColor3 = Color3.new(0, 1, 1) -- Warna Cyan / Biru Muda
+bpLabel.TextColor3 = Color3.new(0, 1, 1) -- Cyan
 bpLabel.TextSize = 20
 bpLabel.Font = Enum.Font.Code
 bpLabel.Text = lp.Name .. " | BP EXP: Mencari data..."
@@ -70,7 +69,7 @@ local function findBPLabel()
     return nil
 end
 
--- LOOP PEMBARUAN TEKS (Tiap 1 Detik)
+-- LOOP PEMBARUAN TEKS TRACKER (Tiap 1 Detik)
 task.spawn(function()
     while task.wait(1) do
         if not bpLabel or not bpLabel.Parent then break end
@@ -85,6 +84,20 @@ task.spawn(function()
 end)
 
 -- =============================================
+-- 💰 LOOP AUTO SELL ALL (SETIAP 1 MENIT)
+-- =============================================
+task.spawn(function()
+    while task.wait(60) do
+        if _G.autoFarm then
+            pcall(function()
+                -- Dieksekusi secara diam-diam di background
+                ReplicatedStorage.Shared.Packages.Network.ref_B_SellAll:InvokeServer()
+            end)
+        end
+    end
+end)
+
+-- =============================================
 -- 🛡️ ANTI AFK
 -- =============================================
 lp.Idled:Connect(function()
@@ -93,7 +106,7 @@ lp.Idled:Connect(function()
 end)
 
 -- =============================================
--- 📡 CARI REMOTE
+-- 📡 CARI REMOTE NENDANG
 -- =============================================
 local kickRemote = nil
 for _, r in pairs(ReplicatedStorage:GetDescendants()) do
@@ -181,14 +194,12 @@ task.spawn(function()
         -- [ FASE 1: IDLE / NENDANG (JEDA 4 DETIK GANDA) ]
         if _G.targetAction == "Idle" then
             if distToSafeZone > 10 then
-                -- Jeda 4 detik setelah respawn sebelum teleport
                 if _G.stateTimer >= 3 then
                     hrp.CFrame = CFrame.new(safeZone)
                     task.wait(0.1) 
                     _G.stateTimer = 0 
                 end
             else
-                -- Jeda 4 detik di safe zone sebelum nendang
                 if _G.stateTimer >= 3 then
                     if kickRemote then kickRemote:FireServer(1, 1) end
                     _G.targetAction = "WaitingForDrop"
