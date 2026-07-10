@@ -6,11 +6,16 @@ local VirtualUser = game:GetService("VirtualUser")
 local CoreGui = game:GetService("CoreGui")
 local lp = Players.LocalPlayer
 
+-- Jalan Pintas Network untuk semua fungsi
+local Network = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Packages"):WaitForChild("Network")
+
 -- =============================================
--- ⚙️ KONFIGURASI 
+-- ⚙️ KONFIGURASI UTAMA
 -- =============================================
 _G.autoFarm = true              
 _G.animDelay = 6.5              
+_G.AutoSpeedUpgrade = true      -- Fitur Upgrade (Background)
+_G.AutoBuyStick = true          -- Fitur Beli (Background)
 
 -- =============================================
 -- 🧠 VARIABEL OTAK UTAMA (STATE MACHINE)
@@ -84,14 +89,37 @@ task.spawn(function()
 end)
 
 -- =============================================
--- 💰 LOOP AUTO SELL ALL (SETIAP 1 MENIT)
+-- ⚡ FITUR BACKGROUND (AUTO UPGRADE, BUY, SELL)
 -- =============================================
+
+-- 1. Loop Auto Speed Upgrade (Tiap 1.5 Detik)
+task.spawn(function()
+    while task.wait(1.5) do
+        if _G.autoFarm and _G.AutoSpeedUpgrade then
+            pcall(function()
+                Network.rev_SPEED_UPGRADE:FireServer(5)
+            end)
+        end
+    end
+end)
+
+-- 2. Loop Auto Buy Stick (Tiap 2 Detik)
+task.spawn(function()
+    while task.wait(2) do
+        if _G.autoFarm and _G.AutoBuyStick then
+            pcall(function()
+                Network.rev_Shop_Buy:FireServer("WeightShop", "Wooden Stick")
+            end)
+        end
+    end
+end)
+
+-- 3. Loop Auto Sell All (Tiap 60 Detik)
 task.spawn(function()
     while task.wait(60) do
         if _G.autoFarm then
             pcall(function()
-                -- Dieksekusi secara diam-diam di background
-                ReplicatedStorage.Shared.Packages.Network.ref_B_SellAll:InvokeServer()
+                Network.ref_B_SellAll:InvokeServer()
             end)
         end
     end
