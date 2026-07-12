@@ -1,6 +1,6 @@
 --[[
     Pink Glow Compact Hub UI
-    Reference: Screenshot_20260712-152719.jpg
+    Reference: Screenshot_2712-152719.jpg
     Style: Dark/Pink, Sidebar Tabs, Grouped Sections
 ]]
 
