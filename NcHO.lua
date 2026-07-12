@@ -1,5 +1,5 @@
 --[[
-    Blue Compact Hub UI Library
+    Blue Compact Hub UI Library (V2 - Overlap Fixed)
     Style: Dark/Blue, Sidebar Tabs, Grouped Sections
 ]]
 
@@ -40,18 +40,18 @@ local function MakeDraggable(dragPoint, objectToMove)
     end)
 end
 
--- TEMA WARNA BIRU NEON (Blue Style)
+-- TEMA WARNA BIRU NEON
 local Theme = {
-    MainBg = Color3.fromRGB(20, 20, 22),       -- Hitam pekat kebiruan
-    SidebarBg = Color3.fromRGB(15, 15, 17),    -- Lebih gelap untuk sidebar
-    ElementBg = Color3.fromRGB(30, 30, 35),    -- Abu-abu gelap
-    Accent = Color3.fromRGB(0, 170, 255),      -- BIRU NEON
-    Text = Color3.fromRGB(240, 240, 240),      -- Putih Teks
-    TextDim = Color3.fromRGB(150, 150, 150),   -- Abu-abu Teks
+    MainBg = Color3.fromRGB(20, 20, 22),
+    SidebarBg = Color3.fromRGB(15, 15, 17),
+    ElementBg = Color3.fromRGB(30, 30, 35),
+    Accent = Color3.fromRGB(0, 170, 255),
+    Text = Color3.fromRGB(240, 240, 240),
+    TextDim = Color3.fromRGB(150, 150, 150),
     Radius = UDim.new(0, 6)
 }
 
--- Wadah untuk Notifikasi
+-- SISTEM NOTIFIKASI
 local NotifGui = Instance.new("ScreenGui")
 NotifGui.Name = "BlueUI_Notifications"
 NotifGui.Parent = getSafeParent()
@@ -65,14 +65,12 @@ UIListNotif.VerticalAlignment = Enum.VerticalAlignment.Bottom
 UIListNotif.Padding = UDim.new(0, 10)
 UIListNotif.Parent = NotifLayout
 
--- FUNGSI NOTIFIKASI
 function Library:Notify(title, content, duration)
     local dur = duration or 3
-    
     local NFrame = Instance.new("Frame")
     NFrame.Size = UDim2.new(1, 0, 0, 60)
     NFrame.BackgroundColor3 = Theme.SidebarBg
-    NFrame.Position = UDim2.new(1, 300, 0, 0) -- Mulai dari luar layar (kanan)
+    NFrame.Position = UDim2.new(1, 300, 0, 0)
     NFrame.Parent = NotifLayout
     Instance.new("UICorner", NFrame).CornerRadius = Theme.Radius
     local NStroke = Instance.new("UIStroke")
@@ -103,10 +101,7 @@ function Library:Notify(title, content, duration)
     NText.TextWrapped = true
     NText.Parent = NFrame
 
-    -- Animasi Masuk
     TweenService:Create(NFrame, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Position = UDim2.new(0, 0, 0, 0)}):Play()
-    
-    -- Animasi Keluar
     task.delay(dur, function()
         local tweenOut = TweenService:Create(NFrame, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.In), {Position = UDim2.new(1, 300, 0, 0)})
         tweenOut:Play()
@@ -114,11 +109,10 @@ function Library:Notify(title, content, duration)
     end)
 end
 
--- FUNGSI MEMBUAT UI UTAMA
 function Library:CreateWindow(config)
     local titleText = config.Name or "Compact Hub"
     local footerText = config.Footer or "discord.gg/yourlink | v1.0"
-    local logoIcon = config.LogoText or "S" -- Default Logo "S"
+    local logoIcon = config.LogoText or "S"
 
     local targetParent = getSafeParent()
     if targetParent:FindFirstChild("BlueCompactUI") then
@@ -130,7 +124,7 @@ function Library:CreateWindow(config)
     ScreenGui.ResetOnSpawn = false
     ScreenGui.Parent = targetParent
 
-    -- FLOATING LOGO (Muncul saat diminimize)
+    -- FLOATING LOGO
     local FloatingBtn = Instance.new("TextButton")
     FloatingBtn.Size = UDim2.new(0, 50, 0, 50)
     FloatingBtn.Position = UDim2.new(0, 20, 0.5, -25)
@@ -149,7 +143,7 @@ function Library:CreateWindow(config)
     FloatStroke.Parent = FloatingBtn
     MakeDraggable(FloatingBtn, FloatingBtn)
 
-    -- MAIN WINDOW (Ukuran 480x320)
+    -- MAIN WINDOW
     local MainFrame = Instance.new("Frame")
     MainFrame.Size = UDim2.new(0, 480, 0, 320)
     MainFrame.Position = UDim2.new(0.5, -240, 0.5, -160)
@@ -206,7 +200,7 @@ function Library:CreateWindow(config)
     MakeDraggable(Topbar, MainFrame)
 
     local SearchBox = Instance.new("TextLabel")
-    SearchBox.Size = UDim2.new(1, -40, 0, 26)
+    SearchBox.Size = UDim2.new(1, -50, 0, 26) -- Dikecilkan sedikit agar X tidak sempit
     SearchBox.Position = UDim2.new(0, 10, 0.5, -13)
     SearchBox.BackgroundColor3 = Theme.SidebarBg
     SearchBox.Text = "   🔍 Search / " .. titleText
@@ -217,15 +211,18 @@ function Library:CreateWindow(config)
     SearchBox.Parent = Topbar
     Instance.new("UICorner", SearchBox).CornerRadius = Theme.Radius
 
-    -- TOMBOL MINIMIZE
+    -- TOMBOL MINIMIZE (TOMBOL X)
     local MinBtn = Instance.new("TextButton")
     MinBtn.Size = UDim2.new(0, 30, 0, 40)
     MinBtn.Position = UDim2.new(1, -30, 0, 0)
     MinBtn.BackgroundTransparency = 1
     MinBtn.Text = "✖"
-    MinBtn.TextColor3 = Theme.Accent
+    MinBtn.TextColor3 = Theme.TextDim
     MinBtn.TextSize = 14
     MinBtn.Parent = Topbar
+    
+    MinBtn.MouseEnter:Connect(function() MinBtn.TextColor3 = Theme.Accent end)
+    MinBtn.MouseLeave:Connect(function() MinBtn.TextColor3 = Theme.TextDim end)
 
     MinBtn.MouseButton1Click:Connect(function()
         MainFrame.Visible = false
@@ -257,7 +254,7 @@ function Library:CreateWindow(config)
     ContentContainer.Parent = MainFrame
 
     -- ==========================================
-    -- LOGIKA TAB & SECTION
+    -- LOGIKA TAB & SECTION (PERBAIKAN TOTAL DI SINI)
     -- ==========================================
     local Window = { Tabs = {}, FirstTab = true }
 
@@ -285,6 +282,7 @@ function Library:CreateWindow(config)
         PageLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
         PageLayout.Parent = Page
         Instance.new("UIPadding", Page).PaddingTop = UDim.new(0, 5)
+        Instance.new("UIPadding", Page).PaddingBottom = UDim.new(0, 5)
 
         table.insert(self.Tabs, {Btn = TabBtn, Page = Page})
 
@@ -298,9 +296,11 @@ function Library:CreateWindow(config)
         self.FirstTab = false
         local TabLogic = {}
 
+        -- STRUKTUR SECTION BARU (ANTI-OVERLAP)
         function TabLogic:AddSection(titleText)
+            -- Wadah Utama Section
             local SecFrame = Instance.new("Frame")
-            SecFrame.Size = UDim2.new(1, -20, 0, 30)
+            SecFrame.Size = UDim2.new(1, -20, 0, 40) -- Tinggi sementara, akan auto-resize
             SecFrame.BackgroundColor3 = Theme.MainBg
             SecFrame.Parent = Page
             
@@ -309,6 +309,7 @@ function Library:CreateWindow(config)
             SecStroke.Parent = SecFrame
             Instance.new("UICorner", SecFrame).CornerRadius = Theme.Radius
 
+            -- Judul Section (Dipisah dari area auto-layout agar tidak tabrakan)
             local SecTitle = Instance.new("TextLabel")
             SecTitle.Size = UDim2.new(1, -10, 0, 30)
             SecTitle.Position = UDim2.new(0, 10, 0, 0)
@@ -320,26 +321,35 @@ function Library:CreateWindow(config)
             SecTitle.TextXAlignment = Enum.TextXAlignment.Left
             SecTitle.Parent = SecFrame
 
+            -- Kontainer untuk elemen-elemen di dalamnya
+            local InnerContainer = Instance.new("Frame")
+            InnerContainer.Size = UDim2.new(1, 0, 1, -30)
+            InnerContainer.Position = UDim2.new(0, 0, 0, 30) -- Mulai di bawah Judul
+            InnerContainer.BackgroundTransparency = 1
+            InnerContainer.Parent = SecFrame
+
             local SecLayout = Instance.new("UIListLayout")
             SecLayout.Padding = UDim.new(0, 6)
-            SecLayout.Parent = SecFrame
+            SecLayout.Parent = InnerContainer
 
-            SecLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-                SecFrame.Size = UDim2.new(1, -20, 0, SecLayout.AbsoluteContentSize.Y + 10)
-            end)
-            
             local SecPadding = Instance.new("UIPadding")
-            SecPadding.PaddingTop = UDim.new(0, 30)
+            SecPadding.PaddingTop = UDim.new(0, 5)
+            SecPadding.PaddingBottom = UDim.new(0, 10)
             SecPadding.PaddingLeft = UDim.new(0, 10)
             SecPadding.PaddingRight = UDim.new(0, 10)
-            SecPadding.PaddingBottom = UDim.new(0, 10)
-            SecPadding.Parent = SecFrame
+            SecPadding.Parent = InnerContainer
+
+            -- Logika Matematika Auto-Resize yang Benar
+            SecLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+                -- 30 (Tinggi Judul) + 5 (Padding Atas) + 10 (Padding Bawah) = 45 Pixel Tambahan
+                SecFrame.Size = UDim2.new(1, -20, 0, SecLayout.AbsoluteContentSize.Y + 45)
+            end)
 
             local Section = {}
 
             -- ================= ELEMEN DI DALAM SECTION =================
+            -- PERHATIAN: Semua parent sekarang dimasukkan ke 'InnerContainer'
 
-            -- 1. TOMBOL (BUTTON)
             function Section:AddButton(text, callback)
                 local BtnFrame = Instance.new("TextButton")
                 BtnFrame.Size = UDim2.new(1, 0, 0, 26)
@@ -349,7 +359,7 @@ function Library:CreateWindow(config)
                 BtnFrame.Font = Enum.Font.Gotham
                 BtnFrame.TextSize = 12
                 BtnFrame.TextXAlignment = Enum.TextXAlignment.Left
-                BtnFrame.Parent = SecFrame
+                BtnFrame.Parent = InnerContainer
                 Instance.new("UICorner", BtnFrame).CornerRadius = UDim.new(0, 4)
 
                 BtnFrame.MouseButton1Click:Connect(function()
@@ -357,13 +367,12 @@ function Library:CreateWindow(config)
                 end)
             end
 
-            -- 2. TOGGLE
             function Section:AddToggle(text, default, callback)
                 local state = default or false
                 local Tgl = Instance.new("Frame")
                 Tgl.Size = UDim2.new(1, 0, 0, 26)
                 Tgl.BackgroundTransparency = 1
-                Tgl.Parent = SecFrame
+                Tgl.Parent = InnerContainer
 
                 local Lbl = Instance.new("TextLabel")
                 Lbl.Size = UDim2.new(1, -40, 1, 0)
@@ -403,12 +412,11 @@ function Library:CreateWindow(config)
                 end)
             end
 
-            -- 3. SLIDER
             function Section:AddSlider(text, min, max, default, callback)
                 local SldFrame = Instance.new("Frame")
                 SldFrame.Size = UDim2.new(1, 0, 0, 40)
                 SldFrame.BackgroundTransparency = 1
-                SldFrame.Parent = SecFrame
+                SldFrame.Parent = InnerContainer
 
                 local Lbl = Instance.new("TextLabel")
                 Lbl.Size = UDim2.new(1, -30, 0, 16)
@@ -474,13 +482,12 @@ function Library:CreateWindow(config)
                 end)
             end
 
-            -- 4. KEYBIND (TOMBOL PINTASAN)
             function Section:AddBind(text, defaultKey, callback)
                 local keyName = defaultKey.Name
                 local BindFrame = Instance.new("Frame")
                 BindFrame.Size = UDim2.new(1, 0, 0, 26)
                 BindFrame.BackgroundTransparency = 1
-                BindFrame.Parent = SecFrame
+                BindFrame.Parent = InnerContainer
 
                 local Lbl = Instance.new("TextLabel")
                 Lbl.Size = UDim2.new(1, -60, 1, 0)
@@ -522,13 +529,12 @@ function Library:CreateWindow(config)
                 end)
             end
 
-            -- 5. DROPDOWN (PILIHAN)
             function Section:AddDropdown(text, list, callback)
                 local DropFrame = Instance.new("Frame")
                 DropFrame.Size = UDim2.new(1, 0, 0, 45)
                 DropFrame.BackgroundTransparency = 1
                 DropFrame.ClipsDescendants = true
-                DropFrame.Parent = SecFrame
+                DropFrame.Parent = InnerContainer
 
                 local Lbl = Instance.new("TextLabel")
                 Lbl.Size = UDim2.new(1, 0, 0, 16)
@@ -583,12 +589,11 @@ function Library:CreateWindow(config)
                 end
             end
 
-            -- 6. TEXTBOX INPUT
             function Section:AddInput(text, placeholder, callback)
                 local InpFrame = Instance.new("Frame")
                 InpFrame.Size = UDim2.new(1, 0, 0, 45)
                 InpFrame.BackgroundTransparency = 1
-                InpFrame.Parent = SecFrame
+                InpFrame.Parent = InnerContainer
 
                 local Lbl = Instance.new("TextLabel")
                 Lbl.Size = UDim2.new(1, 0, 0, 16)
