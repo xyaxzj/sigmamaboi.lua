@@ -1,219 +1,38 @@
--- ==========================================================
--- MOCTA AUTO TRAIN V2.2 (ANTI-LAG REBIRTH LOGIC & WEBHOOK)
--- Build: 3-Second Validation, Target Power 35B, Discord Embed
--- ==========================================================
+local Players = game:GetService("Players")
+local lp = Players.LocalPlayer
 
-local success, err = pcall(function()
-    local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
-    local Players = game:GetService("Players")
-    local LocalPlayer = Players.LocalPlayer
-    local HttpService = game:GetService("HttpService")
+_G.autoUseBarbell = true
 
-    -- ===================== KONFIGURASI =====================
-    local TargetPower = 32000000000 -- Target langsung dikunci di 35 Miliar
-    local WebhookURL = "https://discord.com/api/webhooks/1414511296426021007/B8_cONien59-Ff5QnOds-p6mB7huJa847lSMVGWS7DcvPZmmDH-6iddmjUAEQG4-r-iR" -- TEMPEL LINK WEBHOOK BOS DI SINI
+local targetTools = {
+    ["Emerald Barbell"] = true,
+    ["Planet Barbell"] = true
+}
 
-    local Window = Rayfield:CreateWindow({
-        Name = "Mocta Auto Train",
-        LoadingTitle = "Smart Train + Webhook",
-        Theme = "DarkBlue"
-    })
-
-    local Tab = Window:CreateTab("🏋️ Auto Train", 4483362458)
-
-    local AutoTrainEnabled = true
-    local ConfirmTicks = 0 -- Variabel Konfirmasi
-
-    Tab:CreateToggle({
-        Name = "🟢 Auto Train Aktif",
-        CurrentValue = true,
-        Callback = function(Value)
-            AutoTrainEnabled = Value
-            if not Value then ConfirmTicks = 0 end -- Reset jika dimatikan manual
-        end
-    })
-
-    -- ===================== FUNGSI GET POWER (ANTI KOMA) =====================
-    local function GetCurrentPower()
-        local textLabel = LocalPlayer:FindFirstChild("PlayerGui")
-        if textLabel then textLabel = textLabel:FindFirstChild("HUD") end
-        if textLabel then textLabel = textLabel:FindFirstChild("BottomLeft") end
-        if textLabel then textLabel = textLabel:FindFirstChild("KickLevel") end
-        if textLabel then textLabel = textLabel:FindFirstChild("TextLabel") end
-
-        if not textLabel then return 0 end
-
-        -- Ambil teks dan bersihkan koma jika ada (contoh: 1,000,000 -> 1000000)
-        local rawText = textLabel.Text
-        local cleanText = string.gsub(rawText, ",", "")
-
-        local numberStr, suffix = string.match(cleanText, "([%d%.]+)%s*([KMB]?)")
-
-        if not numberStr then return 0 end
-
-        local number = tonumber(numberStr)
-        if not number then return 0 end
-
-        if suffix == "K" then number = number * 1000 end
-        if suffix == "M" then number = number * 1000000 end
-        if suffix == "B" then number = number * 1000000000 end
-
-        return math.floor(number)
-    end
-
-    -- ===================== FUNGSI GET REBIRTH =====================
-    local function GetCurrentRebirth()
-        local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
-        if not playerGui then return 0 end
-
-        local frames = playerGui:FindFirstChild("Frames")
-        if not frames then return 0 end
-
-        local rebirthFrame = frames:FindFirstChild("Rebirth")
-        if not rebirthFrame then return 0 end
-
-        local rebirthLevelLabel = rebirthFrame:FindFirstChild("RebirthLevel")
-        if not rebirthLevelLabel then return 0 end
-
-        local text = rebirthLevelLabel.Text
-        local numberStr = string.match(text, "%d+") 
-
-        if numberStr then
-            return tonumber(numberStr)
-        end
+task.spawn(function()
+    while task.wait(0.1) do
+        if not _G.autoUseBarbell then continue end
         
-        return 0
-    end
-
-    -- ===================== FUNGSI WEBHOOK =====================
-    local function SendWebhook(currentPower, currentRebirth)
-        if not WebhookURL or WebhookURL == "" then
-            warn("Webhook URL belum diisi!")
-            return
-        end
-
-        local httprequest = (syn and syn.request) or (http and http.request) or http_request or (fluxus and fluxus.request) or request
+        local char = lp.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        local backpack = lp:FindFirstChild("Backpack")
         
-        if not httprequest then return end
-
-        local data = {
-            content = "@everyone 🚨 **PEMBERITAHUAN SISTEM AFK: TARGET TERCAPAI**",
-            embeds = {
-                {
-                    title = "🏆 Misi Latihan Selesai!",
-                    description = "Karakter telah mencapai Rebirth 9 dan memenuhi batas Power target. Mode latihan telah dimatikan.",
-                    color = 3066993,
-                    fields = {
-                        { name = "👤 Akun Player", value = "```" .. LocalPlayer.Name .. "```", inline = false },
-                        { name = "🌀 Rebirth Saat Ini", value = "```" .. tostring(currentRebirth) .. "```", inline = true },
-                        { name = "⚡ Power Tercapai", value = "```" .. tostring(currentPower) .. "```", inline = true },
-                        { name = "🎯 Target Power", value = "```" .. tostring(TargetPower) .. "```", inline = true }
-                    },
-                    footer = { text = "Mocta Ultimate Hub | " .. os.date("%A, %d %B %Y - %H:%M:%S") }
-                }
-            }
-        }
-        
-        local jsonData = HttpService:JSONEncode(data)
-        pcall(function()
-            httprequest({ Url = WebhookURL, Method = "POST", Headers = { ["Content-Type"] = "application/json" }, Body = jsonData })
-        end)
-    end
-
-    -- ===================== FUNGSI AUTO EQUIP BARBELL =====================
-    local function AutoEquipBarbell()
-        if not AutoTrainEnabled then return end
-
-        local char = LocalPlayer.Character
-        local humanoid = char and char:FindFirstChildOfClass("Humanoid")
-        local backpack = LocalPlayer:FindFirstChild("Backpack")
-        
-        if not char or not humanoid or not backpack then return end
+        if not char or not hum then continue end
 
         local currentTool = char:FindFirstChildOfClass("Tool")
-        if currentTool then
-            local name = string.lower(currentTool.Name):gsub("%s+$", "")
-            if string.match(name, "barbell$") then return end
-        end
-
-        for _, tool in ipairs(backpack:GetChildren()) do
-            if tool:IsA("Tool") then
-                local name = string.lower(tool.Name):gsub("%s+$", "")
-                if string.match(name, "barbell$") then
-                    humanoid:EquipTool(tool)
-                    return
-                end
-            end
-        end
-    end
-
-    -- ===================== FUNGSI SELESAI TRAINING =====================
-    local function FinishTraining(currentPower, currentRebirth)
-        local char = LocalPlayer.Character
-        local humanoid = char and char:FindFirstChildOfClass("Humanoid")
         
-        if humanoid then
-            local currentTool = char:FindFirstChildOfClass("Tool")
-            if currentTool and string.match(string.lower(currentTool.Name), "barbell$") then
-                currentTool.Parent = LocalPlayer.Backpack
-            end
-
-            task.wait(0.6)
-
-            local backpack = LocalPlayer:FindFirstChild("Backpack")
+        if currentTool and targetTools[currentTool.Name] then
+            currentTool:Activate()
+        else
             if backpack then
-                local tools = {}
                 for _, tool in ipairs(backpack:GetChildren()) do
-                    if tool:IsA("Tool") and not string.match(string.lower(tool.Name), "barbell$") then
-                        table.insert(tools, tool)
+                    if tool:IsA("Tool") and targetTools[tool.Name] then
+                        hum:EquipTool(tool)
+                        task.wait(0.1)
+                        tool:Activate()
+                        break
                     end
-                end
-
-                if #tools > 0 then
-                    local randomTool = tools[math.random(#tools)]
-                    humanoid:EquipTool(randomTool)
                 end
             end
         end
-
-        SendWebhook(currentPower, currentRebirth)
-        AutoTrainEnabled = false
     end
-
-    -- ===================== LOOP UTAMA (ANTI-LAG LOGIC) =====================
-    task.spawn(function()
-        while task.wait(1) do
-            if AutoTrainEnabled then
-                local currentPower = GetCurrentPower()
-                local currentRebirth = GetCurrentRebirth()
-
-                if currentRebirth < 9 then
-                    ConfirmTicks = 0 -- Reset konfirmasi jika masih di bawah Rebirth 9
-                    AutoEquipBarbell()
-                else
-                    -- Jika Rebirth sudah 9, cek powernya
-                    if currentPower >= TargetPower and currentPower > 0 then
-                        ConfirmTicks = ConfirmTicks + 1
-                        
-                        -- Butuh 3 detik berturut-turut power di atas target agar valid!
-                        if ConfirmTicks >= 3 then 
-                            FinishTraining(currentPower, currentRebirth)
-                        else
-                            print("[MOCTA] Memvalidasi target power... (" .. ConfirmTicks .. "/3)")
-                        end
-                    else
-                        -- Ternyata powernya jatuh lagi ke 0 (karena UI baru ke-reset), lanjut latihan!
-                        ConfirmTicks = 0 
-                        AutoEquipBarbell()
-                    end
-                end
-            end
-        end
-    end)
-
-    print("✅ Mocta Smart Train V2.2 (Target 35B) aktif!")
 end)
-
-if not success then
-    warn("ERROR: " .. tostring(err))
-end
