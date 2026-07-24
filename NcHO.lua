@@ -5,7 +5,7 @@
       Features: MultiTheme, ColorPicker, KeySystem,            
       Collapsible, ConfigManager, DependencySystem,            
       ProgressBar, Stepper, MultiDropdown, Changelog,          
-      AutoSave, BadgeTab, Notification Types, Animations       
+      AutoSave, BadgeTab, NotificationTypes, Animations       
     ========================================================
 ]]
 -- =
