@@ -70,7 +70,7 @@ local success, errorMessage = pcall(function()
     -- FUNGSI INTI & INVENTORY SCANNER
     -- ==========================================
     local function getBaseName(dropdownString) 
-        return string.split(dropdownString, " | Stok:")[1] or dropdownString 
+        return string.split(dropdownString, " | Stock:")[1] or dropdownString 
     end
 
     local function formatTime(seconds)
