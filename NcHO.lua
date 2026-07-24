@@ -1162,6 +1162,24 @@ function Library:CreateWindow(config)
                     PFrame.Size = UDim2.new(1, 0, 0, PDesc.TextBounds.Y + 34)
                 end)
                 table.insert(Window.SearchableItems, {Name = title .. " " .. desc, Frame = PFrame})
+
+                -- Return updateable object so callers can do para:Set(newTitle, newContent)
+                return {
+                    Set = function(_, newTitle, newDesc)
+                        -- Support both Set(title, desc) and Set({Title=..., Content=...})
+                        if type(newTitle) == "table" then
+                            local t = newTitle.Title or newTitle[1]
+                            local d = newTitle.Content or newTitle[2]
+                            if t then PTitle.Text = t end
+                            if d then PDesc.Text = d end
+                        else
+                            if newTitle then PTitle.Text = newTitle end
+                            if newDesc  then PDesc.Text  = newDesc  end
+                        end
+                    end,
+                    SetTitle   = function(_, t) PTitle.Text = t end,
+                    SetContent = function(_, d) PDesc.Text  = d end,
+                }
             end
 
             -- 3. WARNING BOX
@@ -1915,6 +1933,60 @@ function Library:CreateWindow(config)
                     Get = function() return selected end,
                     Set = function(_, newSel)
                         selected = newSel
+                        updateDisplay()
+                    end,
+                    -- Rebuild the dropdown with a fresh list
+                    Refresh = function(_, newList)
+                        list = newList
+                        DROP_HEIGHT = math.min(#list * 28, 130)
+                        MDScroll.Size = UDim2.new(1, 0, 0, DROP_HEIGHT)
+                        -- Clear old rows
+                        for _, ch in ipairs(MDScroll:GetChildren()) do
+                            if ch:IsA("TextButton") then ch:Destroy() end
+                        end
+                        -- Rebuild rows
+                        for _, item in ipairs(list) do
+                            local checked = table.find(selected, item) ~= nil
+                            local IRow2 = Instance.new("TextButton", MDScroll)
+                            IRow2.Size            = UDim2.new(1, 0, 0, 28)
+                            IRow2.BackgroundColor3 = checked and Theme.ElementHover or Theme.SidebarBg
+                            IRow2.Text            = ""
+                            IRow2.BorderSizePixel  = 0
+                            local IC2 = Instance.new("TextLabel", IRow2)
+                            IC2.Size = UDim2.new(0, 22, 1, 0)
+                            IC2.Position = UDim2.new(0, 5, 0, 0)
+                            IC2.BackgroundTransparency = 1
+                            IC2.Text = checked and "☑" or "☐"
+                            IC2.TextColor3 = checked and Theme.Accent or Theme.TextDim
+                            IC2.Font = Enum.Font.GothamBold
+                            IC2.TextSize = 14
+                            local IN2 = Instance.new("TextLabel", IRow2)
+                            IN2.Size = UDim2.new(1, -30, 1, 0)
+                            IN2.Position = UDim2.new(0, 28, 0, 0)
+                            IN2.BackgroundTransparency = 1
+                            IN2.Text = tostring(item)
+                            IN2.TextColor3 = checked and Theme.Text or Theme.TextDim
+                            IN2.Font = Enum.Font.Gotham
+                            IN2.TextSize = 12
+                            IN2.TextXAlignment = Enum.TextXAlignment.Left
+                            IRow2.MouseButton1Click:Connect(function()
+                                local idx = table.find(selected, item)
+                                if idx then
+                                    table.remove(selected, idx)
+                                    IC2.Text = "☐"; IC2.TextColor3 = Theme.TextDim
+                                    IN2.TextColor3 = Theme.TextDim
+                                    Tween(IRow2, 0.1, {BackgroundColor3 = Theme.SidebarBg}):Play()
+                                else
+                                    table.insert(selected, item)
+                                    IC2.Text = "☑"; IC2.TextColor3 = Theme.Accent
+                                    IN2.TextColor3 = Theme.Text
+                                    Tween(IRow2, 0.1, {BackgroundColor3 = Theme.ElementHover}):Play()
+                                end
+                                updateDisplay()
+                                if flag then Library.Flags[flag] = selected end
+                                if callback then callback(selected) end
+                            end)
+                        end
                         updateDisplay()
                     end,
                 }
