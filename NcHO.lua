@@ -673,7 +673,10 @@ function Library:CreateWindow(config)
 
     -- ── MAIN FRAME ──────────────────────────────
     local MainFrame = Instance.new("Frame", ScreenGui)
-    MainFrame.Size             = UDim2.new(0, 520, 0, 340)
+    local vpSize = workspace.CurrentCamera.ViewportSize
+    local width = math.min(520, vpSize.X - 20)
+    local height = math.min(340, vpSize.Y - 20)
+    MainFrame.Size             = UDim2.new(0, width, 0, height)
     MainFrame.Position         = UDim2.new(0.5, -260, 0.5, -170)
     MainFrame.BackgroundColor3 = Theme.MainBg
     MainFrame.BackgroundTransparency = Theme.Transparency
