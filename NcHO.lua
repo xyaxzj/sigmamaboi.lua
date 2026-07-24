@@ -5,7 +5,7 @@
       Features: MultiTheme, ColorPicker, KeySystem,            
       Collapsible, ConfigManager, DependencySystem,            
       ProgressBar, Stepper, MultiDropdown, Changelog,          
-      AutoSave, BadgeTab, NotificationTypes, Animations       
+      AutoSave, BadgeTab, Notification Types, Animations       
     ========================================================
 ]]
 -- =
@@ -162,7 +162,10 @@ if not task then
     task = {
         wait  = wait,
         spawn = spawn,
-        defer = function(f, ...) spawn(function() f(...) end) end,
+        defer = function(f, ...) 
+            local args = {...}
+            spawn(function() f(unpack(args)) end) 
+        end,
         delay = function(t, f) delay(t, f) end,
     }
 end
