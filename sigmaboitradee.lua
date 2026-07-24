@@ -213,8 +213,7 @@ local success, errorMessage = pcall(function()
     local TradeMutationDropdown = SecCart3:AddMultiDropdown({Name = "Pilih Mutasi (Trade)", Options = getMutationList(), Default = {}}, function() end)
     local ItemDropdown = SecCart3:AddMultiDropdown({Name = "Pilih Barang Custom", Options = {"[ANY ASSET]"}, Default = {}}, function() end)
     
-    local TradeMixQty = 0
-    SecCart3:AddInput({Name = "Jumlah barang dikirim:", Placeholder = "Masukkan jumlah..."}, function(Text) TradeMixQty = tonumber(Text) or 0 end)
+    local qtyInputTrade = SecCart3:AddInput({Name = "Jumlah barang dikirim:", Placeholder = "Masukkan jumlah..."}, function() end)
     
     local CartStatus = SecCart3:AddParagraph("Isi Keranjang Trade", "Kosong.")
     local function updateCartDisplay()
@@ -224,6 +223,7 @@ local success, errorMessage = pcall(function()
     end
     
     SecCart3:AddButton("➕ Tambah Custom Sesuai Jumlah", function() 
+        local TradeMixQty = tonumber(qtyInputTrade:Get()) or 0
         local liveSelectedItems = ItemDropdown:Get(); if type(liveSelectedItems) ~= "table" then liveSelectedItems = {liveSelectedItems} end
         for _, optionStr in pairs(liveSelectedItems) do local itemName = getBaseName(optionStr); if itemName ~= "" and itemName ~= "[ANY ASSET]" and TradeMixQty > 0 then local rs = getRealStock(itemName); local cur = ShoppingCart[itemName] or 0; ShoppingCart[itemName] = (cur + TradeMixQty > rs) and rs or (cur + TradeMixQty) end end
         updateCartDisplay() 
@@ -233,8 +233,8 @@ local success, errorMessage = pcall(function()
         for _, optionStr in pairs(liveSelectedItems) do local itemName = getBaseName(optionStr); if itemName ~= "" and itemName ~= "[ANY ASSET]" then ShoppingCart[itemName] = getRealStock(itemName) end end
         updateCartDisplay() 
     end)
-    SecCart3:AddButton("✨ Tambah Berdasarkan Mutasi (Sesuai Jumlah)", function() addMutationsToCart(ShoppingCart, TradeMutationDropdown:Get(), TradeMixQty, false); updateCartDisplay() end)
-    SecCart3:AddButton("✨ Tambah Berdasarkan Mutasi (Maksimal Stok)", function() addMutationsToCart(ShoppingCart, TradeMutationDropdown:Get(), TradeMixQty, true); updateCartDisplay() end)
+    SecCart3:AddButton("✨ Tambah Berdasarkan Mutasi (Sesuai Jumlah)", function() local TradeMixQty = tonumber(qtyInputTrade:Get()) or 0; addMutationsToCart(ShoppingCart, TradeMutationDropdown:Get(), TradeMixQty, false); updateCartDisplay() end)
+    SecCart3:AddButton("✨ Tambah Berdasarkan Mutasi (Maksimal Stok)", function() local TradeMixQty = tonumber(qtyInputTrade:Get()) or 0; addMutationsToCart(ShoppingCart, TradeMutationDropdown:Get(), TradeMixQty, true); updateCartDisplay() end)
     SecCart3:AddButton("🗑️ Kosongkan Keranjang", function() ShoppingCart = {}; updateCartDisplay() end)
     
     SecCart3:AddButton("🚀 Buat Antrean dari Keranjang", function() 
@@ -255,7 +255,7 @@ local success, errorMessage = pcall(function()
     local SellMutationDropdown = SecSell1:AddMultiDropdown({Name = "Pilih Mutasi (Jual)", Options = getMutationList(), Default = {}}, function() end)
     local SellItemDropdown = SecSell1:AddMultiDropdown({Name = "Pilih Item Dijual Custom", Options = {"[ANY ASSET]"}, Default = {}}, function(Options) SelectedSellItems = Options end)
     
-    SecSell1:AddInput({Name = "Jumlah Dijual:", Placeholder = "Masukkan jumlah..."}, function(Text) SelectedSellMixQty = tonumber(Text) or 0 end)
+    local qtyInputSell = SecSell1:AddInput({Name = "Jumlah Dijual:", Placeholder = "Masukkan jumlah..."}, function() end)
     
     local SellCartStatus = SecSell1:AddParagraph("🛒 Keranjang Jual", "Kosong.")
     local function updateSellCartDisplay()
@@ -265,6 +265,7 @@ local success, errorMessage = pcall(function()
     end
     
     SecSell1:AddButton("➕ Tambah Custom Sesuai Jumlah", function() 
+        local SelectedSellMixQty = tonumber(qtyInputSell:Get()) or 0
         local lst = type(SelectedSellItems) == "table" and SelectedSellItems or {SelectedSellItems}
         for _, optionStr in pairs(lst) do local itemName = getBaseName(optionStr); if itemName ~= "" and itemName ~= "[ANY ASSET]" and SelectedSellMixQty > 0 then local rs = getRealStock(itemName); local cur = SellCart[itemName] or 0; SellCart[itemName] = (cur + SelectedSellMixQty > rs) and rs or (cur + SelectedSellMixQty) end end
         updateSellCartDisplay() 
@@ -274,8 +275,8 @@ local success, errorMessage = pcall(function()
         for _, optionStr in pairs(lst) do local itemName = getBaseName(optionStr); if itemName ~= "" and itemName ~= "[ANY ASSET]" then SellCart[itemName] = getRealStock(itemName) end end
         updateSellCartDisplay() 
     end)
-    SecSell1:AddButton("✨ Tambah Mutasi (Sesuai Jumlah)", function() addMutationsToCart(SellCart, SellMutationDropdown:Get(), SelectedSellMixQty, false); updateSellCartDisplay() end)
-    SecSell1:AddButton("✨ Tambah Mutasi (Maksimal Stok)", function() addMutationsToCart(SellCart, SellMutationDropdown:Get(), SelectedSellMixQty, true); updateSellCartDisplay() end)
+    SecSell1:AddButton("✨ Tambah Mutasi (Sesuai Jumlah)", function() local SelectedSellMixQty = tonumber(qtyInputSell:Get()) or 0; addMutationsToCart(SellCart, SellMutationDropdown:Get(), SelectedSellMixQty, false); updateSellCartDisplay() end)
+    SecSell1:AddButton("✨ Tambah Mutasi (Maksimal Stok)", function() local SelectedSellMixQty = tonumber(qtyInputSell:Get()) or 0; addMutationsToCart(SellCart, SellMutationDropdown:Get(), SelectedSellMixQty, true); updateSellCartDisplay() end)
     SecSell1:AddButton("🗑️ Kosongkan Keranjang Jual", function() SellCart = {}; updateSellCartDisplay() end)
     
     local SecSell2 = TabSell:AddSection("2. Eksekusi Jual")
@@ -314,7 +315,7 @@ local success, errorMessage = pcall(function()
     
     local BaseMutationDropdown = SecBase1:AddMultiDropdown({Name = "Pilih Mutasi (Base)", Options = getMutationList(), Default = {}}, function() end)
     local PlaceItemDropdown = SecBase1:AddMultiDropdown({Name = "Pilih Brainrot Custom", Options = {"[ANY ASSET]"}, Default = {}}, function(Options) SelectedPlaceItems = Options end)
-    SecBase1:AddInput({Name = "Jumlah diletakkan:", Placeholder = "Masukkan jumlah..."}, function(Text) SelectedPlaceMixQty = tonumber(Text) or 0 end)
+    local qtyInputBase = SecBase1:AddInput({Name = "Jumlah diletakkan:", Placeholder = "Masukkan jumlah..."}, function() end)
     
     local BaseCartStatus = SecBase1:AddParagraph("🛒 Keranjang Base", "Kosong.")
     local function updateBaseCartDisplay()
@@ -324,6 +325,7 @@ local success, errorMessage = pcall(function()
     end
     
     SecBase1:AddButton("➕ Tambah Custom Sesuai Jumlah", function() 
+        local SelectedPlaceMixQty = tonumber(qtyInputBase:Get()) or 0
         local lst = type(SelectedPlaceItems) == "table" and SelectedPlaceItems or {SelectedPlaceItems}
         for _, optionStr in pairs(lst) do local itemName = getBaseName(optionStr); if itemName ~= "" and itemName ~= "[ANY ASSET]" and SelectedPlaceMixQty > 0 then local rs = getRealStock(itemName); local cur = BaseCart[itemName] or 0; BaseCart[itemName] = (cur + SelectedPlaceMixQty > rs) and rs or (cur + SelectedPlaceMixQty) end end
         updateBaseCartDisplay() 
@@ -333,8 +335,8 @@ local success, errorMessage = pcall(function()
         for _, optionStr in pairs(lst) do local itemName = getBaseName(optionStr); if itemName ~= "" and itemName ~= "[ANY ASSET]" then BaseCart[itemName] = getRealStock(itemName) end end
         updateBaseCartDisplay() 
     end)
-    SecBase1:AddButton("✨ Tambah Mutasi (Sesuai Jumlah)", function() addMutationsToCart(BaseCart, BaseMutationDropdown:Get(), SelectedPlaceMixQty, false); updateBaseCartDisplay() end)
-    SecBase1:AddButton("✨ Tambah Mutasi (Maksimal Stok)", function() addMutationsToCart(BaseCart, BaseMutationDropdown:Get(), SelectedPlaceMixQty, true); updateBaseCartDisplay() end)
+    SecBase1:AddButton("✨ Tambah Mutasi (Sesuai Jumlah)", function() local SelectedPlaceMixQty = tonumber(qtyInputBase:Get()) or 0; addMutationsToCart(BaseCart, BaseMutationDropdown:Get(), SelectedPlaceMixQty, false); updateBaseCartDisplay() end)
+    SecBase1:AddButton("✨ Tambah Mutasi (Maksimal Stok)", function() local SelectedPlaceMixQty = tonumber(qtyInputBase:Get()) or 0; addMutationsToCart(BaseCart, BaseMutationDropdown:Get(), SelectedPlaceMixQty, true); updateBaseCartDisplay() end)
     SecBase1:AddButton("🗑️ Kosongkan Keranjang Base", function() BaseCart = {}; updateBaseCartDisplay() end)
     
     local SecBase2 = TabBase:AddSection("2. Pengaturan Koordinat Base")
