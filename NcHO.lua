@@ -1,17 +1,16 @@
 --[[
-    ╔═══════════════════════════════════════════════════════════╗
-    ║         Sigma UI Library — V4 ULTIMATE EDITION            ║
-    ║  Bug Fixes + 22 New Features + Visual Overhaul            ║
-    ║  Features: MultiTheme, ColorPicker, KeySystem,            ║
-    ║  Collapsible, ConfigManager, DependencySystem,            ║
-    ║  ProgressBar, Stepper, MultiDropdown, Changelog,          ║
-    ║  AutoSave, BadgeTab, Notification Types, Animations       ║
-    ╚═══════════════════════════════════════════════════════════╝
+    ========================================================
+             Sigma UI Library - V4 ULTIMATE EDITION            
+      Bug Fixes + 22 New Features + Visual Overhaul            
+      Features: MultiTheme, ColorPicker, KeySystem,            
+      Collapsible, ConfigManager, DependencySystem,            
+      ProgressBar, Stepper, MultiDropdown, Changelog,          
+      AutoSave, BadgeTab, Notification Types, Animations       
+    ========================================================
 ]]
-
--- ══════════════════════════════════════════
+-- =
 --  CORE SERVICES
--- ══════════════════════════════════════════
+-- =
 local Library = {
     Flags       = {},
     ConfigName  = "SigmaHub_Config",
@@ -2492,9 +2491,9 @@ function Library:StopAutoSave()
     end
 end
 
--- ══════════════════════════════════════════
+-- ===========================================================================
 --  THEME SHORTCUT
--- ══════════════════════════════════════════
+-- ===========================================================================
 Library.Themes = Themes
 
 return Library
