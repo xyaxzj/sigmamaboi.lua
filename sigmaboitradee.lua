@@ -202,7 +202,7 @@ local success, errorMessage = pcall(function()
     -- ==========================================
     -- TAB 1: CART SETUP (TRADE)
     -- ==========================================
-    local TabCart = Window:AddTab("🛒 Trade Cart")
+    local TabCart = Window:MakeTab("🛒 Trade Cart")
     
     local SecCart1 = TabCart:AddSection("Target Penerima")
     local PlayerDropdown = SecCart1:AddDropdown({Name = "Target Penerima (P2)", Options = getPlayerList(), Default = ""}, function(Opt) TargetPlayerName = tostring(Opt) end)
@@ -254,7 +254,7 @@ local success, errorMessage = pcall(function()
     -- ==========================================
     -- TAB 2: SMART SELL (KERANJANG JUAL)
     -- ==========================================
-    local TabSell = Window:AddTab("💰 Sell Cerdas")
+    local TabSell = Window:MakeTab("💰 Sell Cerdas")
     local SecSell1 = TabSell:AddSection("1. Setup Keranjang Jual")
     if not ref_B_Sell then SecSell1:AddParagraph("⚠️ Peringatan", "Remote Sell tidak ditemukan.") end
     
@@ -314,7 +314,7 @@ local success, errorMessage = pcall(function()
     -- ==========================================
     -- TAB 3: BASE MANAGER (PLACE & PICKUP CART)
     -- ==========================================
-    local TabBase = Window:AddTab("🏗️ Base Manager")
+    local TabBase = Window:MakeTab("🏗️ Base Manager")
     local SecBase1 = TabBase:AddSection("1. Setup Keranjang Base")
     if not rev_S_Interact then SecBase1:AddParagraph("⚠️ Peringatan", "Remote Interact tidak ditemukan.") end
     
@@ -393,7 +393,7 @@ local success, errorMessage = pcall(function()
     -- ==========================================
     -- TAB 4: ACTION CENTER (UNLIMITED BURST)
     -- ==========================================
-    local TabAction = Window:AddTab("💣 Action Center")
+    local TabAction = Window:MakeTab("💣 Action Center")
     local SecAction = TabAction:AddSection("Kontrol Burst")
     
     SecAction:AddParagraph("⚠️ PERINGATAN UNLIMITED BURST", "Begitu tombol ditekan, bot akan terus mencari, memegang, dan mengeklik item sampai STOK DI TAS BENAR-BENAR HABIS (0).")
@@ -448,7 +448,7 @@ local success, errorMessage = pcall(function()
     -- ==========================================
     -- TAB 5: TAS & STOK (INVENTORY)
     -- ==========================================
-    local TabInventory = Window:AddTab("🎒 Tas & Stok")
+    local TabInventory = Window:MakeTab("🎒 Tas & Stok")
     local SecInv = TabInventory:AddSection("Informasi")
     local FullInventoryLabel = SecInv:AddParagraph("Daftar Barang & Total", "Menyinkronkan...")
     SecInv:AddButton("🔄 Update Manual Data Tas", function() updateInventoryDisplay() end)
@@ -456,7 +456,7 @@ local success, errorMessage = pcall(function()
     -- ==========================================
     -- TAB 6: PENGIRIM (P1)
     -- ==========================================
-    local TabDispatch = Window:AddTab("📤 Pengirim (P1)")
+    local TabDispatch = Window:MakeTab("📤 Pengirim (P1)")
     local SecDispatch = TabDispatch:AddSection("Kontrol Pengiriman")
     local LiveProgress = SecDispatch:AddParagraph("Status Pengiriman", "Sisa Antrean: 0\nSukses: 0")
     local ActionLog = SecDispatch:AddParagraph("Log Proses", "Menunggu perintah...")
@@ -520,7 +520,7 @@ local success, errorMessage = pcall(function()
     -- ==========================================
     -- TAB 7: PENERIMA (P2)
     -- ==========================================
-    local TabInbound = Window:AddTab("📥 Penerima (P2)")
+    local TabInbound = Window:MakeTab("📥 Penerima (P2)")
     local SecInbound = TabInbound:AddSection("Kontrol Penerimaan")
     local ReceiverLog = SecInbound:AddParagraph("Status", "Nonaktif.")
     SecInbound:AddToggle({Name = "🤖 Auto-Accept", Default = false}, function(Value)
@@ -585,7 +585,7 @@ local success, errorMessage = pcall(function()
     -- ==========================================
     -- TAB 8: DASHBOARD
     -- ==========================================
-    local TabStats = Window:AddTab("📊 Dashboard")
+    local TabStats = Window:MakeTab("📊 Dashboard")
     local SecStats = TabStats:AddSection("Statistik")
     local StatsDisplay = SecStats:AddParagraph("Sesi Saat Ini", "Menghitung...")
     local HistoryDisplay = SecStats:AddParagraph("Log Pengiriman Terakhir", TradeHistoryString)
@@ -613,7 +613,7 @@ local success, errorMessage = pcall(function()
     -- ==========================================
     -- TAB 9: SETTINGS
     -- ==========================================
-    local TabSettings = Window:AddTab("⚙️ Settings")
+    local TabSettings = Window:MakeTab("⚙️ Settings")
     local SecSet = TabSettings:AddSection("Sistem")
     SecSet:AddButton("🔄 Update Script", function() task.wait(0.5); loadstring(game:HttpGet(SCRIPT_URL))() end)
 
