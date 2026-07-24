@@ -1,12 +1,15 @@
 --[[
-    Blue Compact Hub UI Library (V2 - Overlap Fixed)
-    Style: Dark/Blue, Sidebar Tabs, Grouped Sections
+    Blue Compact Hub UI Library (V3 - Ultimate Edition)
+    Base: V2 Overlap Fixed
+    New Features: Config Saver, Dynamic Updates, Ripple, Glassmorphism, Tooltips, Active Search, Watermark, Console
 ]]
 
-local Library = {}
+local Library = { Flags = {}, ConfigName = "BlueHub_Config" }
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local CoreGui = game:GetService("CoreGui")
+local RunService = game:GetService("RunService")
+local HttpService = game:GetService("HttpService")
 
 local function getSafeParent()
     if gethui then return gethui() end
@@ -35,19 +38,45 @@ local function MakeDraggable(dragPoint, objectToMove)
     UserInputService.InputChanged:Connect(function(input)
         if input == dragInput and dragging then
             local delta = input.Position - mousePos
-            objectToMove.Position = UDim2.new(framePos.X.Scale, framePos.X.Offset + delta.X, framePos.Y.Scale, framePos.Y.Offset + delta.Y)
+            TweenService:Create(objectToMove, TweenInfo.new(0.08), {Position = UDim2.new(framePos.X.Scale, framePos.X.Offset + delta.X, framePos.Y.Scale, framePos.Y.Offset + delta.Y)}):Play()
         end
     end)
 end
 
--- TEMA WARNA BIRU NEON
+-- EFEK RIPPLE (GELOMBANG KLIK)
+local function CreateRipple(parent, input)
+    local ripple = Instance.new("Frame")
+    ripple.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    ripple.BackgroundTransparency = 0.8
+    ripple.BorderSizePixel = 0
+    Instance.new("UICorner", ripple).CornerRadius = UDim.new(1, 0)
+    
+    local x, y = input.Position.X - parent.AbsolutePosition.X, input.Position.Y - parent.AbsolutePosition.Y
+    ripple.Position = UDim2.new(0, x, 0, y)
+    ripple.Size = UDim2.new(0, 0, 0, 0)
+    ripple.Parent = parent
+    
+    local endSize = math.max(parent.AbsoluteSize.X, parent.AbsoluteSize.Y) * 1.5
+    local tween = TweenService:Create(ripple, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        Size = UDim2.new(0, endSize, 0, endSize), 
+        Position = UDim2.new(0, x - endSize/2, 0, y - endSize/2), 
+        BackgroundTransparency = 1
+    })
+    tween:Play()
+    tween.Completed:Connect(function() ripple:Destroy() end)
+end
+
+-- TEMA WARNA BIRU NEON (Update Glassmorphism)
 local Theme = {
     MainBg = Color3.fromRGB(20, 20, 22),
     SidebarBg = Color3.fromRGB(15, 15, 17),
     ElementBg = Color3.fromRGB(30, 30, 35),
+    ElementHover = Color3.fromRGB(38, 38, 43),
     Accent = Color3.fromRGB(0, 170, 255),
+    Warning = Color3.fromRGB(255, 100, 100),
     Text = Color3.fromRGB(240, 240, 240),
     TextDim = Color3.fromRGB(150, 150, 150),
+    Transparency = 0.05, -- Glassmorphism
     Radius = UDim.new(0, 6)
 }
 
@@ -113,6 +142,7 @@ function Library:CreateWindow(config)
     local titleText = config.Name or "Compact Hub"
     local footerText = config.Footer or "discord.gg/yourlink | v1.0"
     local logoIcon = config.LogoText or "S"
+    self.ConfigName = config.ConfigName or "BlueHub_Config"
 
     local targetParent = getSafeParent()
     if targetParent:FindFirstChild("BlueCompactUI") then
@@ -123,6 +153,76 @@ function Library:CreateWindow(config)
     ScreenGui.Name = "BlueCompactUI"
     ScreenGui.ResetOnSpawn = false
     ScreenGui.Parent = targetParent
+
+    -- SISTEM TOOLTIP (INFO MENGAMBANG)
+    local TooltipGui = Instance.new("Frame")
+    TooltipGui.Size = UDim2.new(0, 200, 0, 30)
+    TooltipGui.BackgroundColor3 = Theme.ElementBg
+    TooltipGui.Visible = false
+    TooltipGui.ZIndex = 100
+    TooltipGui.Parent = ScreenGui
+    Instance.new("UICorner", TooltipGui).CornerRadius = Theme.Radius
+    local TtStroke = Instance.new("UIStroke")
+    TtStroke.Color = Theme.Accent
+    TtStroke.Parent = TooltipGui
+    local TooltipText = Instance.new("TextLabel")
+    TooltipText.Size = UDim2.new(1, -10, 1, 0)
+    TooltipText.Position = UDim2.new(0, 5, 0, 0)
+    TooltipText.BackgroundTransparency = 1
+    TooltipText.TextColor3 = Theme.Text
+    TooltipText.Font = Enum.Font.Gotham
+    TooltipText.TextSize = 11
+    TooltipText.TextWrapped = true
+    TooltipText.Parent = TooltipGui
+
+    local function AddTooltip(element, text)
+        if not text or text == "" then return end
+        local isHovering = false
+        element.MouseEnter:Connect(function()
+            isHovering = true
+            task.wait(0.4)
+            if isHovering then
+                TooltipText.Text = text
+                TooltipGui.Size = UDim2.new(0, TooltipText.TextBounds.X + 20, 0, TooltipText.TextBounds.Y + 15)
+                TooltipGui.Visible = true
+                TooltipGui.Position = UDim2.new(0, UserInputService:GetMouseLocation().X + 15, 0, UserInputService:GetMouseLocation().Y - 35)
+            end
+        end)
+        element.MouseLeave:Connect(function()
+            isHovering = false; TooltipGui.Visible = false
+        end)
+    end
+
+    -- SISTEM WATERMARK (OPSIONAL)
+    if config.Watermark then
+        local WMFrame = Instance.new("Frame")
+        WMFrame.Size = UDim2.new(0, 250, 0, 25)
+        WMFrame.Position = UDim2.new(0, 20, 0, 20)
+        WMFrame.BackgroundColor3 = Theme.SidebarBg
+        WMFrame.BackgroundTransparency = Theme.Transparency
+        WMFrame.Parent = ScreenGui
+        Instance.new("UICorner", WMFrame).CornerRadius = Theme.Radius
+        local WMStroke = Instance.new("UIStroke")
+        WMStroke.Color = Theme.Accent
+        WMStroke.Thickness = 1
+        WMStroke.Parent = WMFrame
+        local WMLabel = Instance.new("TextLabel")
+        WMLabel.Size = UDim2.new(1, -10, 1, 0)
+        WMLabel.Position = UDim2.new(0, 10, 0, 0)
+        WMLabel.BackgroundTransparency = 1
+        WMLabel.TextColor3 = Theme.Accent
+        WMLabel.Font = Enum.Font.GothamBold
+        WMLabel.TextSize = 12
+        WMLabel.TextXAlignment = Enum.TextXAlignment.Left
+        WMLabel.Parent = WMFrame
+        MakeDraggable(WMFrame, WMFrame)
+        
+        RunService.RenderStepped:Connect(function()
+            local fps = math.floor(1 / RunService.RenderStepped:Wait())
+            local ping = game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValue()
+            WMLabel.Text = titleText .. " | FPS: " .. fps .. " | Ping: " .. math.floor(ping) .. "ms"
+        end)
+    end
 
     -- FLOATING LOGO
     local FloatingBtn = Instance.new("TextButton")
@@ -143,12 +243,14 @@ function Library:CreateWindow(config)
     FloatStroke.Parent = FloatingBtn
     MakeDraggable(FloatingBtn, FloatingBtn)
 
-    -- MAIN WINDOW
+    -- MAIN WINDOW (Update Glassmorphism)
     local MainFrame = Instance.new("Frame")
     MainFrame.Size = UDim2.new(0, 480, 0, 320)
     MainFrame.Position = UDim2.new(0.5, -240, 0.5, -160)
     MainFrame.BackgroundColor3 = Theme.MainBg
+    MainFrame.BackgroundTransparency = Theme.Transparency
     MainFrame.BorderSizePixel = 0
+    MainFrame.ClipsDescendants = true
     MainFrame.Parent = ScreenGui
     Instance.new("UICorner", MainFrame).CornerRadius = Theme.Radius
     
@@ -161,6 +263,7 @@ function Library:CreateWindow(config)
     local Sidebar = Instance.new("Frame")
     Sidebar.Size = UDim2.new(0, 45, 1, 0)
     Sidebar.BackgroundColor3 = Theme.SidebarBg
+    Sidebar.BackgroundTransparency = Theme.Transparency
     Sidebar.BorderSizePixel = 0
     Sidebar.Parent = MainFrame
     Instance.new("UICorner", Sidebar).CornerRadius = Theme.Radius
@@ -199,19 +302,26 @@ function Library:CreateWindow(config)
     Topbar.Parent = MainFrame
     MakeDraggable(Topbar, MainFrame)
 
-    local SearchBox = Instance.new("TextLabel")
-    SearchBox.Size = UDim2.new(1, -50, 0, 26) -- Dikecilkan sedikit agar X tidak sempit
+    -- SEARCH BOX AKTIF
+    local SearchBox = Instance.new("TextBox")
+    SearchBox.Size = UDim2.new(1, -50, 0, 26) 
     SearchBox.Position = UDim2.new(0, 10, 0.5, -13)
     SearchBox.BackgroundColor3 = Theme.SidebarBg
-    SearchBox.Text = "   🔍 Search / " .. titleText
-    SearchBox.TextColor3 = Theme.TextDim
+    SearchBox.Text = ""
+    SearchBox.PlaceholderText = "🔍 Search / " .. titleText
+    SearchBox.TextColor3 = Theme.Text
+    SearchBox.PlaceholderColor3 = Theme.TextDim
     SearchBox.Font = Enum.Font.Gotham
     SearchBox.TextSize = 12
     SearchBox.TextXAlignment = Enum.TextXAlignment.Left
+    SearchBox.ClearTextOnFocus = false
     SearchBox.Parent = Topbar
     Instance.new("UICorner", SearchBox).CornerRadius = Theme.Radius
+    local SearchPadding = Instance.new("UIPadding")
+    SearchPadding.PaddingLeft = UDim.new(0, 10)
+    SearchPadding.Parent = SearchBox
 
-    -- TOMBOL MINIMIZE (TOMBOL X)
+    -- TOMBOL MINIMIZE
     local MinBtn = Instance.new("TextButton")
     MinBtn.Size = UDim2.new(0, 30, 0, 40)
     MinBtn.Position = UDim2.new(1, -30, 0, 0)
@@ -245,7 +355,6 @@ function Library:CreateWindow(config)
     Footer.TextSize = 11
     Footer.Parent = MainFrame
 
-    -- KONTEN TABS
     local ContentContainer = Instance.new("Frame")
     ContentContainer.Size = UDim2.new(1, -45, 1, -60)
     ContentContainer.Position = UDim2.new(0, 45, 0, 40)
@@ -254,9 +363,20 @@ function Library:CreateWindow(config)
     ContentContainer.Parent = MainFrame
 
     -- ==========================================
-    -- LOGIKA TAB & SECTION (PERBAIKAN TOTAL DI SINI)
+    -- LOGIKA WINDOW & SEARCH
     -- ==========================================
-    local Window = { Tabs = {}, FirstTab = true }
+    local Window = { Tabs = {}, FirstTab = true, SearchableItems = {} }
+
+    SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
+        local searchText = string.lower(SearchBox.Text)
+        for _, item in ipairs(Window.SearchableItems) do
+            if searchText == "" or string.find(string.lower(item.Name), searchText) then
+                item.Frame.Visible = true
+            else
+                item.Frame.Visible = false
+            end
+        end
+    end)
 
     function Window:MakeTab(iconId)
         local TabBtn = Instance.new("TextButton")
@@ -289,19 +409,19 @@ function Library:CreateWindow(config)
         TabBtn.MouseButton1Click:Connect(function()
             for _, tabInfo in ipairs(self.Tabs) do
                 tabInfo.Page.Visible = (tabInfo.Page == Page)
-                tabInfo.Btn.TextColor3 = (tabInfo.Btn == TabBtn) and Theme.Accent or Theme.TextDim
+                TweenService:Create(tabInfo.Btn, TweenInfo.new(0.2), {TextColor3 = (tabInfo.Btn == TabBtn) and Theme.Accent or Theme.TextDim}):Play()
             end
         end)
 
         self.FirstTab = false
         local TabLogic = {}
 
-        -- STRUKTUR SECTION BARU (ANTI-OVERLAP)
+        -- STRUKTUR SECTION (TETAP MENGGUNAKAN FIX OVERLAP)
         function TabLogic:AddSection(titleText)
-            -- Wadah Utama Section
             local SecFrame = Instance.new("Frame")
-            SecFrame.Size = UDim2.new(1, -20, 0, 40) -- Tinggi sementara, akan auto-resize
+            SecFrame.Size = UDim2.new(1, -20, 0, 40) 
             SecFrame.BackgroundColor3 = Theme.MainBg
+            SecFrame.BackgroundTransparency = Theme.Transparency
             SecFrame.Parent = Page
             
             local SecStroke = Instance.new("UIStroke")
@@ -309,7 +429,6 @@ function Library:CreateWindow(config)
             SecStroke.Parent = SecFrame
             Instance.new("UICorner", SecFrame).CornerRadius = Theme.Radius
 
-            -- Judul Section (Dipisah dari area auto-layout agar tidak tabrakan)
             local SecTitle = Instance.new("TextLabel")
             SecTitle.Size = UDim2.new(1, -10, 0, 30)
             SecTitle.Position = UDim2.new(0, 10, 0, 0)
@@ -321,10 +440,9 @@ function Library:CreateWindow(config)
             SecTitle.TextXAlignment = Enum.TextXAlignment.Left
             SecTitle.Parent = SecFrame
 
-            -- Kontainer untuk elemen-elemen di dalamnya
             local InnerContainer = Instance.new("Frame")
             InnerContainer.Size = UDim2.new(1, 0, 1, -30)
-            InnerContainer.Position = UDim2.new(0, 0, 0, 30) -- Mulai di bawah Judul
+            InnerContainer.Position = UDim2.new(0, 0, 0, 30)
             InnerContainer.BackgroundTransparency = 1
             InnerContainer.Parent = SecFrame
 
@@ -339,40 +457,89 @@ function Library:CreateWindow(config)
             SecPadding.PaddingRight = UDim.new(0, 10)
             SecPadding.Parent = InnerContainer
 
-            -- Logika Matematika Auto-Resize yang Benar
             SecLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-                -- 30 (Tinggi Judul) + 5 (Padding Atas) + 10 (Padding Bawah) = 45 Pixel Tambahan
                 SecFrame.Size = UDim2.new(1, -20, 0, SecLayout.AbsoluteContentSize.Y + 45)
             end)
 
             local Section = {}
 
-            -- ================= ELEMEN DI DALAM SECTION =================
-            -- PERHATIAN: Semua parent sekarang dimasukkan ke 'InnerContainer'
+            -- ================= ELEMEN ULTIMATE =================
 
-            function Section:AddButton(text, callback)
+            -- 1. WARNING BOX
+            function Section:AddWarning(text)
+                local WarnFrame = Instance.new("Frame")
+                WarnFrame.Size = UDim2.new(1, 0, 0, 0)
+                WarnFrame.BackgroundColor3 = Theme.Warning
+                WarnFrame.BackgroundTransparency = 0.8
+                WarnFrame.Parent = InnerContainer
+                Instance.new("UICorner", WarnFrame).CornerRadius = Theme.Radius
+                local WarnStroke = Instance.new("UIStroke")
+                WarnStroke.Color = Theme.Warning
+                WarnStroke.Thickness = 1
+                WarnStroke.Parent = WarnFrame
+                
+                local Lbl = Instance.new("TextLabel")
+                Lbl.Size = UDim2.new(1, -20, 1, -10)
+                Lbl.Position = UDim2.new(0, 10, 0, 5)
+                Lbl.BackgroundTransparency = 1
+                Lbl.Text = "⚠️ " .. text
+                Lbl.TextColor3 = Theme.Warning
+                Lbl.Font = Enum.Font.GothamBold
+                Lbl.TextSize = 12
+                Lbl.TextWrapped = true
+                Lbl.TextXAlignment = Enum.TextXAlignment.Left
+                Lbl.Parent = WarnFrame
+                
+                WarnFrame.Size = UDim2.new(1, 0, 0, Lbl.TextBounds.Y + 20)
+                table.insert(Window.SearchableItems, {Name = text, Frame = WarnFrame})
+            end
+
+            -- 2. BUTTON (With Hover & Ripple)
+            function Section:AddButton(info, callback)
+                local text = type(info) == "table" and info.Name or info
+                local tooltip = type(info) == "table" and info.Tooltip or ""
+
                 local BtnFrame = Instance.new("TextButton")
-                BtnFrame.Size = UDim2.new(1, 0, 0, 26)
+                BtnFrame.Size = UDim2.new(1, 0, 0, 30)
                 BtnFrame.BackgroundColor3 = Theme.ElementBg
                 BtnFrame.Text = "  " .. text
                 BtnFrame.TextColor3 = Theme.Text
                 BtnFrame.Font = Enum.Font.Gotham
                 BtnFrame.TextSize = 12
                 BtnFrame.TextXAlignment = Enum.TextXAlignment.Left
+                BtnFrame.ClipsDescendants = true
                 BtnFrame.Parent = InnerContainer
                 Instance.new("UICorner", BtnFrame).CornerRadius = UDim.new(0, 4)
+                
+                AddTooltip(BtnFrame, tooltip)
 
-                BtnFrame.MouseButton1Click:Connect(function()
-                    if callback then callback() end
+                BtnFrame.MouseEnter:Connect(function() TweenService:Create(BtnFrame, TweenInfo.new(0.2), {BackgroundColor3 = Theme.ElementHover}):Play() end)
+                BtnFrame.MouseLeave:Connect(function() TweenService:Create(BtnFrame, TweenInfo.new(0.2), {BackgroundColor3 = Theme.ElementBg}):Play() end)
+                BtnFrame.MouseButton1Click:Connect(function() 
+                    CreateRipple(BtnFrame, UserInputService:GetMouseLocation())
+                    if callback then callback() end 
                 end)
+                table.insert(Window.SearchableItems, {Name = text, Frame = BtnFrame})
             end
 
-            function Section:AddToggle(text, default, callback)
-                local state = default or false
+            -- 3. TOGGLE (Dynamic & Config Ready)
+            function Section:AddToggle(info, defaultOrCb, cbArg)
+                local text, default, callback, flag, tooltip
+                if type(info) == "table" then
+                    text = info.Name; default = info.Default or false; callback = defaultOrCb; flag = info.Flag; tooltip = info.Tooltip
+                else
+                    text = info; default = defaultOrCb or false; callback = cbArg
+                end
+                
+                local state = default
+                if flag and Library.Flags[flag] ~= nil then state = Library.Flags[flag] end
+                Library.Flags[flag] = state
+
                 local Tgl = Instance.new("Frame")
                 Tgl.Size = UDim2.new(1, 0, 0, 26)
                 Tgl.BackgroundTransparency = 1
                 Tgl.Parent = InnerContainer
+                AddTooltip(Tgl, tooltip)
 
                 local Lbl = Instance.new("TextLabel")
                 Lbl.Size = UDim2.new(1, -40, 1, 0)
@@ -404,19 +571,38 @@ function Library:CreateWindow(config)
                 Btn.Text = ""
                 Btn.Parent = Tgl
 
-                Btn.MouseButton1Click:Connect(function()
-                    state = not state
+                local function SetState(newState)
+                    state = newState
+                    if flag then Library.Flags[flag] = state end
                     TweenService:Create(Bg, TweenInfo.new(0.2), {BackgroundColor3 = state and Theme.Accent or Theme.ElementBg}):Play()
                     TweenService:Create(Dot, TweenInfo.new(0.2), {Position = state and UDim2.new(1, -14, 0.5, -6) or UDim2.new(0, 2, 0.5, -6)}):Play()
                     if callback then callback(state) end
-                end)
+                end
+
+                Btn.MouseButton1Click:Connect(function() SetState(not state) end)
+                table.insert(Window.SearchableItems, {Name = text, Frame = Tgl})
+
+                return { Set = function(self, val) SetState(val) end, Get = function() return state end }
             end
 
-            function Section:AddSlider(text, min, max, default, callback)
+            -- 4. SLIDER (Dynamic & Config Ready)
+            function Section:AddSlider(info, minVal, maxVal, defVal, cbArg)
+                local text, min, max, default, callback, flag, tooltip
+                if type(info) == "table" then
+                    text = info.Name; min = info.Min or 0; max = info.Max or 100; default = info.Default or min; callback = minVal; flag = info.Flag; tooltip = info.Tooltip
+                else
+                    text = info; min = minVal; max = maxVal; default = defVal; callback = cbArg
+                end
+
+                local value = default
+                if flag and Library.Flags[flag] ~= nil then value = Library.Flags[flag] end
+                Library.Flags[flag] = value
+
                 local SldFrame = Instance.new("Frame")
                 SldFrame.Size = UDim2.new(1, 0, 0, 40)
                 SldFrame.BackgroundTransparency = 1
                 SldFrame.Parent = InnerContainer
+                AddTooltip(SldFrame, tooltip)
 
                 local Lbl = Instance.new("TextLabel")
                 Lbl.Size = UDim2.new(1, -30, 0, 16)
@@ -432,7 +618,7 @@ function Library:CreateWindow(config)
                 ValLbl.Size = UDim2.new(0, 30, 0, 16)
                 ValLbl.Position = UDim2.new(1, -30, 0, 0)
                 ValLbl.BackgroundTransparency = 1
-                ValLbl.Text = tostring(default)
+                ValLbl.Text = tostring(value)
                 ValLbl.TextColor3 = Theme.Accent
                 ValLbl.Font = Enum.Font.GothamBold
                 ValLbl.TextSize = 12
@@ -447,7 +633,7 @@ function Library:CreateWindow(config)
                 Instance.new("UICorner", BgBar).CornerRadius = UDim.new(1, 0)
 
                 local FillBar = Instance.new("Frame")
-                local initialScale = math.clamp((default - min) / (max - min), 0, 1)
+                local initialScale = math.clamp((value - min) / (max - min), 0, 1)
                 FillBar.Size = UDim2.new(initialScale, 0, 1, 0)
                 FillBar.BackgroundColor3 = Theme.Accent
                 FillBar.Parent = BgBar
@@ -460,13 +646,18 @@ function Library:CreateWindow(config)
                 SldBtn.Text = ""
                 SldBtn.Parent = BgBar
 
+                local function SetValue(v)
+                    value = math.clamp(v, min, max)
+                    if flag then Library.Flags[flag] = value end
+                    TweenService:Create(FillBar, TweenInfo.new(0.1), {Size = UDim2.new((value - min) / (max - min), 0, 1, 0)}):Play()
+                    ValLbl.Text = tostring(value)
+                    if callback then callback(value) end
+                end
+
                 local dragging = false
                 local function updateSlider(input)
                     local pos = math.clamp((input.Position.X - BgBar.AbsolutePosition.X) / BgBar.AbsoluteSize.X, 0, 1)
-                    local value = math.floor(min + ((max - min) * pos))
-                    FillBar.Size = UDim2.new(pos, 0, 1, 0)
-                    ValLbl.Text = tostring(value)
-                    if callback then callback(value) end
+                    SetValue(math.floor(min + ((max - min) * pos)))
                 end
 
                 SldBtn.InputBegan:Connect(function(input)
@@ -480,14 +671,25 @@ function Library:CreateWindow(config)
                 UserInputService.InputChanged:Connect(function(input)
                     if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then updateSlider(input) end
                 end)
+                table.insert(Window.SearchableItems, {Name = text, Frame = SldFrame})
+
+                return { Set = function(self, val) SetValue(val) end, Get = function() return value end }
             end
 
-            function Section:AddBind(text, defaultKey, callback)
-                local keyName = defaultKey.Name
+            -- 5. KEYBIND
+            function Section:AddBind(info, defaultKey, cbArg)
+                local text, keyName, callback, tooltip
+                if type(info) == "table" then
+                    text = info.Name; keyName = info.Default.Name; callback = defaultKey; tooltip = info.Tooltip
+                else
+                    text = info; keyName = defaultKey.Name; callback = cbArg
+                end
+
                 local BindFrame = Instance.new("Frame")
                 BindFrame.Size = UDim2.new(1, 0, 0, 26)
                 BindFrame.BackgroundTransparency = 1
                 BindFrame.Parent = InnerContainer
+                AddTooltip(BindFrame, tooltip)
 
                 local Lbl = Instance.new("TextLabel")
                 Lbl.Size = UDim2.new(1, -60, 1, 0)
@@ -527,14 +729,28 @@ function Library:CreateWindow(config)
                         end
                     end
                 end)
+                table.insert(Window.SearchableItems, {Name = text, Frame = BindFrame})
             end
 
-            function Section:AddDropdown(text, list, callback)
+            -- 6. DROPDOWN (Dynamic & Config Ready)
+            function Section:AddDropdown(info, listOpt, cbArg)
+                local text, list, default, callback, flag, tooltip
+                if type(info) == "table" then
+                    text = info.Name; list = info.Options; default = info.Default; callback = listOpt; flag = info.Flag; tooltip = info.Tooltip
+                else
+                    text = info; list = listOpt; default = listOpt[1]; callback = cbArg
+                end
+
+                local selected = default
+                if flag and Library.Flags[flag] ~= nil then selected = Library.Flags[flag] end
+                Library.Flags[flag] = selected
+
                 local DropFrame = Instance.new("Frame")
                 DropFrame.Size = UDim2.new(1, 0, 0, 45)
                 DropFrame.BackgroundTransparency = 1
                 DropFrame.ClipsDescendants = true
                 DropFrame.Parent = InnerContainer
+                AddTooltip(DropFrame, tooltip)
 
                 local Lbl = Instance.new("TextLabel")
                 Lbl.Size = UDim2.new(1, 0, 0, 16)
@@ -550,7 +766,7 @@ function Library:CreateWindow(config)
                 MainBtn.Size = UDim2.new(1, 0, 0, 26)
                 MainBtn.Position = UDim2.new(0, 0, 0, 18)
                 MainBtn.BackgroundColor3 = Theme.ElementBg
-                MainBtn.Text = "  Select..."
+                MainBtn.Text = "  " .. (selected or "Select...")
                 MainBtn.TextColor3 = Theme.Text
                 MainBtn.Font = Enum.Font.Gotham
                 MainBtn.TextSize = 12
@@ -568,6 +784,15 @@ function Library:CreateWindow(config)
                     TweenService:Create(DropFrame, TweenInfo.new(0.2), {Size = UDim2.new(1, 0, 0, isOpen and (45 + (#list * 24)) or 45)}):Play()
                 end)
 
+                local function SetOption(val)
+                    selected = val
+                    if flag then Library.Flags[flag] = selected end
+                    MainBtn.Text = "  " .. tostring(val)
+                    isOpen = false
+                    TweenService:Create(DropFrame, TweenInfo.new(0.2), {Size = UDim2.new(1, 0, 0, 45)}):Play()
+                    if callback then callback(val) end
+                end
+
                 for _, item in ipairs(list) do
                     local ItemBtn = Instance.new("TextButton")
                     ItemBtn.Size = UDim2.new(1, 0, 0, 22)
@@ -580,15 +805,14 @@ function Library:CreateWindow(config)
                     ItemBtn.Parent = DropFrame
                     Instance.new("UICorner", ItemBtn).CornerRadius = UDim.new(0, 4)
 
-                    ItemBtn.MouseButton1Click:Connect(function()
-                        MainBtn.Text = "  " .. tostring(item)
-                        isOpen = false
-                        TweenService:Create(DropFrame, TweenInfo.new(0.2), {Size = UDim2.new(1, 0, 0, 45)}):Play()
-                        if callback then callback(item) end
-                    end)
+                    ItemBtn.MouseButton1Click:Connect(function() SetOption(item) end)
                 end
+                table.insert(Window.SearchableItems, {Name = text, Frame = DropFrame})
+
+                return { Set = function(self, val) SetOption(val) end, Get = function() return selected end }
             end
 
+            -- 7. TEXT INPUT
             function Section:AddInput(text, placeholder, callback)
                 local InpFrame = Instance.new("Frame")
                 InpFrame.Size = UDim2.new(1, 0, 0, 45)
@@ -622,6 +846,53 @@ function Library:CreateWindow(config)
                 Box.FocusLost:Connect(function(ep)
                     if ep and callback then callback(Box.Text) end
                 end)
+                table.insert(Window.SearchableItems, {Name = text, Frame = InpFrame})
+            end
+
+            -- 8. CONSOLE / TEXT LOG
+            function Section:AddConsole(text)
+                local CFrame = Instance.new("Frame")
+                CFrame.Size = UDim2.new(1, 0, 0, 120)
+                CFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 12)
+                CFrame.Parent = InnerContainer
+                Instance.new("UICorner", CFrame).CornerRadius = Theme.Radius
+                local CStroke = Instance.new("UIStroke")
+                CStroke.Color = Theme.ElementBg
+                CStroke.Parent = CFrame
+                
+                local CScroll = Instance.new("ScrollingFrame")
+                CScroll.Size = UDim2.new(1, -10, 1, -10)
+                CScroll.Position = UDim2.new(0, 5, 0, 5)
+                CScroll.BackgroundTransparency = 1
+                CScroll.ScrollBarThickness = 2
+                CScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+                CScroll.CanvasSize = UDim2.new(0,0,0,0)
+                CScroll.Parent = CFrame
+                local CLayout = Instance.new("UIListLayout")
+                CLayout.Padding = UDim.new(0, 2)
+                CLayout.Parent = CScroll
+                
+                table.insert(Window.SearchableItems, {Name = text, Frame = CFrame})
+                
+                return {
+                    Log = function(self, msg)
+                        local msgLbl = Instance.new("TextLabel")
+                        msgLbl.Size = UDim2.new(1, 0, 0, 14)
+                        msgLbl.BackgroundTransparency = 1
+                        msgLbl.Text = "> " .. msg
+                        msgLbl.TextColor3 = Theme.TextDim
+                        msgLbl.Font = Enum.Font.Code
+                        msgLbl.TextSize = 11
+                        msgLbl.TextXAlignment = Enum.TextXAlignment.Left
+                        msgLbl.Parent = CScroll
+                        CScroll.CanvasPosition = Vector2.new(0, CLayout.AbsoluteContentSize.Y)
+                    end,
+                    Clear = function(self) 
+                        for _, v in pairs(CScroll:GetChildren()) do 
+                            if v:IsA("TextLabel") then v:Destroy() end 
+                        end 
+                    end
+                }
             end
 
             return Section
@@ -631,6 +902,23 @@ function Library:CreateWindow(config)
     end
 
     return Window
+end
+
+-- ==========================================
+-- SISTEM SAVE & LOAD CONFIGURATION
+-- ==========================================
+function Library:SaveConfig()
+    if not writefile then return end
+    local success, encoded = pcall(function() return HttpService:JSONEncode(self.Flags) end)
+    if success then writefile(self.ConfigName .. ".json", encoded) end
+end
+
+function Library:LoadConfig()
+    if not readfile or not isfile or not isfile(self.ConfigName .. ".json") then return end
+    local success, decoded = pcall(function() return HttpService:JSONDecode(readfile(self.ConfigName .. ".json")) end)
+    if success and type(decoded) == "table" then
+        for k, v in pairs(decoded) do self.Flags[k] = v end
+    end
 end
 
 return Library
