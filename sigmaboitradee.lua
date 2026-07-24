@@ -190,7 +190,7 @@ local success, errorMessage = pcall(function()
     -- ==========================================
     -- RAYFIELD WINDOW INITIALIZATION -> SIGMA V4
     -- ==========================================
-    local Library = loadstring(game:HttpGet('https://raw.githubusercontent.com/xyaxzj/sigmamaboi.lua/refs/heads/main/NcHO.lua'))()
+    local Library = loadstring(game:HttpGet('https://raw.githubusercontent.com/xyaxzj/sigmamaboi.lua/refs/heads/main/NcHO.lua?t=' .. tostring(tick())))()
     local Window = Library:CreateWindow("Mocta Ultimate Hub V1.8", "The Complete Arsenal")
 
     -- ==========================================
