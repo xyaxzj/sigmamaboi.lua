@@ -7,7 +7,7 @@ local SCRIPT_URL = "https://raw.githubusercontent.com/xyaxzj/sigmamaboi.lua/refs
 
 local success, errorMessage = pcall(function()
     
-    -- (Library initialized lower down)
+    local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
     local StarterGui = game:GetService("StarterGui")
     local Players = game:GetService("Players")
     local localPlayer = Players.LocalPlayer
@@ -190,13 +190,7 @@ local success, errorMessage = pcall(function()
     -- ==========================================
     -- RAYFIELD WINDOW INITIALIZATION -> SIGMA V4
     -- ==========================================
-    local uiUrl = 'https://github.com/xyaxzj/sigmamaboi.lua/raw/main/NcHO.lua'
-    local uiCode = game:HttpGet(uiUrl)
-    local uiFunc, uiErr = loadstring(uiCode)
-    if not uiFunc then
-        error("UI SYNTAX ERROR: " .. tostring(uiErr))
-    end
-    local Library = uiFunc()
+    local Library = loadstring(game:HttpGet('https://github.com/xyaxzj/sigmamaboi.lua/raw/main/NcHO.lua'))()
     local Window = Library:CreateWindow("Mocta Ultimate Hub V1.8", "The Complete Arsenal")
 
     -- ==========================================
@@ -615,7 +609,7 @@ local success, errorMessage = pcall(function()
     -- ==========================================
     local TabSettings = Window:MakeTab("⚙️ Settings")
     local SecSet = TabSettings:AddSection("Sistem")
-    SecSet:AddButton("🔄 Update Script", function() task.wait(0.5); loadstring(game:HttpGet(SCRIPT_URL))() end)
+    SecSet:AddButton("🔄 Update Script", function() Library.Unloaded = true; task.wait(0.5); loadstring(game:HttpGet(SCRIPT_URL))() end)
 
     -- ==========================================
     -- INVENTORY SYNC ENGINE
