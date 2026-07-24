@@ -190,7 +190,7 @@ local success, errorMessage = pcall(function()
     -- ==========================================
     -- RAYFIELD WINDOW INITIALIZATION -> SIGMA V4
     -- ==========================================
-    local uiUrl = 'https://raw.githubusercontent.com/xyaxzj/sigmamaboi.lua/refs/heads/main/NcHO.lua?t=' .. tostring(tick())
+    local uiUrl = 'https://github.com/xyaxzj/sigmamaboi.lua/raw/main/NcHO.lua'
     local uiCode = game:HttpGet(uiUrl)
     local uiFunc, uiErr = loadstring(uiCode)
     if not uiFunc then
