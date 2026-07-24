@@ -1163,9 +1163,8 @@ function Library:CreateWindow(config)
                 PDesc.TextWrapped       = true
                 PDesc.AutomaticSize     = Enum.AutomaticSize.Y
 
-                PDesc:GetPropertyChangedSignal("TextBounds"):Connect(function()
-                    PFrame.Size = UDim2.new(1, 0, 0, PDesc.TextBounds.Y + 34)
-                end)
+                PFrame.AutomaticSize = Enum.AutomaticSize.Y
+
                 table.insert(Window.SearchableItems, {Name = title .. " " .. desc, Frame = PFrame})
 
                 -- Return updateable object so callers can do para:Set(newTitle, newContent)
