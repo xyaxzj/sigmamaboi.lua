@@ -190,7 +190,13 @@ local success, errorMessage = pcall(function()
     -- ==========================================
     -- RAYFIELD WINDOW INITIALIZATION -> SIGMA V4
     -- ==========================================
-    local Library = loadstring(game:HttpGet('https://raw.githubusercontent.com/xyaxzj/sigmamaboi.lua/refs/heads/main/NcHO.lua?t=' .. tostring(tick())))()
+    local uiUrl = 'https://raw.githubusercontent.com/xyaxzj/sigmamaboi.lua/refs/heads/main/NcHO.lua?t=' .. tostring(tick())
+    local uiCode = game:HttpGet(uiUrl)
+    local uiFunc, uiErr = loadstring(uiCode)
+    if not uiFunc then
+        error("UI SYNTAX ERROR: " .. tostring(uiErr))
+    end
+    local Library = uiFunc()
     local Window = Library:CreateWindow("Mocta Ultimate Hub V1.8", "The Complete Arsenal")
 
     -- ==========================================
