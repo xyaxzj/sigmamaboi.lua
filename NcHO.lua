@@ -979,6 +979,9 @@ function Library:CreateWindow(config)
         HUDClose.Font = Enum.Font.GothamBold
         HUDClose.MouseButton1Click:Connect(function()
             HUDFrame.Visible = false
+            if config.OnClose then
+                pcall(config.OnClose)
+            end
         end)
         HUDClose.MouseEnter:Connect(function() HUDClose.TextColor3 = Theme.Error end)
         HUDClose.MouseLeave:Connect(function() HUDClose.TextColor3 = Theme.TextDim end)
