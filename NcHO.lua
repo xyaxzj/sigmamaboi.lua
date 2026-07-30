@@ -548,7 +548,7 @@ end
 -- ══════════════════════════════════════════
 function Library:CreateWindow(config)
     local titleText  = config.Name       or "Sigma Hub"
-    local footerText = config.Footer     or "discord.gg/sigma | v4.0"
+    local footerText = config.Footer     or "v4.0"
     local logoIcon   = config.LogoText   or "Σ"
     local toggleKey  = config.ToggleKey  or Enum.KeyCode.RightShift
     self.ConfigName  = config.ConfigName or "SigmaHub_Config"
