@@ -207,8 +207,70 @@ local success, errorMessage = pcall(function()
     -- ==========================================
     -- RAYFIELD WINDOW INITIALIZATION -> SIGMA V4
     -- ==========================================
-    local Library = loadstring(game:HttpGet('https://github.com/xyaxzj/sigmamaboi.lua/raw/main/NcHO.lua'))()
+    local Library
+    local successUI, err = pcall(function()
+        if readfile and isfile and isfile("UI sigma.lua") then
+            Library = loadstring(readfile("UI sigma.lua"))()
+        else
+            Library = loadstring(game:HttpGet('https://github.com/xyaxzj/sigmamaboi.lua/raw/main/NcHO.lua'))()
+        end
+    end)
+    if not Library or type(Library) ~= "table" then return end
+
     local Window = Library:CreateWindow("Mocta Ultimate Hub V1.8", "The Complete Arsenal")
+
+    -- ==========================================
+    -- UNIVERSAL HUD & STATUS WIDGET SYSTEM
+    -- ==========================================
+    local TradeHUD = Window:CreateHUD({Title = "Auto-Trade Status", Width = 180, Height = 90})
+    local hudQueueLine = TradeHUD:AddLine("Queue: Empty")
+    local hudSenderLine = TradeHUD:AddLine("Sender (P1): 🔴 Inactive")
+    local hudReceiverLine = TradeHUD:AddLine("Receiver (P2): 🔴 Inactive")
+
+    local function updateTradeHUD()
+        local queueCount = #CurrentQueue
+        if queueCount > 0 then
+            hudQueueLine:SetText("Queue: " .. queueCount .. " items remaining")
+            hudQueueLine:SetColor(Color3.fromRGB(255, 200, 50))
+        else
+            hudQueueLine:SetText("Queue: Empty")
+            hudQueueLine:SetColor(Color3.fromRGB(150, 150, 150))
+        end
+        
+        if AutoLoopEnabled then
+            hudSenderLine:SetText("Sender (P1): 🟢 Loop Active")
+            hudSenderLine:SetColor(Color3.fromRGB(0, 255, 120))
+        else
+            hudSenderLine:SetText("Sender (P1): 🔴 Inactive")
+            hudSenderLine:SetColor(Color3.fromRGB(150, 150, 150))
+        end
+        
+        if AutoReceiverEnabled then
+            hudReceiverLine:SetText("Receiver (P2): 🟢 Auto-Accept")
+            hudReceiverLine:SetColor(Color3.fromRGB(0, 255, 120))
+        else
+            hudReceiverLine:SetText("Receiver (P2): 🔴 Inactive")
+            hudReceiverLine:SetColor(Color3.fromRGB(150, 150, 150))
+        end
+        
+        if AutoLoopEnabled or AutoReceiverEnabled then
+            Window:SetMinimizedGlow("Success")
+            if AutoLoopEnabled and AutoReceiverEnabled then
+                Window:SetMinimizedText("P1 & P2 Active")
+            elseif AutoLoopEnabled then
+                Window:SetMinimizedText("P1: " .. queueCount .. " left")
+            else
+                Window:SetMinimizedText("P2: Active")
+            end
+        else
+            Window:SetMinimizedGlow("TextDim")
+            Window:SetMinimizedText("Trade Idle")
+        end
+    end
+
+    -- Initialize Minimized state status
+    Window:SetMinimizedText("Trade Idle")
+    Window:SetMinimizedGlow("TextDim")
 
     -- ==========================================
     -- TAB 1: CART SETUP (TRADE)
@@ -224,6 +286,7 @@ local success, errorMessage = pcall(function()
         CurrentQueue = {}; ItemsProcessed = 0; local itemsFound = 0
         for _, tool in ipairs(getAllTools()) do if isTradeable(tool) then table.insert(CurrentQueue, tool); itemsFound = itemsFound + 1 end end  
         Library:Notify("Success", itemsFound .. " items added to queue.", 2)
+        updateTradeHUD()
     end)
     
     local SecCart3 = TabCart:AddSection("Specific Filter & Mutation")
@@ -260,6 +323,7 @@ local success, errorMessage = pcall(function()
         local itemsFound = 0
         for _, tool in ipairs(getAllTools()) do if isTradeable(tool) then local name = getFullItemName(tool); if needed[name] and needed[name] > 0 then table.insert(CurrentQueue, tool); needed[name] = needed[name] - 1; itemsFound = itemsFound + 1 end end end
         Library:Notify("Success", itemsFound .. " items prepared.", 2)
+        updateTradeHUD()
     end)
 
     -- ==========================================
@@ -524,13 +588,14 @@ local success, errorMessage = pcall(function()
         end
         
         LiveProgress:Set("Status", string.format("Remaining: %d\nSuccess: %d", #CurrentQueue, ItemsProcessed))
-        updateStatsDisplay(); IsProcessing = false; return true
+        updateStatsDisplay(); updateTradeHUD(); IsProcessing = false; return true
     end
 
     SecDispatch:AddButton("▶️ Send 1 Batch", function() task.spawn(executeSenderBatch) end)
     SecDispatch:AddToggle({Name = "🔁 Auto-Loop", Default = false}, function(V) 
         AutoLoopEnabled = V 
-        if V then task.spawn(function() while AutoLoopEnabled do if #CurrentQueue == 0 then AutoLoopEnabled = false; break end executeSenderBatch(); task.wait(2.5) end end) end 
+        updateTradeHUD()
+        if V then task.spawn(function() while AutoLoopEnabled do if #CurrentQueue == 0 then AutoLoopEnabled = false; updateTradeHUD(); break end executeSenderBatch(); task.wait(2.5) end end) end 
     end)
 
     -- ==========================================
@@ -541,6 +606,7 @@ local success, errorMessage = pcall(function()
     local ReceiverLog = SecInbound:AddParagraph("Status", "Inactive.")
     SecInbound:AddToggle({Name = "🤖 Auto-Accept", Default = false}, function(Value)
         AutoReceiverEnabled = Value
+        updateTradeHUD()
         if AutoReceiverEnabled then
             ReceiverLog:Set("Status", "🟢 Active...")
             task.spawn(function()
@@ -608,7 +674,7 @@ local success, errorMessage = pcall(function()
                                 end
                             end
                         end)
-                        P2TradesCompleted = P2TradesCompleted + 1; updateStatsDisplay()
+                        P2TradesCompleted = P2TradesCompleted + 1; updateStatsDisplay(); updateTradeHUD()
                         if ConsoleStats then
                             if #receivedNames > 0 then
                                 ConsoleStats:Log("Receive: " .. groupItems(receivedNames), "info")
@@ -619,7 +685,10 @@ local success, errorMessage = pcall(function()
                     end
                 end
             end)
-        else ReceiverLog:Set("Status", "❌ Disabled.") end
+        else 
+            ReceiverLog:Set("Status", "❌ Disabled.") 
+            updateTradeHUD()
+        end
     end)
 
     -- ==========================================
