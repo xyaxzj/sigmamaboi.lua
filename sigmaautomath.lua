@@ -85,19 +85,96 @@ end)
 
 ExploitSec:AddToggle({Name = "💎 Unlock All Gamepass (Advanced)", Default = false}, function(state)
     _G.GamepassSpoofed = state
-    if state and not hookInitialized then
-        local success, err = pcall(function()
-            local oldNamecall
-            oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
-                local method = getnamecallmethod()
-                if _G.GamepassSpoofed and not checkcaller() then
-                    if self == MarketplaceService and (method == "UserOwnsGamePassAsync" or method == "PlayerOwnsAsset") then return true end
-                    if method == "InvokeServer" and (self.Name == "GamepassOwned" or self.Name == "GamepassSync") then return true end
-                end
-                return oldNamecall(self, ...)
+    
+    if state then
+        -- 1. Set atribut lokal pada Player & Character (Bypass client-side GetAttribute checks)
+        local function applyAttributes(target)
+            if not target then return end
+            pcall(function()
+                target:SetAttribute("VIP", true)
+                target:SetAttribute("vip", true)
+                target:SetAttribute("x2cash", true)
+                target:SetAttribute("x2wins", true)
+                target:SetAttribute("x2winstreak", true)
+                target:SetAttribute("starterpack", true)
+                target:SetAttribute("Pack1", true)
+                target:SetAttribute("Pack2", true)
             end)
+        end
+        applyAttributes(LocalPlayer)
+        applyAttributes(LocalPlayer.Character)
+        
+        local charConn = LocalPlayer.CharacterAdded:Connect(applyAttributes)
+        
+        -- 2. Modifikasi GameConfig jika ada di ReplicatedStorage
+        pcall(function()
+            local gc = ReplicatedStorage:FindFirstChild("GameConfig") or ReplicatedStorage:FindFirstChild("Gameconfig")
+            if gc and gc:IsA("ModuleScript") then
+                local config = require(gc)
+                if type(config) == "table" then
+                    -- Spoof getGamepassByKey / getGamepassById di modul
+                    if type(config.getGamepassByKey) == "function" then
+                        local oldByKey = config.getGamepassByKey
+                        config.getGamepassByKey = function(self, key)
+                            return {key = key, id = 1234567, effects = {}}
+                        end
+                    end
+                    if type(config.getGamepassById) == "function" then
+                        config.getGamepassById = function(self, id)
+                            return {id = id, key = "spoofed", effects = {}}
+                        end
+                    end
+                end
+            end
         end)
-        if success then hookInitialized = true Library:Notify({Title = "Hook Aktif", Content = "Bypass Gamepass Aktif!", Type = "Success", Duration = 3}) end
+
+        -- 3. Hook namecall & hookfunction
+        if not hookInitialized then
+            local successHook, err = pcall(function()
+                -- Hook via hookfunction jika executor canggih
+                if hookfunction then
+                    local oldUserOwns = MarketplaceService.UserOwnsGamePassAsync
+                    hookfunction(MarketplaceService.UserOwnsGamePassAsync, function(self, ...)
+                        if _G.GamepassSpoofed then return true end
+                        return oldUserOwns(self, ...)
+                    end)
+                    local oldPlayerOwns = MarketplaceService.PlayerOwnsAsset
+                    hookfunction(MarketplaceService.PlayerOwnsAsset, function(self, ...)
+                        if _G.GamepassSpoofed then return true end
+                        return oldPlayerOwns(self, ...)
+                    end)
+                end
+                
+                -- Metamethod hook sebagai cadangan / untuk Remote
+                local oldNamecall
+                oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+                    local method = getnamecallmethod()
+                    if _G.GamepassSpoofed and not checkcaller() then
+                        if self == MarketplaceService and (method == "UserOwnsGamePassAsync" or method == "PlayerOwnsAsset") then
+                            return true
+                        end
+                        if self == LocalPlayer and method == "GetAttribute" then
+                            local attr = ...
+                            if attr == "VIP" or attr == "vip" or attr == "x2cash" or attr == "x2wins" or attr == "x2winstreak" or attr == "starterpack" or attr == "Pack1" or attr == "Pack2" then
+                                return true
+                            end
+                        end
+                        if method == "InvokeServer" and (self.Name == "GamepassOwned" or self.Name == "GamepassSync") then
+                            return true
+                        end
+                    end
+                    return oldNamecall(self, ...)
+                end)
+            end)
+            
+            if successHook then
+                hookInitialized = true
+                Library:Notify({Title = "Hook Aktif", Content = "Bypass Gamepass & Atribut Aktif!", Type = "Success", Duration = 3})
+            else
+                -- Jika hookmetamethod & hookfunction gagal/tidak didukung, tetap beri notif bahwa atribut lokal dipasang
+                Library:Notify({Title = "Atribut Diaktifkan", Content = "Bypass Atribut Aktif (Metamethod Hook tidak didukung).", Type = "Info", Duration = 3})
+            end
+        end
     end
 end)
 
@@ -722,14 +799,33 @@ local function ProcessAI(data)
         if nums[1] then return #tostring(nums[1]) end
     end
 
-    if normText:find("round") and normText:find("nearest") then
+    if normText:find("round") then
         local dec = mainText:match("(%d+%.%d+)")
-        if dec then return math.floor(tonumber(dec) + 0.5) end
-        local n = mainText:match("round (%d+)")
-        if n then return tonumber(n) end
+        if dec then
+            return math.floor(tonumber(dec) + 0.5)
+        end
+        if #nums >= 2 then
+            return math.floor(nums[1] / nums[2] + 0.5) * nums[2]
+        end
     end
-    if normText:find("round") and #nums >= 2 and not normText:find("nearest whole") then
-        return math.floor(nums[1] / nums[2] + 0.5) * nums[2]
+
+    if mainText:find("how many seconds in") and mainText:find("minute") then
+        if nums[1] then return nums[1] * 60 end
+    end
+    if mainText:find("how many minutes in") and mainText:find("hour") then
+        if nums[1] then return nums[1] * 60 end
+    end
+    if mainText:find("how many hours in") and mainText:find("day") then
+        if nums[1] then return nums[1] * 24 end
+    end
+    if mainText:find("how many days in") and mainText:find("week") then
+        if nums[1] then return nums[1] * 7 end
+    end
+    if mainText:find("how many months in") and mainText:find("year") then
+        if nums[1] then return nums[1] * 12 end
+    end
+    if mainText:find("how many weeks in") and mainText:find("year") then
+        if nums[1] then return nums[1] * 52 end
     end
 
     if mainText:find("how many corners") or mainText:find("how many sides") or
