@@ -645,7 +645,7 @@ SecCoord:AddButton("📋 Copy Current CFrame to Clipboard", function()
     copyCoords()
 end)
 
-SecCoord:AddTextbox({Name = "New Location Name", Default = "Location 1"}, function(val)
+SecCoord:AddInput({Name = "New Location Name", Placeholder = "Location 1"}, function(val)
     coordInputName = val
 end)
 
