@@ -671,13 +671,40 @@ function Library:CreateWindow(config)
     FBStroke.Thickness = 2
     MakeDraggable(FloatBtn, FloatBtn)
 
+    -- Status indicator LED inside Floating Button
+    local FloatLED = Instance.new("Frame", FloatBtn)
+    FloatLED.Name = "FloatLED"
+    FloatLED.Size = UDim2.new(0, 10, 0, 10)
+    FloatLED.Position = UDim2.new(1, -10, 0, 0)
+    FloatLED.BackgroundColor3 = Theme.Accent
+    FloatLED.BorderSizePixel = 0
+    Instance.new("UICorner", FloatLED).CornerRadius = UDim.new(1, 0)
+    local LEDStroke = Instance.new("UIStroke", FloatLED)
+    LEDStroke.Color = Theme.SidebarBg
+    LEDStroke.Thickness = 1.5
+
+    -- Status text label under Floating Button
+    local FloatLabel = Instance.new("TextLabel", FloatBtn)
+    FloatLabel.Name = "FloatLabel"
+    FloatLabel.Size = UDim2.new(0, 100, 0, 14)
+    FloatLabel.Position = UDim2.new(0.5, -50, 1, 4)
+    FloatLabel.BackgroundTransparency = 1
+    FloatLabel.Text = ""
+    FloatLabel.TextColor3 = Theme.Text
+    FloatLabel.Font = Enum.Font.GothamSemibold
+    FloatLabel.TextSize = 9
+    FloatLabel.TextXAlignment = Enum.TextXAlignment.Center
+
     -- ── MAIN FRAME ──────────────────────────────
     local MainFrame = Instance.new("Frame", ScreenGui)
     local vpSize = workspace.CurrentCamera.ViewportSize
     local width = math.min(520, vpSize.X - 20)
     local height = math.min(340, vpSize.Y - 20)
+    local currentWidth = width
+    local currentHeight = height
+    local currentPos = UDim2.new(0.5, -width/2, 0.5, -height/2)
     MainFrame.Size             = UDim2.new(0, width, 0, height)
-    MainFrame.Position         = UDim2.new(0.5, -260, 0.5, -170)
+    MainFrame.Position         = currentPos
     MainFrame.BackgroundColor3 = Theme.MainBg
     MainFrame.BackgroundTransparency = Theme.Transparency
     MainFrame.BorderSizePixel  = 0
@@ -692,8 +719,8 @@ function Library:CreateWindow(config)
     MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
     task.defer(function()
         Tween(MainFrame, 0.45, {
-            Size     = UDim2.new(0, 520, 0, 340),
-            Position = UDim2.new(0.5, -260, 0.5, -170)
+            Size     = UDim2.new(0, width, 0, height),
+            Position = currentPos
         }, Enum.EasingStyle.Back):Play()
     end)
 
@@ -741,6 +768,13 @@ function Library:CreateWindow(config)
     Topbar.BorderSizePixel  = 0
     MakeDraggable(Topbar, MainFrame)
 
+    local TopbarGlow = Instance.new("Frame", Topbar)
+    TopbarGlow.Name = "TopbarGlow"
+    TopbarGlow.Size = UDim2.new(1, 0, 0, 1)
+    TopbarGlow.Position = UDim2.new(0, 0, 1, 0)
+    TopbarGlow.BackgroundColor3 = Theme.Accent
+    TopbarGlow.BorderSizePixel = 0
+
     -- Title in topbar
     local TitleLabel = Instance.new("TextLabel", Topbar)
     TitleLabel.Size             = UDim2.new(0, 120, 1, 0)
@@ -784,7 +818,7 @@ function Library:CreateWindow(config)
     MinBtn.Size             = UDim2.new(0, 32, 0, 42)
     MinBtn.Position         = UDim2.new(1, -32, 0, 0)
     MinBtn.BackgroundTransparency = 1
-    MinBtn.Text             = "⊟"
+    MinBtn.Text             = "—"
     MinBtn.TextColor3       = Theme.TextDim
     MinBtn.TextSize         = 17
     MinBtn.MouseEnter:Connect(function() Tween(MinBtn, 0.15, {TextColor3 = Theme.Accent}):Play() end)
@@ -817,13 +851,14 @@ function Library:CreateWindow(config)
             MainFrame.Visible = true
             FloatBtn.Visible  = false
             Tween(MainFrame, 0.3, {
-                Size     = UDim2.new(0, 520, 0, 340),
-                Position = UDim2.new(0.5, -260, 0.5, -170)
+                Size     = UDim2.new(0, currentWidth, 0, currentHeight),
+                Position = currentPos
             }, Enum.EasingStyle.Back):Play()
         else
+            currentPos = MainFrame.Position
             local tw = Tween(MainFrame, 0.25, {
                 Size     = UDim2.new(0, 0, 0, 0),
-                Position = UDim2.new(0.5, 0, 0.5, 0)
+                Position = UDim2.new(currentPos.X.Scale, currentPos.X.Offset + currentWidth/2, currentPos.Y.Scale, currentPos.Y.Offset + currentHeight/2)
             }, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
             tw:Play()
             tw.Completed:Connect(function()
@@ -850,20 +885,244 @@ function Library:CreateWindow(config)
         Tabs           = {},
         FirstTab       = true,
         SearchableItems= {},
+        Sections       = {},
         _activeTab     = nil,
     }
 
     -- Search logic
     SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
         local q = string.lower(SearchBox.Text)
-        for _, item in ipairs(Window.SearchableItems) do
+        for _, sec in ipairs(Window.Sections) do
+            local sectionTitleMatches = string.find(string.lower(sec.Title), q, 1, true) ~= nil
+            local anyItemMatches = false
+            
+            for _, item in ipairs(sec.Items) do
+                local matches = (q == "") or sectionTitleMatches or (string.find(string.lower(item.Name), q, 1, true) ~= nil)
+                item.Frame.Visible = matches
+                if matches then
+                    anyItemMatches = true
+                end
+            end
+            
             if q == "" then
-                item.Frame.Visible = true
+                sec.Frame.Visible = true
             else
-                item.Frame.Visible = string.find(string.lower(item.Name), q, 1, true) ~= nil
+                sec.Frame.Visible = sectionTitleMatches or anyItemMatches
             end
         end
     end)
+
+    -- ── MINIMIZED WIDGET CONTROLS ────────────────
+    function Window:SetMinimizedText(text)
+        FloatLabel.Text = text
+    end
+    
+    function Window:SetMinimizedGlow(color)
+        if typeof(color) == "Color3" then
+            FloatLED.BackgroundColor3 = color
+            FloatLED.Visible = true
+        elseif type(color) == "string" then
+            local matched = Theme[color] or Themes.Blue[color] or (color:sub(1,1) == "#" and Color3.fromHex(color))
+            if matched then
+                FloatLED.BackgroundColor3 = matched
+                FloatLED.Visible = true
+            else
+                FloatLED.Visible = false
+            end
+        else
+            FloatLED.Visible = false
+        end
+    end
+
+    -- ── UNIVERSAL HUD OVERLAY ───────────────────
+    function Window:CreateHUD(config)
+        config = config or {}
+        local hudTitle = config.Title or "Status HUD"
+        local hudWidth = config.Width or 160
+        local hudHeight = config.Height or 100
+        
+        local HUDFrame = Instance.new("Frame", ScreenGui)
+        HUDFrame.Name = "HUDFrame"
+        HUDFrame.Size = UDim2.new(0, hudWidth, 0, hudHeight)
+        HUDFrame.Position = UDim2.new(1, -hudWidth - 20, 0, 100)
+        HUDFrame.BackgroundColor3 = Theme.SidebarBg
+        HUDFrame.BackgroundTransparency = 0.4
+        HUDFrame.BorderSizePixel = 0
+        Instance.new("UICorner", HUDFrame).CornerRadius = Theme.Radius
+        
+        local HUDStroke = Instance.new("UIStroke", HUDFrame)
+        HUDStroke.Color = Theme.Accent
+        HUDStroke.Thickness = 1
+        
+        local HUDHeader = Instance.new("Frame", HUDFrame)
+        HUDHeader.Name = "HUDHeader"
+        HUDHeader.Size = UDim2.new(1, 0, 0, 24)
+        HUDHeader.BackgroundTransparency = 1
+        
+        local HUDTitle = Instance.new("TextLabel", HUDHeader)
+        HUDTitle.Size = UDim2.new(1, -30, 1, 0)
+        HUDTitle.Position = UDim2.new(0, 10, 0, 0)
+        HUDTitle.BackgroundTransparency = 1
+        HUDTitle.Text = hudTitle
+        HUDTitle.TextColor3 = Theme.Accent
+        HUDTitle.Font = Enum.Font.GothamBold
+        HUDTitle.TextSize = 11
+        HUDTitle.TextXAlignment = Enum.TextXAlignment.Left
+        
+        local HUDClose = Instance.new("TextButton", HUDHeader)
+        HUDClose.Size = UDim2.new(0, 20, 0, 20)
+        HUDClose.Position = UDim2.new(1, -22, 0.5, -10)
+        HUDClose.BackgroundTransparency = 1
+        HUDClose.Text = "×"
+        HUDClose.TextColor3 = Theme.TextDim
+        HUDClose.TextSize = 16
+        HUDClose.Font = Enum.Font.GothamBold
+        HUDClose.MouseButton1Click:Connect(function()
+            HUDFrame.Visible = false
+        end)
+        HUDClose.MouseEnter:Connect(function() HUDClose.TextColor3 = Theme.Error end)
+        HUDClose.MouseLeave:Connect(function() HUDClose.TextColor3 = Theme.TextDim end)
+        
+        MakeDraggable(HUDHeader, HUDFrame)
+        
+        local HUDScroll = Instance.new("ScrollingFrame", HUDFrame)
+        HUDScroll.Size = UDim2.new(1, -8, 1, -32)
+        HUDScroll.Position = UDim2.new(0, 4, 0, 28)
+        HUDScroll.BackgroundTransparency = 1
+        HUDScroll.BorderSizePixel = 0
+        HUDScroll.ScrollBarThickness = 2
+        HUDScroll.ScrollBarImageColor3 = Theme.Accent
+        HUDScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+        HUDScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+        
+        local HUDList = Instance.new("UIListLayout", HUDScroll)
+        HUDList.Padding = UDim.new(0, 4)
+        
+        local HUDPad = Instance.new("UIPadding", HUDScroll)
+        HUDPad.PaddingLeft = UDim.new(0, 6)
+        HUDPad.PaddingRight = UDim.new(0, 6)
+        HUDPad.PaddingTop = UDim.new(0, 2)
+        
+        local hudCurrentW = hudWidth
+        local hudCurrentH = hudHeight
+        
+        local function SetupHUDResizing(hudFrame, minW, minH)
+            minW = minW or 100
+            minH = minH or 60
+            
+            local Right = Instance.new("Frame", hudFrame)
+            Right.Size = UDim2.new(0, 6, 1, -10)
+            Right.Position = UDim2.new(1, -3, 0, 5)
+            Right.BackgroundTransparency = 1
+            Right.ZIndex = 101
+            
+            local Bottom = Instance.new("Frame", hudFrame)
+            Bottom.Size = UDim2.new(1, -10, 0, 6)
+            Bottom.Position = UDim2.new(0, 5, 1, -3)
+            Bottom.BackgroundTransparency = 1
+            Bottom.ZIndex = 101
+            
+            local Corner = Instance.new("ImageButton", hudFrame)
+            Corner.Size = UDim2.new(0, 10, 0, 10)
+            Corner.Position = UDim2.new(1, -10, 1, -10)
+            Corner.BackgroundTransparency = 1
+            Corner.Image = "rbxassetid://6032731804"
+            Corner.ImageColor3 = Theme.TextDim
+            Corner.ImageTransparency = 0.6
+            Corner.ZIndex = 102
+            
+            Corner.MouseEnter:Connect(function() Corner.ImageTransparency = 0; Corner.ImageColor3 = Theme.Accent end)
+            Corner.MouseLeave:Connect(function() Corner.ImageTransparency = 0.6; Corner.ImageColor3 = Theme.TextDim end)
+            
+            local function MakeHUDResizable(dragPt, resX, resY)
+                local resizing = false
+                local dragInput, mousePos, startSize
+                dragPt.InputBegan:Connect(function(input)
+                    if input.UserInputType == Enum.UserInputType.MouseButton1
+                    or input.UserInputType == Enum.UserInputType.Touch then
+                        resizing = true
+                        mousePos = input.Position
+                        startSize = hudFrame.Size
+                        input.Changed:Connect(function()
+                            if input.UserInputState == Enum.UserInputState.End then resizing = false end
+                        end)
+                    end
+                end)
+                dragPt.InputChanged:Connect(function(input)
+                    if input.UserInputType == Enum.UserInputType.MouseMovement
+                    or input.UserInputType == Enum.UserInputType.Touch then dragInput = input end
+                end)
+                UserInputService.InputChanged:Connect(function(input)
+                    if input == dragInput and resizing then
+                        local delta = input.Position - mousePos
+                        local newW = startSize.X.Offset
+                        local newH = startSize.Y.Offset
+                        if resX then
+                            newW = math.max(minW, startSize.X.Offset + delta.X)
+                            hudCurrentW = newW
+                        end
+                        if resY then
+                            newH = math.max(minH, startSize.Y.Offset + delta.Y)
+                            hudCurrentH = newH
+                        end
+                        Tween(hudFrame, 0.05, {Size = UDim2.new(0, newW, 0, newH)}):Play()
+                    end
+                end)
+            end
+            
+            MakeHUDResizable(Right, true, false)
+            MakeHUDResizable(Bottom, false, true)
+            MakeHUDResizable(Corner, true, true)
+        end
+        
+        SetupHUDResizing(HUDFrame, 120, 60)
+        
+        local HUDObj = {}
+        
+        function HUDObj:SetVisible(state)
+            HUDFrame.Visible = state
+        end
+        
+        function HUDObj:SetTitle(title)
+            HUDTitle.Text = title
+        end
+        
+        function HUDObj:AddLine(labelText)
+            local LineLabel = Instance.new("TextLabel", HUDScroll)
+            LineLabel.Size = UDim2.new(1, 0, 0, 16)
+            LineLabel.BackgroundTransparency = 1
+            LineLabel.Text = labelText
+            LineLabel.TextColor3 = Theme.Text
+            LineLabel.Font = Enum.Font.Gotham
+            LineLabel.TextSize = 10
+            LineLabel.TextXAlignment = Enum.TextXAlignment.Left
+            LineLabel.TextWrapped = true
+            
+            local LineObj = {}
+            function LineObj:SetText(newTxt)
+                LineLabel.Text = newTxt
+            end
+            function LineObj:SetColor(color)
+                LineLabel.TextColor3 = color
+            end
+            function LineObj:Destroy()
+                LineLabel:Destroy()
+            end
+            return LineObj
+        end
+        
+        function HUDObj:Clear()
+            for _, ch in ipairs(HUDScroll:GetChildren()) do
+                if ch:IsA("TextLabel") then ch:Destroy() end
+            end
+        end
+        
+        function HUDObj:Destroy()
+            HUDFrame:Destroy()
+        end
+        
+        return HUDObj
+    end
 
     -- ══════════════════════════════════════════
     --  TAB FACTORY
@@ -1005,6 +1264,18 @@ function Library:CreateWindow(config)
             collapsible = (collapsible == nil) and true or collapsible
 
             local SecFrame = Instance.new("Frame", Page)
+            local secRecord = {
+                Frame = SecFrame,
+                Title = sectionTitle,
+                Items = {}
+            }
+            table.insert(Window.Sections, secRecord)
+
+            local function registerItem(name, frame)
+                table.insert(secRecord.Items, {Name = name, Frame = frame})
+                table.insert(Window.SearchableItems, {Name = name, Frame = frame})
+            end
+
             SecFrame.Size             = UDim2.new(1, -18, 0, 36)
             SecFrame.BackgroundColor3 = Theme.MainBg
             SecFrame.BackgroundTransparency = Theme.Transparency
@@ -1129,7 +1400,7 @@ function Library:CreateWindow(config)
                 Lbl.TextSize         = 12
                 Lbl.TextXAlignment   = Enum.TextXAlignment.Left
                 Lbl.TextWrapped      = true
-                table.insert(Window.SearchableItems, {Name = text, Frame = Lbl})
+                registerItem(text, Lbl)
                 return Lbl
             end
 
@@ -1165,7 +1436,7 @@ function Library:CreateWindow(config)
 
                 PFrame.AutomaticSize = Enum.AutomaticSize.Y
 
-                table.insert(Window.SearchableItems, {Name = title .. " " .. desc, Frame = PFrame})
+                registerItem(title .. " " .. desc, PFrame)
 
                 -- Return updateable object so callers can do para:Set(newTitle, newContent)
                 return {
@@ -1217,7 +1488,7 @@ function Library:CreateWindow(config)
                 WLbl:GetPropertyChangedSignal("TextBounds"):Connect(function()
                     WF.Size = UDim2.new(1, 0, 0, WLbl.TextBounds.Y + 14)
                 end)
-                table.insert(Window.SearchableItems, {Name = text, Frame = WF})
+                registerItem(text, WF)
             end
 
             -- 4. BUTTON
@@ -1250,7 +1521,7 @@ function Library:CreateWindow(config)
                     CreateRipple(Btn, UserInputService:GetMouseLocation())
                     if callback then callback() end
                 end)
-                table.insert(Window.SearchableItems, {Name = text, Frame = Btn})
+                registerItem(text, Btn)
             end
 
             -- 5. TOGGLE
@@ -1321,7 +1592,7 @@ function Library:CreateWindow(config)
                 end
 
                 TBtn.MouseButton1Click:Connect(function() SetState(not state) end)
-                table.insert(Window.SearchableItems, {Name = text, Frame = TglRow})
+                registerItem(text, TglRow)
 
                 return {
                     Set = function(_, v) SetState(v) end,
@@ -1365,14 +1636,16 @@ function Library:CreateWindow(config)
                 SLbl.TextSize         = 12
                 SLbl.TextXAlignment   = Enum.TextXAlignment.Left
 
-                local SVLbl = Instance.new("TextLabel", SldFrame)
-                SVLbl.Size             = UDim2.new(0, 45, 0, 18)
-                SVLbl.Position         = UDim2.new(1, -45, 0, 0)
+                local SVLbl = Instance.new("TextBox", SldFrame)
+                SVLbl.Size             = UDim2.new(0, 50, 0, 18)
+                SVLbl.Position         = UDim2.new(1, -50, 0, 0)
                 SVLbl.BackgroundTransparency = 1
                 SVLbl.TextColor3       = Theme.Accent
                 SVLbl.Font             = Enum.Font.GothamBold
                 SVLbl.TextSize         = 12
                 SVLbl.TextXAlignment   = Enum.TextXAlignment.Right
+                SVLbl.ClearTextOnFocus = false
+                SVLbl.Text             = ""
 
                 local BgBar = Instance.new("Frame", SldFrame)
                 BgBar.Size             = UDim2.new(1, 0, 0, 6)
@@ -1405,6 +1678,21 @@ function Library:CreateWindow(config)
                 SldBtn.BackgroundTransparency = 1
                 SldBtn.Text             = ""
 
+                local isFocused = false
+                SVLbl.Focused:Connect(function()
+                    isFocused = true
+                end)
+                SVLbl.FocusLost:Connect(function(enterPressed)
+                    isFocused = false
+                    local num = tonumber(SVLbl.Text)
+                    if num then
+                        SetValue(num)
+                    else
+                        local decimals = tostring(step):find("%.") and #tostring(step):match("%.(.*)") or 0
+                        SVLbl.Text = decimals > 0 and string.format("%." .. decimals .. "f", value) or tostring(math.floor(value))
+                    end
+                end)
+
                 local function SetValue(v)
                     -- Snap to step
                     if step and step ~= 0 then
@@ -1420,7 +1708,9 @@ function Library:CreateWindow(config)
                     local scale = (value - min_) / (max_ - min_)
                     Tween(FillBar, 0.05, {Size = UDim2.new(scale, 0, 1, 0)}):Play()
                     Tween(Thumb, 0.05, {Position = UDim2.new(scale, -6, 0.5, -6)}):Play()
-                    SVLbl.Text = decimals > 0 and string.format("%." .. decimals .. "f", value) or tostring(math.floor(value))
+                    if not isFocused then
+                        SVLbl.Text = decimals > 0 and string.format("%." .. decimals .. "f", value) or tostring(math.floor(value))
+                    end
                     if callback then callback(value) end
                     if Library._autoSave then Library:SaveConfig() end
                 end
@@ -1446,7 +1736,7 @@ function Library:CreateWindow(config)
                         SetValue(min_ + (max_ - min_) * pos)
                     end
                 end)
-                table.insert(Window.SearchableItems, {Name = text, Frame = SldFrame})
+                registerItem(text, SldFrame)
 
                 return {
                     Set = function(_, v) SetValue(v) end,
@@ -1535,7 +1825,7 @@ function Library:CreateWindow(config)
                 MinusBtn.MouseButton1Click:Connect(function() SetVal(value - step) end)
                 PlusBtn.MouseButton1Click:Connect(function() SetVal(value + step) end)
 
-                table.insert(Window.SearchableItems, {Name = text, Frame = StRow})
+                registerItem(text, StRow)
                 return {Set = function(_, v) SetVal(v) end, Get = function() return value end}
             end
 
@@ -1603,7 +1893,7 @@ function Library:CreateWindow(config)
                         if callback then callback() end
                     end
                 end)
-                table.insert(Window.SearchableItems, {Name = text, Frame = BRow})
+                registerItem(text, BRow)
             end
 
             -- 9. DROPDOWN (with Scrollable list)
@@ -1731,7 +2021,7 @@ function Library:CreateWindow(config)
                     Tween(DArrow, 0.2, {Rotation = isOpen and 180 or 0}):Play()
                 end)
 
-                table.insert(Window.SearchableItems, {Name = text, Frame = DFrame})
+                registerItem(text, DFrame)
                 return {
                     Set = function(_, v)
                         -- Find and programmatically select the matching option
@@ -1932,7 +2222,7 @@ function Library:CreateWindow(config)
                     Tween(MDArrow, 0.2, {Rotation = mdOpen and 180 or 0}):Play()
                 end)
 
-                table.insert(Window.SearchableItems, {Name = text, Frame = MDFrame})
+                registerItem(text, MDFrame)
                 return {
                     Get = function() return selected end,
                     Set = function(_, newSel)
@@ -2049,7 +2339,7 @@ function Library:CreateWindow(config)
                     Tween(IBStroke, 0.2, {Color = Theme.Border, Thickness = 1}):Play()
                     if ep and callback then callback(Box.Text) end
                 end)
-                table.insert(Window.SearchableItems, {Name = text, Frame = InpFrame})
+                registerItem(text, InpFrame)
                 return {
                     Get = function() return Box.Text end,
                     Set = function(_, v) Box.Text = v end,
@@ -2112,7 +2402,7 @@ function Library:CreateWindow(config)
                 end
 
                 SetPB(initial)
-                table.insert(Window.SearchableItems, {Name = text, Frame = PBFrame})
+                registerItem(text, PBFrame)
                 return {
                     Set    = function(_, v, m) SetPB(v, m) end,
                     SetMax = function(_, m) curMax = m end,
@@ -2322,7 +2612,7 @@ function Library:CreateWindow(config)
                     end
                 end)
 
-                table.insert(Window.SearchableItems, {Name = text, Frame = CPRow})
+                registerItem(text, CPRow)
                 return {
                     Set = function(_, c) SetColor(c); h,s,v = RgbToHsv(c); updateFromHSV() end,
                     Get = function() return currentColor end,
@@ -2359,7 +2649,7 @@ function Library:CreateWindow(config)
                     error   = Theme.Error   or Color3.fromRGB(255, 80, 80),
                 }
 
-                table.insert(Window.SearchableItems, {Name = name or "Console", Frame = CF})
+                registerItem(name or "Console", CF)
                 return {
                     Log = function(_, msg, logType)
                         local color = typeColorMap[logType or "info"] or Theme.TextDim
@@ -2442,6 +2732,99 @@ function Library:CreateWindow(config)
         local tab = self:MakeTab({Icon="⚙", Name="Config"})
         return tab:AddConfigManager()
     end
+
+    -- ── RESIZING ENGINE ──────────────────────────
+    local function SetupResizing(mainFrame, minW, minH)
+        minW = minW or 350
+        minH = minH or 250
+        
+        -- Right resize edge strip
+        local RightResize = Instance.new("Frame", mainFrame)
+        RightResize.Name = "RightResize"
+        RightResize.Size = UDim2.new(0, 8, 1, -20)
+        RightResize.Position = UDim2.new(1, -4, 0, 10)
+        RightResize.BackgroundTransparency = 1
+        RightResize.ZIndex = 101
+        
+        -- Bottom resize edge strip
+        local BottomResize = Instance.new("Frame", mainFrame)
+        BottomResize.Name = "BottomResize"
+        BottomResize.Size = UDim2.new(1, -20, 0, 8)
+        BottomResize.Position = UDim2.new(0, 10, 1, -4)
+        BottomResize.BackgroundTransparency = 1
+        BottomResize.ZIndex = 101
+
+        -- Bottom-Right corner resize grip button
+        local CornerResize = Instance.new("ImageButton", mainFrame)
+        CornerResize.Name = "CornerResize"
+        CornerResize.Size = UDim2.new(0, 12, 0, 12)
+        CornerResize.Position = UDim2.new(1, -12, 1, -12)
+        CornerResize.BackgroundTransparency = 1
+        CornerResize.Image = "rbxassetid://6032731804" -- standard diagonal resize grip icon
+        CornerResize.ImageColor3 = Theme.TextDim
+        CornerResize.ImageTransparency = 0.5
+        CornerResize.ZIndex = 102
+        
+        CornerResize.MouseEnter:Connect(function()
+            CornerResize.ImageTransparency = 0
+            CornerResize.ImageColor3 = Theme.Accent
+        end)
+        CornerResize.MouseLeave:Connect(function()
+            CornerResize.ImageTransparency = 0.5
+            CornerResize.ImageColor3 = Theme.TextDim
+        end)
+
+        local function MakeEdgeResizable(dragPoint, resizeX, resizeY)
+            local resizing = false
+            local dragInput, mousePos, startSize
+
+            dragPoint.InputBegan:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseButton1
+                or input.UserInputType == Enum.UserInputType.Touch then
+                    resizing = true
+                    mousePos = input.Position
+                    startSize = mainFrame.Size
+                    input.Changed:Connect(function()
+                        if input.UserInputState == Enum.UserInputState.End then
+                            resizing = false
+                        end
+                    end)
+                end
+            end)
+
+            dragPoint.InputChanged:Connect(function(input)
+                if input.UserInputType == Enum.UserInputType.MouseMovement
+                or input.UserInputType == Enum.UserInputType.Touch then
+                    dragInput = input
+                end
+            end)
+
+            UserInputService.InputChanged:Connect(function(input)
+                if input == dragInput and resizing then
+                    local delta = input.Position - mousePos
+                    local newW = startSize.X.Offset
+                    local newH = startSize.Y.Offset
+                    
+                    if resizeX then
+                        newW = math.max(minW, startSize.X.Offset + delta.X)
+                        currentWidth = newW
+                    end
+                    if resizeY then
+                        newH = math.max(minH, startSize.Y.Offset + delta.Y)
+                        currentHeight = newH
+                    end
+                    
+                    Tween(mainFrame, 0.05, {Size = UDim2.new(0, newW, 0, newH)}):Play()
+                end
+            end)
+        end
+
+        MakeEdgeResizable(RightResize, true, false)
+        MakeEdgeResizable(BottomResize, false, true)
+        MakeEdgeResizable(CornerResize, true, true)
+    end
+
+    SetupResizing(MainFrame, 400, 250)
 
     return Window
 end -- CreateWindow
