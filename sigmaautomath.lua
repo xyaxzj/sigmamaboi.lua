@@ -62,7 +62,15 @@ local Window = Library:CreateWindow({
 -- ==========================================================
 -- UNIVERSAL HUD & STATUS WIDGET SYSTEM
 -- ==========================================================
-local MathHUD = Window:CreateHUD({Title = "Math AI Status", Width = 180, Height = 90})
+local HUDToggle
+local MathHUD = Window:CreateHUD({
+    Title = "Math AI Status", 
+    Width = 180, 
+    Height = 90,
+    OnClose = function()
+        if HUDToggle then HUDToggle:Set(false) end
+    end
+})
 local hudStatusLine = MathHUD:AddLine("🔴 Mode: Inactive")
 local hudQuestionLine = MathHUD:AddLine("Question: None")
 local hudAnswerLine = MathHUD:AddLine("Answer: --")
@@ -98,6 +106,9 @@ Window:SetMinimizedGlow("TextDim")
 local MathTab = Window:MakeTab("📝")
 local NormalSec = MathTab:AddSection("🧠 Mode Normal", true)
 local SpeedSec = MathTab:AddSection("⚡ Mode Speed Run", true)
+HUDToggle = NormalSec:AddToggle({Name = "📺 Show Status HUD", Default = true, Flag = "Tgl_MathHUD"}, function(state)
+    MathHUD:SetVisible(state)
+end)
 
 NormalSec:AddToggle({Name = "✅ Auto Answer (Normal)", Default = false, Flag = "Tgl_Normal"}, function(state) 
     _G.AutoMathNormal = state 
