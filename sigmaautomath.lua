@@ -55,7 +55,7 @@ if not successUI or type(Library) ~= "table" then return end
 local Window = Library:CreateWindow({
     Name = "Math AI V23 (Full Coverage)",
     LogoText = "🧠",
-    Footer = "SeNchO | Source Code Read",
+    Footer = "v26",
     ConfigName = "MathV23"
 })
 
