@@ -1722,22 +1722,34 @@ function Library:CreateWindow(config)
                 SetValue(value)
 
                 local dragging = false
+                local dragInput = nil
                 SldBtn.InputBegan:Connect(function(input)
                     if input.UserInputType == Enum.UserInputType.MouseButton1
                     or input.UserInputType == Enum.UserInputType.Touch then
                         dragging = true
+                        dragInput = input
                         local pos = math.clamp((input.Position.X - BgBar.AbsolutePosition.X) / BgBar.AbsoluteSize.X, 0, 1)
                         SetValue(min_ + (max_ - min_) * pos)
+                        
+                        local connection
+                        connection = input.Changed:Connect(function()
+                            if input.UserInputState == Enum.UserInputState.End then
+                                dragging = false
+                                dragInput = nil
+                                connection:Disconnect()
+                            end
+                        end)
                     end
                 end)
-                UserInputService.InputEnded:Connect(function(input)
-                    if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
-                end)
                 UserInputService.InputChanged:Connect(function(input)
-                    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
-                    or input.UserInputType == Enum.UserInputType.Touch) then
-                        local pos = math.clamp((input.Position.X - BgBar.AbsolutePosition.X) / BgBar.AbsoluteSize.X, 0, 1)
-                        SetValue(min_ + (max_ - min_) * pos)
+                    if dragging and input == dragInput then
+                        if BgBar.AbsoluteSize.X > 0 then
+                            local pos = math.clamp((input.Position.X - BgBar.AbsolutePosition.X) / BgBar.AbsoluteSize.X, 0, 1)
+                            SetValue(min_ + (max_ - min_) * pos)
+                        else
+                            dragging = false
+                            dragInput = nil
+                        end
                     end
                 end)
                 registerItem(text, SldFrame)
@@ -2558,22 +2570,32 @@ function Library:CreateWindow(config)
                 end
 
                 -- SV interaction
+                -- SV interaction
                 local svDragging = false
+                local svDragInput = nil
                 local SVBtn = Instance.new("TextButton", SVBox)
                 SVBtn.Size = UDim2.new(1,0,1,0); SVBtn.BackgroundTransparency=1; SVBtn.Text=""
                 SVBtn.InputBegan:Connect(function(inp)
-                    if inp.UserInputType == Enum.UserInputType.MouseButton1 then
+                    if inp.UserInputType == Enum.UserInputType.MouseButton1
+                    or inp.UserInputType == Enum.UserInputType.Touch then
                         svDragging = true
+                        svDragInput = inp
                         s = math.clamp((inp.Position.X - SVBox.AbsolutePosition.X) / SVBox.AbsoluteSize.X, 0, 1)
                         v = 1 - math.clamp((inp.Position.Y - SVBox.AbsolutePosition.Y) / SVBox.AbsoluteSize.Y, 0, 1)
                         updateFromHSV()
+                        
+                        local connection
+                        connection = inp.Changed:Connect(function()
+                            if inp.UserInputState == Enum.UserInputState.End then
+                                svDragging = false
+                                svDragInput = nil
+                                connection:Disconnect()
+                            end
+                        end)
                     end
                 end)
-                UserInputService.InputEnded:Connect(function(inp)
-                    if inp.UserInputType == Enum.UserInputType.MouseButton1 then svDragging = false end
-                end)
                 UserInputService.InputChanged:Connect(function(inp)
-                    if svDragging and inp.UserInputType == Enum.UserInputType.MouseMovement then
+                    if svDragging and inp == svDragInput then
                         s = math.clamp((inp.Position.X - SVBox.AbsolutePosition.X) / SVBox.AbsoluteSize.X, 0, 1)
                         v = 1 - math.clamp((inp.Position.Y - SVBox.AbsolutePosition.Y) / SVBox.AbsoluteSize.Y, 0, 1)
                         updateFromHSV()
@@ -2582,20 +2604,29 @@ function Library:CreateWindow(config)
 
                 -- Hue interaction
                 local hueDragging = false
+                local hueDragInput = nil
                 local HueBtn = Instance.new("TextButton", HueBar)
                 HueBtn.Size=UDim2.new(1,0,1,0); HueBtn.BackgroundTransparency=1; HueBtn.Text=""
                 HueBtn.InputBegan:Connect(function(inp)
-                    if inp.UserInputType == Enum.UserInputType.MouseButton1 then
+                    if inp.UserInputType == Enum.UserInputType.MouseButton1
+                    or inp.UserInputType == Enum.UserInputType.Touch then
                         hueDragging = true
+                        hueDragInput = inp
                         h = math.clamp((inp.Position.Y - HueBar.AbsolutePosition.Y) / HueBar.AbsoluteSize.Y, 0, 1)
                         updateFromHSV()
+                        
+                        local connection
+                        connection = inp.Changed:Connect(function()
+                            if inp.UserInputState == Enum.UserInputState.End then
+                                hueDragging = false
+                                hueDragInput = nil
+                                connection:Disconnect()
+                            end
+                        end)
                     end
                 end)
-                UserInputService.InputEnded:Connect(function(inp)
-                    if inp.UserInputType == Enum.UserInputType.MouseButton1 then hueDragging = false end
-                end)
                 UserInputService.InputChanged:Connect(function(inp)
-                    if hueDragging and inp.UserInputType == Enum.UserInputType.MouseMovement then
+                    if hueDragging and inp == hueDragInput then
                         h = math.clamp((inp.Position.Y - HueBar.AbsolutePosition.Y) / HueBar.AbsoluteSize.Y, 0, 1)
                         updateFromHSV()
                     end
