@@ -51,7 +51,7 @@ local Window = Library:CreateWindow({
     ConfigName = "MathV23"
 })
 
-local MathTab = Window:MakeTab("📝 Utama")
+local MathTab = Window:MakeTab("📝")
 local NormalSec = MathTab:AddSection("🧠 Mode Normal", true)
 local SpeedSec = MathTab:AddSection("⚡ Mode Speed Run", true)
 
@@ -60,8 +60,23 @@ NormalSec:AddInput({Name = "Jeda Jawab (Detik)", Placeholder = "1.0"}, function(
 
 SpeedSec:AddToggle({Name = "⚡ Auto Answer (Speed)", Default = false, Flag = "Tgl_Speed"}, function(state) _G.AutoMathSpeed = state end)
 SpeedSec:AddInput({Name = "Jeda Jawab (Detik)", Placeholder = "0.3"}, function(txt) if tonumber(txt) then _G.DelaySpeed = tonumber(txt) end end)
+SpeedSec:AddToggle({Name = "🗳️ Auto Vote Speedrun", Default = false, Flag = "Tgl_VoteSpeed"}, function(state)
+    _G.AutoVoteSpeedrun = state
+    if state then
+        task.spawn(function()
+            local voteRemote = ReplicatedStorage:WaitForChild("MathMatchEvents"):WaitForChild("PlayerVote")
+            while _G.AutoVoteSpeedrun do
+                pcall(function()
+                    voteRemote:FireServer("_submit")
+                    voteRemote:FireServer("Speedrun")
+                end)
+                task.wait(5)
+            end
+        end)
+    end
+end)
 
-local ExtraTab = Window:MakeTab("🛠️ Utilitas Ekstra")
+local ExtraTab = Window:MakeTab("🛠️")
 local ExploitSec = ExtraTab:AddSection("🔥 Client Exploits", true)
 
 ExploitSec:AddToggle({Name = "🛡️ Anti-AFK (Bypass Idle Kick)", Default = true}, function(state) _G.AntiAFK = state end)
