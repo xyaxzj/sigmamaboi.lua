@@ -12,16 +12,14 @@ local VirtualUser = game:GetService("VirtualUser")
 local LocalPlayer = Players.LocalPlayer
 
 -- 1. LOAD UI SIGMA LIBRARY
-local Library
-if readfile then
-    local s, res = pcall(function() return readfile("UI sigma.lua") end)
-    if s and res then
-        Library = loadstring(res)()
+local successUI, Library = pcall(function()
+    if readfile and isfile and isfile("UI sigma.lua") then
+        return loadstring(readfile("UI sigma.lua"))()
     end
-end
-if not Library then
-    Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/zxSnes/SigmaHub/main/UI%20sigma.lua"))()
-end
+    return loadstring(game:HttpGet("https://raw.githubusercontent.com/xyaxzj/sigmamaboi.lua/refs/heads/main/NcHO.lua"))()
+end)
+
+if not successUI or type(Library) ~= "table" then return end
 
 -- 2. CREATE WINDOW
 local Window = Library:CreateWindow({
