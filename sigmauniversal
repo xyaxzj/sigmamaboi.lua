@@ -355,7 +355,7 @@ local function refreshCoordsDropdown()
             table.insert(opts, k)
         end
         table.sort(opts)
-        savedCoordsDropdown:SetOptions(opts)
+        savedCoordsDropdown:Refresh(opts)
     end
 end
 
