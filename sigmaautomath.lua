@@ -28,6 +28,7 @@ _G.GamepassSpoofed = false
 _G.AntiAFK = true
 local hookInitialized = false
 local UIConsole
+local lastQuestionText = ""
 
 -- ==========================================================
 -- [2] ANTI-AFK SYSTEM (BUILT-IN)
@@ -337,6 +338,21 @@ local SHAPE_SIDES = {
     hexagon=6, heptagon=7, octagon=8, nonagon=9, decagon=10,
     rhombus=4, parallelogram=4, trapezoid=4, trapezium=4,
     kite=4, diamond=4,
+}
+
+local DICE_ASSETS = {
+    ["rbxassetid://135387362632078"] = 1,
+    ["rbxassetid://131493678775999"] = 2,
+    ["rbxassetid://110341390233609"] = 3,
+    ["rbxassetid://80284591457100"]  = 4,
+    ["rbxassetid://105892312794371"] = 5,
+    ["rbxassetid://131239646519401"] = 6,
+    ["dice_1"] = 1,
+    ["dice_2"] = 2,
+    ["dice_3"] = 3,
+    ["dice_4"] = 4,
+    ["dice_5"] = 5,
+    ["dice_6"] = 6,
 }
 
 -- ==========================================================
@@ -942,18 +958,45 @@ local function ProcessAI(data)
         end
     end
 
-    if render.kind == "dice" and render.pips then
-        local total = 0
-        for _, pipsValue in pairs(render.pips) do total = total + tonumber(pipsValue) end
-        return total
+    if render.kind == "dice" or tempId:find("dice") or tempId:find("dots") then
+        if render.pips then
+            local total = 0
+            for _, pipsValue in pairs(render.pips) do
+                local val = tonumber(pipsValue) or DICE_ASSETS[tostring(pipsValue)] or DICE_ASSETS[tostring(pipsValue):lower()]
+                if val then total = total + val end
+            end
+            if total > 0 then return total end
+        end
+        if render.images then
+            local total = 0
+            for _, img in pairs(render.images) do
+                local assetStr = tostring(img)
+                local val = DICE_ASSETS[assetStr] or DICE_ASSETS[assetStr:lower()]
+                if not val then
+                    if not assetStr:find("rbxassetid://") then
+                        local n = assetStr:match("%d+")
+                        if n then val = tonumber(n) end
+                    end
+                end
+                if val then total = total + val end
+            end
+            if total > 0 then return total end
+        end
     end
     if render.images and (tempId:find("domino") or tempId:find("dice")) then
         local total = 0
         for _, img in pairs(render.images) do
-            local n = img:match("%d+")
-            if n then total = total + tonumber(n) end
+            local assetStr = tostring(img)
+            local val = DICE_ASSETS[assetStr] or DICE_ASSETS[assetStr:lower()]
+            if not val then
+                if not assetStr:find("rbxassetid://") then
+                    local n = assetStr:match("%d+")
+                    if n then val = tonumber(n) end
+                end
+            end
+            if val then total = total + val end
         end
-        return total
+        if total > 0 then return total end
     end
 
     if render.kind == "object_count" and render.images then
@@ -1007,6 +1050,8 @@ local function FireAnswer(remote, rawData, delayTime, modeName)
         deskripsiSoal = "Visual (" .. tostring(rawData.templateId or (rawData.render and rawData.render.kind) or qType or "Unknown") .. ")"
     end
     if #deskripsiSoal > 80 then deskripsiSoal = deskripsiSoal:sub(1, 77) .. "..." end
+
+    lastQuestionText = deskripsiSoal
 
     if success then
         if answer ~= nil then
@@ -1077,7 +1122,8 @@ ShowRoundResult.OnClientEvent:Connect(function(data)
             outcome = "TIE ⚖️"
             logType = "warn"
         end
-        UIConsole:Log("📢 [" .. outcome .. "] " .. infoText .. " (Saya: " .. tostring(myAns) .. " | Lawan: " .. tostring(oppAns) .. " | Benar: " .. tostring(corrAns) .. ")", logType)
+        local qText = lastQuestionText ~= "" and lastQuestionText or "Unknown"
+        UIConsole:Log("📢 [" .. outcome .. "] Soal: " .. qText .. " | Jawab Saya: " .. tostring(myAns) .. " (Kunci: " .. tostring(corrAns) .. ") | Lawan: " .. tostring(oppAns) .. " | " .. infoText, logType)
     end
 end)
 
