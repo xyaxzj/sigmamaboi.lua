@@ -231,7 +231,12 @@ local success, errorMessage = pcall(function()
     end)
     if not Library or type(Library) ~= "table" then return end
 
-    local Window = Library:CreateWindow("Mocta Ultimate Hub V1.8", "The Complete Arsenal")
+    local Window = Library:CreateWindow({
+        Name = "Mocta Ultimate Hub V1.8",
+        LogoText = "🛒",
+        Footer = "v1.8",
+        ConfigName = "MoctaTrade"
+    })
 
     -- ==========================================
     -- UNIVERSAL HUD & STATUS WIDGET SYSTEM
