@@ -1092,7 +1092,8 @@ function Library:CreateWindow(config)
         
         function HUDObj:AddLine(labelText)
             local LineLabel = Instance.new("TextLabel", HUDScroll)
-            LineLabel.Size = UDim2.new(1, 0, 0, 16)
+            LineLabel.Size = UDim2.new(1, 0, 0, 0)
+            LineLabel.AutomaticSize = Enum.AutomaticSize.Y
             LineLabel.BackgroundTransparency = 1
             LineLabel.Text = labelText
             LineLabel.TextColor3 = Theme.Text
