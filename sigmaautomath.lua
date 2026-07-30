@@ -16,6 +16,7 @@ local SpeedRoundStart = MathEvents:WaitForChild("SpeedRoundStart")
 local SpeedPlayerAnswer = MathEvents:WaitForChild("SpeedPlayerAnswer")
 local StartVoting = MathEvents:WaitForChild("StartVoting")
 local PlayerVote = MathEvents:WaitForChild("PlayerVote")
+local ShowRoundResult = MathEvents:WaitForChild("ShowRoundResult")
 
 _G.AutoMathNormal = false
 _G.AutoMathSpeed = false
@@ -1055,6 +1056,29 @@ end)
 SpeedRoundStart.OnClientEvent:Connect(function(...)
     if not _G.AutoMathSpeed then return end
     FireAnswer(SpeedPlayerAnswer, ({...})[1], _G.DelaySpeed, "Speed")
+end)
+
+ShowRoundResult.OnClientEvent:Connect(function(data)
+    if type(data) ~= "table" then return end
+    if UIConsole then
+        local myAns = data.myAnswer or "none"
+        local oppAns = data.opponentAnswer or "none"
+        local corrAns = data.correctAnswer or "none"
+        local infoText = tostring(data.infoText or "")
+        local outcome = "Round Result"
+        local logType = "info"
+        if data.myCorrect == true then
+            outcome = "WON / CORRECT ✅"
+            logType = "success"
+        elseif data.myCorrect == false then
+            outcome = "LOST / INCORRECT ❌"
+            logType = "error"
+        elseif data.isTie then
+            outcome = "TIE ⚖️"
+            logType = "warn"
+        end
+        UIConsole:Log("📢 [" .. outcome .. "] " .. infoText .. " (Saya: " .. tostring(myAns) .. " | Lawan: " .. tostring(oppAns) .. " | Benar: " .. tostring(corrAns) .. ")", logType)
+    end
 end)
 
 Library:Notify({Title = "V26 Loaded ✅", Content = "Full Tiers 1-8 Coverage (V26 Perfect Engine) aktif.", Type = "Info", Duration = 5})
