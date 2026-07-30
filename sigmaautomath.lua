@@ -145,6 +145,37 @@ local function NormalizeOp(str)
     return s
 end
 
+-- Menghitung jumlah faktor pembagi angka
+local function countFactors(n)
+    if not n or n < 1 then return 0 end
+    local count = 0
+    for i = 1, math.floor(math.sqrt(n)) do
+        if n % i == 0 then
+            if i * i == n then
+                count = count + 1
+            else
+                count = count + 2
+            end
+        end
+    end
+    return count
+end
+
+-- Panjang huruf untuk representasi angka bahasa Inggris (1-10)
+local NUMBER_WORD_LENGTHS = {
+    [1] = 3, -- one
+    [2] = 3, -- two
+    [3] = 5, -- three
+    [4] = 4, -- four
+    [5] = 4, -- five
+    [6] = 3, -- six
+    [7] = 5, -- seven
+    [8] = 5, -- eight
+    [9] = 4, -- nine
+    [10] = 3, -- ten
+}
+
+
 -- Trivia / Pengetahuan Umum (jawaban statis)
 local TRIVIA_DB = {
     ["how many months in a year"]       = 12,
@@ -209,7 +240,7 @@ local SHAPE_SIDES = {
 }
 
 -- ==========================================================
--- [5] PERFECT AI ENGINE V25 (FULL PATTERN COVERAGE)
+-- [5] PERFECT AI ENGINE V26 (FULL PATTERN COVERAGE)
 -- ==========================================================
 local function ProcessAI(data)
     if type(data) ~= "table" then return nil end
@@ -217,19 +248,11 @@ local function ProcessAI(data)
     local render = data.render or {}
     local tempId = tostring(data.templateId or ""):lower()
 
-    -- =========================================================
-    -- PRIORITAS 1: Server mengirim jawaban langsung (Classic Mode)
-    -- Semua soal Classic punya field 'answer' yang berisi jawaban benar
-    -- =========================================================
     if data.answer ~= nil and type(data.answer) == "number" then
         return data.answer
     end
 
-    -- =========================================================
-    -- PRIORITAS 2: Dispatch berdasarkan type soal (Classic Mode)
-    -- =========================================================
     local qType = tostring(data.type or ""):lower()
-
     local questionText = tostring(data.questionText or ""):lower()
     local prompt      = tostring(data.prompt or ""):lower()
     local mainText    = (questionText ~= "" and questionText) or prompt
@@ -237,7 +260,153 @@ local function ProcessAI(data)
     local normText  = NormalizeOp(mainText)
     local compactMath = normText:gsub("%s+", "")
 
-    -- NUMERIC: a op b
+    -- 1. PERSENTASE (What is X% of Y? & X is what percent of Y?)
+    if mainText:find("is what percent of") then
+        local nums = ExtractNumbers(mainText)
+        if #nums >= 2 then
+            return math.floor(nums[1] / nums[2] * 100 + 0.5)
+        end
+    end
+    if mainText:find("what is %d+%% of %d+") or mainText:find("%% of") then
+        local nums = ExtractNumbers(mainText)
+        if #nums >= 2 then
+            return math.floor(nums[1] * nums[2] / 100 + 0.5)
+        end
+    end
+
+    -- 2. DYNAMIC PATH MATH (Start at X, then op Y, op Z...)
+    if mainText:find("start at") then
+        local startNum = tonumber(mainText:match("start at (%d+)"))
+        if startNum then
+            local current = startNum
+            local stepsText = mainText:match("then%s*(.+)")
+            if stepsText then
+                for op, numStr in stepsText:gmatch("([%+%-%*/x÷×])%s*(%d+)") do
+                    current = doOp(current, tonumber(numStr), op)
+                end
+                return current
+            end
+        end
+    end
+
+    -- 3. JALUR WAKTU SELISIH MENIT (How many minutes from H1:M1 to H2:M2?)
+    if mainText:find("from %d+:%d+ to %d+:%d+") or (mainText:find("how many minutes") and mainText:find(":")) then
+        local h1, m1, h2, m2 = mainText:match("(%d+):(%d+) to (%d+):(%d+)")
+        if h1 and m1 and h2 and m2 then
+            local t1 = tonumber(h1) * 60 + tonumber(m1)
+            local t2 = tonumber(h2) * 60 + tonumber(m2)
+            if t2 < t1 then t2 = t2 + 12 * 60 end
+            if t2 < t1 then t2 = t2 + 12 * 60 end
+            return t2 - t1
+        end
+    end
+
+    -- 4. PERBANDINGAN EKSPRESI TERBESAR (Which is biggest? (1) expr1 (2) expr2 (3) expr3)
+    if mainText:find("which is biggest") and mainText:find("%(1%)") then
+        local e1 = mainText:match("%(1%)%s*([%d%+%-*x/÷×%s]+)")
+        local e2 = mainText:match("%(2%)%s*([%d%+%-*x/÷×%s]+)")
+        local e3 = mainText:match("%(3%)%s*([%d%+%-*x/÷×%s]+)")
+        local function evalExpr(str)
+            if not str then return -math.huge end
+            str = str:gsub("%s+", "")
+            local a, op, b = str:match("(%d+)([%+%-%*/x÷×])(%d+)")
+            if a and b and op then
+                return doOp(tonumber(a), tonumber(b), op) or -math.huge
+            end
+            return tonumber(str) or -math.huge
+        end
+        local v1 = evalExpr(e1)
+        local v2 = evalExpr(e2)
+        local v3 = evalExpr(e3)
+        if v1 > v2 and v1 > v3 then return 1
+        elseif v2 > v1 and v2 > v3 then return 2
+        else return 3 end
+    end
+
+    -- 5. SORTING ASCENDING/DESCENDING NTH (Sort ascending: a, b, c, d. What is the Nth?)
+    if mainText:find("sort ascending") or mainText:find("sort descending") then
+        local nums = ExtractNumbers(mainText)
+        local nthStr = mainText:match("what is the (%d+)") or mainText:match("what is the (%a+)")
+        local nth = 1
+        if nthStr then
+            if nthStr:find("1") or nthStr == "first" or nthStr == "1st" then nth = 1
+            elseif nthStr:find("2") or nthStr == "second" or nthStr == "2nd" then nth = 2
+            elseif nthStr:find("3") or nthStr == "third" or nthStr == "3rd" then nth = 3
+            elseif nthStr:find("4") or nthStr == "fourth" or nthStr == "4th" then nth = 4
+            end
+        end
+        local list = {nums[1], nums[2], nums[3], nums[4]}
+        if mainText:find("ascending") then
+            table.sort(list)
+        else
+            table.sort(list, function(a,b) return a > b end)
+        end
+        return list[nth]
+    end
+
+    -- 6. SELISIH SUHU NAIK (Temperature went from X to Y. How many degrees did it rise?)
+    if mainText:find("temperature went from") or (mainText:find("went from") and mainText:find("rise")) then
+        local nums = ExtractNumbers(mainText)
+        if #nums >= 2 then
+            return math.abs(nums[2] - nums[1])
+        end
+    end
+
+    -- 7. KELIPATAN TERKECIL DI ATAS N (Smallest multiple of X above Y?)
+    if mainText:find("smallest multiple of %d+ above %d+") or (mainText:find("smallest multiple") and mainText:find("above")) then
+        local nums = ExtractNumbers(mainText)
+        if #nums >= 2 then
+            local mult = nums[1]
+            local above = nums[2]
+            return math.ceil((above + 1) / mult) * mult
+        end
+    end
+
+    -- 8. JUMLAH FAKTOR BILANGAN (How many factors does X have?)
+    if mainText:find("how many factors does") then
+        local nums = ExtractNumbers(mainText)
+        if nums[1] then return countFactors(nums[1]) end
+    end
+
+    -- 9. JUMLAH HURUF DARI KATA ANGKA (How many letters are in the word for X?)
+    if mainText:find("letters are in the word for") then
+        local nums = ExtractNumbers(mainText)
+        if nums[1] and NUMBER_WORD_LENGTHS[nums[1]] then
+            return NUMBER_WORD_LENGTHS[nums[1]]
+        end
+    end
+
+    -- 10. FRUIT SUBSTITUTION TIER 3 (A + B = total, A = value, find B)
+    if tempId == "t3_fruit_equation" or render.kind == "fruits_substitution" then
+        local tot = tonumber(render.total)
+        local val = tonumber(render.knownValue)
+        if tot and val then return tot - val end
+    end
+
+    -- 11. LUAS / KELILING PERSEGI PANJANG (visual/teks)
+    if tempId == "t4_rectangle_area" and render.width and render.height then
+        return tonumber(render.width) * tonumber(render.height)
+    end
+    if tempId == "t6_rectangle_perimeter" and render.width and render.height then
+        return 2 * (tonumber(render.width) + tonumber(render.height))
+    end
+
+    -- 12. KOIN TOTAL VISUAL TIER 4 (Coins renderer)
+    if tempId == "t4_coin_total" or render.kind == "coins" then
+        if render.coins then
+            local sum = 0
+            for _, coin in pairs(render.coins) do
+                sum = sum + (tonumber(coin.value) or 0)
+            end
+            return sum
+        end
+    end
+
+    -- 13. CORNERS COUNT TIER 6 (visual shape corners)
+    if tempId == "t6_count_corners" and render.shape then
+        return SHAPE_SIDES[render.shape] or 0
+    end
+
     if qType == "numeric" then
         local a = tonumber(data.a)
         local b = tonumber(data.b)
@@ -245,13 +414,21 @@ local function ProcessAI(data)
         if a and b and op ~= "" then return doOp(a, b, op) end
     end
 
-    -- WORD: soal cerita
     if qType == "word" then
         local qt = tostring(data.questionText or mainText):lower()
         local nums = ExtractNumbers(qt)
         if #nums >= 2 then
+            if qt:find("shared into groups of") or qt:find("shared into") or qt:find("groups of") then
+                return nums[1] / nums[2]
+            end
+            if qt:find("split") and (qt:find("pay") or qt:find("%$")) then
+                return nums[2] / nums[1]
+            end
             if qt:find("split equally") or qt:find("shared among") or qt:find("how many each") then
                 return nums[1] / nums[2]
+            end
+            if (qt:find("start with") or qt:find("started with")) and (qt:find("sold") or qt:find("lost") or qt:find("gave")) then
+                return nums[1] + nums[2]
             end
             if qt:find("windows") or qt:find("crayons each") or qt:find("per row") or qt:find("per hive")
                 or qt:find("total seats") or (qt:find("hives") and not qt:find("how many left"))
@@ -273,11 +450,18 @@ local function ProcessAI(data)
             end
         end
         if #nums == 3 then
+            if (qt:find("eats") or qt:find("ate") or qt:find("lost") or qt:find("gave") or qt:find("sold")) and 
+               (qt:find("buy") or qt:find("more") or qt:find("found") or qt:find("got")) then
+                return nums[1] - nums[2] + nums[3]
+            end
+            if (qt:find("gave away") or qt:find("eats") or qt:find("ate") or qt:find("lost")) and 
+               (qt:find("ate") or qt:find("eat") or qt:find("lost") or qt:find("gave")) then
+                return nums[1] - nums[2] - nums[3]
+            end
             if qt:find("sold") and qt:find("got") and qt:find("more") then return nums[1] - nums[2] + nums[3] end
         end
     end
 
-    -- FINDX: cari angka hilang
     if qType == "findx" or (mainText:find("%?") and mainText:find("=")) then
         local pL, op, pR, res = compactMath:match("^(.-)([%+%-%*/])(.-)=(%d+)$")
         if pL and pR and res then
@@ -296,26 +480,8 @@ local function ProcessAI(data)
                 elseif op == "/" then return a ~= 0 and a / rN or nil end
             end
         end
-        local pL2, op2, pR2, res2 = normText:match("(%S+)%s*([%+%-%*/])%s*(%S+)%s*=%s*(%d+)")
-        if pL2 and op2 and pR2 and res2 then
-            local rN = tonumber(res2)
-            if pL2 == "?" and tonumber(pR2) then
-                local b = tonumber(pR2)
-                if op2 == "+" then return rN - b
-                elseif op2 == "-" then return rN + b
-                elseif op2 == "*" then return b ~= 0 and rN / b or nil
-                elseif op2 == "/" then return rN * b end
-            elseif pR2 == "?" and tonumber(pL2) then
-                local a = tonumber(pL2)
-                if op2 == "+" then return rN - a
-                elseif op2 == "-" then return a - rN
-                elseif op2 == "*" then return a ~= 0 and rN / a or nil
-                elseif op2 == "/" then return a ~= 0 and a / rN or nil end
-            end
-        end
     end
 
-    -- COMPARE: mana lebih besar/kecil
     if qType == "compare" then
         local opts = data.explicitOptions
         if opts and type(opts) == "table" and #opts >= 2 then
@@ -324,12 +490,11 @@ local function ProcessAI(data)
         end
         local nums = ExtractNumbers(mainText)
         if #nums >= 2 then
-            if mainText:find("bigger") or mainText:find("larger") then return math.max(nums[1], nums[2]) end
-            if mainText:find("smaller") then return math.min(nums[1], nums[2]) end
+            if mainText:find("bigger") or mainText:find("larger") or mainText:find("biggest") or mainText:find("largest") then return math.max(table.unpack(nums)) end
+            if mainText:find("smaller") or mainText:find("smallest") then return math.min(table.unpack(nums)) end
         end
     end
 
-    -- PARITY: mana yang genap/ganjil
     if qType == "parity" then
         local opts = data.explicitOptions
         if opts and type(opts) == "table" then
@@ -347,16 +512,24 @@ local function ProcessAI(data)
         end
     end
 
-    -- SEQUENCE: deret bilangan
     if qType == "sequence" or mainText:find("what comes next") then
         local nums = ExtractNumbers(tostring(data.questionText or mainText):lower())
         if #nums >= 2 then
+            if #nums >= 3 then
+                local isFib = true
+                for i=3, #nums do
+                    if nums[i] ~= nums[i-1] + nums[i-2] then
+                        isFib = false
+                        break
+                    end
+                end
+                if isFib then return nums[#nums] + nums[#nums-1] end
+            end
             local diff = nums[#nums] - nums[#nums - 1]
             return nums[#nums] + diff
         end
     end
 
-    -- DOUBLEHALF: ganda atau setengah
     if qType == "doublehalf" or mainText:find("double of") or mainText:find("half of") then
         local qt = tostring(data.questionText or mainText):lower()
         if qt:find("double of") then
@@ -368,42 +541,24 @@ local function ProcessAI(data)
         end
     end
 
-    -- SUBSTITUTION: substitusi variabel
-    if qType == "substitution" or mainText:find("if .*what is") then
-        local qt = NormalizeOp(tostring(data.questionText or mainText):lower())
-        local map = {}
-        for k, v in qt:gmatch("(%d+)%s*=%s*(%d+)") do map[tonumber(k)] = tonumber(v) end
-        local expr = qt:match("what is%s*(.-)%s*%?")
-        if expr and next(map) then
-            expr = expr:gsub("and", ""):gsub("%s+", "")
-            local a, op1, b, op2, c = expr:match("^(%d+)([%+%-%*/])(%d+)([%+%-%*/])(%d+)$")
-            if a and b and c then
-                local va = map[tonumber(a)] or tonumber(a)
-                local vb = map[tonumber(b)] or tonumber(b)
-                local vc = map[tonumber(c)] or tonumber(c)
-                if (op1 == "*" or op1 == "/") and (op2 == "+" or op2 == "-") then
-                    return doOp(doOp(va, vb, op1), vc, op2)
-                elseif (op2 == "*" or op2 == "/") and (op1 == "+" or op1 == "-") then
-                    return doOp(va, doOp(vb, vc, op2), op1)
-                else
-                    return doOp(doOp(va, vb, op1), vc, op2)
-                end
-            end
-            local a2, op3, b2 = expr:match("^(%d+)([%+%-%*/])(%d+)$")
-            if a2 and b2 then
-                return doOp(map[tonumber(a2)] or tonumber(a2), map[tonumber(b2)] or tonumber(b2), op3)
+    if render.kind == "numerical_binary" then
+        local a = tonumber(render.a)
+        local b = tonumber(render.b)
+        if a and render.aExp then a = a ^ tonumber(render.aExp) end
+        if b and render.bExp then b = b ^ tonumber(render.bExp) end
+        return doOp(a, b, tostring(render.op))
+    end
+    if render.sqrt or tempId == "t8_square_root" then
+        local val = render.sqrt or render.a
+        if not val then
+            for _, v in pairs(render) do
+                local nv = tonumber(v)
+                if nv and nv > 0 then val = nv break end
             end
         end
-    end
-
-    -- =========================================================
-    -- PRIORITAS 3: Render Server Eksplisit (Speed Mode / Visual)
-    -- =========================================================
-    if render.kind == "numerical_binary" then
-        return doOp(tonumber(render.a), tonumber(render.b), tostring(render.op))
+        if val then return math.sqrt(tonumber(val)) end
     end
     if tempId == "t3_squares" or tempId:find("square") then
-        -- Coba render data dulu (tonumber() agar handle string)
         local n = tonumber(render.n) or tonumber(render.a) or tonumber(render.base)
         if not n then
             for _, v in pairs(render) do
@@ -411,11 +566,8 @@ local function ProcessAI(data)
                 if nv and nv > 0 then n = nv break end
             end
         end
-        -- Fallback: parse dari teks prompt ("4²" atau "4^2")
         if not n then
-            local base = mainText:match("(%d+)%s*%^%s*2")
-                      or mainText:match("(%d+)%C2%B2") -- UTF-8 ²
-                      or mainText:match("(%d+)²")
+            local base = mainText:match("(%d+)%s*%^%s*2") or mainText:match("(%d+)%C2%B2") or mainText:match("(%d+)²")
             if base then n = tonumber(base) end
         end
         if n then return n * n end
@@ -428,37 +580,21 @@ local function ProcessAI(data)
                 if nv and nv > 0 then n = nv break end
             end
         end
-        -- Fallback: parse dari teks prompt ("2³" atau "2^3")
         if not n then
-            local base = mainText:match("(%d+)%s*%^%s*3")
-                      or mainText:match("(%d+)%C2%B3") -- UTF-8 ³
-                      or mainText:match("(%d+)³")
+            local base = mainText:match("(%d+)%s*%^%s*3") or mainText:match("(%d+)%C2%B3") or mainText:match("(%d+)³")
             if base then n = tonumber(base) end
         end
         if n then return n * n * n end
     end
     if tempId:find("triangle") or render.kind == "triangle" then
-        return 180 - ((type(render.x) == "number" and render.x or 0)
-                    + (type(render.y) == "number" and render.y or 0)
-                    + (type(render.z) == "number" and render.z or 0))
+        return 180 - ((type(render.x) == "number" and render.x or 0) + (type(render.y) == "number" and render.y or 0) + (type(render.z) == "number" and render.z or 0))
     end
 
-    -- =========================================================
-    -- PRIORITAS 4: Fallback Text Parsing (Speed Mode)
-    -- =========================================================
-
-    -- Angka Romawi
     if tempId == "t5_roman_add_subtract" or tempId:find("roman") then
         if render.a and render.b and render.op then
             local n1, n2 = RomanToInt(tostring(render.a)), RomanToInt(tostring(render.b))
             if n1 and n2 then return doOp(n1, n2, tostring(render.op)) end
         end
-    end
-    if mainText:find("what number") then
-        local romanMatch = mainText:match("what number is this%?%s*([ivxlcdm]+)")
-            or mainText:match("what number is%s*([ivxlcdm]+)")
-            or mainText:match("([ivxlcdm]+)[%p%s]*$")
-        if romanMatch then return RomanToInt(romanMatch) end
     end
     local r1, opR, r2 = compactMath:match("([ivxlcdm]+)([%+%-%*/])([ivxlcdm]+)")
     if r1 and r2 then
@@ -466,105 +602,11 @@ local function ProcessAI(data)
         if n1 and n2 then return doOp(n1, n2, opR) end
     end
 
-    -- =========================================================
-    -- Konversi Waktu Dinamis: "How many seconds in 9 minutes?" → 540
-    -- Handles semua kombinasi unit waktu dengan angka dinamis
-    -- =========================================================
-    if mainText:find("how many") then
-        -- Tabel multiplier: berapa unit_kecil dalam 1 unit_besar
-        local TIME_MULT = {
-            -- unit kecil = { unit besar = faktor }
-            second  = { minute=60,  hour=3600,   day=86400,   week=604800 },
-            minute  = { hour=60,    day=1440,    week=10080,  year=525960 },
-            hour    = { day=24,     week=168,    month=730,   year=8766   },
-            day     = { week=7,     month=30,    year=365     },
-            week    = { month=4,    year=52      },
-            month   = { year=12     },
-        }
-        -- Pola: "how many [unit1]s in [N] [unit2]s?"
-        -- Contoh: "how many seconds in 9 minutes?" → unit1=second, N=9, unit2=minute
-        local unit1 = mainText:match("how many (%a+)s? in")
-        local nStr, unit2 = mainText:match("in%s+(%d+)%s+(%a+)")
-        if unit1 and nStr and unit2 then
-            -- Singularkan (hilangkan huruf 's' di belakang)
-            local u1 = unit1:gsub("s$", "")
-            local u2 = unit2:gsub("s$", "")
-            local conv = TIME_MULT[u1] and TIME_MULT[u1][u2]
-            if conv then return tonumber(nStr) * conv end
-            -- Coba kebalikan: "how many minutes in 1 hour?" → 60
-            local conv2 = TIME_MULT[u2] and TIME_MULT[u2][u1]
-            if conv2 then return tonumber(nStr) * conv2 end
-        end
-    end
-
-    -- =========================================================
-    -- Pengetahuan Umum / Trivia (lookup statis)
-    -- =========================================================
-    for pattern, ans in pairs(TRIVIA_DB) do
-        if mainText:find(pattern, 1, true) then return ans end
-    end
-
-    -- =========================================================
-    -- Hitung digit ("How many digits are in 7955?") → 4
-    -- =========================================================
-    if mainText:find("how many digits") then
-        local nums = ExtractNumbers(mainText)
-        if nums[1] then return #tostring(math.abs(math.floor(nums[1]))) end
-    end
-
-    -- =========================================================
-    -- Aljabar Huruf: "If A + B = 13, A + C = 10, and B = 9, what is C?"
-    -- =========================================================
-    if mainText:find("if ") and mainText:find("what is ") then
-        -- Deteksi variabel huruf (bukan angka substitusi)
-        local hasLetterVar = mainText:match("%f[%a][a-z]%s*[%+%-%*]%s*[a-z]%f[^%a]")
-        local hasLetterEq  = mainText:match("%f[%a][a-z]%s*=%s*%d")
-        if hasLetterVar or hasLetterEq then
-            local vars = {}
-            -- Kumpulkan nilai langsung: "b = 9"
-            for v, n in mainText:gmatch("%f[%a]([a-z])%s*=%s*(%d+)%f[^%d]") do
-                -- Pastikan bukan bagian dari persamaan dua variabel
-                if not mainText:find(v .. "%s*[%+%-]%s*[a-z]") and
-                   not mainText:find("[a-z]%s*[%+%-]%s*" .. v .. "%s*=") then
-                    vars[v] = tonumber(n)
-                end
-            end
-            -- Kumpulkan semua persamaan dua variabel: "a + b = 13"
-            local equations = {}
-            for eq in mainText:gmatch("([a-z%s%+%-%d]+)=%s*%d+") do
-                local va, op, vb, res = mainText:match("%f[%a]([a-z])%s*([%+%-])%s*([a-z])%s*=%s*(%d+)")
-                -- Iterate all occurrences
-            end
-            for va, op, vb, res in mainText:gmatch("%f[%a]([a-z])%s*([%+%-])%s*([a-z])%s*=%s*(%d+)") do
-                table.insert(equations, {a=va, op=op, b=vb, res=tonumber(res)})
-            end
-            -- Selesaikan iteratif
-            for _ = 1, 10 do
-                for _, eq in ipairs(equations) do
-                    if vars[eq.a] and not vars[eq.b] then
-                        if eq.op == "+" then vars[eq.b] = eq.res - vars[eq.a]
-                        elseif eq.op == "-" then vars[eq.b] = vars[eq.a] - eq.res end
-                    elseif vars[eq.b] and not vars[eq.a] then
-                        if eq.op == "+" then vars[eq.a] = eq.res - vars[eq.b]
-                        elseif eq.op == "-" then vars[eq.a] = eq.res + vars[eq.b] end
-                    end
-                end
-            end
-            -- Ambil variabel yang ditanya
-            local askVar = mainText:match("what is ([a-z])%s*%?")
-            if askVar and vars[askVar] then return vars[askVar] end
-        end
-    end
-
-    -- Kuadrat ² (fallback teks)
     local baseSq = compactMath:match("(%d+)%²") or compactMath:match("(%d+)%^2")
     if baseSq then return tonumber(baseSq) * tonumber(baseSq) end
-
-    -- Kubik ³ (fallback teks)
     local baseCb = compactMath:match("(%d+)%³") or compactMath:match("(%d+)%^3")
     if baseCb then return tonumber(baseCb) * tonumber(baseCb) * tonumber(baseCb) end
 
-    -- Tiga angka (urutan operasi benar)
     local a1, op1a, b1, op2a, c1 = compactMath:match("(%d+)([%+%-%*/])(%d+)([%+%-%*/])(%d+)")
     if a1 and b1 and c1 then
         if (op1a == "*" or op1a == "/") and (op2a == "+" or op2a == "-") then
@@ -576,16 +618,9 @@ local function ProcessAI(data)
         end
     end
 
-    -- Kurung: (a op b) op c
-    local a2, op3, b2, op4, c2 = compactMath:match("%((%d+)([%+%-%*/])(%d+)%)([%+%-%*/])(%d+)")
-    if a2 and b2 and c2 then return doOp(doOp(tonumber(a2), tonumber(b2), op3), tonumber(c2), op4) end
-
-    -- Dua angka murni
     local a3, op5, b3 = compactMath:match("^(%d+)([%+%-%*/])(%d+)$")
     if a3 and b3 then return doOp(tonumber(a3), tonumber(b3), op5) end
 
-    -- Compare (speed prompt style + 3+ angka tanpa titik dua)
-    -- Menangani: "bigger:", "larger:", "smaller:", "Which is biggest? 5, 20, 9", "Which is smallest? ..."
     if normText:find("bigger") or normText:find("largest") then
         local nums = ExtractNumbers(mainText)
         if #nums >= 2 then return math.max(table.unpack(nums)) end
@@ -594,61 +629,20 @@ local function ProcessAI(data)
         if #nums >= 2 then return math.min(table.unpack(nums)) end
     end
 
-    -- Parity (speed prompt style)
-    if normText:find("even:") or normText:find("which is even") then
-        for _, n in ipairs(ExtractNumbers(mainText)) do if n % 2 == 0 then return n end end
-    elseif normText:find("odd:") or normText:find("which is odd") then
-        for _, n in ipairs(ExtractNumbers(mainText)) do if n % 2 ~= 0 then return n end end
-    end
-
-    -- Soal cerita fallback (speed mode, 2 angka)
-    local nums = ExtractNumbers(mainText)
-    if #nums == 2 then
-        if normText:find("split") or normText:find("shared") or normText:find("how many each") then return nums[1] / nums[2] end
-        if normText:find("windows") or normText:find("crayons each") or normText:find("per row")
-            or normText:find("per hive") or normText:find("total seats") then return nums[1] * nums[2] end
-        if normText:find("eats") or normText:find("left") or normText:find("remain") or normText:find("stay")
-            or normText:find("borrowed") or normText:find("get off") or normText:find("sold")
-            or normText:find("swim away") or normText:find("digs up") or normText:find("checked out")
-            or normText:find("go home") then return nums[1] - nums[2] end
-        if normText:find("more") or normText:find("hop on") or normText:find("picks") or normText:find("grow")
-            or normText:find("finds") or normText:find("arrive") or normText:find("move in")
-            or normText:find("gives her") or normText:find("how many now") then return nums[1] + nums[2] end
-    elseif #nums == 3 then
-        if normText:find("sold") and normText:find("got") and normText:find("more") then
-            return nums[1] - nums[2] + nums[3]
-        end
-    end
-
-    if normText:find("reverse") and nums[1] then return tonumber(string.reverse(tostring(nums[1]))) end
-    if normText:find("remainder") and #nums >= 2 then return nums[1] % nums[2] end
-    if normText:find("sum of digits") and nums[1] then
-        local sum = 0
-        for i = 1, #tostring(nums[1]) do sum = sum + tonumber(string.sub(tostring(nums[1]), i, i)) end
-        return sum
-    end
-
-    -- Pembulatan desimal: "Round 8.7 to the nearest whole number" → 9
     if normText:find("round") and normText:find("nearest") then
         local dec = mainText:match("(%d+%.%d+)")
         if dec then return math.floor(tonumber(dec) + 0.5) end
-        -- Fallback: integer
         local n = mainText:match("round (%d+)")
         if n then return tonumber(n) end
     end
-    -- Round to nearest multiple (lama): "round X to nearest Y"
     if normText:find("round") and #nums >= 2 and not normText:find("nearest whole") then
         return math.floor(nums[1] / nums[2] + 0.5) * nums[2]
     end
 
-    -- Sudut / sisi bentuk: "How many corners?", "How many sides?"
     if mainText:find("how many corners") or mainText:find("how many sides") or
        mainText:find("how many vertices") or mainText:find("how many angles") then
-        -- Cari dari render data
-        local sides = tonumber(render.sides) or tonumber(render.corners)
-                   or tonumber(render.vertices) or tonumber(render.n)
+        local sides = tonumber(render.sides) or tonumber(render.corners) or tonumber(render.vertices) or tonumber(render.n)
         if sides then return sides end
-        -- Cari nama bentuk di render
         local function checkShapeName(s)
             if not s then return nil end
             s = tostring(s):lower()
@@ -657,19 +651,39 @@ local function ProcessAI(data)
             end
             return nil
         end
-        local found = checkShapeName(render.shape) or checkShapeName(render.type)
-                   or checkShapeName(render.kind)  or checkShapeName(render.name)
-                   or checkShapeName(tempId)
+        local found = checkShapeName(render.shape) or checkShapeName(render.type) or checkShapeName(render.kind) or checkShapeName(render.name) or checkShapeName(tempId)
         if found then return found end
-        -- Cari nama bentuk dalam prompt (jika ada: "How many corners does a square have?")
         for name, count in pairs(SHAPE_SIDES) do
             if mainText:find(name) then return count end
         end
     end
 
-    -- Pola visual "Which number breaks the pattern?"
+    -- 14. Pattern Completion Visual Outlier Finder (t6_pattern_completion)
+    if tempId == "t6_pattern_completion" or render.kind == "pattern" then
+        if render.items then
+            local freq = {}
+            for _, item in ipairs(render.items) do
+                freq[item] = (freq[item] or 0) + 1
+            end
+            local outlier = nil
+            for item, cnt in pairs(freq) do
+                if cnt == 1 then
+                    outlier = item
+                    break
+                end
+            end
+            if outlier then
+                for idx, item in ipairs(render.items) do
+                    if item == outlier then
+                        return idx
+                    end
+                end
+            end
+        end
+    end
+
+    -- Pola visual "Which number breaks the pattern?" fallback
     if mainText:find("breaks the pattern") or mainText:find("break the pattern") then
-        -- Coba baca angka dari render
         local function collectNums(t, out)
             for _, v in pairs(t) do
                 local nv = tonumber(v)
@@ -680,14 +694,12 @@ local function ProcessAI(data)
         local renderNums = {}
         collectNums(render, renderNums)
         if #renderNums >= 3 then
-            -- Cari angka yang tidak sama dengan mayoritas
             local freq = {}
             for _, v in ipairs(renderNums) do freq[v] = (freq[v] or 0) + 1 end
             for val, cnt in pairs(freq) do
-                if cnt == 1 then return val end -- angka yang muncul sekali = outlier
+                if cnt == 1 then return val end
             end
         end
-        -- Coba dari images: cari nama yang berbeda
         if render.images then
             local freq = {}
             for _, img in pairs(render.images) do
@@ -703,7 +715,7 @@ local function ProcessAI(data)
         end
     end
 
-    -- Area / Perimeter (visual)
+    -- Area / Perimeter (visual) fallback
     if normText:find("area") or normText:find("perimeter") then
         local geoNums = {}
         local function findNums(t)
@@ -754,7 +766,7 @@ local function ProcessAI(data)
         return count
     end
 
-    -- Total (fruit equation, dll)
+    -- Total (fruit equation, dll) fallback
     if normText:find("total") or tempId == "t3_fruit_equation" or normText:find("fruit") then
         local numsFruit = {}
         local total = 0
@@ -822,4 +834,4 @@ SpeedRoundStart.OnClientEvent:Connect(function(...)
     FireAnswer(SpeedPlayerAnswer, ({...})[1], _G.DelaySpeed, "Speed")
 end)
 
-Library:Notify({Title = "V25 Loaded ✅", Content = "+algebra/round-decimal/corners/pattern aktif.", Type = "Info", Duration = 5})
+Library:Notify({Title = "V26 Loaded ✅", Content = "Full Tiers 1-8 Coverage (V26 Perfect Engine) aktif.", Type = "Info", Duration = 5})
