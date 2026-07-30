@@ -26,6 +26,7 @@ _G.ObbyDelay = 10.0
 _G.GamepassSpoofed = false
 _G.AntiAFK = true
 local hookInitialized = false
+local UIConsole
 
 -- ==========================================================
 -- [2] ANTI-AFK SYSTEM (BUILT-IN)
@@ -192,9 +193,11 @@ ExploitSec:AddToggle({Name = "💎 Unlock All Gamepass (Advanced)", Default = fa
                 -- Jika hookmetamethod & hookfunction gagal/tidak didukung, tetap beri notif bahwa atribut lokal dipasang
                 Library:Notify({Title = "Atribut Diaktifkan", Content = "Bypass Atribut Aktif (Metamethod Hook tidak didukung).", Type = "Info", Duration = 3})
             end
-        end
     end
 end)
+local LogTab = Window:MakeTab("📋")
+local LogSec = LogTab:AddSection("Log Pertanyaan", true)
+UIConsole = LogSec:AddConsole("Math AI Logs")
 
 -- ==========================================================
 -- [4] FUNGSI HELPER
@@ -1012,6 +1015,9 @@ local function FireAnswer(remote, rawData, delayTime, modeName)
                 Type = "Success",
                 Duration = 2
             })
+            if UIConsole then
+                UIConsole:Log("[" .. modeName .. "] Soal: " .. deskripsiSoal .. " ➔ Jawab: " .. tostring(finalAns), "success")
+            end
             task.spawn(function()
                 task.wait(delayTime)
                 remote:FireServer(finalAns)
@@ -1023,6 +1029,9 @@ local function FireAnswer(remote, rawData, delayTime, modeName)
                 Type = "Error",
                 Duration = 5
             })
+            if UIConsole then
+                UIConsole:Log("[" .. modeName .. "] NIL ANSWER untuk: " .. deskripsiSoal, "warn")
+            end
         end
     else
         Library:Notify({
@@ -1031,6 +1040,9 @@ local function FireAnswer(remote, rawData, delayTime, modeName)
             Type = "Error",
             Duration = 7
         })
+        if UIConsole then
+            UIConsole:Log("[" .. modeName .. "] CRASH: " .. tostring(answer) .. " | Soal: " .. deskripsiSoal, "error")
+        end
     end
 end
 
