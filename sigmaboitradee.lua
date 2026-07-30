@@ -31,13 +31,14 @@ local success, errorMessage = pcall(function()
     end
 
     -- ==========================================
-    -- VARIABEL SISTEM (KERANJANG & ANTREAN)
+    -- ==========================================
+    -- SYSTEM VARIABLES (CARTS & QUEUES)
     -- ==========================================
     local TargetPlayerName = ""
     local CurrentQueue = {}
     
     local ShoppingCart = {}  -- Trade
-    local SellCart = {}      -- Jual
+    local SellCart = {}      -- Sell
     local BaseCart = {}      -- Place Base
     
     local ItemsProcessed = 0
@@ -262,7 +263,7 @@ local success, errorMessage = pcall(function()
     end)
 
     -- ==========================================
-    -- TAB 2: SMART SELL (KERANJANG JUAL)
+    -- TAB 2: SMART SELL (SELL CART)
     -- ==========================================
     local TabSell = Window:MakeTab("💰")
     local SecSell1 = TabSell:AddSection("1. Sell Cart Setup")
@@ -453,12 +454,12 @@ local success, errorMessage = pcall(function()
             end
             
             Library:Notify("Completely Drained!", "Execution complete. Total clicks: " .. clickCount .. "x.", 5)
-            print("[MOCTA] Pembantaian selesai. Total " .. TargetToolNameAction .. " executed: " .. clickCount)
+            print("[MOCTA] Execution finished. Total " .. TargetToolNameAction .. " executed: " .. clickCount)
         end)
     end)
 
     -- ==========================================
-    -- TAB 5: TAS & STOK (INVENTORY)
+    -- TAB 5: STOCK & STORAGE (INVENTORY)
     -- ==========================================
     local TabInventory = Window:MakeTab("🎒")
     local SecInv = TabInventory:AddSection("Information")
@@ -466,7 +467,7 @@ local success, errorMessage = pcall(function()
     SecInv:AddButton("🔄 Manual Update Inventory Data", function() updateInventoryDisplay() end)
 
     -- ==========================================
-    -- TAB 6: PENGIRIM (P1)
+    -- TAB 6: DISPATCH SENDER (P1)
     -- ==========================================
     local TabDispatch = Window:MakeTab("📤")
     local SecDispatch = TabDispatch:AddSection("Dispatch Control")
@@ -533,7 +534,7 @@ local success, errorMessage = pcall(function()
     end)
 
     -- ==========================================
-    -- TAB 7: PENERIMA (P2)
+    -- TAB 7: INBOUND RECEIVER (P2)
     -- ==========================================
     local TabInbound = Window:MakeTab("📥")
     local SecInbound = TabInbound:AddSection("Inbound Control")
@@ -632,11 +633,11 @@ local success, errorMessage = pcall(function()
     updateStatsDisplay = function()
         local elapsedTime = tick() - SessionStartTime
         local str = "Uptime: " .. formatTime(elapsedTime) .. "\n"
-        str = str .. "Total P1 Transactions (Send): " .. P1TradesCompleted .. " kali\n"
-        str = str .. "Total P2 Transactions (Receive): " .. P2TradesCompleted .. " kali\n"
-        str = str .. "Total Items Sent: " .. TotalItemsSent .. " barang"
+        str = str .. "Total P1 Transactions (Send): " .. P1TradesCompleted .. " times\n"
+        str = str .. "Total P2 Transactions (Receive): " .. P2TradesCompleted .. " times\n"
+        str = str .. "Total Items Sent: " .. TotalItemsSent .. " items"
         
-        StatsDisplay:Set("Statistik Real-Time", str)
+        StatsDisplay:Set("Real-Time Statistics", str)
     end
 
     task.spawn(function() while task.wait(1) do if updateStatsDisplay then updateStatsDisplay() end end end)
@@ -695,7 +696,7 @@ local success, errorMessage = pcall(function()
                 for _, cat in ipairs(sortedCategories) do
                     displayString = displayString .. "=== " .. cat .. " (Total: " .. categoryTotals[cat] .. ") ===\n"
                     table.sort(categorizedItems[cat], function(a, b) return a.name < b.name end)
-                    for _, item in ipairs(categorizedItems[cat]) do displayString = displayString .. string.format(" • %s  (Stok: %d)\n", item.name, item.qty) end
+                    for _, item in ipairs(categorizedItems[cat]) do displayString = displayString .. string.format(" • %s  (Stock: %d)\n", item.name, item.qty) end
                     displayString = displayString .. "\n"
                 end
             end
@@ -723,5 +724,5 @@ end)
 
 if not success then
     warn("MOCTA SCRIPT ERROR: " .. tostring(errorMessage))
-    pcall(function() game.StarterGui:SetCore("SendNotification", {Title = "Kesalahan", Text = tostring(errorMessage), Duration = 20}) end)
+    pcall(function() game.StarterGui:SetCore("SendNotification", {Title = "Error", Text = tostring(errorMessage), Duration = 20}) end)
 end
