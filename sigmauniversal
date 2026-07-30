@@ -641,6 +641,19 @@ end)
 -- 5. TAB TELEPORT / COORDINATES
 local TabTP = Window:MakeTab("📍")
 local SecCoord = TabTP:AddSection("Location Coordinate Manager")
+if not SecCoord.AddInput then
+    task.spawn(function()
+        task.wait(1)
+        Library:Notify({
+            Title = "Library Outdated",
+            Content = "Please copy the latest 'UI sigma.lua' file to your executor's workspace folder!",
+            Type = "Error",
+            Duration = 15
+        })
+    end)
+    return
+end
+
 SecCoord:AddButton("📋 Copy Current CFrame to Clipboard", function()
     copyCoords()
 end)
