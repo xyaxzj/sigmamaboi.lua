@@ -51,7 +51,23 @@ local success, errorMessage = pcall(function()
     local P1TradesCompleted = 0
     local P2TradesCompleted = 0
     local TotalItemsSent = 0
-    local TradeHistoryString = "No transaction history yet."
+    local ConsoleStats
+    local function groupItems(namesTable)
+        local counts = {}
+        local order = {}
+        for _, name in ipairs(namesTable) do
+            if not counts[name] then
+                counts[name] = 0
+                table.insert(order, name)
+            end
+            counts[name] = counts[name] + 1
+        end
+        local parts = {}
+        for _, name in ipairs(order) do
+            table.insert(parts, name .. " x" .. counts[name])
+        end
+        return table.concat(parts, ", ")
+    end
 
     local SelectedSellItems = {}
     local SelectedSellMixQty = 0
@@ -501,7 +517,10 @@ local success, errorMessage = pcall(function()
         end
         
         P1TradesCompleted = P1TradesCompleted + 1; ItemsProcessed = ItemsProcessed + batchSize; TotalItemsSent = TotalItemsSent + batchSize
-        TradeHistoryString = TradeHistoryString .. "\n[" .. os.date("%H:%M:%S") .. "] Mengirim " .. batchSize .. " items to " .. target.Name
+        local details = groupItems(names)
+        if ConsoleStats then
+            ConsoleStats:Log("Send: " .. details .. " to " .. target.Name, "success")
+        end
         
         LiveProgress:Set("Status", string.format("Remaining: %d\nSuccess: %d", #CurrentQueue, ItemsProcessed))
         updateStatsDisplay(); IsProcessing = false; return true
@@ -571,7 +590,31 @@ local success, errorMessage = pcall(function()
                         while tradeFrame.Visible and not isOpponentConfirmed(tradeFrame) do task.wait(0.2) end
                         if tradeFrame.Visible and isOpponentConfirmed(tradeFrame) then task.wait(5.5); r_trade_i:FireServer("Confirm") end
                         while tradeFrame.Visible do task.wait(0.5) end
-                        P2TradesCompleted = P2TradesCompleted + 1; updateStatsDisplay() 
+                        local receivedNames = {}
+                        pcall(function()
+                            local p2Frame = tradeFrame:FindFirstChild("P2_Frame")
+                            if p2Frame then
+                                for _, slot in ipairs(p2Frame:GetDescendants()) do
+                                    if slot:IsA("TextLabel") and slot.Visible and slot.Text ~= "" and slot.Text ~= "Confirmed" then
+                                        local isPlayer = false
+                                        for _, p in ipairs(Players:GetPlayers()) do
+                                            if p.Name == slot.Text or p.DisplayName == slot.Text then isPlayer = true break end
+                                        end
+                                        if not isPlayer and not tonumber(slot.Text) and #slot.Text > 2 then
+                                            table.insert(receivedNames, slot.Text)
+                                        end
+                                    end
+                                end
+                            end
+                        end)
+                        P2TradesCompleted = P2TradesCompleted + 1; updateStatsDisplay()
+                        if ConsoleStats then
+                            if #receivedNames > 0 then
+                                ConsoleStats:Log("Receive: " .. groupItems(receivedNames), "info")
+                            else
+                                ConsoleStats:Log("Receive: Incoming trade completed successfully.", "info")
+                            end
+                        end
                     end
                 end
             end)
@@ -584,7 +627,7 @@ local success, errorMessage = pcall(function()
     local TabStats = Window:MakeTab("📊")
     local SecStats = TabStats:AddSection("Statistics")
     local StatsDisplay = SecStats:AddParagraph("Current Session", "Calculating...")
-    local HistoryDisplay = SecStats:AddParagraph("Last Dispatch Log", TradeHistoryString)
+    ConsoleStats = SecStats:AddConsole("Trade History Logs")
     
     updateStatsDisplay = function()
         local elapsedTime = tick() - SessionStartTime
@@ -594,14 +637,6 @@ local success, errorMessage = pcall(function()
         str = str .. "Total Items Sent: " .. TotalItemsSent .. " barang"
         
         StatsDisplay:Set("Statistik Real-Time", str)
-        
-        local lines = string.split(TradeHistoryString, "\n")
-        if #lines > 15 then
-            local newHistory = ""
-            for i = #lines - 10, #lines do newHistory = newHistory .. lines[i] .. "\n" end
-            TradeHistoryString = newHistory
-        end
-        HistoryDisplay:Set("Last Dispatch Log", TradeHistoryString)
     end
 
     task.spawn(function() while task.wait(1) do if updateStatsDisplay then updateStatsDisplay() end end end)
