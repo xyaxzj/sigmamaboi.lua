@@ -53,6 +53,20 @@ local success, errorMessage = pcall(function()
     local P2TradesCompleted = 0
     local TotalItemsSent = 0
     local ConsoleStats
+    _G.TradeLogsMode = "Detailed"
+    local CumulativeSent = {}
+    local CumulativeReceived = {}
+    local function getCumulativeDetails(playerData)
+        local parts = {}
+        local order = {}
+        for name in pairs(playerData) do table.insert(order, name) end
+        table.sort(order)
+        for _, name in ipairs(order) do
+            table.insert(parts, name .. " x" .. playerData[name])
+        end
+        return table.concat(parts, ", ")
+    end
+
     local function groupItems(namesTable)
         local counts = {}
         local order = {}
@@ -222,7 +236,15 @@ local success, errorMessage = pcall(function()
     -- ==========================================
     -- UNIVERSAL HUD & STATUS WIDGET SYSTEM
     -- ==========================================
-    local TradeHUD = Window:CreateHUD({Title = "Auto-Trade Status", Width = 180, Height = 90})
+    local HUDToggle
+    local TradeHUD = Window:CreateHUD({
+        Title = "Auto-Trade Status", 
+        Width = 180, 
+        Height = 90,
+        OnClose = function()
+            if HUDToggle then HUDToggle:Set(false) end
+        end
+    })
     local hudQueueLine = TradeHUD:AddLine("Queue: Empty")
     local hudSenderLine = TradeHUD:AddLine("Sender (P1): 🔴 Inactive")
     local hudReceiverLine = TradeHUD:AddLine("Receiver (P2): 🔴 Inactive")
@@ -582,9 +604,19 @@ local success, errorMessage = pcall(function()
         end
         
         P1TradesCompleted = P1TradesCompleted + 1; ItemsProcessed = ItemsProcessed + batchSize; TotalItemsSent = TotalItemsSent + batchSize
-        local details = groupItems(names)
         if ConsoleStats then
-            ConsoleStats:Log("Send: " .. details .. " to " .. target.Name, "success")
+            if _G.TradeLogsMode == "Documentation" then
+                if not CumulativeSent[target.Name] then CumulativeSent[target.Name] = {} end
+                local playerSent = CumulativeSent[target.Name]
+                for _, name in ipairs(names) do
+                    playerSent[name] = (playerSent[name] or 0) + 1
+                end
+                local details = getCumulativeDetails(playerSent)
+                ConsoleStats:Log("Total Sent to " .. target.Name .. ": " .. details, "success")
+            else
+                local details = groupItems(names)
+                ConsoleStats:Log("Send: " .. details .. " to " .. target.Name, "success")
+            end
         end
         
         LiveProgress:Set("Status", string.format("Remaining: %d\nSuccess: %d", #CurrentQueue, ItemsProcessed))
@@ -676,8 +708,28 @@ local success, errorMessage = pcall(function()
                         end)
                         P2TradesCompleted = P2TradesCompleted + 1; updateStatsDisplay(); updateTradeHUD()
                         if ConsoleStats then
+                            local partnerName = "Opponent"
+                            for _, p in ipairs(Players:GetPlayers()) do
+                                if p ~= localPlayer then
+                                    if tradeFrame:FindFirstChild(p.Name, true) or tradeFrame:FindFirstChild(p.DisplayName, true) then
+                                        partnerName = p.Name
+                                        break
+                                    end
+                                end
+                            end
+
                             if #receivedNames > 0 then
-                                ConsoleStats:Log("Receive: " .. groupItems(receivedNames), "info")
+                                if _G.TradeLogsMode == "Documentation" then
+                                    if not CumulativeReceived[partnerName] then CumulativeReceived[partnerName] = {} end
+                                    local playerRec = CumulativeReceived[partnerName]
+                                    for _, name in ipairs(receivedNames) do
+                                        playerRec[name] = (playerRec[name] or 0) + 1
+                                    end
+                                    local details = getCumulativeDetails(playerRec)
+                                    ConsoleStats:Log("Total Received from " .. partnerName .. ": " .. details, "info")
+                                else
+                                    ConsoleStats:Log("Receive: " .. groupItems(receivedNames) .. " from " .. partnerName, "info")
+                                end
                             else
                                 ConsoleStats:Log("Receive: Incoming trade completed successfully.", "info")
                             end
@@ -697,6 +749,9 @@ local success, errorMessage = pcall(function()
     local TabStats = Window:MakeTab("📊")
     local SecStats = TabStats:AddSection("Statistics")
     local StatsDisplay = SecStats:AddParagraph("Current Session", "Calculating...")
+    SecStats:AddDropdown({Name = "Console Log Mode", Options = {"Detailed", "Documentation"}, Default = "Detailed"}, function(val)
+        _G.TradeLogsMode = val
+    end)
     ConsoleStats = SecStats:AddConsole("Trade History Logs")
     
     updateStatsDisplay = function()
@@ -716,6 +771,9 @@ local success, errorMessage = pcall(function()
     -- ==========================================
     local TabSettings = Window:MakeTab("⚙️")
     local SecSet = TabSettings:AddSection("System")
+    HUDToggle = SecSet:AddToggle({Name = "📺 Show Status HUD", Default = true}, function(state)
+        TradeHUD:SetVisible(state)
+    end)
     SecSet:AddButton("🔄 Update Script", function() Library.Unloaded = true; task.wait(0.5); loadstring(game:HttpGet(SCRIPT_URL))() end)
 
     -- ==========================================
