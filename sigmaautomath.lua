@@ -145,8 +145,71 @@ local function NormalizeOp(str)
     return s
 end
 
+-- Trivia / Pengetahuan Umum (jawaban statis)
+local TRIVIA_DB = {
+    ["how many months in a year"]       = 12,
+    ["months in a year"]                = 12,
+    ["how many days in a week"]         = 7,
+    ["days in a week"]                  = 7,
+    ["how many days in a year"]         = 365,
+    ["how many weeks in a year"]        = 52,
+    ["how many seconds in a minute"]    = 60,
+    ["how many minutes in an hour"]     = 60,
+    ["how many hours in a day"]         = 24,
+    ["how many hours in a week"]        = 168,
+    ["how many sides does a triangle have"] = 3,
+    ["sides does a triangle have"]      = 3,
+    ["how many sides does a square have"]   = 4,
+    ["sides does a square have"]        = 4,
+    ["how many sides does a pentagon have"] = 5,
+    ["sides does a pentagon have"]      = 5,
+    ["how many sides does a hexagon have"]  = 6,
+    ["sides does a hexagon have"]       = 6,
+    ["how many sides does an octagon have"] = 8,
+    ["sides does an octagon have"]      = 8,
+    ["how many sides does a heptagon have"] = 7,
+    ["how many sides does a decagon have"]  = 10,
+    ["how many faces does a cube have"] = 6,
+    ["faces does a cube have"]          = 6,
+    ["how many edges does a cube have"] = 12,
+    ["edges does a cube have"]          = 12,
+    ["how many corners does a cube have"]   = 8,
+    ["how many vertices does a cube have"]  = 8,
+    ["how many degrees in a circle"]    = 360,
+    ["degrees in a circle"]             = 360,
+    ["how many degrees in a right angle"]   = 90,
+    ["degrees in a right angle"]        = 90,
+    ["how many degrees in a straight line"] = 180,
+    ["degrees in a straight line"]      = 180,
+    ["how many degrees in a triangle"]  = 180,
+    ["sum of angles in a triangle"]     = 180,
+    -- Shapes & Angles difficulty extras
+    ["how many corners does a rectangle have"] = 4,
+    ["how many corners does a square have"]    = 4,
+    ["how many corners does a triangle have"]  = 3,
+    ["how many corners does a pentagon have"]  = 5,
+    ["how many corners does a hexagon have"]   = 6,
+    ["how many right angles in a square"]      = 4,
+    ["how many right angles in a rectangle"]   = 4,
+    ["how many right angles in a triangle"]    = 1,
+    ["how many lines of symmetry does a square have"]    = 4,
+    ["how many lines of symmetry does a rectangle have"] = 2,
+    ["how many lines of symmetry does a circle have"]    = 0,  -- infinite, but game likely says 0 or some fixed
+    ["how many faces does a sphere have"]      = 1,
+    ["how many faces does a cylinder have"]    = 3,
+    ["how many faces does a cone have"]        = 2,
+}
+
+-- Peta nama bentuk → jumlah sisi/sudut
+local SHAPE_SIDES = {
+    triangle=3, square=4, rectangle=4, pentagon=5,
+    hexagon=6, heptagon=7, octagon=8, nonagon=9, decagon=10,
+    rhombus=4, parallelogram=4, trapezoid=4, trapezium=4,
+    kite=4, diamond=4,
+}
+
 -- ==========================================================
--- [5] PERFECT AI ENGINE V23 (BERDASARKAN BANK SOAL ASLI)
+-- [5] PERFECT AI ENGINE V25 (FULL PATTERN COVERAGE)
 -- ==========================================================
 local function ProcessAI(data)
     if type(data) ~= "table" then return nil end
@@ -340,13 +403,38 @@ local function ProcessAI(data)
         return doOp(tonumber(render.a), tonumber(render.b), tostring(render.op))
     end
     if tempId == "t3_squares" or tempId:find("square") then
-        local n = render.n or render.a or render.base
-        if not n then for _, v in pairs(render) do if type(v) == "number" then n = v break end end end
+        -- Coba render data dulu (tonumber() agar handle string)
+        local n = tonumber(render.n) or tonumber(render.a) or tonumber(render.base)
+        if not n then
+            for _, v in pairs(render) do
+                local nv = tonumber(v)
+                if nv and nv > 0 then n = nv break end
+            end
+        end
+        -- Fallback: parse dari teks prompt ("4²" atau "4^2")
+        if not n then
+            local base = mainText:match("(%d+)%s*%^%s*2")
+                      or mainText:match("(%d+)%C2%B2") -- UTF-8 ²
+                      or mainText:match("(%d+)²")
+            if base then n = tonumber(base) end
+        end
         if n then return n * n end
     end
     if tempId == "t6_cubes" or tempId:find("cube") then
-        local n = render.n or render.a or render.base
-        if not n then for _, v in pairs(render) do if type(v) == "number" then n = v break end end end
+        local n = tonumber(render.n) or tonumber(render.a) or tonumber(render.base)
+        if not n then
+            for _, v in pairs(render) do
+                local nv = tonumber(v)
+                if nv and nv > 0 then n = nv break end
+            end
+        end
+        -- Fallback: parse dari teks prompt ("2³" atau "2^3")
+        if not n then
+            local base = mainText:match("(%d+)%s*%^%s*3")
+                      or mainText:match("(%d+)%C2%B3") -- UTF-8 ³
+                      or mainText:match("(%d+)³")
+            if base then n = tonumber(base) end
+        end
         if n then return n * n * n end
     end
     if tempId:find("triangle") or render.kind == "triangle" then
@@ -378,9 +466,103 @@ local function ProcessAI(data)
         if n1 and n2 then return doOp(n1, n2, opR) end
     end
 
-    -- Kuadrat ²
-    local baseSq = compactMath:match("(%d+)%²")
+    -- =========================================================
+    -- Konversi Waktu Dinamis: "How many seconds in 9 minutes?" → 540
+    -- Handles semua kombinasi unit waktu dengan angka dinamis
+    -- =========================================================
+    if mainText:find("how many") then
+        -- Tabel multiplier: berapa unit_kecil dalam 1 unit_besar
+        local TIME_MULT = {
+            -- unit kecil = { unit besar = faktor }
+            second  = { minute=60,  hour=3600,   day=86400,   week=604800 },
+            minute  = { hour=60,    day=1440,    week=10080,  year=525960 },
+            hour    = { day=24,     week=168,    month=730,   year=8766   },
+            day     = { week=7,     month=30,    year=365     },
+            week    = { month=4,    year=52      },
+            month   = { year=12     },
+        }
+        -- Pola: "how many [unit1]s in [N] [unit2]s?"
+        -- Contoh: "how many seconds in 9 minutes?" → unit1=second, N=9, unit2=minute
+        local unit1 = mainText:match("how many (%a+)s? in")
+        local nStr, unit2 = mainText:match("in%s+(%d+)%s+(%a+)")
+        if unit1 and nStr and unit2 then
+            -- Singularkan (hilangkan huruf 's' di belakang)
+            local u1 = unit1:gsub("s$", "")
+            local u2 = unit2:gsub("s$", "")
+            local conv = TIME_MULT[u1] and TIME_MULT[u1][u2]
+            if conv then return tonumber(nStr) * conv end
+            -- Coba kebalikan: "how many minutes in 1 hour?" → 60
+            local conv2 = TIME_MULT[u2] and TIME_MULT[u2][u1]
+            if conv2 then return tonumber(nStr) * conv2 end
+        end
+    end
+
+    -- =========================================================
+    -- Pengetahuan Umum / Trivia (lookup statis)
+    -- =========================================================
+    for pattern, ans in pairs(TRIVIA_DB) do
+        if mainText:find(pattern, 1, true) then return ans end
+    end
+
+    -- =========================================================
+    -- Hitung digit ("How many digits are in 7955?") → 4
+    -- =========================================================
+    if mainText:find("how many digits") then
+        local nums = ExtractNumbers(mainText)
+        if nums[1] then return #tostring(math.abs(math.floor(nums[1]))) end
+    end
+
+    -- =========================================================
+    -- Aljabar Huruf: "If A + B = 13, A + C = 10, and B = 9, what is C?"
+    -- =========================================================
+    if mainText:find("if ") and mainText:find("what is ") then
+        -- Deteksi variabel huruf (bukan angka substitusi)
+        local hasLetterVar = mainText:match("%f[%a][a-z]%s*[%+%-%*]%s*[a-z]%f[^%a]")
+        local hasLetterEq  = mainText:match("%f[%a][a-z]%s*=%s*%d")
+        if hasLetterVar or hasLetterEq then
+            local vars = {}
+            -- Kumpulkan nilai langsung: "b = 9"
+            for v, n in mainText:gmatch("%f[%a]([a-z])%s*=%s*(%d+)%f[^%d]") do
+                -- Pastikan bukan bagian dari persamaan dua variabel
+                if not mainText:find(v .. "%s*[%+%-]%s*[a-z]") and
+                   not mainText:find("[a-z]%s*[%+%-]%s*" .. v .. "%s*=") then
+                    vars[v] = tonumber(n)
+                end
+            end
+            -- Kumpulkan semua persamaan dua variabel: "a + b = 13"
+            local equations = {}
+            for eq in mainText:gmatch("([a-z%s%+%-%d]+)=%s*%d+") do
+                local va, op, vb, res = mainText:match("%f[%a]([a-z])%s*([%+%-])%s*([a-z])%s*=%s*(%d+)")
+                -- Iterate all occurrences
+            end
+            for va, op, vb, res in mainText:gmatch("%f[%a]([a-z])%s*([%+%-])%s*([a-z])%s*=%s*(%d+)") do
+                table.insert(equations, {a=va, op=op, b=vb, res=tonumber(res)})
+            end
+            -- Selesaikan iteratif
+            for _ = 1, 10 do
+                for _, eq in ipairs(equations) do
+                    if vars[eq.a] and not vars[eq.b] then
+                        if eq.op == "+" then vars[eq.b] = eq.res - vars[eq.a]
+                        elseif eq.op == "-" then vars[eq.b] = vars[eq.a] - eq.res end
+                    elseif vars[eq.b] and not vars[eq.a] then
+                        if eq.op == "+" then vars[eq.a] = eq.res - vars[eq.b]
+                        elseif eq.op == "-" then vars[eq.a] = eq.res + vars[eq.b] end
+                    end
+                end
+            end
+            -- Ambil variabel yang ditanya
+            local askVar = mainText:match("what is ([a-z])%s*%?")
+            if askVar and vars[askVar] then return vars[askVar] end
+        end
+    end
+
+    -- Kuadrat ² (fallback teks)
+    local baseSq = compactMath:match("(%d+)%²") or compactMath:match("(%d+)%^2")
     if baseSq then return tonumber(baseSq) * tonumber(baseSq) end
+
+    -- Kubik ³ (fallback teks)
+    local baseCb = compactMath:match("(%d+)%³") or compactMath:match("(%d+)%^3")
+    if baseCb then return tonumber(baseCb) * tonumber(baseCb) * tonumber(baseCb) end
 
     -- Tiga angka (urutan operasi benar)
     local a1, op1a, b1, op2a, c1 = compactMath:match("(%d+)([%+%-%*/])(%d+)([%+%-%*/])(%d+)")
@@ -402,11 +584,14 @@ local function ProcessAI(data)
     local a3, op5, b3 = compactMath:match("^(%d+)([%+%-%*/])(%d+)$")
     if a3 and b3 then return doOp(tonumber(a3), tonumber(b3), op5) end
 
-    -- Compare (speed prompt style)
-    if normText:find("bigger:") or normText:find("larger:") then
-        local nums = ExtractNumbers(mainText); if #nums >= 2 then return math.max(nums[1], nums[2]) end
-    elseif normText:find("smaller:") then
-        local nums = ExtractNumbers(mainText); if #nums >= 2 then return math.min(nums[1], nums[2]) end
+    -- Compare (speed prompt style + 3+ angka tanpa titik dua)
+    -- Menangani: "bigger:", "larger:", "smaller:", "Which is biggest? 5, 20, 9", "Which is smallest? ..."
+    if normText:find("bigger") or normText:find("largest") then
+        local nums = ExtractNumbers(mainText)
+        if #nums >= 2 then return math.max(table.unpack(nums)) end
+    elseif normText:find("smaller") or normText:find("smallest") then
+        local nums = ExtractNumbers(mainText)
+        if #nums >= 2 then return math.min(table.unpack(nums)) end
     end
 
     -- Parity (speed prompt style)
@@ -435,7 +620,6 @@ local function ProcessAI(data)
         end
     end
 
-    -- Utilitas
     if normText:find("reverse") and nums[1] then return tonumber(string.reverse(tostring(nums[1]))) end
     if normText:find("remainder") and #nums >= 2 then return nums[1] % nums[2] end
     if normText:find("sum of digits") and nums[1] then
@@ -443,7 +627,81 @@ local function ProcessAI(data)
         for i = 1, #tostring(nums[1]) do sum = sum + tonumber(string.sub(tostring(nums[1]), i, i)) end
         return sum
     end
-    if normText:find("round") and #nums >= 2 then return math.floor(nums[1] / nums[2] + 0.5) * nums[2] end
+
+    -- Pembulatan desimal: "Round 8.7 to the nearest whole number" → 9
+    if normText:find("round") and normText:find("nearest") then
+        local dec = mainText:match("(%d+%.%d+)")
+        if dec then return math.floor(tonumber(dec) + 0.5) end
+        -- Fallback: integer
+        local n = mainText:match("round (%d+)")
+        if n then return tonumber(n) end
+    end
+    -- Round to nearest multiple (lama): "round X to nearest Y"
+    if normText:find("round") and #nums >= 2 and not normText:find("nearest whole") then
+        return math.floor(nums[1] / nums[2] + 0.5) * nums[2]
+    end
+
+    -- Sudut / sisi bentuk: "How many corners?", "How many sides?"
+    if mainText:find("how many corners") or mainText:find("how many sides") or
+       mainText:find("how many vertices") or mainText:find("how many angles") then
+        -- Cari dari render data
+        local sides = tonumber(render.sides) or tonumber(render.corners)
+                   or tonumber(render.vertices) or tonumber(render.n)
+        if sides then return sides end
+        -- Cari nama bentuk di render
+        local function checkShapeName(s)
+            if not s then return nil end
+            s = tostring(s):lower()
+            for name, count in pairs(SHAPE_SIDES) do
+                if s:find(name) then return count end
+            end
+            return nil
+        end
+        local found = checkShapeName(render.shape) or checkShapeName(render.type)
+                   or checkShapeName(render.kind)  or checkShapeName(render.name)
+                   or checkShapeName(tempId)
+        if found then return found end
+        -- Cari nama bentuk dalam prompt (jika ada: "How many corners does a square have?")
+        for name, count in pairs(SHAPE_SIDES) do
+            if mainText:find(name) then return count end
+        end
+    end
+
+    -- Pola visual "Which number breaks the pattern?"
+    if mainText:find("breaks the pattern") or mainText:find("break the pattern") then
+        -- Coba baca angka dari render
+        local function collectNums(t, out)
+            for _, v in pairs(t) do
+                local nv = tonumber(v)
+                if nv then table.insert(out, nv)
+                elseif type(v) == "table" then collectNums(v, out) end
+            end
+        end
+        local renderNums = {}
+        collectNums(render, renderNums)
+        if #renderNums >= 3 then
+            -- Cari angka yang tidak sama dengan mayoritas
+            local freq = {}
+            for _, v in ipairs(renderNums) do freq[v] = (freq[v] or 0) + 1 end
+            for val, cnt in pairs(freq) do
+                if cnt == 1 then return val end -- angka yang muncul sekali = outlier
+            end
+        end
+        -- Coba dari images: cari nama yang berbeda
+        if render.images then
+            local freq = {}
+            for _, img in pairs(render.images) do
+                for name, _ in pairs(SHAPE_SIDES) do
+                    if tostring(img):lower():find(name) then
+                        freq[name] = (freq[name] or 0) + 1
+                    end
+                end
+            end
+            for shapeName, cnt in pairs(freq) do
+                if cnt == 1 then return SHAPE_SIDES[shapeName] end
+            end
+        end
+    end
 
     -- Area / Perimeter (visual)
     if normText:find("area") or normText:find("perimeter") then
@@ -564,5 +822,4 @@ SpeedRoundStart.OnClientEvent:Connect(function(...)
     FireAnswer(SpeedPlayerAnswer, ({...})[1], _G.DelaySpeed, "Speed")
 end)
 
-Library:Notify({Title = "V23 Loaded ✅", Content = "Full Coverage: numeric/word/findX/compare/parity/sequence/doubleHalf/substitution aktif.", Type = "Info", Duration = 5})
-
+Library:Notify({Title = "V25 Loaded ✅", Content = "+algebra/round-decimal/corners/pattern aktif.", Type = "Info", Duration = 5})
