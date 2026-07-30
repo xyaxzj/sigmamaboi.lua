@@ -14,6 +14,8 @@ local StartRound = MathEvents:WaitForChild("StartRound")
 local PlayerAnswer = MathEvents:WaitForChild("PlayerAnswer")
 local SpeedRoundStart = MathEvents:WaitForChild("SpeedRoundStart")
 local SpeedPlayerAnswer = MathEvents:WaitForChild("SpeedPlayerAnswer")
+local StartVoting = MathEvents:WaitForChild("StartVoting")
+local PlayerVote = MathEvents:WaitForChild("PlayerVote")
 
 _G.AutoMathNormal = false
 _G.AutoMathSpeed = false
@@ -60,18 +62,19 @@ NormalSec:AddInput({Name = "Jeda Jawab (Detik)", Placeholder = "1.0"}, function(
 
 SpeedSec:AddToggle({Name = "⚡ Auto Answer (Speed)", Default = false, Flag = "Tgl_Speed"}, function(state) _G.AutoMathSpeed = state end)
 SpeedSec:AddInput({Name = "Jeda Jawab (Detik)", Placeholder = "0.3"}, function(txt) if tonumber(txt) then _G.DelaySpeed = tonumber(txt) end end)
+local voteConnection
 SpeedSec:AddToggle({Name = "🗳️ Auto Vote Speedrun", Default = false, Flag = "Tgl_VoteSpeed"}, function(state)
     _G.AutoVoteSpeedrun = state
+    if voteConnection then voteConnection:Disconnect() voteConnection = nil end
     if state then
-        task.spawn(function()
-            local voteRemote = ReplicatedStorage:WaitForChild("MathMatchEvents"):WaitForChild("PlayerVote")
-            while _G.AutoVoteSpeedrun do
-                pcall(function()
-                    voteRemote:FireServer("_submit")
-                    voteRemote:FireServer("Speedrun")
-                end)
-                task.wait(5)
-            end
+        voteConnection = StartVoting.OnClientEvent:Connect(function(...)
+            if not _G.AutoVoteSpeedrun then return end
+            pcall(function()
+                task.wait(0.5)
+                PlayerVote:FireServer("Speedrun")
+                task.wait(0.2)
+                PlayerVote:FireServer("_submit")
+            end)
         end)
     end
 end)
@@ -789,7 +792,7 @@ local function ProcessAI(data)
         end
         if normText:find("windows") or normText:find("crayons each") or normText:find("per row")
             or normText:find("per hive") or normText:find("total seats") then return nums[1] * nums[2] end
-        if normText:find("eats") or normText:find("left") or normText:find("remain") or normText:find("stay")
+        if normText:find("eats") or normText:find("left") or (normText:find("remain") and not normText:find("remainder")) or normText:find("stay")
             or normText:find("borrowed") or normText:find("get off") or normText:find("sold")
             or normText:find("swim away") or normText:find("digs up") or normText:find("checked out")
             or normText:find("go home") then return nums[1] - nums[2] end
