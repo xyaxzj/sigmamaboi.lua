@@ -591,8 +591,11 @@ local function ProcessAI(data)
 
     if render.kind == "numerical_binary" then
         local a = tonumber(render.a)
-        local b = tonumber(render.b)
         if a and render.aExp then a = a ^ tonumber(render.aExp) end
+        if render.unary or not render.op or tostring(render.op) == "" or tostring(render.op) == "nil" then
+            return a
+        end
+        local b = tonumber(render.b)
         if b and render.bExp then b = b ^ tonumber(render.bExp) end
         return doOp(a, b, tostring(render.op))
     end
@@ -713,6 +716,10 @@ local function ProcessAI(data)
         local sum = 0
         for i = 1, #tostring(nums[1]) do sum = sum + tonumber(string.sub(tostring(nums[1]), i, i)) end
         return sum
+    end
+
+    if tempId == "t2_how_many_digits" or (normText:find("how many digits") and normText:find("in")) then
+        if nums[1] then return #tostring(nums[1]) end
     end
 
     if normText:find("round") and normText:find("nearest") then
