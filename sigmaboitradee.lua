@@ -609,16 +609,24 @@ local success, errorMessage = pcall(function()
         end
         
         P1TradesCompleted = P1TradesCompleted + 1; ItemsProcessed = ItemsProcessed + batchSize; TotalItemsSent = TotalItemsSent + batchSize
+        
+        -- Always track cumulative sent in the background
+        if not CumulativeSent[target.Name] then CumulativeSent[target.Name] = {} end
+        local playerSent = CumulativeSent[target.Name]
+        for _, name in ipairs(names) do
+            playerSent[name] = (playerSent[name] or 0) + 1
+        end
+
         if ConsoleStats then
             if _G.TradeLogsMode == "Documentation" then
-                if not CumulativeSent[target.Name] then CumulativeSent[target.Name] = {} end
-                local playerSent = CumulativeSent[target.Name]
-                for _, name in ipairs(names) do
-                    playerSent[name] = (playerSent[name] or 0) + 1
-                end
                 local details = getCumulativeDetails(playerSent)
                 ConsoleStats:Log("Total Sent to " .. target.Name .. ": " .. details, "success")
-            else
+            elseif _G.TradeLogsMode == "Both" then
+                local detailed = groupItems(names)
+                local cumulative = getCumulativeDetails(playerSent)
+                ConsoleStats:Log("Send: " .. detailed .. " to " .. target.Name, "success")
+                ConsoleStats:Log("Total Sent to " .. target.Name .. ": " .. cumulative, "info")
+            else -- Detailed
                 local details = groupItems(names)
                 ConsoleStats:Log("Send: " .. details .. " to " .. target.Name, "success")
             end
@@ -724,15 +732,22 @@ local success, errorMessage = pcall(function()
                             end
 
                             if #receivedNames > 0 then
+                                -- Always track cumulative received in the background
+                                if not CumulativeReceived[partnerName] then CumulativeReceived[partnerName] = {} end
+                                local playerRec = CumulativeReceived[partnerName]
+                                for _, name in ipairs(receivedNames) do
+                                    playerRec[name] = (playerRec[name] or 0) + 1
+                                end
+
                                 if _G.TradeLogsMode == "Documentation" then
-                                    if not CumulativeReceived[partnerName] then CumulativeReceived[partnerName] = {} end
-                                    local playerRec = CumulativeReceived[partnerName]
-                                    for _, name in ipairs(receivedNames) do
-                                        playerRec[name] = (playerRec[name] or 0) + 1
-                                    end
                                     local details = getCumulativeDetails(playerRec)
                                     ConsoleStats:Log("Total Received from " .. partnerName .. ": " .. details, "info")
-                                else
+                                elseif _G.TradeLogsMode == "Both" then
+                                    local detailed = groupItems(receivedNames)
+                                    local cumulative = getCumulativeDetails(playerRec)
+                                    ConsoleStats:Log("Receive: " .. detailed .. " from " .. partnerName, "info")
+                                    ConsoleStats:Log("Total Received from " .. partnerName .. ": " .. cumulative, "info")
+                                else -- Detailed
                                     ConsoleStats:Log("Receive: " .. groupItems(receivedNames) .. " from " .. partnerName, "info")
                                 end
                             else
@@ -754,8 +769,13 @@ local success, errorMessage = pcall(function()
     local TabStats = Window:MakeTab("📊")
     local SecStats = TabStats:AddSection("Statistics")
     local StatsDisplay = SecStats:AddParagraph("Current Session", "Calculating...")
-    SecStats:AddDropdown({Name = "Console Log Mode", Options = {"Detailed", "Documentation"}, Default = "Detailed"}, function(val)
+    SecStats:AddDropdown({Name = "Console Log Mode", Options = {"Detailed", "Documentation", "Both"}, Default = "Detailed"}, function(val)
         _G.TradeLogsMode = val
+    end)
+    SecStats:AddButton("🧹 Clear Console Logs", function()
+        if ConsoleStats then
+            ConsoleStats:Clear()
+        end
     end)
     ConsoleStats = SecStats:AddConsole("Trade History Logs")
     
