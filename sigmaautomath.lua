@@ -44,6 +44,9 @@ end)
 -- [3] UI SIGMA V4 LITE
 -- ==========================================================
 local successUI, Library = pcall(function()
+    if readfile and isfile and isfile("UI sigma.lua") then
+        return loadstring(readfile("UI sigma.lua"))()
+    end
     return loadstring(game:HttpGet("https://raw.githubusercontent.com/xyaxzj/sigmamaboi.lua/refs/heads/main/NcHO.lua"))()
 end)
 
@@ -56,15 +59,58 @@ local Window = Library:CreateWindow({
     ConfigName = "MathV23"
 })
 
+-- ==========================================================
+-- UNIVERSAL HUD & STATUS WIDGET SYSTEM
+-- ==========================================================
+local MathHUD = Window:CreateHUD({Title = "Math AI Status", Width = 180, Height = 90})
+local hudStatusLine = MathHUD:AddLine("🔴 Mode: Inactive")
+local hudQuestionLine = MathHUD:AddLine("Question: None")
+local hudAnswerLine = MathHUD:AddLine("Answer: --")
+
+local function updateStatusHUD()
+    if _G.AutoMathNormal and _G.AutoMathSpeed then
+        hudStatusLine:SetText("🟢 Mode: Both Active")
+        hudStatusLine:SetColor(Color3.fromRGB(0, 255, 120))
+        Window:SetMinimizedText("Both Auto")
+        Window:SetMinimizedGlow("Success")
+    elseif _G.AutoMathNormal then
+        hudStatusLine:SetText("🟢 Mode: Normal Active")
+        hudStatusLine:SetColor(Color3.fromRGB(0, 255, 120))
+        Window:SetMinimizedText("Normal Auto")
+        Window:SetMinimizedGlow("Success")
+    elseif _G.AutoMathSpeed then
+        hudStatusLine:SetText("⚡ Mode: Speedrun Active")
+        hudStatusLine:SetColor(Color3.fromRGB(255, 200, 50))
+        Window:SetMinimizedText("Speed Auto")
+        Window:SetMinimizedGlow("Warning")
+    else
+        hudStatusLine:SetText("🔴 Mode: Inactive")
+        hudStatusLine:SetColor(Color3.fromRGB(150, 150, 150))
+        Window:SetMinimizedText("Math Idle")
+        Window:SetMinimizedGlow("TextDim")
+    end
+end
+
+-- Initialize Minimized state status
+Window:SetMinimizedText("Math Idle")
+Window:SetMinimizedGlow("TextDim")
+
 local MathTab = Window:MakeTab("📝")
 local NormalSec = MathTab:AddSection("🧠 Mode Normal", true)
 local SpeedSec = MathTab:AddSection("⚡ Mode Speed Run", true)
 
-NormalSec:AddToggle({Name = "✅ Auto Answer (Normal)", Default = false, Flag = "Tgl_Normal"}, function(state) _G.AutoMathNormal = state end)
+NormalSec:AddToggle({Name = "✅ Auto Answer (Normal)", Default = false, Flag = "Tgl_Normal"}, function(state) 
+    _G.AutoMathNormal = state 
+    updateStatusHUD()
+end)
 NormalSec:AddInput({Name = "Jeda Jawab (Detik)", Placeholder = "1.0"}, function(txt) if tonumber(txt) then _G.DelayNormal = tonumber(txt) end end)
 
-SpeedSec:AddToggle({Name = "⚡ Auto Answer (Speed)", Default = false, Flag = "Tgl_Speed"}, function(state) _G.AutoMathSpeed = state end)
+SpeedSec:AddToggle({Name = "⚡ Auto Answer (Speed)", Default = false, Flag = "Tgl_Speed"}, function(state) 
+    _G.AutoMathSpeed = state 
+    updateStatusHUD()
+end)
 SpeedSec:AddInput({Name = "Jeda Jawab (Detik)", Placeholder = "0.3"}, function(txt) if tonumber(txt) then _G.DelaySpeed = tonumber(txt) end end)
+
 local voteConnection
 SpeedSec:AddToggle({Name = "🗳️ Auto Vote Speedrun", Default = false, Flag = "Tgl_VoteSpeed"}, function(state)
     _G.AutoVoteSpeedrun = state
@@ -1052,6 +1098,9 @@ local function FireAnswer(remote, rawData, delayTime, modeName)
     if #deskripsiSoal > 80 then deskripsiSoal = deskripsiSoal:sub(1, 77) .. "..." end
 
     lastQuestionText = deskripsiSoal
+    if hudQuestionLine then
+        hudQuestionLine:SetText("Question: " .. deskripsiSoal)
+    end
 
     if success then
         if answer ~= nil then
@@ -1064,6 +1113,10 @@ local function FireAnswer(remote, rawData, delayTime, modeName)
             })
             if UIConsole then
                 UIConsole:Log("[" .. modeName .. "] Soal: " .. deskripsiSoal .. " ➔ Jawab: " .. tostring(finalAns), "success")
+            end
+            if hudAnswerLine then
+                hudAnswerLine:SetText("Answer: " .. tostring(finalAns) .. " (" .. modeName .. ")")
+                hudAnswerLine:SetColor(Color3.fromRGB(0, 255, 120))
             end
             task.spawn(function()
                 task.wait(delayTime)
@@ -1079,6 +1132,10 @@ local function FireAnswer(remote, rawData, delayTime, modeName)
             if UIConsole then
                 UIConsole:Log("[" .. modeName .. "] NIL ANSWER untuk: " .. deskripsiSoal, "warn")
             end
+            if hudAnswerLine then
+                hudAnswerLine:SetText("Answer: NIL ⚠️")
+                hudAnswerLine:SetColor(Color3.fromRGB(255, 80, 80))
+            end
         end
     else
         Library:Notify({
@@ -1089,6 +1146,10 @@ local function FireAnswer(remote, rawData, delayTime, modeName)
         })
         if UIConsole then
             UIConsole:Log("[" .. modeName .. "] CRASH: " .. tostring(answer) .. " | Soal: " .. deskripsiSoal, "error")
+        end
+        if hudAnswerLine then
+            hudAnswerLine:SetText("Answer: CRASH ❌")
+            hudAnswerLine:SetColor(Color3.fromRGB(255, 80, 80))
         end
     end
 end
