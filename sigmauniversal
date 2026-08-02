@@ -1,5 +1,5 @@
 -- ===========================================================================
---  SIGMA UNIVERSAL CLIENT (v1.0) + PERFECT AUTO SHOOT
+--  SIGMA UNIVERSAL CLIENT (v1.3) + COMBAT OVERHAUL (PREDICTION & HEARTBEAT)
 --  Compatibility: Mobile (Delta, Hydrogen, Codex, Arceus X) & PC (Wave, Electron)
 -- ===========================================================================
 
@@ -25,7 +25,7 @@ if not successUI or type(Library) ~= "table" then return end
 local Window = Library:CreateWindow({
     Name = "Sigma Universal Client",
     LogoText = "⚡",
-    Footer = "v1.2 (+Perfect Combat)",
+    Footer = "v1.3 (Aimbot Pro)",
     ConfigName = "SigmaUniversal"
 })
 
@@ -1323,21 +1323,68 @@ SecCoord:AddButton("❌ Delete Selected Location", function()
 end)
 
 -- ===========================================================================
---  6. TAB COMBAT (AUTO SHOOT)
+--  6. TAB COMBAT (AUTO SHOOT) - OVERHAUL
 -- ===========================================================================
 local TabCombat = Window:MakeTab("⚔️")
-local SecCombat = TabCombat:AddSection("Auto Shoot Enemy")
+local SecCombat = TabCombat:AddSection("Auto Shoot Enemy (Aimbot)")
 
 local autoShootEnabled = false
-local autoShootDelay = 0.1
+local autoShootDelay = 0.05 -- Dipercepat jadi 0.05 detik
 local autoShootTeamCheck = false
+local enablePrediction = true
+local bulletSpeed = 1500 -- Asumsi kecepatan peluru agar sinkron saat target gerak
 
-local function getClosestEnemy()
-    local closest = nil
-    local shortestDist = math.huge
-    local localHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+-- Cache Remote (Dilakukan di luar loop agar tidak lag)
+local shootRemote = ReplicatedStorage:WaitForChild("Blaster", 5)
+if shootRemote then
+    shootRemote = shootRemote:WaitForChild("Remotes", 5)
+    if shootRemote then
+        shootRemote = shootRemote:WaitForChild("Shoot", 5)
+    end
+end
+
+-- Deteksi senjata yang lebih kuat
+local function getActiveWeapon(char)
+    local tool = char:FindFirstChildOfClass("Tool")
+    if tool then return tool end
     
-    if not localHrp then return nil end
+    local ignoreList = {
+        HumanoidRootPart=true, Head=true, UpperTorso=true, LowerTorso=true, Torso=true,
+        RightArm=true, LeftArm=true, RightLeg=true, LeftLeg=true,
+        RightUpperArm=true, RightLowerArm=true, RightHand=true,
+        LeftUpperArm=true, LeftLowerArm=true, LeftHand=true,
+        RightUpperLeg=true, RightLowerLeg=true, RightFoot=true,
+        LeftUpperLeg=true, LeftLowerLeg=true, LeftFoot=true,
+        Humanoid=true, ForceField=true, Shirt=true, Pants=true, ShirtGraphic=true, BodyColors=true,
+        Animate=true, Health=true
+    }
+    
+    for _, child in ipairs(char:GetChildren()) do
+        if (child:IsA("Model") or child:IsA("Folder") or child:IsA("Tool")) and not ignoreList[child.Name] and not child:IsA("Accessory") then
+            return child 
+        end
+    end
+    return nil
+end
+
+-- Loop menggunakan Heartbeat (Berjalan sesuai FPS, max performa)
+local lastShotTime = 0
+RunService.Heartbeat:Connect(function()
+    if not autoShootEnabled or not shootRemote then return end
+    
+    local currentTime = tick()
+    if currentTime - lastShotTime < autoShootDelay then return end
+
+    local localChar = LocalPlayer.Character
+    local localHrp = localChar and localChar:FindFirstChild("HumanoidRootPart")
+    if not localHrp then return end
+
+    local weapon = getActiveWeapon(localChar)
+    if not weapon then return end -- Hanya nembak kalau pegang senjata
+
+    -- Cari musuh terdekat setiap frame
+    local closestTarget = nil
+    local shortestDist = math.huge
     
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer and p.Character then
@@ -1350,90 +1397,58 @@ local function getClosestEnemy()
                 local dist = (hrp.Position - localHrp.Position).Magnitude
                 if dist < shortestDist then
                     shortestDist = dist
-                    closest = p
+                    closestTarget = p
                 end
             end
         end
     end
-    return closest
-end
 
--- Cari senjata yang di-equip, entah itu Tool atau custom Model (seperti Rattler)
-local function getActiveWeapon(char)
-    local tool = char:FindFirstChildOfClass("Tool")
-    if tool then return tool end
-    
-    local ignoreList = {
-        HumanoidRootPart=true, Head=true, UpperTorso=true, LowerTorso=true, Torso=true,
-        RightArm=true, LeftArm=true, RightLeg=true, LeftLeg=true,
-        RightUpperArm=true, RightLowerArm=true, RightHand=true,
-        LeftUpperArm=true, LeftLowerArm=true, LeftHand=true,
-        RightUpperLeg=true, RightLowerLeg=true, RightFoot=true,
-        LeftUpperLeg=true, LeftLowerLeg=true, LeftFoot=true,
-        Humanoid=true, ForceField=true, Shirt=true, Pants=true, ShirtGraphic=true, BodyColors=true
-    }
-    
-    for _, child in ipairs(char:GetChildren()) do
-        if (child:IsA("Model") or child:IsA("Folder")) and not ignoreList[child.Name] and not child:IsA("Accessory") then
-            return child 
-        end
-    end
-    return nil
-end
-
-local function fireAtTarget(target)
-    if not target or not target.Character then return end
-    
-    local localChar = LocalPlayer.Character
-    local localHrp = localChar and localChar:FindFirstChild("HumanoidRootPart")
-    local weapon = localChar and getActiveWeapon(localChar)
-    
-    local targetHrp = target.Character:FindFirstChild("HumanoidRootPart")
-    local targetHum = target.Character:FindFirstChildOfClass("Humanoid")
-    
-    if weapon and localHrp and targetHrp and targetHum then
-        local aimCFrame = CFrame.new(localHrp.Position, targetHrp.Position)
+    if closestTarget then
+        local targetChar = closestTarget.Character
+        local targetHrp = targetChar:FindFirstChild("HumanoidRootPart")
+        local targetHum = targetChar:FindFirstChildOfClass("Humanoid")
         
-        local shootRemote = ReplicatedStorage:FindFirstChild("Blaster") 
-            and ReplicatedStorage.Blaster:FindFirstChild("Remotes") 
-            and ReplicatedStorage.Blaster.Remotes:FindFirstChild("Shoot")
+        if targetHrp and targetHum then
+            local targetPos = targetHrp.Position
             
-        if shootRemote then
-            -- Bungkus persis menggunakan format dari log yang kamu berikan
-            local args = {
-                [1] = workspace:GetServerTimeNow(), -- Timestamp spesifik server
-                [2] = weapon,                       -- Model/Tool "Rattler"
-                [3] = aimCFrame,                    -- Vektor tembakan
-                [4] = {                             -- Kamus Hit Registrasi
-                    ["1"] = targetHum
-                }
-            }
-            shootRemote:FireServer(table.unpack(args))
-        end
-    end
-end
-
-SecCombat:AddToggle({Name = "🔫 Enable Auto Shoot", Default = false}, function(state)
-    autoShootEnabled = state
-    if state then
-        task.spawn(function()
-            while autoShootEnabled do
-                local target = getClosestEnemy()
-                if target then
-                    fireAtTarget(target)
-                end
-                task.wait(autoShootDelay)
+            -- VELOCITY PREDICTION: Kompensasi saat musuh lari/loncat
+            if enablePrediction then
+                local distToTarget = (targetPos - localHrp.Position).Magnitude
+                local predictionTime = distToTarget / bulletSpeed 
+                -- AssemblyLinearVelocity menghitung arah & kecepatan fisik (termasuk loncat di sumbu Y)
+                targetPos = targetPos + (targetHrp.AssemblyLinearVelocity * predictionTime)
             end
-        end)
+            
+            -- Set Aimbot memutar peluru langsung ke lokasi yang sudah di-prediksi
+            local aimCFrame = CFrame.lookAt(localHrp.Position, targetPos)
+            
+            local args = {
+                [1] = tick(),
+                [2] = weapon,
+                [3] = aimCFrame,
+                [4] = { ["1"] = targetHum }
+            }
+            
+            shootRemote:FireServer(table.unpack(args))
+            lastShotTime = currentTime
+        end
     end
 end)
 
-SecCombat:AddSlider({Name = "Shoot Delay (Detik)", Min = 0, Max = 2, Default = 0.1}, function(val)
+SecCombat:AddToggle({Name = "🔫 Enable Auto Shoot", Default = false}, function(state)
+    autoShootEnabled = state
+end)
+
+SecCombat:AddSlider({Name = "Shoot Delay (Detik)", Min = 0, Max = 1, Default = 0.05}, function(val)
     autoShootDelay = val
+end)
+
+SecCombat:AddToggle({Name = "🚀 Movement Prediction", Default = true}, function(state)
+    enablePrediction = state
 end)
 
 SecCombat:AddToggle({Name = "🛡️ Team Check (Abaikan Tim Sendiri)", Default = false}, function(state)
     autoShootTeamCheck = state
 end)
 
-Library:Notify({Title = "Sigma Hub", Content = "Sigma Universal Client v1.2 (+Perfect Combat) Loaded!", Type = "Info", Duration = 3})
+Library:Notify({Title = "Sigma Hub", Content = "Sigma Universal Client v1.3 (Aimbot Pro) Loaded!", Type = "Info", Duration = 4})
