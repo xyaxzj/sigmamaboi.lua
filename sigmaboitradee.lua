@@ -102,135 +102,126 @@ local success, errorMessage = pcall(function()
     -- ==========================================
     local RarityList = {"Common", "Rare", "Epic", "Legendary", "Mythic", "Godly", "Exclusive", "Volcanic", "Celestial", "Abyssal", "Demon", "Secret", "Rainbow", "Eternal", "Hacked"}
     local database = {
-        ["1x1x1x1"] = { Rarity = "Hacked", BaseCPS = 0 },
-        ["67"] = { Rarity = "Mythic", BaseCPS = 0 },
-        ["Agarrini La Palini"] = { Rarity = "Demon", BaseCPS = 0 },
-        ["Alessio"] = { Rarity = "Hacked", BaseCPS = 0 },
-        ["Anpali Babel"] = { Rarity = "Abyssal", BaseCPS = 0 },
-        ["Astro Tim"] = { Rarity = "Abyssal", BaseCPS = 0 },
-        ["Baba Yaga"] = { Rarity = "Abyssal", BaseCPS = 0 },
-        ["Ballerina Cappuccina"] = { Rarity = "Rare", BaseCPS = 19 },
-        ["Bambini Crostini"] = { Rarity = "Legendary", BaseCPS = 0 },
-        ["Bananita Dolphinita"] = { Rarity = "Mythic", BaseCPS = 0 },
-        ["Bangello"] = { Rarity = "Mythic", BaseCPS = 0 },
-        ["Barbelloni Gymrattoni"] = { Rarity = "Abyssal", BaseCPS = 0 },
-        ["Beluga Beluga"] = { Rarity = "Abyssal", BaseCPS = 0 },
-        ["Blackhole Goat"] = { Rarity = "Celestial", BaseCPS = 0 },
-        ["Block Cup"] = { Rarity = "Exclusive", BaseCPS = 0 },
-        ["Bobrito Bandito"] = { Rarity = "Rare", BaseCPS = 17 },
-        ["Bombardiro Crocodilo"] = { Rarity = "Secret", BaseCPS = 0 },
-        ["Bombini Gusini"] = { Rarity = "Secret", BaseCPS = 0 },
-        ["Boneca Ambalabu"] = { Rarity = "Rare", BaseCPS = 17 },
-        ["Brr Brr Patapim"] = { Rarity = "Rare", BaseCPS = 22 },
-        ["Burbaloni Luliloli"] = { Rarity = "Mythic", BaseCPS = 0 },
-        ["Burguro"] = { Rarity = "Secret", BaseCPS = 0 },
-        ["Cacto Hipopotamo"] = { Rarity = "Rare", BaseCPS = 26 },
-        ["Cactus Pingu"] = { Rarity = "Demon", BaseCPS = 0 },
-        ["Capi Taco"] = { Rarity = "Legendary", BaseCPS = 0 },
-        ["Cappuccino Assassino"] = { Rarity = "Rare", BaseCPS = 22 },
-        ["Cappuccino Clownino"] = { Rarity = "Celestial", BaseCPS = 0 },
-        ["Capybara Eggplant"] = { Rarity = "Mythic", BaseCPS = 0 },
-        ["Cavallo Virtuso"] = { Rarity = "Rainbow", BaseCPS = 0 },
-        ["Chef Crabracadabra"] = { Rarity = "Mythic", BaseCPS = 0 },
-        ["Chicleteira Bicicleteira"] = { Rarity = "Abyssal", BaseCPS = 0 },
-        ["Chillin Chilli"] = { Rarity = "Eternal", BaseCPS = 0 },
-        ["Chimpanzini Bananini"] = { Rarity = "Legendary", BaseCPS = 0 },
-        ["Cocofanto Elefanto"] = { Rarity = "Rainbow", BaseCPS = 0 },
-        ["Coinator Baconator"] = { Rarity = "Abyssal", BaseCPS = 0 },
-        ["Compactoroni Diskaloni"] = { Rarity = "Celestial", BaseCPS = 0 },
-        ["Cordraculo"] = { Rarity = "Abyssal", BaseCPS = 0 },
-        ["Corn Sahur"] = { Rarity = "Eternal", BaseCPS = 0 },
-        ["Crazylone Pizaione"] = { Rarity = "Eternal", BaseCPS = 0 },
-        ["Dipperi Chiperini"] = { Rarity = "Hacked", BaseCPS = 0 },
-        ["Divinello Starblock"] = { Rarity = "Abyssal", BaseCPS = 0 },
-        ["Don Tiramisotto"] = { Rarity = "Abyssal", BaseCPS = 0 },
-        ["Dragonfrutina Dolphinita"] = { Rarity = "Abyssal", BaseCPS = 0 },
-        ["Dribbloni Spaghetti"] = { Rarity = "Abyssal", BaseCPS = 0 },
-        ["Dumbelloni"] = { Rarity = "Abyssal", BaseCPS = 0 },
-        ["Elefanto Frigo"] = { Rarity = "Godly", BaseCPS = 0 },
-        ["Elefantucci Bananucci"] = { Rarity = "Legendary", BaseCPS = 0 },
-        ["Espresso Shockantoni"] = { Rarity = "Abyssal", BaseCPS = 0 },
-        ["Espresso Signora"] = { Rarity = "Hacked", BaseCPS = 0 },
-        ["Eternal"] = { Rarity = "Exclusive", BaseCPS = 0 },
-        ["Frigo Camelo"] = { Rarity = "Secret", BaseCPS = 0 },
-        ["Fruli Frula"] = { Rarity = "Common", BaseCPS = 7 },
-        ["Fryuro"] = { Rarity = "Secret", BaseCPS = 0 },
-        ["Gangster Footera"] = { Rarity = "Rare", BaseCPS = 15 },
-        ["Garamararam"] = { Rarity = "Epic", BaseCPS = 40 },
-        ["Gattatino Nyanino"] = { Rarity = "Legendary", BaseCPS = 0 },
-        ["Girafa Celeste"] = { Rarity = "Rainbow", BaseCPS = 0 },
-        ["Glorbo Fruttodrillo"] = { Rarity = "Godly", BaseCPS = 0 },
-        ["Gorillo Watermelondrillo"] = { Rarity = "Rainbow", BaseCPS = 0 },
-        ["Guerriro Digitale"] = { Rarity = "Abyssal", BaseCPS = 0 },
-        ["Guest666"] = { Rarity = "Rainbow", BaseCPS = 0 },
-        ["Harpini Goosini"] = { Rarity = "Abyssal", BaseCPS = 0 },
-        ["John Pork"] = { Rarity = "Epic", BaseCPS = 0 },
-        ["Karkerkar Kurkur"] = { Rarity = "Demon", BaseCPS = 0 },
-        ["Ketupat Kepat"] = { Rarity = "Abyssal", BaseCPS = 0 },
-        ["Kicky"] = { Rarity = "Abyssal", BaseCPS = 0 },
-        ["Krupuk Pagi Pagi"] = { Rarity = "Abyssal", BaseCPS = 0 },
-        ["La Vacca Saturno Saturnita"] = { Rarity = "Demon", BaseCPS = 0 },
-        ["Lirili Larila"] = { Rarity = "Common", BaseCPS = 3 },
-        ["Los Primos"] = { Rarity = "Abyssal", BaseCPS = 0 },
-        ["Los Primos Blue"] = { Rarity = "Demon", BaseCPS = 0 },
-        ["Lucky Fella"] = { Rarity = "Abyssal", BaseCPS = 0 },
-        ["Madung"] = { Rarity = "Epic", BaseCPS = 44 },
-        ["Mangolini Parrocini"] = { Rarity = "Epic", BaseCPS = 0 },
-        ["Mastodontico Telepiedone"] = { Rarity = "Abyssal", BaseCPS = 0 },
-        ["Matteo"] = { Rarity = "Hacked", BaseCPS = 0 },
-        ["Meowl"] = { Rarity = "Eternal", BaseCPS = 0 },
-        ["MutationChances"] = { Rarity = "Unknown", BaseCPS = 0 },
-        ["Noobini Pizzanini"] = { Rarity = "Common", BaseCPS = 2 },
-        ["Nuclearo Dinossauro"] = { Rarity = "Celestial", BaseCPS = 0 },
-        ["OctoDJ"] = { Rarity = "Abyssal", BaseCPS = 0 },
-        ["Octopusini Bluberini"] = { Rarity = "Godly", BaseCPS = 0 },
-        ["Orangutini Ananasini"] = { Rarity = "Secret", BaseCPS = 0 },
-        ["Orcalero"] = { Rarity = "Epic", BaseCPS = 64 },
-        ["Pandaccini Bananini"] = { Rarity = "Godly", BaseCPS = 0 },
-        ["Pannaburro"] = { Rarity = "Epic", BaseCPS = 62 },
-        ["Peant Jarro"] = { Rarity = "Rainbow", BaseCPS = 0 },
-        ["Penguino Cocosino"] = { Rarity = "Mythic", BaseCPS = 0 },
-        ["Pesto Mortioni"] = { Rarity = "Epic", BaseCPS = 52 },
-        ["Pipi Kiwi"] = { Rarity = "Common", BaseCPS = 6 },
-        ["Plan Blue"] = { Rarity = "Legendary", BaseCPS = 0 },
-        ["Plan Red"] = { Rarity = "Legendary", BaseCPS = 0 },
-        ["Pool"] = { Rarity = "Unknown", BaseCPS = 0 },
-        ["Pot Hotspot"] = { Rarity = "Abyssal", BaseCPS = 0 },
-        ["Professora 67"] = { Rarity = "Abyssal", BaseCPS = 0 },
-        ["Pulcino Pistoletti"] = { Rarity = "Abyssal", BaseCPS = 0 },
-        ["Rainbow"] = { Rarity = "Exclusive", BaseCPS = 0 },
-        ["RandomBrainrot"] = { Rarity = "Random", BaseCPS = 0 },
-        ["Rexosaurus"] = { Rarity = "Hacked", BaseCPS = 0 },
-        ["Rhino Toasterino"] = { Rarity = "Secret", BaseCPS = 0 },
-        ["Rinooccio Verdini"] = { Rarity = "Godly", BaseCPS = 0 },
-        ["SWAG SODA"] = { Rarity = "Hacked", BaseCPS = 0 },
-        ["Salamino Pinguino"] = { Rarity = "Mythic", BaseCPS = 0 },
-        ["Sigma Boy"] = { Rarity = "Godly", BaseCPS = 0 },
-        ["Smelloni Papayoni"] = { Rarity = "Abyssal", BaseCPS = 0 },
-        ["Stoppo Luminino"] = { Rarity = "Hacked", BaseCPS = 0 },
-        ["Strawberelli Flamingelli"] = { Rarity = "Godly", BaseCPS = 0 },
-        ["Strawberry Elephant"] = { Rarity = "Abyssal", BaseCPS = 0 },
-        ["Svinina Bombardino"] = { Rarity = "Common", BaseCPS = 5 },
-        ["Ta Ta Ta Ta Sahur"] = { Rarity = "Rare", BaseCPS = 18 },
-        ["Talpa Di Fero"] = { Rarity = "Common", BaseCPS = 4 },
-        ["Tictac Sahur"] = { Rarity = "Demon", BaseCPS = 0 },
-        ["Tim Cheese"] = { Rarity = "Common", BaseCPS = 3 },
-        ["Torrtuginni Dragonfrutini"] = { Rarity = "Demon", BaseCPS = 0 },
-        ["Tralaledon"] = { Rarity = "Abyssal", BaseCPS = 0 },
-        ["Tralalerita Tralala"] = { Rarity = "Rainbow", BaseCPS = 0 },
-        ["Tralalero Tralala"] = { Rarity = "Rainbow", BaseCPS = 0 },
-        ["Tripi Tropi Tropa Tripa"] = { Rarity = "Hacked", BaseCPS = 0 },
-        ["Trippi Troppi"] = { Rarity = "Common", BaseCPS = 7 },
-        ["Trulimero Trulicina"] = { Rarity = "Legendary", BaseCPS = 0 },
-        ["Tubafante"] = { Rarity = "Abyssal", BaseCPS = 0 },
-        ["Tuff Toucan"] = { Rarity = "Secret", BaseCPS = 0 },
-        ["Turtinella Melodica"] = { Rarity = "Abyssal", BaseCPS = 0 },
-        ["Udin Din Din Dun"] = { Rarity = "Godly", BaseCPS = 0 },
-        ["Virus"] = { Rarity = "Exclusive", BaseCPS = 0 },
-        ["Volcanic"] = { Rarity = "Exclusive", BaseCPS = 0 },
-        ["Waterdino"] = { Rarity = "Epic", BaseCPS = 50 },
-        ["Weather"] = { Rarity = "Exclusive", BaseCPS = 0 },
-        ["Zibra Zubra Zibralini"] = { Rarity = "Rainbow", BaseCPS = 0 },
+        ["1x1x1x1"] = { Rarity = "" },
+        ["67"] = { Rarity = "" },
+        ["Agarrini La Palini"] = { Rarity = "Hacked" },
+        ["Alessio"] = { Rarity = "" },
+        ["Anpali Babel"] = { Rarity = "Eternal" },
+        ["Astro Tim"] = { Rarity = "Eternal" },
+        ["Baba Yaga"] = { Rarity = "Eternal" },
+        ["Ballerina Cappuccina"] = { Rarity = "" },
+        ["Bambini Crostini"] = { Rarity = "" },
+        ["Bananita Dolphinita"] = { Rarity = "" },
+        ["Bangello"] = { Rarity = "" },
+        ["Barbelloni Gymrattoni"] = { Rarity = "Eternal" },
+        ["Beluga Beluga"] = { Rarity = "Celestial" },
+        ["Blackhole Goat"] = { Rarity = "" },
+        ["Bobrito Bandito"] = { Rarity = "" },
+        ["Bombardiro Crocodilo"] = { Rarity = "" },
+        ["Bombini Gusini"] = { Rarity = "" },
+        ["Boneca Ambalabu"] = { Rarity = "" },
+        ["Brr Brr Patapim"] = { Rarity = "" },
+        ["Burbaloni Luliloli"] = { Rarity = "" },
+        ["Burguro"] = { Rarity = "" },
+        ["Cacto Hipopotamo"] = { Rarity = "" },
+        ["Cactus Pingu"] = { Rarity = "" },
+        ["Capi Taco"] = { Rarity = "" },
+        ["Cappuccino Assassino"] = { Rarity = "" },
+        ["Cappuccino Clownino"] = { Rarity = "" },
+        ["Capybara Eggplant"] = { Rarity = "" },
+        ["Cavallo Virtuso"] = { Rarity = "" },
+        ["Chef Crabracadabra"] = { Rarity = "" },
+        ["Chicleteira Bicicleteira"] = { Rarity = "Celestial" },
+        ["Chillin Chilli"] = { Rarity = "" },
+        ["Chimpanzini Bananini"] = { Rarity = "" },
+        ["Cocofanto Elefanto"] = { Rarity = "" },
+        ["Coinator Baconator"] = { Rarity = "Abysall" },
+        ["Compactoroni Diskaloni"] = { Rarity = "" },
+        ["Cordraculo"] = { Rarity = "Abysall" },
+        ["Corn Sahur"] = { Rarity = "" },
+        ["Crazylone Pizaione"] = { Rarity = "OG" },
+        ["Dipperi Chiperini"] = { Rarity = "" },
+        ["Divinello Starblock"] = { Rarity = "" },
+        ["Don Tiramisotto"] = { Rarity = "Eternal" },
+        ["Dragonfrutina Dolphinita"] = { Rarity = "Celestial" },
+        ["Dribbloni Spaghetti"] = { Rarity = "Eternal" },
+        ["Dumbelloni"] = { Rarity = "Eternal" },
+        ["Elefanto Frigo"] = { Rarity = "" },
+        ["Elefantucci Bananucci"] = { Rarity = "" },
+        ["Espresso Shockantoni"] = { Rarity = "Eternal" },
+        ["Espresso Signora"] = { Rarity = "" },
+        ["Frigo Camelo"] = { Rarity = "" },
+        ["Fruli Frula"] = { Rarity = "" },
+        ["Fryuro"] = { Rarity = "" },
+        ["Gangster Footera"] = { Rarity = "" },
+        ["Garamararam"] = { Rarity = "" },
+        ["Gattatino Nyanino"] = { Rarity = "" },
+        ["Girafa Celeste"] = { Rarity = "" },
+        ["Glorbo Fruttodrillo"] = { Rarity = "" },
+        ["Gorillo Watermelondrillo"] = { Rarity = "" },
+        ["Guerriro Digitale"] = { Rarity = "Celestial" },
+        ["Guest666"] = { Rarity = "" },
+        ["Harpini Goosini"] = { Rarity = "" },
+        ["John Pork"] = { Rarity = "" },
+        ["Karkerkar Kurkur"] = { Rarity = "" },
+        ["Ketupat Kepat"] = { Rarity = "" },
+        ["Kicky"] = { Rarity = "Eternal" },
+        ["Krupuk Pagi Pagi"] = { Rarity = "Celestial" },
+        ["La Vacca Saturno Saturnita"] = { Rarity = "" },
+        ["Lirili Larila"] = { Rarity = "" },
+        ["Los Primos"] = { Rarity = "Celestial" },
+        ["Los Primos Blue"] = { Rarity = "" },
+        ["Lucky Fella"] = { Rarity = "Abysall" },
+        ["Madung"] = { Rarity = "" },
+        ["Mangolini Parrocini"] = { Rarity = "" },
+        ["Mastodontico Telepiedone"] = { Rarity = "Celestial" },
+        ["Matteo"] = { Rarity = "" },
+        ["Meowl"] = { Rarity = "OG" },
+        ["Noobini Pizzanini"] = { Rarity = "" },
+        ["Nuclearo Dinossauro"] = { Rarity = "" },
+        ["OctoDJ"] = { Rarity = "Abysall" },
+        ["Octopusini Bluberini"] = { Rarity = "" },
+        ["Orangutini Ananasini"] = { Rarity = "" },
+        ["Orcalero"] = { Rarity = "" },
+        ["Pandaccini Bananini"] = { Rarity = "" },
+        ["Pannaburro"] = { Rarity = "" },
+        ["Peant Jarro"] = { Rarity = "" },
+        ["Penguino Cocosino"] = { Rarity = "" },
+        ["Pesto Mortioni"] = { Rarity = "" },
+        ["Pipi Kiwi"] = { Rarity = "" },
+        ["Plan Blue"] = { Rarity = "" },
+        ["Plan Red"] = { Rarity = "" },
+        ["Pot Hotspot"] = { Rarity = "Celestial" },
+        ["Professora 67"] = { Rarity = "Eternal" },
+        ["Pulcino Pistoletti"] = { Rarity = "Abysall" },
+        ["Rexosaurus"] = { Rarity = "" },
+        ["Rhino Toasterino"] = { Rarity = "" },
+        ["Rinooccio Verdini"] = { Rarity = "" },
+        ["SWAG SODA"] = { Rarity = "" },
+        ["Salamino Pinguino"] = { Rarity = "" },
+        ["Sigma Boy"] = { Rarity = "" },
+        ["Smelloni Papayoni"] = { Rarity = "Eternal" },
+        ["Stoppo Luminino"] = { Rarity = "" },
+        ["Strawberelli Flamingelli"] = { Rarity = "" },
+        ["Strawberry Elephant"] = { Rarity = "OG" },
+        ["Svinina Bombardino"] = { Rarity = "" },
+        ["Ta Ta Ta Ta Sahur"] = { Rarity = "" },
+        ["Talpa Di Fero"] = { Rarity = "" },
+        ["Tictac Sahur"] = { Rarity = "" },
+        ["Tim Cheese"] = { Rarity = "" },
+        ["Torrtuginni Dragonfrutini"] = { Rarity = "" },
+        ["Tralaledon"] = { Rarity = "Celestial" },
+        ["Tralalerita Tralala"] = { Rarity = "" },
+        ["Tralalero Tralala"] = { Rarity = "" },
+        ["Tripi Tropi Tropa Tripa"] = { Rarity = "" },
+        ["Trippi Troppi"] = { Rarity = "" },
+        ["Trulimero Trulicina"] = { Rarity = "" },
+        ["Tubafante"] = { Rarity = "" },
+        ["Tuff Toucan"] = { Rarity = "" },
+        ["Turtinella Melodica"] = { Rarity = "" },
+        ["Udin Din Din Dun"] = { Rarity = "" },
+        ["Waterdino"] = { Rarity = "" },
+        ["Zibra Zubra Zibralini"] = { Rarity = "" },
     }
 
     -- ==========================================
@@ -278,45 +269,34 @@ local success, errorMessage = pcall(function()
     end
 
     local function getItemInfo(tool)
-        if not tool then return "Unknown", 0 end
+        if not tool then return "Unknown" end
         local baseName = tool.Name
         local dbInfo = database[baseName]
-        local rarity = dbInfo and dbInfo.Rarity or "Unknown"
-        local baseCPS = dbInfo and dbInfo.BaseCPS or 0
         
-        local lvlValue = tool:GetAttribute("Level") or tool:GetAttribute("level") or tool:GetAttribute("Lvl")
-        if not lvlValue then
-            local lvlObj = tool:FindFirstChild("Level") or tool:FindFirstChild("level") or tool:FindFirstChild("Lvl")
-            if lvlObj and (lvlObj:IsA("IntValue") or lvlObj:IsA("NumberValue") or lvlObj:IsA("StringValue")) then lvlValue = lvlObj.Value end
-        end
-        local lvl = tonumber(lvlValue) or 1
+        local rarity = "Unknown"
         
-        local lvlMult = 1
+        -- Try to query game's actual EntitiesData module safely at runtime (non-blocking)
         local EntitiesDataModule
         pcall(function()
-            EntitiesDataModule = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Data"):WaitForChild("EntitiesData"))
-        end)
-        if EntitiesDataModule and EntitiesDataModule.GetMultiplierPerLevel then
-            pcall(function() lvlMult = EntitiesDataModule.GetMultiplierPerLevel(lvl) end)
-        else
-            lvlMult = 1 + (lvl - 1) * 0.05
-        end
-        
-        local finalCPS = baseCPS * lvlMult
-        local mut = getToolMutation(tool)
-        if mut and mut ~= "" then
-            local buffMult = 1
-            local MutationDataModule
-            pcall(function()
-                MutationDataModule = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Data"):WaitForChild("MutationData"))
-            end)
-            if MutationDataModule and MutationDataModule.Buffs and MutationDataModule.Buffs[mut] then
-                buffMult = MutationDataModule.Buffs[mut].Value or 1
+            local Shared = ReplicatedStorage:FindFirstChild("Shared")
+            local Data = Shared and Shared:FindFirstChild("Data")
+            local EntitiesDataObj = Data and Data:FindFirstChild("EntitiesData")
+            if EntitiesDataObj then
+                EntitiesDataModule = require(EntitiesDataObj)
             end
-            finalCPS = finalCPS * buffMult
+        end)
+        
+        if EntitiesDataModule and EntitiesDataModule.Brainrots and EntitiesDataModule.Brainrots[baseName] then
+            local info = EntitiesDataModule.Brainrots[baseName]
+            rarity = info.Rarity or rarity
         end
         
-        return rarity, finalCPS
+        -- Fallback to static database if the game module query was missing/unknown
+        if (rarity == "Unknown" or rarity == "") and dbInfo then
+            rarity = dbInfo.Rarity or "Unknown"
+        end
+        
+        return rarity
     end
 
     local function addRaritiesToCart(TargetCart, SelectedRarities, QtyLimit, IsMax)
@@ -345,28 +325,7 @@ local success, errorMessage = pcall(function()
         end
     end
 
-    local function addCPSFilterToCart(TargetCart, MinCPS, MaxCPS, QtyLimit, IsMax)
-        local matchingItems = {}
-        for _, tool in ipairs(getAllTools()) do
-            if isTradeable(tool) then
-                local _, cps = getItemInfo(tool)
-                local matchesMin = (not MinCPS or cps >= MinCPS)
-                local matchesMax = (not MaxCPS or cps <= MaxCPS)
-                if matchesMin and matchesMax then
-                    matchingItems[getFullItemName(tool)] = true
-                end
-            end
-        end
-        for itemName, _ in pairs(matchingItems) do
-            local rs = getRealStock(itemName)
-            local cur = TargetCart[itemName] or 0
-            if IsMax then
-                TargetCart[itemName] = rs
-            elseif QtyLimit > 0 then
-                TargetCart[itemName] = (cur + QtyLimit > rs) and rs or (cur + QtyLimit)
-            end
-        end
-    end
+
 
     local function getMutationList()
         local mutCounts = {}
@@ -549,7 +508,6 @@ local success, errorMessage = pcall(function()
     
     local qtyInputTrade = SecCart3:AddInput({Name = "Amount to send:", Placeholder = "Enter amount..."}, function() end)
     local TradeRarityDropdown = SecCart3:AddMultiDropdown({Name = "Select Rarity (Trade)", Options = RarityList, Default = {}}, function() end)
-    local minCPSInputTrade = SecCart3:AddInput({Name = "Min CPS (Trade):", Placeholder = "Example: 1000"}, function() end)
     
     local CartStatus = SecCart3:AddParagraph("Trade Cart Content", "Empty.")
     local function updateCartDisplay()
@@ -582,17 +540,6 @@ local success, errorMessage = pcall(function()
         addRaritiesToCart(ShoppingCart, selectedRarities, 0, true)
         updateCartDisplay()
     end)
-    SecCart3:AddButton("⚡ Add by CPS (by Amount)", function()
-        local qty = tonumber(qtyInputTrade:Get()) or 0
-        local minCps = tonumber(minCPSInputTrade:Get())
-        addCPSFilterToCart(ShoppingCart, minCps, nil, qty, false)
-        updateCartDisplay()
-    end)
-    SecCart3:AddButton("⚡ Add by CPS (Max Stock)", function()
-        local minCps = tonumber(minCPSInputTrade:Get())
-        addCPSFilterToCart(ShoppingCart, minCps, nil, 0, true)
-        updateCartDisplay()
-    end)
     SecCart3:AddButton("🗑️ Clear Cart", function() ShoppingCart = {}; updateCartDisplay() end)
     
     SecCart3:AddButton("🚀 Create Queue from Cart", function() 
@@ -613,10 +560,8 @@ local success, errorMessage = pcall(function()
     
     local SellMutationDropdown = SecSell1:AddMultiDropdown({Name = "Select Mutation (Sell)", Options = getMutationList(), Default = {}}, function() end)
     local SellItemDropdown = SecSell1:AddMultiDropdown({Name = "Select Custom Sell Item", Options = {"[ANY ASSET]"}, Default = {}}, function(Options) SelectedSellItems = Options end)
-    
     local qtyInputSell = SecSell1:AddInput({Name = "Amount to Sell:", Placeholder = "Enter amount..."}, function() end)
     local SellRarityDropdown = SecSell1:AddMultiDropdown({Name = "Select Rarity (Sell)", Options = RarityList, Default = {}}, function() end)
-    local maxCPSInputSell = SecSell1:AddInput({Name = "Max CPS Limit (Sell):", Placeholder = "Example: 100"}, function() end)
     
     local SellCartStatus = SecSell1:AddParagraph("🛒 Sell Cart", "Empty.")
     local function updateSellCartDisplay()
@@ -647,17 +592,6 @@ local success, errorMessage = pcall(function()
     SecSell1:AddButton("⭐ Add by Rarity (Max Stock)", function() 
         local selectedRarities = SellRarityDropdown:Get()
         addRaritiesToCart(SellCart, selectedRarities, 0, true)
-        updateSellCartDisplay()
-    end)
-    SecSell1:AddButton("⚡ Add by CPS Limit (by Amount)", function()
-        local qty = tonumber(qtyInputSell:Get()) or 0
-        local maxCps = tonumber(maxCPSInputSell:Get())
-        addCPSFilterToCart(SellCart, nil, maxCps, qty, false)
-        updateSellCartDisplay()
-    end)
-    SecSell1:AddButton("⚡ Add by CPS Limit (Max Stock)", function()
-        local maxCps = tonumber(maxCPSInputSell:Get())
-        addCPSFilterToCart(SellCart, nil, maxCps, 0, true)
         updateSellCartDisplay()
     end)
     SecSell1:AddButton("🗑️ Clear Sell Cart", function() SellCart = {}; updateSellCartDisplay() end)
@@ -700,7 +634,6 @@ local success, errorMessage = pcall(function()
     local PlaceItemDropdown = SecBase1:AddMultiDropdown({Name = "Select Custom Brainrot", Options = {"[ANY ASSET]"}, Default = {}}, function(Options) SelectedPlaceItems = Options end)
     local qtyInputBase = SecBase1:AddInput({Name = "Amount to place:", Placeholder = "Enter amount..."}, function() end)
     local BaseRarityDropdown = SecBase1:AddMultiDropdown({Name = "Select Rarity (Base)", Options = RarityList, Default = {}}, function() end)
-    local minCPSInputBase = SecBase1:AddInput({Name = "Min CPS (Base):", Placeholder = "Example: 1000"}, function() end)
     
     local BaseCartStatus = SecBase1:AddParagraph("🛒 Base Cart", "Empty.")
     local function updateBaseCartDisplay()
@@ -731,17 +664,6 @@ local success, errorMessage = pcall(function()
     SecBase1:AddButton("⭐ Add by Rarity (Max Stock)", function() 
         local selectedRarities = BaseRarityDropdown:Get()
         addRaritiesToCart(BaseCart, selectedRarities, 0, true)
-        updateBaseCartDisplay()
-    end)
-    SecBase1:AddButton("⚡ Add by CPS (by Amount)", function()
-        local qty = tonumber(qtyInputBase:Get()) or 0
-        local minCps = tonumber(minCPSInputBase:Get())
-        addCPSFilterToCart(BaseCart, minCps, nil, qty, false)
-        updateBaseCartDisplay()
-    end)
-    SecBase1:AddButton("⚡ Add by CPS (Max Stock)", function()
-        local minCps = tonumber(minCPSInputBase:Get())
-        addCPSFilterToCart(BaseCart, minCps, nil, 0, true)
         updateBaseCartDisplay()
     end)
     SecBase1:AddButton("🗑️ Clear Base Cart", function() BaseCart = {}; updateBaseCartDisplay() end)
@@ -1127,24 +1049,14 @@ local success, errorMessage = pcall(function()
             local itemsList = {"[ANY ASSET]"}  
             for name, count in pairs(inventoryData) do 
                 local rarity = "Unknown"
-                local cps = 0
                 for _, tool in ipairs(getAllTools()) do
                     if isTradeable(tool) and getFullItemName(tool) == name then
-                        rarity, cps = getItemInfo(tool)
+                        rarity = getItemInfo(tool)
                         break
                     end
                 end
                 
-                local formattedCPS = tostring(cps)
-                if cps >= 1000 then
-                    if cps >= 1000000 then
-                        formattedCPS = string.format("%.1fM", cps / 1000000)
-                    else
-                        formattedCPS = string.format("%.1fK", cps / 1000)
-                    end
-                end
-                
-                table.insert(itemsList, string.format("%s | %s | CPS: %s | Stock: %d", name, rarity, formattedCPS, count))
+                table.insert(itemsList, string.format("%s | %s | Stock: %d", name, rarity, count))
             end  
             table.sort(itemsList, function(a, b) if a == "[ANY ASSET]" then return true end if b == "[ANY ASSET]" then return false end return a < b end)  
             
@@ -1162,26 +1074,16 @@ local success, errorMessage = pcall(function()
                 local categorizedItems = {}; local categoryTotals = {}
                 for itemName, amount in pairs(inventoryData) do
                     local rarity = "Unknown"
-                    local cps = 0
                     for _, tool in ipairs(getAllTools()) do
                         if isTradeable(tool) and getFullItemName(tool) == itemName then
-                            rarity, cps = getItemInfo(tool)
+                            rarity = getItemInfo(tool)
                             break
                         end
                     end
                     local category = "🏆 " .. string.upper(rarity) .. " ITEMS"
                     if not categorizedItems[category] then categorizedItems[category] = {}; categoryTotals[category] = 0 end
                     
-                    local formattedCPS = tostring(cps)
-                    if cps >= 1000 then
-                        if cps >= 1000000 then
-                            formattedCPS = string.format("%.1fM", cps / 1000000)
-                        else
-                            formattedCPS = string.format("%.1fK", cps / 1000)
-                        end
-                    end
-                    
-                    table.insert(categorizedItems[category], {name = itemName, qty = amount, rarity = rarity, cpsStr = formattedCPS})
+                    table.insert(categorizedItems[category], {name = itemName, qty = amount, rarity = rarity})
                     categoryTotals[category] = categoryTotals[category] + amount
                 end
                 local sortedCategories = {}
@@ -1190,7 +1092,7 @@ local success, errorMessage = pcall(function()
                     displayString = displayString .. "=== " .. cat .. " (Total: " .. categoryTotals[cat] .. ") ===\n"
                     table.sort(categorizedItems[cat], function(a, b) return a.name < b.name end)
                     for _, item in ipairs(categorizedItems[cat]) do 
-                        displayString = displayString .. string.format(" • %s  [CPS: %s] (Stock: %d)\n", item.name, item.qty) 
+                        displayString = displayString .. string.format(" • %s (Stock: %d)\n", item.name, item.qty) 
                     end
                     displayString = displayString .. "\n"
                 end
