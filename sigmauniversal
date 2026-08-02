@@ -422,16 +422,24 @@ getgenv().UniversalESPSystem = {
         if getgenv().UniversalESPSystem.Players then
             for player, objects in pairs(getgenv().UniversalESPSystem.Players) do
                 pcall(function()
-                    objects.Box:Destroy()
+                    if objects.Box then objects.Box:Destroy() end
                     if objects.BoxOutline then objects.BoxOutline:Destroy() end
-                    objects.NameTag:Destroy()
-                    objects.Tracer:Destroy()
+                    if objects.NameTag then objects.NameTag:Destroy() end
+                    if objects.Tracer then objects.Tracer:Destroy() end
                     if objects.TracerOutline then objects.TracerOutline:Destroy() end
                     if objects.HealthOutline then objects.HealthOutline:Destroy() end
                     if objects.HealthFill then objects.HealthFill:Destroy() end
                     if objects.HeadDot then objects.HeadDot:Destroy() end
+                    if objects.LookTracer then objects.LookTracer:Destroy() end
+                    if objects.WeaponTag then objects.WeaponTag:Destroy() end
+                    if objects.Arrow then objects.Arrow:Destroy() end
                     if objects.Bones then
                         for _, line in ipairs(objects.Bones) do
+                            line:Destroy()
+                        end
+                    end
+                    if objects.Corners then
+                        for _, line in ipairs(objects.Corners) do
                             line:Destroy()
                         end
                     end
@@ -454,6 +462,7 @@ local ESP = {
     Boxes = true,
     BoxColor = Color3.fromRGB(0, 255, 140),
     BoxOutline = true,
+    BoxStyle = "Normal", -- "Normal" or "Corner"
     Names = true,
     NameColor = Color3.fromRGB(240, 240, 240),
     Tracers = false,
@@ -466,6 +475,14 @@ local ESP = {
     HeadDotColor = Color3.fromRGB(255, 0, 0),
     Skeletons = false,
     SkeletonColor = Color3.fromRGB(255, 255, 255),
+    LookTracers = false,
+    LookTracerColor = Color3.fromRGB(255, 170, 0),
+    OffScreenArrows = false,
+    ArrowColor = Color3.fromRGB(255, 0, 100),
+    ArrowRadius = 150,
+    ArrowSize = 12,
+    Weapons = false,
+    WeaponColor = Color3.fromRGB(0, 200, 255),
     Chams = false,
     ChamsColor = Color3.fromRGB(0, 255, 140),
     ChamsOutlineColor = Color3.fromRGB(255, 255, 255),
@@ -526,6 +543,16 @@ local function createESP(player)
     box.Filled = false
     espObjects.Box = box
     
+    -- Corners (8 Lines)
+    espObjects.Corners = {}
+    for i = 1, 8 do
+        local line = Drawing.new("Line")
+        line.Visible = false
+        line.Color = ESP.BoxColor
+        line.Thickness = 1.5
+        table.insert(espObjects.Corners, line)
+    end
+    
     -- Health Bar Outline
     local healthOutline = Drawing.new("Square")
     healthOutline.Visible = false
@@ -573,6 +600,30 @@ local function createESP(player)
     headDot.Filled = true
     espObjects.HeadDot = headDot
     
+    -- Look Tracer
+    local lookTracer = Drawing.new("Line")
+    lookTracer.Visible = false
+    lookTracer.Color = ESP.LookTracerColor
+    lookTracer.Thickness = 1.5
+    espObjects.LookTracer = lookTracer
+    
+    -- Off-Screen Arrow
+    local arrow = Drawing.new("Triangle")
+    arrow.Visible = false
+    arrow.Color = ESP.ArrowColor
+    arrow.Filled = true
+    espObjects.Arrow = arrow
+    
+    -- Weapon Tag
+    local weaponTag = Drawing.new("Text")
+    weaponTag.Visible = false
+    weaponTag.Color = ESP.WeaponColor
+    weaponTag.Size = 11
+    weaponTag.Center = true
+    weaponTag.Outline = true
+    weaponTag.Font = 2
+    espObjects.WeaponTag = weaponTag
+    
     -- Skeletons (Max 15 lines)
     espObjects.Bones = {}
     for i = 1, 15 do
@@ -599,9 +650,19 @@ local function removeESP(player)
         pcall(function() if espObjects.HealthOutline then espObjects.HealthOutline:Destroy() end end)
         pcall(function() if espObjects.HealthFill then espObjects.HealthFill:Destroy() end end)
         pcall(function() if espObjects.HeadDot then espObjects.HeadDot:Destroy() end end)
+        pcall(function() if espObjects.LookTracer then espObjects.LookTracer:Destroy() end end)
+        pcall(function() if espObjects.Arrow then espObjects.Arrow:Destroy() end end)
+        pcall(function() if espObjects.WeaponTag then espObjects.WeaponTag:Destroy() end end)
         pcall(function()
             if espObjects.Bones then
                 for _, line in ipairs(espObjects.Bones) do
+                    line:Destroy()
+                end
+            end
+        end)
+        pcall(function()
+            if espObjects.Corners then
+                for _, line in ipairs(espObjects.Corners) do
                     line:Destroy()
                 end
             end
@@ -624,8 +685,16 @@ local function hideESP(objects)
     if objects.HealthOutline then objects.HealthOutline.Visible = false end
     if objects.HealthFill then objects.HealthFill.Visible = false end
     if objects.HeadDot then objects.HeadDot.Visible = false end
+    if objects.LookTracer then objects.LookTracer.Visible = false end
+    if objects.Arrow then objects.Arrow.Visible = false end
+    if objects.WeaponTag then objects.WeaponTag.Visible = false end
     if objects.Bones then
         for _, line in ipairs(objects.Bones) do
+            line.Visible = false
+        end
+    end
+    if objects.Corners then
+        for _, line in ipairs(objects.Corners) do
             line.Visible = false
         end
     end
@@ -682,6 +751,9 @@ local renderConn = RunService.RenderStepped:Connect(function()
                 end
                 
                 if onScreen then
+                    -- Hide off-screen arrow
+                    objects.Arrow.Visible = false
+                    
                     local head = char:FindFirstChild("Head")
                     local headPos = head and camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0)) or pos
                     local footPos = camera:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0))
@@ -690,23 +762,84 @@ local renderConn = RunService.RenderStepped:Connect(function()
                     local boxHeight = math.clamp(math.abs(headPos.Y - footPos.Y), 6, 2000)
                     local boxWidth = math.clamp(boxHeight * 0.6, 4, 1500)
                     
-                    -- Box Rendering
+                    -- Box Rendering (Normal vs Corner)
                     if ESP.Boxes then
-                        if ESP.BoxOutline then
-                            objects.BoxOutline.Size = Vector2.new(boxWidth, boxHeight)
-                            objects.BoxOutline.Position = Vector2.new(pos.X - boxWidth / 2, pos.Y - boxHeight / 2)
-                            objects.BoxOutline.Visible = true
-                        else
+                        if ESP.BoxStyle == "Corner" then
+                            -- Hide normal box
+                            objects.Box.Visible = false
                             objects.BoxOutline.Visible = false
+                            
+                            local x = pos.X - boxWidth / 2
+                            local y = pos.Y - boxHeight / 2
+                            
+                            -- Left-Top Corner
+                            objects.Corners[1].From = Vector2.new(x, y)
+                            objects.Corners[1].To = Vector2.new(x + boxWidth / 4, y)
+                            objects.Corners[1].Color = espColor
+                            objects.Corners[1].Visible = true
+                            
+                            objects.Corners[2].From = Vector2.new(x, y)
+                            objects.Corners[2].To = Vector2.new(x, y + boxHeight / 4)
+                            objects.Corners[2].Color = espColor
+                            objects.Corners[2].Visible = true
+                            
+                            -- Right-Top Corner
+                            objects.Corners[3].From = Vector2.new(x + boxWidth, y)
+                            objects.Corners[3].To = Vector2.new(x + boxWidth - boxWidth / 4, y)
+                            objects.Corners[3].Color = espColor
+                            objects.Corners[3].Visible = true
+                            
+                            objects.Corners[4].From = Vector2.new(x + boxWidth, y)
+                            objects.Corners[4].To = Vector2.new(x + boxWidth, y + boxHeight / 4)
+                            objects.Corners[4].Color = espColor
+                            objects.Corners[4].Visible = true
+                            
+                            -- Left-Bottom Corner
+                            objects.Corners[5].From = Vector2.new(x, y + boxHeight)
+                            objects.Corners[5].To = Vector2.new(x + boxWidth / 4, y + boxHeight)
+                            objects.Corners[5].Color = espColor
+                            objects.Corners[5].Visible = true
+                            
+                            objects.Corners[6].From = Vector2.new(x, y + boxHeight)
+                            objects.Corners[6].To = Vector2.new(x, y + boxHeight - boxHeight / 4)
+                            objects.Corners[6].Color = espColor
+                            objects.Corners[6].Visible = true
+                            
+                            -- Right-Bottom Corner
+                            objects.Corners[7].From = Vector2.new(x + boxWidth, y + boxHeight)
+                            objects.Corners[7].To = Vector2.new(x + boxWidth - boxWidth / 4, y + boxHeight)
+                            objects.Corners[7].Color = espColor
+                            objects.Corners[7].Visible = true
+                            
+                            objects.Corners[8].From = Vector2.new(x + boxWidth, y + boxHeight)
+                            objects.Corners[8].To = Vector2.new(x + boxWidth, y + boxHeight - boxHeight / 4)
+                            objects.Corners[8].Color = espColor
+                            objects.Corners[8].Visible = true
+                        else
+                            -- Normal Box
+                            for _, line in ipairs(objects.Corners) do
+                                line.Visible = false
+                            end
+                            
+                            if ESP.BoxOutline then
+                                objects.BoxOutline.Size = Vector2.new(boxWidth, boxHeight)
+                                objects.BoxOutline.Position = Vector2.new(pos.X - boxWidth / 2, pos.Y - boxHeight / 2)
+                                objects.BoxOutline.Visible = true
+                            else
+                                objects.BoxOutline.Visible = false
+                            end
+                            
+                            objects.Box.Size = Vector2.new(boxWidth, boxHeight)
+                            objects.Box.Position = Vector2.new(pos.X - boxWidth / 2, pos.Y - boxHeight / 2)
+                            objects.Box.Color = espColor
+                            objects.Box.Visible = true
                         end
-                        
-                        objects.Box.Size = Vector2.new(boxWidth, boxHeight)
-                        objects.Box.Position = Vector2.new(pos.X - boxWidth / 2, pos.Y - boxHeight / 2)
-                        objects.Box.Color = espColor
-                        objects.Box.Visible = true
                     else
                         objects.Box.Visible = false
                         objects.BoxOutline.Visible = false
+                        for _, line in ipairs(objects.Corners) do
+                            line.Visible = false
+                        end
                     end
                     
                     -- Health Bar Rendering
@@ -798,6 +931,41 @@ local renderConn = RunService.RenderStepped:Connect(function()
                         objects.HeadDot.Visible = false
                     end
                     
+                    -- Look Tracer (Facing Line)
+                    if ESP.LookTracers and head then
+                        local start3d = head.Position
+                        local end3d = head.Position + (head.CFrame.LookVector * 15)
+                        
+                        local w2sStart, onScreenStart = camera:WorldToViewportPoint(start3d)
+                        local w2sEnd, onScreenEnd = camera:WorldToViewportPoint(end3d)
+                        
+                        if onScreenStart and onScreenEnd then
+                            objects.LookTracer.From = Vector2.new(w2sStart.X, w2sStart.Y)
+                            objects.LookTracer.To = Vector2.new(w2sEnd.X, w2sEnd.Y)
+                            objects.LookTracer.Color = ESP.UseTeamColor and player.TeamColor and player.TeamColor.Color or ESP.LookTracerColor
+                            objects.LookTracer.Visible = true
+                        else
+                            objects.LookTracer.Visible = false
+                        end
+                    else
+                        objects.LookTracer.Visible = false
+                    end
+                    
+                    -- Equipped Weapon/Tool ESP
+                    if ESP.Weapons then
+                        local weapon = char:FindFirstChildOfClass("Tool")
+                        if weapon then
+                            objects.WeaponTag.Text = string.upper(weapon.Name)
+                            objects.WeaponTag.Color = ESP.UseTeamColor and player.TeamColor and player.TeamColor.Color or ESP.WeaponColor
+                            objects.WeaponTag.Position = Vector2.new(pos.X, pos.Y + boxHeight / 2 + 5)
+                            objects.WeaponTag.Visible = true
+                        else
+                            objects.WeaponTag.Visible = false
+                        end
+                    else
+                        objects.WeaponTag.Visible = false
+                    end
+                    
                     -- Skeleton Rendering
                     if ESP.Skeletons then
                         local boneIdx = 1
@@ -855,7 +1023,43 @@ local renderConn = RunService.RenderStepped:Connect(function()
                         objects.Highlight = nil
                     end
                 else
-                    hideESP(objects)
+                    -- Target is off-screen, hide on-screen elements
+                    objects.Box.Visible = false
+                    objects.BoxOutline.Visible = false
+                    for _, line in ipairs(objects.Corners) do line.Visible = false end
+                    objects.NameTag.Visible = false
+                    objects.Tracer.Visible = false
+                    if objects.TracerOutline then objects.TracerOutline.Visible = false end
+                    objects.HealthOutline.Visible = false
+                    objects.HealthFill.Visible = false
+                    objects.HeadDot.Visible = false
+                    for _, line in ipairs(objects.Bones) do line.Visible = false end
+                    objects.LookTracer.Visible = false
+                    objects.WeaponTag.Visible = false
+                    if objects.Highlight then pcall(function() objects.Highlight.Enabled = false end) end
+                    
+                    -- Render Off-Screen Arrow if enabled
+                    if ESP.OffScreenArrows then
+                        local relativePos = camera.CFrame:PointToObjectSpace(hrp.Position)
+                        local angle = math.atan2(-relativePos.X, -relativePos.Z)
+                        
+                        local screenCenter = Vector2.new(viewportSize.X / 2, viewportSize.Y / 2)
+                        local rotVec = Vector2.new(math.sin(angle), math.cos(angle))
+                        local perpVec = Vector2.new(-rotVec.Y, rotVec.X)
+                        
+                        local arrowPos = screenCenter + rotVec * ESP.ArrowRadius
+                        local pointA = arrowPos + rotVec * ESP.ArrowSize
+                        local pointB = arrowPos - rotVec * (ESP.ArrowSize / 2) + perpVec * (ESP.ArrowSize / 1.5)
+                        local pointC = arrowPos - rotVec * (ESP.ArrowSize / 2) - perpVec * (ESP.ArrowSize / 1.5)
+                        
+                        objects.Arrow.PointA = pointA
+                        objects.Arrow.PointB = pointB
+                        objects.Arrow.PointC = pointC
+                        objects.Arrow.Color = ESP.UseTeamColor and player.TeamColor and player.TeamColor.Color or ESP.ArrowColor
+                        objects.Arrow.Visible = true
+                    else
+                        objects.Arrow.Visible = false
+                    end
                 end
             else
                 hideESP(objects)
@@ -970,6 +1174,9 @@ local SecESPOpts = TabVisuals:AddSection("ESP Features")
 SecESPOpts:AddToggle({Name = "📦 Show Player Boxes", Default = true}, function(state)
     ESP.Boxes = state
 end)
+SecESPOpts:AddDropdown({Name = "Box Style", Options = {"Normal", "Corner"}, Default = "Normal"}, function(val)
+    ESP.BoxStyle = val
+end)
 SecESPOpts:AddToggle({Name = "🖤 Box Outline (High Contrast)", Default = true}, function(state)
     ESP.BoxOutline = state
 end)
@@ -988,6 +1195,12 @@ end)
 SecESPOpts:AddToggle({Name = "🦴 Show Player Skeletons", Default = false}, function(state)
     ESP.Skeletons = state
 end)
+SecESPOpts:AddToggle({Name = "👁️ Show Head Look Tracers", Default = false}, function(state)
+    ESP.LookTracers = state
+end)
+SecESPOpts:AddToggle({Name = "🔫 Show Equipped Weapons", Default = false}, function(state)
+    ESP.Weapons = state
+end)
 SecESPOpts:AddSlider({Name = "Max ESP Distance (Studs)", Min = 100, Max = 10000, Default = 3000}, function(val)
     ESP.MaxDistance = val
 end)
@@ -1001,6 +1214,17 @@ SecTracers:AddToggle({Name = "🖤 Tracer Outline", Default = true}, function(st
 end)
 SecTracers:AddDropdown({Name = "Tracer Origin", Options = {"Bottom", "Center", "Top"}, Default = "Bottom"}, function(val)
     ESP.TracerOrigin = val
+end)
+
+local SecArrows = TabVisuals:AddSection("Off-Screen Indicators")
+SecArrows:AddToggle({Name = "🔺 Enable Off-Screen Arrows", Default = false}, function(state)
+    ESP.OffScreenArrows = state
+end)
+SecArrows:AddSlider({Name = "Arrow Radius (Studs Offset)", Min = 50, Max = 400, Default = 150}, function(val)
+    ESP.ArrowRadius = val
+end)
+SecArrows:AddSlider({Name = "Arrow Indicator Size", Min = 5, Max = 25, Default = 12}, function(val)
+    ESP.ArrowSize = val
 end)
 
 local SecChams = TabVisuals:AddSection("Chams / Highlights")
@@ -1040,6 +1264,15 @@ SecColor:AddColorPicker({Name = "Head Dot Color", Default = Color3.fromRGB(255, 
 end)
 SecColor:AddColorPicker({Name = "Skeleton Color", Default = Color3.fromRGB(255, 255, 255)}, function(color)
     ESP.SkeletonColor = color
+end)
+SecColor:AddColorPicker({Name = "Look Tracer Color", Default = Color3.fromRGB(255, 170, 0)}, function(color)
+    ESP.LookTracerColor = color
+end)
+SecColor:AddColorPicker({Name = "Off-Screen Arrow Color", Default = Color3.fromRGB(255, 0, 100)}, function(color)
+    ESP.ArrowColor = color
+end)
+SecColor:AddColorPicker({Name = "Weapon Text Color", Default = Color3.fromRGB(0, 200, 255)}, function(color)
+    ESP.WeaponColor = color
 end)
 SecColor:AddColorPicker({Name = "Chams Fill Color", Default = Color3.fromRGB(0, 255, 140)}, function(color)
     ESP.ChamsColor = color
