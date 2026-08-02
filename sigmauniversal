@@ -407,43 +407,183 @@ local function copyCoords()
 end
 
 -- ===========================================================================
+-- Clean up any previous runs of this script to prevent memory leaks and ghost drawings
+if getgenv().UniversalESPSystem then
+    pcall(function() getgenv().UniversalESPSystem.Cleanup() end)
+end
+
+getgenv().UniversalESPSystem = {
+    Cleanup = function()
+        if getgenv().UniversalESPSystem.Connections then
+            for _, conn in ipairs(getgenv().UniversalESPSystem.Connections) do
+                pcall(function() conn:Disconnect() end)
+            end
+        end
+        if getgenv().UniversalESPSystem.Players then
+            for player, objects in pairs(getgenv().UniversalESPSystem.Players) do
+                pcall(function()
+                    objects.Box:Destroy()
+                    if objects.BoxOutline then objects.BoxOutline:Destroy() end
+                    objects.NameTag:Destroy()
+                    objects.Tracer:Destroy()
+                    if objects.TracerOutline then objects.TracerOutline:Destroy() end
+                    if objects.HealthOutline then objects.HealthOutline:Destroy() end
+                    if objects.HealthFill then objects.HealthFill:Destroy() end
+                    if objects.HeadDot then objects.HeadDot:Destroy() end
+                    if objects.Bones then
+                        for _, line in ipairs(objects.Bones) do
+                            line:Destroy()
+                        end
+                    end
+                    if objects.Highlight then
+                        objects.Highlight:Destroy()
+                    end
+                end)
+            end
+        end
+    end,
+    Connections = {},
+    Players = {}
+}
+
+-- ===========================================================================
 --  PLAYER ESP SYSTEM
 -- ===========================================================================
 local ESP = {
     Enabled = false,
     Boxes = true,
+    BoxColor = Color3.fromRGB(0, 255, 140),
+    BoxOutline = true,
     Names = true,
+    NameColor = Color3.fromRGB(240, 240, 240),
     Tracers = false,
+    TracerColor = Color3.fromRGB(255, 255, 255),
+    TracerOutline = true,
+    TracerOrigin = "Bottom",
     Distance = true,
-    Players = {},
+    HealthBar = true,
+    HeadDot = true,
+    HeadDotColor = Color3.fromRGB(255, 0, 0),
+    Skeletons = false,
+    SkeletonColor = Color3.fromRGB(255, 255, 255),
+    Chams = false,
+    ChamsColor = Color3.fromRGB(0, 255, 140),
+    ChamsOutlineColor = Color3.fromRGB(255, 255, 255),
+    ChamsFillTrans = 0.5,
+    ChamsOutlineTrans = 0,
+    TeamCheck = false,
+    HideTeammates = false,
+    UseTeamColor = false,
+    MaxDistance = 3000,
+    Players = getgenv().UniversalESPSystem.Players,
+}
+
+local BonePairs = {
+    R6 = {
+        {"Head", "Torso"},
+        {"Torso", "Left Arm"},
+        {"Torso", "Right Arm"},
+        {"Torso", "Left Leg"},
+        {"Torso", "Right Leg"}
+    },
+    R15 = {
+        {"Head", "UpperTorso"},
+        {"UpperTorso", "LowerTorso"},
+        {"UpperTorso", "LeftUpperArm"},
+        {"LeftUpperArm", "LeftLowerArm"},
+        {"LeftLowerArm", "LeftHand"},
+        {"UpperTorso", "RightUpperArm"},
+        {"RightUpperArm", "RightLowerArm"},
+        {"RightLowerArm", "RightHand"},
+        {"LowerTorso", "LeftUpperLeg"},
+        {"LeftUpperLeg", "LeftLowerLeg"},
+        {"LeftLowerLeg", "LeftFoot"},
+        {"LowerTorso", "RightUpperLeg"},
+        {"RightUpperLeg", "RightLowerLeg"},
+        {"RightLowerLeg", "RightFoot"}
+    }
 }
 
 local function createESP(player)
     if player == LocalPlayer then return end
+    if ESP.Players[player] then return end
     
     local espObjects = {}
     
+    -- Box Outline
+    local boxOutline = Drawing.new("Square")
+    boxOutline.Visible = false
+    boxOutline.Color = Color3.fromRGB(0, 0, 0)
+    boxOutline.Thickness = 3
+    boxOutline.Filled = false
+    espObjects.BoxOutline = boxOutline
+    
+    -- Main Box
     local box = Drawing.new("Square")
     box.Visible = false
-    box.Color = Color3.fromRGB(0, 255, 140)
-    box.Thickness = 1.5
+    box.Color = ESP.BoxColor
+    box.Thickness = 1
     box.Filled = false
     espObjects.Box = box
     
+    -- Health Bar Outline
+    local healthOutline = Drawing.new("Square")
+    healthOutline.Visible = false
+    healthOutline.Color = Color3.fromRGB(0, 0, 0)
+    healthOutline.Thickness = 1
+    healthOutline.Filled = true
+    espObjects.HealthOutline = healthOutline
+    
+    -- Health Bar Fill
+    local healthFill = Drawing.new("Square")
+    healthFill.Visible = false
+    healthFill.Color = Color3.fromRGB(0, 255, 0)
+    healthFill.Thickness = 1
+    healthFill.Filled = true
+    espObjects.HealthFill = healthFill
+    
+    -- NameTag
     local nameTag = Drawing.new("Text")
     nameTag.Visible = false
-    nameTag.Color = Color3.fromRGB(240, 240, 240)
+    nameTag.Color = ESP.NameColor
     nameTag.Size = 13
     nameTag.Center = true
     nameTag.Outline = true
     nameTag.Font = 2
     espObjects.NameTag = nameTag
     
+    -- Tracer Outline
+    local tracerOutline = Drawing.new("Line")
+    tracerOutline.Visible = false
+    tracerOutline.Color = Color3.fromRGB(0, 0, 0)
+    tracerOutline.Thickness = 3
+    espObjects.TracerOutline = tracerOutline
+    
+    -- Tracer
     local tracer = Drawing.new("Line")
     tracer.Visible = false
-    tracer.Color = Color3.fromRGB(255, 255, 255)
+    tracer.Color = ESP.TracerColor
     tracer.Thickness = 1
     espObjects.Tracer = tracer
+    
+    -- Head Dot
+    local headDot = Drawing.new("Circle")
+    headDot.Visible = false
+    headDot.Color = ESP.HeadDotColor
+    headDot.Filled = true
+    espObjects.HeadDot = headDot
+    
+    -- Skeletons (Max 15 lines)
+    espObjects.Bones = {}
+    for i = 1, 15 do
+        local boneLine = Drawing.new("Line")
+        boneLine.Visible = false
+        boneLine.Color = ESP.SkeletonColor
+        boneLine.Thickness = 1
+        table.insert(espObjects.Bones, boneLine)
+    end
+    
+    espObjects.Highlight = nil
     
     ESP.Players[player] = espObjects
 end
@@ -452,18 +592,52 @@ local function removeESP(player)
     local espObjects = ESP.Players[player]
     if espObjects then
         pcall(function() espObjects.Box:Destroy() end)
+        pcall(function() if espObjects.BoxOutline then espObjects.BoxOutline:Destroy() end end)
         pcall(function() espObjects.NameTag:Destroy() end)
         pcall(function() espObjects.Tracer:Destroy() end)
+        pcall(function() if espObjects.TracerOutline then espObjects.TracerOutline:Destroy() end end)
+        pcall(function() if espObjects.HealthOutline then espObjects.HealthOutline:Destroy() end end)
+        pcall(function() if espObjects.HealthFill then espObjects.HealthFill:Destroy() end end)
+        pcall(function() if espObjects.HeadDot then espObjects.HeadDot:Destroy() end end)
+        pcall(function()
+            if espObjects.Bones then
+                for _, line in ipairs(espObjects.Bones) do
+                    line:Destroy()
+                end
+            end
+        end)
+        pcall(function()
+            if espObjects.Highlight then
+                espObjects.Highlight:Destroy()
+            end
+        end)
         ESP.Players[player] = nil
     end
 end
 
-RunService.RenderStepped:Connect(function()
+local function hideESP(objects)
+    objects.Box.Visible = false
+    if objects.BoxOutline then objects.BoxOutline.Visible = false end
+    objects.NameTag.Visible = false
+    objects.Tracer.Visible = false
+    if objects.TracerOutline then objects.TracerOutline.Visible = false end
+    if objects.HealthOutline then objects.HealthOutline.Visible = false end
+    if objects.HealthFill then objects.HealthFill.Visible = false end
+    if objects.HeadDot then objects.HeadDot.Visible = false end
+    if objects.Bones then
+        for _, line in ipairs(objects.Bones) do
+            line.Visible = false
+        end
+    end
+    if objects.Highlight then
+        pcall(function() objects.Highlight.Enabled = false end)
+    end
+end
+
+local renderConn = RunService.RenderStepped:Connect(function()
     if not ESP.Enabled then
         for _, objects in pairs(ESP.Players) do
-            objects.Box.Visible = false
-            objects.NameTag.Visible = false
-            objects.Tracer.Visible = false
+            hideESP(objects)
         end
         return
     end
@@ -473,64 +647,229 @@ RunService.RenderStepped:Connect(function()
     
     for player, objects in pairs(ESP.Players) do
         local char = player.Character
-        local hrp = char and char:FindFirstChild("HumanoidRootPart")
-        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        -- Streamed-out or partially loaded fallbacks
+        local hrp = char and (char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso") or char:FindFirstChildOfClass("BasePart"))
+        local hum = char and (char:FindFirstChildOfClass("Humanoid") or char:FindFirstChild("AnimationController"))
         
-        if hrp and hum and hum.Health > 0 then
-            local pos, onScreen = camera:WorldToViewportPoint(hrp.Position)
+        if hrp then
+            local dist = math.floor((hrp.Position - camera.CFrame.Position).Magnitude)
             
-            if onScreen then
-                local head = char:FindFirstChild("Head")
-                local headPos = head and camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0)) or pos
-                local footPos = camera:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0))
+            -- Hide if beyond max distance filter
+            if dist > ESP.MaxDistance then
+                hideESP(objects)
+                continue
+            end
+            
+            local health = hum and hum.Health or 100
+            local maxHealth = hum and hum.MaxHealth or 100
+            
+            if health > 0 then
+                local pos, onScreen = camera:WorldToViewportPoint(hrp.Position)
                 
-                local boxHeight = math.abs(headPos.Y - footPos.Y)
-                local boxWidth = boxHeight * 0.6
-                
-                if ESP.Boxes then
-                    objects.Box.Size = Vector2.new(boxWidth, boxHeight)
-                    objects.Box.Position = Vector2.new(pos.X - boxWidth / 2, pos.Y - boxHeight / 2)
-                    objects.Box.Visible = true
-                else
-                    objects.Box.Visible = false
+                -- Team check
+                local isTeammate = player.Team == LocalPlayer.Team
+                if ESP.TeamCheck and isTeammate and ESP.HideTeammates then
+                    hideESP(objects)
+                    continue
                 end
                 
-                if ESP.Names then
-                    local label = player.Name
-                    if ESP.Distance then
-                        local dist = math.floor((hrp.Position - camera.CFrame.Position).Magnitude)
-                        label = string.format("%s [%dm]", player.Name, dist)
+                -- Decide Color
+                local espColor = ESP.BoxColor
+                if ESP.UseTeamColor and player.TeamColor then
+                    espColor = player.TeamColor.Color
+                elseif ESP.TeamCheck then
+                    espColor = isTeammate and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+                end
+                
+                if onScreen then
+                    local head = char:FindFirstChild("Head")
+                    local headPos = head and camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0)) or pos
+                    local footPos = camera:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0))
+                    
+                    -- Dynamic box sizing clamping to prevent sub-pixel issues at long distance
+                    local boxHeight = math.clamp(math.abs(headPos.Y - footPos.Y), 6, 2000)
+                    local boxWidth = math.clamp(boxHeight * 0.6, 4, 1500)
+                    
+                    -- Box Rendering
+                    if ESP.Boxes then
+                        if ESP.BoxOutline then
+                            objects.BoxOutline.Size = Vector2.new(boxWidth, boxHeight)
+                            objects.BoxOutline.Position = Vector2.new(pos.X - boxWidth / 2, pos.Y - boxHeight / 2)
+                            objects.BoxOutline.Visible = true
+                        else
+                            objects.BoxOutline.Visible = false
+                        end
+                        
+                        objects.Box.Size = Vector2.new(boxWidth, boxHeight)
+                        objects.Box.Position = Vector2.new(pos.X - boxWidth / 2, pos.Y - boxHeight / 2)
+                        objects.Box.Color = espColor
+                        objects.Box.Visible = true
+                    else
+                        objects.Box.Visible = false
+                        objects.BoxOutline.Visible = false
                     end
-                    objects.NameTag.Text = label
-                    objects.NameTag.Position = Vector2.new(pos.X, pos.Y - boxHeight / 2 - 15)
-                    objects.NameTag.Visible = true
+                    
+                    -- Health Bar Rendering
+                    if ESP.HealthBar then
+                        local healthPercent = math.clamp(health / maxHealth, 0, 1)
+                        local barColor = Color3.fromRGB(255, 0, 0):Lerp(Color3.fromRGB(0, 255, 0), healthPercent)
+                        
+                        local barWidth = 4
+                        local barGap = 6
+                        local barHeight = boxHeight
+                        
+                        local outlineX = pos.X - boxWidth / 2 - barWidth - barGap
+                        local outlineY = pos.Y - boxHeight / 2
+                        
+                        objects.HealthOutline.Size = Vector2.new(barWidth + 2, barHeight + 2)
+                        objects.HealthOutline.Position = Vector2.new(outlineX - 1, outlineY - 1)
+                        objects.HealthOutline.Visible = true
+                        
+                        local fillHeight = barHeight * healthPercent
+                        local fillY = outlineY + barHeight - fillHeight
+                        
+                        objects.HealthFill.Size = Vector2.new(barWidth, fillHeight)
+                        objects.HealthFill.Position = Vector2.new(outlineX, fillY)
+                        objects.HealthFill.Color = barColor
+                        objects.HealthFill.Visible = true
+                    else
+                        objects.HealthOutline.Visible = false
+                        objects.HealthFill.Visible = false
+                    end
+                    
+                    -- NameTag Rendering with font scaling based on distance
+                    if ESP.Names then
+                        local label = player.Name
+                        if ESP.Distance then
+                            label = string.format("%s [%dm]", player.Name, dist)
+                        end
+                        
+                        -- Scale text dynamically down to 9px at 1500+ studs
+                        local textScale = math.clamp(math.floor(13 - (dist / 400)), 9, 13)
+                        
+                        objects.NameTag.Text = label
+                        objects.NameTag.Size = textScale
+                        objects.NameTag.Color = ESP.UseTeamColor and player.TeamColor and player.TeamColor.Color or ESP.NameColor
+                        objects.NameTag.Position = Vector2.new(pos.X, pos.Y - boxHeight / 2 - 15)
+                        objects.NameTag.Visible = true
+                    else
+                        objects.NameTag.Visible = false
+                    end
+                    
+                    -- Tracer Rendering
+                    if ESP.Tracers then
+                        local originX, originY = viewportSize.X / 2, viewportSize.Y
+                        if ESP.TracerOrigin == "Top" then
+                            originX, originY = viewportSize.X / 2, 0
+                        elseif ESP.TracerOrigin == "Center" then
+                            originX, originY = viewportSize.X / 2, viewportSize.Y / 2
+                        end
+                        
+                        if ESP.TracerOutline then
+                            objects.TracerOutline.From = Vector2.new(originX, originY)
+                            objects.TracerOutline.To = Vector2.new(pos.X, pos.Y + boxHeight / 2)
+                            objects.TracerOutline.Visible = true
+                        else
+                            objects.TracerOutline.Visible = false
+                        end
+                        
+                        objects.Tracer.From = Vector2.new(originX, originY)
+                        objects.Tracer.To = Vector2.new(pos.X, pos.Y + boxHeight / 2)
+                        objects.Tracer.Color = ESP.UseTeamColor and player.TeamColor and player.TeamColor.Color or ESP.TracerColor
+                        objects.Tracer.Visible = true
+                    else
+                        objects.TracerOutline.Visible = false
+                        objects.Tracer.Visible = false
+                    end
+                    
+                    -- Head Dot Rendering
+                    if ESP.HeadDot and head then
+                        local headPos, onScreenHead = camera:WorldToViewportPoint(head.Position)
+                        if onScreenHead then
+                            local rad = math.clamp(120 / dist, 2, 8)
+                            objects.HeadDot.Position = Vector2.new(headPos.X, headPos.Y)
+                            objects.HeadDot.Radius = rad
+                            objects.HeadDot.Color = ESP.UseTeamColor and player.TeamColor and player.TeamColor.Color or ESP.HeadDotColor
+                            objects.HeadDot.Visible = true
+                        else
+                            objects.HeadDot.Visible = false
+                        end
+                    else
+                        objects.HeadDot.Visible = false
+                    end
+                    
+                    -- Skeleton Rendering
+                    if ESP.Skeletons then
+                        local boneIdx = 1
+                        local isR15 = char:FindFirstChild("UpperTorso") ~= nil
+                        local pairsList = isR15 and BonePairs.R15 or BonePairs.R6
+                        
+                        for _, pair in ipairs(pairsList) do
+                            local p1 = char:FindFirstChild(pair[1])
+                            local p2 = char:FindFirstChild(pair[2])
+                            
+                            if p1 and p2 then
+                                local w2s1, onScreen1 = camera:WorldToViewportPoint(p1.Position)
+                                local w2s2, onScreen2 = camera:WorldToViewportPoint(p2.Position)
+                                
+                                if onScreen1 and onScreen2 and boneIdx <= #objects.Bones then
+                                    local line = objects.Bones[boneIdx]
+                                    line.From = Vector2.new(w2s1.X, w2s1.Y)
+                                    line.To = Vector2.new(w2s2.X, w2s2.Y)
+                                    line.Color = ESP.UseTeamColor and player.TeamColor and player.TeamColor.Color or ESP.SkeletonColor
+                                    line.Visible = true
+                                    boneIdx = boneIdx + 1
+                                end
+                            end
+                        end
+                        
+                        for i = boneIdx, #objects.Bones do
+                            objects.Bones[i].Visible = false
+                        end
+                    else
+                        for _, line in ipairs(objects.Bones) do
+                            line.Visible = false
+                        end
+                    end
+                    
+                    -- Highlight Chams rendering
+                    if ESP.Chams then
+                        local highlight = char:FindFirstChildOfClass("Highlight")
+                        if not highlight then
+                            highlight = Instance.new("Highlight")
+                            highlight.Parent = char
+                        end
+                        highlight.Adornee = char
+                        highlight.FillColor = ESP.UseTeamColor and player.TeamColor and player.TeamColor.Color or ESP.ChamsColor
+                        highlight.OutlineColor = ESP.ChamsOutlineColor
+                        highlight.FillTransparency = ESP.ChamsFillTrans
+                        highlight.OutlineTransparency = ESP.ChamsOutlineTrans
+                        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                        highlight.Enabled = true
+                        objects.Highlight = highlight
+                    else
+                        local highlight = char:FindFirstChildOfClass("Highlight")
+                        if highlight then
+                            pcall(function() highlight:Destroy() end)
+                        end
+                        objects.Highlight = nil
+                    end
                 else
-                    objects.NameTag.Visible = false
-                end
-                
-                if ESP.Tracers then
-                    objects.Tracer.From = Vector2.new(viewportSize.X / 2, viewportSize.Y)
-                    objects.Tracer.To = Vector2.new(pos.X, pos.Y + boxHeight / 2)
-                    objects.Tracer.Visible = true
-                else
-                    objects.Tracer.Visible = false
+                    hideESP(objects)
                 end
             else
-                objects.Box.Visible = false
-                objects.NameTag.Visible = false
-                objects.Tracer.Visible = false
+                hideESP(objects)
             end
         else
-            objects.Box.Visible = false
-            objects.NameTag.Visible = false
-            objects.Tracer.Visible = false
+            hideESP(objects)
         end
     end
 end)
 
 for _, p in ipairs(Players:GetPlayers()) do createESP(p) end
-Players.PlayerAdded:Connect(createESP)
-Players.PlayerRemoving:Connect(removeESP)
+table.insert(getgenv().UniversalESPSystem.Connections, Players.PlayerAdded:Connect(createESP))
+table.insert(getgenv().UniversalESPSystem.Connections, Players.PlayerRemoving:Connect(removeESP))
+table.insert(getgenv().UniversalESPSystem.Connections, renderConn)
 
 -- ===========================================================================
 --  UI TABS CONFIGURATION
@@ -621,22 +960,94 @@ end)
 
 -- 4. TAB VISUALS
 local TabVisuals = Window:MakeTab("👁️")
+
 local SecESP = TabVisuals:AddSection("Player ESP (Wallhack)")
 SecESP:AddToggle({Name = "🔆 Enable ESP System", Default = false}, function(state)
     ESP.Enabled = state
 end)
-SecESP:AddToggle({Name = "📦 Show Player Boxes", Default = true}, function(state)
+
+local SecESPOpts = TabVisuals:AddSection("ESP Features")
+SecESPOpts:AddToggle({Name = "📦 Show Player Boxes", Default = true}, function(state)
     ESP.Boxes = state
 end)
-SecESP:AddToggle({Name = "📛 Show Player Names", Default = true}, function(state)
+SecESPOpts:AddToggle({Name = "🖤 Box Outline (High Contrast)", Default = true}, function(state)
+    ESP.BoxOutline = state
+end)
+SecESPOpts:AddToggle({Name = "📛 Show Player Names", Default = true}, function(state)
     ESP.Names = state
 end)
-SecESP:AddToggle({Name = "📏 Show Distance", Default = true}, function(state)
+SecESPOpts:AddToggle({Name = "📏 Show Distance", Default = true}, function(state)
     ESP.Distance = state
 end)
-SecESP:AddToggle({Name = "📏 Show Tracers (Line)", Default = false}, function(state)
+SecESPOpts:AddToggle({Name = "💚 Show Health Bar", Default = true}, function(state)
+    ESP.HealthBar = state
+end)
+SecESPOpts:AddToggle({Name = "🔴 Show Head Dot", Default = true}, function(state)
+    ESP.HeadDot = state
+end)
+SecESPOpts:AddToggle({Name = "🦴 Show Player Skeletons", Default = false}, function(state)
+    ESP.Skeletons = state
+end)
+SecESPOpts:AddSlider({Name = "Max ESP Distance (Studs)", Min = 100, Max = 10000, Default = 3000}, function(val)
+    ESP.MaxDistance = val
+end)
+
+local SecTracers = TabVisuals:AddSection("Tracer Settings")
+SecTracers:AddToggle({Name = "📏 Show Tracers (Line)", Default = false}, function(state)
     ESP.Tracers = state
 end)
+SecTracers:AddToggle({Name = "🖤 Tracer Outline", Default = true}, function(state)
+    ESP.TracerOutline = state
+end)
+SecTracers:AddDropdown({Name = "Tracer Origin", Options = {"Bottom", "Center", "Top"}, Default = "Bottom"}, function(val)
+    ESP.TracerOrigin = val
+end)
+
+local SecChams = TabVisuals:AddSection("Chams / Highlights")
+SecChams:AddToggle({Name = "✨ Enable Highlight Chams", Default = false}, function(state)
+    ESP.Chams = state
+end)
+SecChams:AddSlider({Name = "Chams Fill Transparency", Min = 0, Max = 100, Default = 50}, function(val)
+    ESP.ChamsFillTrans = val / 100
+end)
+SecChams:AddSlider({Name = "Chams Outline Transparency", Min = 0, Max = 100, Default = 0}, function(val)
+    ESP.ChamsOutlineTrans = val / 100
+end)
+
+local SecTeam = TabVisuals:AddSection("Team Settings")
+SecTeam:AddToggle({Name = "🛡️ Team Check Mode", Default = false}, function(state)
+    ESP.TeamCheck = state
+end)
+SecTeam:AddToggle({Name = "👻 Hide Teammates", Default = false}, function(state)
+    ESP.HideTeammates = state
+end)
+SecTeam:AddToggle({Name = "🎨 Use Team Colors", Default = false}, function(state)
+    ESP.UseTeamColor = state
+end)
+
+local SecColor = TabVisuals:AddSection("ESP Colors Customization")
+SecColor:AddColorPicker({Name = "Box Color", Default = Color3.fromRGB(0, 255, 140)}, function(color)
+    ESP.BoxColor = color
+end)
+SecColor:AddColorPicker({Name = "Name Color", Default = Color3.fromRGB(240, 240, 240)}, function(color)
+    ESP.NameColor = color
+end)
+SecColor:AddColorPicker({Name = "Tracer Color", Default = Color3.fromRGB(255, 255, 255)}, function(color)
+    ESP.TracerColor = color
+end)
+SecColor:AddColorPicker({Name = "Head Dot Color", Default = Color3.fromRGB(255, 0, 0)}, function(color)
+    ESP.HeadDotColor = color
+end)
+SecColor:AddColorPicker({Name = "Skeleton Color", Default = Color3.fromRGB(255, 255, 255)}, function(color)
+    ESP.SkeletonColor = color
+end)
+SecColor:AddColorPicker({Name = "Chams Fill Color", Default = Color3.fromRGB(0, 255, 140)}, function(color)
+    ESP.ChamsColor = color
+end)
+SecColor:AddColorPicker({Name = "Chams Outline Color", Default = Color3.fromRGB(255, 255, 255)}, function(color)
+    ESP.ChamsOutlineColor = color
+end)
+
 
 -- 5. TAB TELEPORT / COORDINATES
 local TabTP = Window:MakeTab("📍")
