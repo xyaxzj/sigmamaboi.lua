@@ -1,5 +1,5 @@
 -- ===========================================================================
---  SIGMA UNIVERSAL CLIENT (v1.3) + COMBAT OVERHAUL (PREDICTION & HEARTBEAT)
+--  SIGMA UNIVERSAL CLIENT (v1.0)
 --  Compatibility: Mobile (Delta, Hydrogen, Codex, Arceus X) & PC (Wave, Electron)
 -- ===========================================================================
 
@@ -25,7 +25,7 @@ if not successUI or type(Library) ~= "table" then return end
 local Window = Library:CreateWindow({
     Name = "Sigma Universal Client",
     LogoText = "⚡",
-    Footer = "v1.3 (Aimbot Pro)",
+    Footer = "v1.0",
     ConfigName = "SigmaUniversal"
 })
 
@@ -433,6 +433,7 @@ getgenv().UniversalESPSystem = {
                     if objects.LookTracer then objects.LookTracer:Destroy() end
                     if objects.WeaponTag then objects.WeaponTag:Destroy() end
                     if objects.Arrow then objects.Arrow:Destroy() end
+                    if objects.RadarDot then objects.RadarDot:Destroy() end
                     if objects.Bones then
                         for _, line in ipairs(objects.Bones) do
                             line:Destroy()
@@ -449,9 +450,15 @@ getgenv().UniversalESPSystem = {
                 end)
             end
         end
+        if getgenv().UniversalESPSystem.RadarDrawings then
+            for _, drawing in ipairs(getgenv().UniversalESPSystem.RadarDrawings) do
+                pcall(function() drawing:Destroy() end)
+            end
+        end
     end,
     Connections = {},
-    Players = {}
+    Players = {},
+    RadarDrawings = {}
 }
 
 -- ===========================================================================
@@ -492,6 +499,13 @@ local ESP = {
     HideTeammates = false,
     UseTeamColor = false,
     MaxDistance = 3000,
+    RadarEnabled = false,
+    RadarX = 150,
+    RadarY = 180,
+    RadarSize = 120,
+    RadarZoom = 2.0,
+    RadarBgColor = Color3.fromRGB(20, 20, 20),
+    RadarBorderColor = Color3.fromRGB(80, 80, 80),
     Players = getgenv().UniversalESPSystem.Players,
 }
 
@@ -634,6 +648,13 @@ local function createESP(player)
         table.insert(espObjects.Bones, boneLine)
     end
     
+    -- Radar Dot
+    local radarDot = Drawing.new("Circle")
+    radarDot.Visible = false
+    radarDot.Radius = 3.5
+    radarDot.Filled = true
+    espObjects.RadarDot = radarDot
+    
     espObjects.Highlight = nil
     
     ESP.Players[player] = espObjects
@@ -653,6 +674,7 @@ local function removeESP(player)
         pcall(function() if espObjects.LookTracer then espObjects.LookTracer:Destroy() end end)
         pcall(function() if espObjects.Arrow then espObjects.Arrow:Destroy() end end)
         pcall(function() if espObjects.WeaponTag then espObjects.WeaponTag:Destroy() end end)
+        pcall(function() if espObjects.RadarDot then espObjects.RadarDot:Destroy() end end)
         pcall(function()
             if espObjects.Bones then
                 for _, line in ipairs(espObjects.Bones) do
@@ -688,6 +710,7 @@ local function hideESP(objects)
     if objects.LookTracer then objects.LookTracer.Visible = false end
     if objects.Arrow then objects.Arrow.Visible = false end
     if objects.WeaponTag then objects.WeaponTag.Visible = false end
+    if objects.RadarDot then objects.RadarDot.Visible = false end
     if objects.Bones then
         for _, line in ipairs(objects.Bones) do
             line.Visible = false
@@ -703,16 +726,112 @@ local function hideESP(objects)
     end
 end
 
+local function createRadar()
+    if getgenv().UniversalESPSystem.RadarBackground then return end
+    
+    local bg = Drawing.new("Circle")
+    bg.Filled = true
+    bg.Color = ESP.RadarBgColor
+    bg.Transparency = 0.6
+    bg.Visible = false
+    getgenv().UniversalESPSystem.RadarBackground = bg
+    table.insert(getgenv().UniversalESPSystem.RadarDrawings, bg)
+    
+    local border = Drawing.new("Circle")
+    border.Filled = false
+    border.Color = ESP.RadarBorderColor
+    border.Thickness = 1.5
+    border.Visible = false
+    getgenv().UniversalESPSystem.RadarBorder = border
+    table.insert(getgenv().UniversalESPSystem.RadarDrawings, border)
+    
+    local lineH = Drawing.new("Line")
+    lineH.Color = Color3.fromRGB(60, 60, 60)
+    lineH.Thickness = 1
+    lineH.Visible = false
+    getgenv().UniversalESPSystem.RadarLineH = lineH
+    table.insert(getgenv().UniversalESPSystem.RadarDrawings, lineH)
+    
+    local lineV = Drawing.new("Line")
+    lineV.Color = Color3.fromRGB(60, 60, 60)
+    lineV.Thickness = 1
+    lineV.Visible = false
+    getgenv().UniversalESPSystem.RadarLineV = lineV
+    table.insert(getgenv().UniversalESPSystem.RadarDrawings, lineV)
+    
+    local pointer = Drawing.new("Circle")
+    pointer.Radius = 4
+    pointer.Color = Color3.fromRGB(255, 255, 255)
+    pointer.Filled = true
+    pointer.Visible = false
+    getgenv().UniversalESPSystem.RadarPointer = pointer
+    table.insert(getgenv().UniversalESPSystem.RadarDrawings, pointer)
+end
+
 local renderConn = RunService.RenderStepped:Connect(function()
     if not ESP.Enabled then
         for _, objects in pairs(ESP.Players) do
             hideESP(objects)
         end
+        pcall(function()
+            getgenv().UniversalESPSystem.RadarBackground.Visible = false
+            getgenv().UniversalESPSystem.RadarBorder.Visible = false
+            getgenv().UniversalESPSystem.RadarLineH.Visible = false
+            getgenv().UniversalESPSystem.RadarLineV.Visible = false
+            getgenv().UniversalESPSystem.RadarPointer.Visible = false
+        end)
         return
     end
     
     local camera = workspace.CurrentCamera
     local viewportSize = camera.ViewportSize
+    
+    local localChar = LocalPlayer.Character
+    local localHrp = localChar and (localChar:FindFirstChild("HumanoidRootPart") or localChar:FindFirstChild("Torso") or localChar:FindFirstChild("UpperTorso") or localChar:FindFirstChildOfClass("BasePart"))
+    
+    if ESP.RadarEnabled and localHrp then
+        createRadar()
+        
+        local center = Vector2.new(ESP.RadarX, ESP.RadarY)
+        local radius = ESP.RadarSize / 2
+        
+        local bg = getgenv().UniversalESPSystem.RadarBackground
+        local border = getgenv().UniversalESPSystem.RadarBorder
+        local lineH = getgenv().UniversalESPSystem.RadarLineH
+        local lineV = getgenv().UniversalESPSystem.RadarLineV
+        local pointer = getgenv().UniversalESPSystem.RadarPointer
+        
+        if bg and border and lineH and lineV and pointer then
+            bg.Position = center
+            bg.Radius = radius
+            bg.Color = ESP.RadarBgColor
+            bg.Visible = true
+            
+            border.Position = center
+            border.Radius = radius
+            border.Color = ESP.RadarBorderColor
+            border.Visible = true
+            
+            lineH.From = center - Vector2.new(radius, 0)
+            lineH.To = center + Vector2.new(radius, 0)
+            lineH.Visible = true
+            
+            lineV.From = center - Vector2.new(0, radius)
+            lineV.To = center + Vector2.new(0, radius)
+            lineV.Visible = true
+            
+            pointer.Position = center
+            pointer.Visible = true
+        end
+    else
+        pcall(function()
+            getgenv().UniversalESPSystem.RadarBackground.Visible = false
+            getgenv().UniversalESPSystem.RadarBorder.Visible = false
+            getgenv().UniversalESPSystem.RadarLineH.Visible = false
+            getgenv().UniversalESPSystem.RadarLineV.Visible = false
+            getgenv().UniversalESPSystem.RadarPointer.Visible = false
+        end)
+    end
     
     for player, objects in pairs(ESP.Players) do
         local char = player.Character
@@ -733,10 +852,39 @@ local renderConn = RunService.RenderStepped:Connect(function()
             local maxHealth = hum and hum.MaxHealth or 100
             
             if health > 0 then
+                local isTeammate = player.Team == LocalPlayer.Team
+                
+                -- Radar Dot rendering
+                if ESP.RadarEnabled and localHrp then
+                    local relativePos = localHrp.CFrame:PointToObjectSpace(hrp.Position)
+                    local dx = relativePos.X * ESP.RadarZoom
+                    local dz = relativePos.Z * ESP.RadarZoom
+                    
+                    local center = Vector2.new(ESP.RadarX, ESP.RadarY)
+                    local radius = ESP.RadarSize / 2
+                    local distance = math.sqrt(dx^2 + dz^2)
+                    
+                    local dotColor = ESP.BoxColor
+                    if ESP.UseTeamColor and player.TeamColor then
+                        dotColor = player.TeamColor.Color
+                    elseif ESP.TeamCheck then
+                        dotColor = isTeammate and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+                    end
+                    
+                    if distance <= radius then
+                        objects.RadarDot.Position = center + Vector2.new(dx, dz)
+                        objects.RadarDot.Color = dotColor
+                        objects.RadarDot.Visible = true
+                    else
+                        objects.RadarDot.Visible = false
+                    end
+                else
+                    objects.RadarDot.Visible = false
+                end
+                
                 local pos, onScreen = camera:WorldToViewportPoint(hrp.Position)
                 
                 -- Team check
-                local isTeammate = player.Team == LocalPlayer.Team
                 if ESP.TeamCheck and isTeammate and ESP.HideTeammates then
                     hideESP(objects)
                     continue
@@ -1249,6 +1397,23 @@ SecTeam:AddToggle({Name = "🎨 Use Team Colors", Default = false}, function(sta
     ESP.UseTeamColor = state
 end)
 
+local SecRadar = TabVisuals:AddSection("Radar ESP Settings")
+SecRadar:AddToggle({Name = "🗺️ Enable Radar ESP", Default = false}, function(state)
+    ESP.RadarEnabled = state
+end)
+SecRadar:AddSlider({Name = "Radar Position X", Min = 0, Max = 2500, Default = 150}, function(val)
+    ESP.RadarX = val
+end)
+SecRadar:AddSlider({Name = "Radar Position Y", Min = 0, Max = 2000, Default = 180}, function(val)
+    ESP.RadarY = val
+end)
+SecRadar:AddSlider({Name = "Radar Size", Min = 50, Max = 400, Default = 120}, function(val)
+    ESP.RadarSize = val
+end)
+SecRadar:AddSlider({Name = "Radar Zoom Level", Min = 5, Max = 100, Default = 20}, function(val)
+    ESP.RadarZoom = val / 10
+end)
+
 local SecColor = TabVisuals:AddSection("ESP Colors Customization")
 SecColor:AddColorPicker({Name = "Box Color", Default = Color3.fromRGB(0, 255, 140)}, function(color)
     ESP.BoxColor = color
@@ -1273,6 +1438,12 @@ SecColor:AddColorPicker({Name = "Off-Screen Arrow Color", Default = Color3.fromR
 end)
 SecColor:AddColorPicker({Name = "Weapon Text Color", Default = Color3.fromRGB(0, 200, 255)}, function(color)
     ESP.WeaponColor = color
+end)
+SecColor:AddColorPicker({Name = "Radar Background Color", Default = Color3.fromRGB(20, 20, 20)}, function(color)
+    ESP.RadarBgColor = color
+end)
+SecColor:AddColorPicker({Name = "Radar Border Color", Default = Color3.fromRGB(80, 80, 80)}, function(color)
+    ESP.RadarBorderColor = color
 end)
 SecColor:AddColorPicker({Name = "Chams Fill Color", Default = Color3.fromRGB(0, 255, 140)}, function(color)
     ESP.ChamsColor = color
@@ -1322,133 +1493,4 @@ SecCoord:AddButton("❌ Delete Selected Location", function()
     deleteCoord(selectedSavedCoord)
 end)
 
--- ===========================================================================
---  6. TAB COMBAT (AUTO SHOOT) - OVERHAUL
--- ===========================================================================
-local TabCombat = Window:MakeTab("⚔️")
-local SecCombat = TabCombat:AddSection("Auto Shoot Enemy (Aimbot)")
-
-local autoShootEnabled = false
-local autoShootDelay = 0.05 -- Dipercepat jadi 0.05 detik
-local autoShootTeamCheck = false
-local enablePrediction = true
-local bulletSpeed = 1500 -- Asumsi kecepatan peluru agar sinkron saat target gerak
-
--- Cache Remote (Dilakukan di luar loop agar tidak lag)
-local shootRemote = ReplicatedStorage:WaitForChild("Blaster", 5)
-if shootRemote then
-    shootRemote = shootRemote:WaitForChild("Remotes", 5)
-    if shootRemote then
-        shootRemote = shootRemote:WaitForChild("Shoot", 5)
-    end
-end
-
--- Deteksi senjata yang lebih kuat
-local function getActiveWeapon(char)
-    local tool = char:FindFirstChildOfClass("Tool")
-    if tool then return tool end
-    
-    local ignoreList = {
-        HumanoidRootPart=true, Head=true, UpperTorso=true, LowerTorso=true, Torso=true,
-        RightArm=true, LeftArm=true, RightLeg=true, LeftLeg=true,
-        RightUpperArm=true, RightLowerArm=true, RightHand=true,
-        LeftUpperArm=true, LeftLowerArm=true, LeftHand=true,
-        RightUpperLeg=true, RightLowerLeg=true, RightFoot=true,
-        LeftUpperLeg=true, LeftLowerLeg=true, LeftFoot=true,
-        Humanoid=true, ForceField=true, Shirt=true, Pants=true, ShirtGraphic=true, BodyColors=true,
-        Animate=true, Health=true
-    }
-    
-    for _, child in ipairs(char:GetChildren()) do
-        if (child:IsA("Model") or child:IsA("Folder") or child:IsA("Tool")) and not ignoreList[child.Name] and not child:IsA("Accessory") then
-            return child 
-        end
-    end
-    return nil
-end
-
--- Loop menggunakan Heartbeat (Berjalan sesuai FPS, max performa)
-local lastShotTime = 0
-RunService.Heartbeat:Connect(function()
-    if not autoShootEnabled or not shootRemote then return end
-    
-    local currentTime = tick()
-    if currentTime - lastShotTime < autoShootDelay then return end
-
-    local localChar = LocalPlayer.Character
-    local localHrp = localChar and localChar:FindFirstChild("HumanoidRootPart")
-    if not localHrp then return end
-
-    local weapon = getActiveWeapon(localChar)
-    if not weapon then return end -- Hanya nembak kalau pegang senjata
-
-    -- Cari musuh terdekat setiap frame
-    local closestTarget = nil
-    local shortestDist = math.huge
-    
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer and p.Character then
-            if autoShootTeamCheck and p.Team == LocalPlayer.Team then continue end
-            
-            local hrp = p.Character:FindFirstChild("HumanoidRootPart")
-            local hum = p.Character:FindFirstChildOfClass("Humanoid")
-            
-            if hrp and hum and hum.Health > 0 then
-                local dist = (hrp.Position - localHrp.Position).Magnitude
-                if dist < shortestDist then
-                    shortestDist = dist
-                    closestTarget = p
-                end
-            end
-        end
-    end
-
-    if closestTarget then
-        local targetChar = closestTarget.Character
-        local targetHrp = targetChar:FindFirstChild("HumanoidRootPart")
-        local targetHum = targetChar:FindFirstChildOfClass("Humanoid")
-        
-        if targetHrp and targetHum then
-            local targetPos = targetHrp.Position
-            
-            -- VELOCITY PREDICTION: Kompensasi saat musuh lari/loncat
-            if enablePrediction then
-                local distToTarget = (targetPos - localHrp.Position).Magnitude
-                local predictionTime = distToTarget / bulletSpeed 
-                -- AssemblyLinearVelocity menghitung arah & kecepatan fisik (termasuk loncat di sumbu Y)
-                targetPos = targetPos + (targetHrp.AssemblyLinearVelocity * predictionTime)
-            end
-            
-            -- Set Aimbot memutar peluru langsung ke lokasi yang sudah di-prediksi
-            local aimCFrame = CFrame.lookAt(localHrp.Position, targetPos)
-            
-            local args = {
-                [1] = tick(),
-                [2] = weapon,
-                [3] = aimCFrame,
-                [4] = { ["1"] = targetHum }
-            }
-            
-            shootRemote:FireServer(table.unpack(args))
-            lastShotTime = currentTime
-        end
-    end
-end)
-
-SecCombat:AddToggle({Name = "🔫 Enable Auto Shoot", Default = false}, function(state)
-    autoShootEnabled = state
-end)
-
-SecCombat:AddSlider({Name = "Shoot Delay (Detik)", Min = 0, Max = 1, Default = 0.05}, function(val)
-    autoShootDelay = val
-end)
-
-SecCombat:AddToggle({Name = "🚀 Movement Prediction", Default = true}, function(state)
-    enablePrediction = state
-end)
-
-SecCombat:AddToggle({Name = "🛡️ Team Check (Abaikan Tim Sendiri)", Default = false}, function(state)
-    autoShootTeamCheck = state
-end)
-
-Library:Notify({Title = "Sigma Hub", Content = "Sigma Universal Client v1.3 (Aimbot Pro) Loaded!", Type = "Info", Duration = 4})
+Library:Notify({Title = "Sigma Hub", Content = "Sigma Universal Client v1.0 Loaded!", Type = "Info", Duration = 3})
