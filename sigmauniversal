@@ -1,5 +1,5 @@
 -- ===========================================================================
---  SIGMA UNIVERSAL CLIENT (v1.0) + COMBAT AUTO SHOOT
+--  SIGMA UNIVERSAL CLIENT (v1.0) + PERFECT AUTO SHOOT
 --  Compatibility: Mobile (Delta, Hydrogen, Codex, Arceus X) & PC (Wave, Electron)
 -- ===========================================================================
 
@@ -25,7 +25,7 @@ if not successUI or type(Library) ~= "table" then return end
 local Window = Library:CreateWindow({
     Name = "Sigma Universal Client",
     LogoText = "⚡",
-    Footer = "v1.1 (+Combat)",
+    Footer = "v1.2 (+Perfect Combat)",
     ConfigName = "SigmaUniversal"
 })
 
@@ -1358,25 +1358,57 @@ local function getClosestEnemy()
     return closest
 end
 
+-- Cari senjata yang di-equip, entah itu Tool atau custom Model (seperti Rattler)
+local function getActiveWeapon(char)
+    local tool = char:FindFirstChildOfClass("Tool")
+    if tool then return tool end
+    
+    local ignoreList = {
+        HumanoidRootPart=true, Head=true, UpperTorso=true, LowerTorso=true, Torso=true,
+        RightArm=true, LeftArm=true, RightLeg=true, LeftLeg=true,
+        RightUpperArm=true, RightLowerArm=true, RightHand=true,
+        LeftUpperArm=true, LeftLowerArm=true, LeftHand=true,
+        RightUpperLeg=true, RightLowerLeg=true, RightFoot=true,
+        LeftUpperLeg=true, LeftLowerLeg=true, LeftFoot=true,
+        Humanoid=true, ForceField=true, Shirt=true, Pants=true, ShirtGraphic=true, BodyColors=true
+    }
+    
+    for _, child in ipairs(char:GetChildren()) do
+        if (child:IsA("Model") or child:IsA("Folder")) and not ignoreList[child.Name] and not child:IsA("Accessory") then
+            return child 
+        end
+    end
+    return nil
+end
+
 local function fireAtTarget(target)
     if not target or not target.Character then return end
     
     local localChar = LocalPlayer.Character
-    local tool = localChar and localChar:FindFirstChildOfClass("Tool")
     local localHrp = localChar and localChar:FindFirstChild("HumanoidRootPart")
+    local weapon = localChar and getActiveWeapon(localChar)
     
     local targetHrp = target.Character:FindFirstChild("HumanoidRootPart")
     local targetHum = target.Character:FindFirstChildOfClass("Humanoid")
     
-    if tool and localHrp and targetHrp and targetHum then
-        local aimCFrame = CFrame.lookAt(localHrp.Position, targetHrp.Position)
+    if weapon and localHrp and targetHrp and targetHum then
+        local aimCFrame = CFrame.new(localHrp.Position, targetHrp.Position)
         
         local shootRemote = ReplicatedStorage:FindFirstChild("Blaster") 
             and ReplicatedStorage.Blaster:FindFirstChild("Remotes") 
             and ReplicatedStorage.Blaster.Remotes:FindFirstChild("Shoot")
             
         if shootRemote then
-            shootRemote:FireServer(tick(), tool, aimCFrame, {["1"] = targetHum})
+            -- Bungkus persis menggunakan format dari log yang kamu berikan
+            local args = {
+                [1] = workspace:GetServerTimeNow(), -- Timestamp spesifik server
+                [2] = weapon,                       -- Model/Tool "Rattler"
+                [3] = aimCFrame,                    -- Vektor tembakan
+                [4] = {                             -- Kamus Hit Registrasi
+                    ["1"] = targetHum
+                }
+            }
+            shootRemote:FireServer(table.unpack(args))
         end
     end
 end
@@ -1404,4 +1436,4 @@ SecCombat:AddToggle({Name = "🛡️ Team Check (Abaikan Tim Sendiri)", Default 
     autoShootTeamCheck = state
 end)
 
-Library:Notify({Title = "Sigma Hub", Content = "Sigma Universal Client v1.1 (+Combat) Loaded!", Type = "Info", Duration = 3})
+Library:Notify({Title = "Sigma Hub", Content = "Sigma Universal Client v1.2 (+Perfect Combat) Loaded!", Type = "Info", Duration = 3})
