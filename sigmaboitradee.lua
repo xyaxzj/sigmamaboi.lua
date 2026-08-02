@@ -98,10 +98,74 @@ local success, errorMessage = pcall(function()
     local TargetToolNameAction = "Block Cup"
 
     -- ==========================================
+    -- DATABASE & PARSER
+    -- ==========================================
+    local database = {}
+    local RarityList = {"Common", "Rare", "Epic", "Legendary", "Mythic", "Godly", "Exclusive", "Volcanic", "Celestial"}
+    local parsedRarityCount = 0
+    local parsedEntitiesCount = 0
+
+    local function cleanItemName(name)
+        return name:match("^%s*(.-)%s*$")
+    end
+
+    local function parseRarityData()
+        if not isfile or not readfile or not isfile("Untuk Auto Trade/raritydata.txt") then return end
+        local content = readfile("Untuk Auto Trade/raritydata.txt")
+        local currentRarity = nil
+        local inPools = false
+        for line in string.gmatch(content, "[^\r\n]+") do
+            if string.find(line, "BrainrotPool") then inPools = true end
+            if inPools then
+                local rarityHeader = string.match(line, '^%s*%["([%w%s]+)"%]%s*=%s*{')
+                if rarityHeader then currentRarity = rarityHeader end
+                local nameMatch = string.match(line, '^%s*%["Name"%]%s*=%s*"([^"]+)"')
+                if nameMatch and currentRarity then
+                    local name = cleanItemName(nameMatch)
+                    if not database[name] then database[name] = {} end
+                    database[name].Rarity = currentRarity
+                    parsedRarityCount = parsedRarityCount + 1
+                end
+            end
+        end
+    end
+
+    local function parseEntitiesData()
+        if not isfile or not readfile or not isfile("Untuk Auto Trade/entitiesdata.txt") then return end
+        local content = readfile("Untuk Auto Trade/entitiesdata.txt")
+        local currentEntity = nil
+        for line in string.gmatch(content, "[^\r\n]+") do
+            local entityHeader = string.match(line, '^%s*%["([^"]+)"%]%s*=%s*{')
+            if entityHeader then
+                currentEntity = cleanItemName(entityHeader)
+                if not database[currentEntity] then database[currentEntity] = {} end
+            elseif currentEntity then
+                local rarityMatch = string.match(line, '^%s*%["Rarity"%]%s*=%s*"([^"]+)"')
+                if rarityMatch then database[currentEntity].Rarity = rarityMatch end
+                local cpsVal = string.match(line, '^%s*%["CPS"%]%s*=%s*v_u_2%.new%("([^"]+)"%)') or
+                               string.match(line, '^%s*%["CPS"%]%s*=%s*v_u_2%.new%(([%d%.]+)%)') or
+                               string.match(line, '^%s*%["CPS"%]%s*=%s*([%d%.e%+%-]+)')
+                if cpsVal then
+                    local base, exp = string.match(cpsVal, "^([%d%.e%+%-]+)%s*,%s*([%d]+)$")
+                    if base and exp then
+                        database[currentEntity].BaseCPS = tonumber(base) * (10 ^ tonumber(exp))
+                    else
+                        database[currentEntity].BaseCPS = tonumber(cpsVal)
+                    end
+                    parsedEntitiesCount = parsedEntitiesCount + 1
+                end
+            end
+        end
+    end
+
+    pcall(parseRarityData)
+    pcall(parseEntitiesData)
+
+    -- ==========================================
     -- FUNGSI INTI & INVENTORY SCANNER
     -- ==========================================
     local function getBaseName(dropdownString) 
-        return string.split(dropdownString, " | Stock:")[1] or dropdownString 
+        return string.split(dropdownString, " | ")[1] or dropdownString 
     end
 
     local function formatTime(seconds)
@@ -139,6 +203,97 @@ local success, errorMessage = pcall(function()
             if p ~= localPlayer then table.insert(tbl, p.Name) end 
         end
         return tbl
+    end
+
+    local function getItemInfo(tool)
+        if not tool then return "Unknown", 0 end
+        local baseName = tool.Name
+        local dbInfo = database[baseName]
+        local rarity = dbInfo and dbInfo.Rarity or "Unknown"
+        local baseCPS = dbInfo and dbInfo.BaseCPS or 0
+        
+        local lvlValue = tool:GetAttribute("Level") or tool:GetAttribute("level") or tool:GetAttribute("Lvl")
+        if not lvlValue then
+            local lvlObj = tool:FindFirstChild("Level") or tool:FindFirstChild("level") or tool:FindFirstChild("Lvl")
+            if lvlObj and (lvlObj:IsA("IntValue") or lvlObj:IsA("NumberValue") or lvlObj:IsA("StringValue")) then lvlValue = lvlObj.Value end
+        end
+        local lvl = tonumber(lvlValue) or 1
+        
+        local lvlMult = 1
+        local EntitiesDataModule
+        pcall(function()
+            EntitiesDataModule = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Data"):WaitForChild("EntitiesData"))
+        end)
+        if EntitiesDataModule and EntitiesDataModule.GetMultiplierPerLevel then
+            pcall(function() lvlMult = EntitiesDataModule.GetMultiplierPerLevel(lvl) end)
+        else
+            lvlMult = 1 + (lvl - 1) * 0.05
+        end
+        
+        local finalCPS = baseCPS * lvlMult
+        local mut = getToolMutation(tool)
+        if mut and mut ~= "" then
+            local buffMult = 1
+            local MutationDataModule
+            pcall(function()
+                MutationDataModule = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Data"):WaitForChild("MutationData"))
+            end)
+            if MutationDataModule and MutationDataModule.Buffs and MutationDataModule.Buffs[mut] then
+                buffMult = MutationDataModule.Buffs[mut].Value or 1
+            end
+            finalCPS = finalCPS * buffMult
+        end
+        
+        return rarity, finalCPS
+    end
+
+    local function addRaritiesToCart(TargetCart, SelectedRarities, QtyLimit, IsMax)
+        if type(SelectedRarities) ~= "table" then SelectedRarities = {SelectedRarities} end
+        local activeRarities = {}
+        for _, r in pairs(SelectedRarities) do
+            if r ~= "" then activeRarities[r] = true end
+        end
+        local matchingItems = {}
+        for _, tool in ipairs(getAllTools()) do
+            if isTradeable(tool) then
+                local rarity = getItemInfo(tool)
+                if activeRarities[rarity] then
+                    matchingItems[getFullItemName(tool)] = true
+                end
+            end
+        end
+        for itemName, _ in pairs(matchingItems) do
+            local rs = getRealStock(itemName)
+            local cur = TargetCart[itemName] or 0
+            if IsMax then
+                TargetCart[itemName] = rs
+            elseif QtyLimit > 0 then
+                TargetCart[itemName] = (cur + QtyLimit > rs) and rs or (cur + QtyLimit)
+            end
+        end
+    end
+
+    local function addCPSFilterToCart(TargetCart, MinCPS, MaxCPS, QtyLimit, IsMax)
+        local matchingItems = {}
+        for _, tool in ipairs(getAllTools()) do
+            if isTradeable(tool) then
+                local _, cps = getItemInfo(tool)
+                local matchesMin = (not MinCPS or cps >= MinCPS)
+                local matchesMax = (not MaxCPS or cps <= MaxCPS)
+                if matchesMin and matchesMax then
+                    matchingItems[getFullItemName(tool)] = true
+                end
+            end
+        end
+        for itemName, _ in pairs(matchingItems) do
+            local rs = getRealStock(itemName)
+            local cur = TargetCart[itemName] or 0
+            if IsMax then
+                TargetCart[itemName] = rs
+            elseif QtyLimit > 0 then
+                TargetCart[itemName] = (cur + QtyLimit > rs) and rs or (cur + QtyLimit)
+            end
+        end
     end
 
     local function getMutationList()
@@ -321,6 +476,8 @@ local success, errorMessage = pcall(function()
     local ItemDropdown = SecCart3:AddMultiDropdown({Name = "Select Custom Item", Options = {"[ANY ASSET]"}, Default = {}}, function() end)
     
     local qtyInputTrade = SecCart3:AddInput({Name = "Amount to send:", Placeholder = "Enter amount..."}, function() end)
+    local TradeRarityDropdown = SecCart3:AddMultiDropdown({Name = "Select Rarity (Trade)", Options = RarityList, Default = {}}, function() end)
+    local minCPSInputTrade = SecCart3:AddInput({Name = "Min CPS (Trade):", Placeholder = "Example: 1000"}, function() end)
     
     local CartStatus = SecCart3:AddParagraph("Trade Cart Content", "Empty.")
     local function updateCartDisplay()
@@ -342,6 +499,28 @@ local success, errorMessage = pcall(function()
     end)
     SecCart3:AddButton("✨ Add by Mutation (by Amount)", function() local TradeMixQty = tonumber(qtyInputTrade:Get()) or 0; addMutationsToCart(ShoppingCart, TradeMutationDropdown:Get(), TradeMixQty, false); updateCartDisplay() end)
     SecCart3:AddButton("✨ Add by Mutation (Max Stock)", function() local TradeMixQty = tonumber(qtyInputTrade:Get()) or 0; addMutationsToCart(ShoppingCart, TradeMutationDropdown:Get(), TradeMixQty, true); updateCartDisplay() end)
+    SecCart3:AddButton("⭐ Add by Rarity (by Amount)", function() 
+        local qty = tonumber(qtyInputTrade:Get()) or 0
+        local selectedRarities = TradeRarityDropdown:Get()
+        addRaritiesToCart(ShoppingCart, selectedRarities, qty, false)
+        updateCartDisplay()
+    end)
+    SecCart3:AddButton("⭐ Add by Rarity (Max Stock)", function() 
+        local selectedRarities = TradeRarityDropdown:Get()
+        addRaritiesToCart(ShoppingCart, selectedRarities, 0, true)
+        updateCartDisplay()
+    end)
+    SecCart3:AddButton("⚡ Add by CPS (by Amount)", function()
+        local qty = tonumber(qtyInputTrade:Get()) or 0
+        local minCps = tonumber(minCPSInputTrade:Get())
+        addCPSFilterToCart(ShoppingCart, minCps, nil, qty, false)
+        updateCartDisplay()
+    end)
+    SecCart3:AddButton("⚡ Add by CPS (Max Stock)", function()
+        local minCps = tonumber(minCPSInputTrade:Get())
+        addCPSFilterToCart(ShoppingCart, minCps, nil, 0, true)
+        updateCartDisplay()
+    end)
     SecCart3:AddButton("🗑️ Clear Cart", function() ShoppingCart = {}; updateCartDisplay() end)
     
     SecCart3:AddButton("🚀 Create Queue from Cart", function() 
@@ -364,6 +543,8 @@ local success, errorMessage = pcall(function()
     local SellItemDropdown = SecSell1:AddMultiDropdown({Name = "Select Custom Sell Item", Options = {"[ANY ASSET]"}, Default = {}}, function(Options) SelectedSellItems = Options end)
     
     local qtyInputSell = SecSell1:AddInput({Name = "Amount to Sell:", Placeholder = "Enter amount..."}, function() end)
+    local SellRarityDropdown = SecSell1:AddMultiDropdown({Name = "Select Rarity (Sell)", Options = RarityList, Default = {}}, function() end)
+    local maxCPSInputSell = SecSell1:AddInput({Name = "Max CPS Limit (Sell):", Placeholder = "Example: 100"}, function() end)
     
     local SellCartStatus = SecSell1:AddParagraph("🛒 Sell Cart", "Empty.")
     local function updateSellCartDisplay()
@@ -385,6 +566,28 @@ local success, errorMessage = pcall(function()
     end)
     SecSell1:AddButton("✨ Add Mutation (by Amount)", function() local SelectedSellMixQty = tonumber(qtyInputSell:Get()) or 0; addMutationsToCart(SellCart, SellMutationDropdown:Get(), SelectedSellMixQty, false); updateSellCartDisplay() end)
     SecSell1:AddButton("✨ Add Mutation (Max Stock)", function() local SelectedSellMixQty = tonumber(qtyInputSell:Get()) or 0; addMutationsToCart(SellCart, SellMutationDropdown:Get(), SelectedSellMixQty, true); updateSellCartDisplay() end)
+    SecSell1:AddButton("⭐ Add by Rarity (by Amount)", function() 
+        local qty = tonumber(qtyInputSell:Get()) or 0
+        local selectedRarities = SellRarityDropdown:Get()
+        addRaritiesToCart(SellCart, selectedRarities, qty, false)
+        updateSellCartDisplay()
+    end)
+    SecSell1:AddButton("⭐ Add by Rarity (Max Stock)", function() 
+        local selectedRarities = SellRarityDropdown:Get()
+        addRaritiesToCart(SellCart, selectedRarities, 0, true)
+        updateSellCartDisplay()
+    end)
+    SecSell1:AddButton("⚡ Add by CPS Limit (by Amount)", function()
+        local qty = tonumber(qtyInputSell:Get()) or 0
+        local maxCps = tonumber(maxCPSInputSell:Get())
+        addCPSFilterToCart(SellCart, nil, maxCps, qty, false)
+        updateSellCartDisplay()
+    end)
+    SecSell1:AddButton("⚡ Add by CPS Limit (Max Stock)", function()
+        local maxCps = tonumber(maxCPSInputSell:Get())
+        addCPSFilterToCart(SellCart, nil, maxCps, 0, true)
+        updateSellCartDisplay()
+    end)
     SecSell1:AddButton("🗑️ Clear Sell Cart", function() SellCart = {}; updateSellCartDisplay() end)
     
     local SecSell2 = TabSell:AddSection("2. Sell Execution")
@@ -424,6 +627,8 @@ local success, errorMessage = pcall(function()
     local BaseMutationDropdown = SecBase1:AddMultiDropdown({Name = "Select Mutation (Base)", Options = getMutationList(), Default = {}}, function() end)
     local PlaceItemDropdown = SecBase1:AddMultiDropdown({Name = "Select Custom Brainrot", Options = {"[ANY ASSET]"}, Default = {}}, function(Options) SelectedPlaceItems = Options end)
     local qtyInputBase = SecBase1:AddInput({Name = "Amount to place:", Placeholder = "Enter amount..."}, function() end)
+    local BaseRarityDropdown = SecBase1:AddMultiDropdown({Name = "Select Rarity (Base)", Options = RarityList, Default = {}}, function() end)
+    local minCPSInputBase = SecBase1:AddInput({Name = "Min CPS (Base):", Placeholder = "Example: 1000"}, function() end)
     
     local BaseCartStatus = SecBase1:AddParagraph("🛒 Base Cart", "Empty.")
     local function updateBaseCartDisplay()
@@ -445,6 +650,28 @@ local success, errorMessage = pcall(function()
     end)
     SecBase1:AddButton("✨ Add Mutation (by Amount)", function() local SelectedPlaceMixQty = tonumber(qtyInputBase:Get()) or 0; addMutationsToCart(BaseCart, BaseMutationDropdown:Get(), SelectedPlaceMixQty, false); updateBaseCartDisplay() end)
     SecBase1:AddButton("✨ Add Mutation (Max Stock)", function() local SelectedPlaceMixQty = tonumber(qtyInputBase:Get()) or 0; addMutationsToCart(BaseCart, BaseMutationDropdown:Get(), SelectedPlaceMixQty, true); updateBaseCartDisplay() end)
+    SecBase1:AddButton("⭐ Add by Rarity (by Amount)", function() 
+        local qty = tonumber(qtyInputBase:Get()) or 0
+        local selectedRarities = BaseRarityDropdown:Get()
+        addRaritiesToCart(BaseCart, selectedRarities, qty, false)
+        updateBaseCartDisplay()
+    end)
+    SecBase1:AddButton("⭐ Add by Rarity (Max Stock)", function() 
+        local selectedRarities = BaseRarityDropdown:Get()
+        addRaritiesToCart(BaseCart, selectedRarities, 0, true)
+        updateBaseCartDisplay()
+    end)
+    SecBase1:AddButton("⚡ Add by CPS (by Amount)", function()
+        local qty = tonumber(qtyInputBase:Get()) or 0
+        local minCps = tonumber(minCPSInputBase:Get())
+        addCPSFilterToCart(BaseCart, minCps, nil, qty, false)
+        updateBaseCartDisplay()
+    end)
+    SecBase1:AddButton("⚡ Add by CPS (Max Stock)", function()
+        local minCps = tonumber(minCPSInputBase:Get())
+        addCPSFilterToCart(BaseCart, minCps, nil, 0, true)
+        updateBaseCartDisplay()
+    end)
     SecBase1:AddButton("🗑️ Clear Base Cart", function() BaseCart = {}; updateBaseCartDisplay() end)
     
     local SecBase2 = TabBase:AddSection("2. Base Coordinate Settings")
@@ -778,6 +1005,11 @@ local success, errorMessage = pcall(function()
         end
     end)
     ConsoleStats = SecStats:AddConsole("Trade History Logs")
+    pcall(function()
+        ConsoleStats:Log("Database initialized successfully.", "info")
+        ConsoleStats:Log("Parsed " .. parsedRarityCount .. " entries from raritydata.txt", "info")
+        ConsoleStats:Log("Parsed " .. parsedEntitiesCount .. " entries from entitiesdata.txt", "info")
+    end)
     
     updateStatsDisplay = function()
         local elapsedTime = tick() - SessionStartTime
@@ -820,7 +1052,27 @@ local success, errorMessage = pcall(function()
             end  
             
             local itemsList = {"[ANY ASSET]"}  
-            for name, count in pairs(inventoryData) do table.insert(itemsList, name .. " | Stock: " .. count) end  
+            for name, count in pairs(inventoryData) do 
+                local rarity = "Unknown"
+                local cps = 0
+                for _, tool in ipairs(getAllTools()) do
+                    if isTradeable(tool) and getFullItemName(tool) == name then
+                        rarity, cps = getItemInfo(tool)
+                        break
+                    end
+                end
+                
+                local formattedCPS = tostring(cps)
+                if cps >= 1000 then
+                    if cps >= 1000000 then
+                        formattedCPS = string.format("%.1fM", cps / 1000000)
+                    else
+                        formattedCPS = string.format("%.1fK", cps / 1000)
+                    end
+                end
+                
+                table.insert(itemsList, string.format("%s | %s | CPS: %s | Stock: %d", name, rarity, formattedCPS, count))
+            end  
             table.sort(itemsList, function(a, b) if a == "[ANY ASSET]" then return true end if b == "[ANY ASSET]" then return false end return a < b end)  
             
             local mutList = getMutationList()
@@ -836,11 +1088,27 @@ local success, errorMessage = pcall(function()
             if totalCount == 0 then displayString = displayString .. "Empty." else
                 local categorizedItems = {}; local categoryTotals = {}
                 for itemName, amount in pairs(inventoryData) do
-                    local category = "📦 STANDARD ITEMS"
-                    local mutMatch = string.match(itemName, "%[(.-)%]")
-                    if mutMatch then category = "✨ " .. string.upper(mutMatch) end
+                    local rarity = "Unknown"
+                    local cps = 0
+                    for _, tool in ipairs(getAllTools()) do
+                        if isTradeable(tool) and getFullItemName(tool) == itemName then
+                            rarity, cps = getItemInfo(tool)
+                            break
+                        end
+                    end
+                    local category = "🏆 " .. string.upper(rarity) .. " ITEMS"
                     if not categorizedItems[category] then categorizedItems[category] = {}; categoryTotals[category] = 0 end
-                    table.insert(categorizedItems[category], {name = itemName, qty = amount})
+                    
+                    local formattedCPS = tostring(cps)
+                    if cps >= 1000 then
+                        if cps >= 1000000 then
+                            formattedCPS = string.format("%.1fM", cps / 1000000)
+                        else
+                            formattedCPS = string.format("%.1fK", cps / 1000)
+                        end
+                    end
+                    
+                    table.insert(categorizedItems[category], {name = itemName, qty = amount, rarity = rarity, cpsStr = formattedCPS})
                     categoryTotals[category] = categoryTotals[category] + amount
                 end
                 local sortedCategories = {}
@@ -848,7 +1116,9 @@ local success, errorMessage = pcall(function()
                 for _, cat in ipairs(sortedCategories) do
                     displayString = displayString .. "=== " .. cat .. " (Total: " .. categoryTotals[cat] .. ") ===\n"
                     table.sort(categorizedItems[cat], function(a, b) return a.name < b.name end)
-                    for _, item in ipairs(categorizedItems[cat]) do displayString = displayString .. string.format(" • %s  (Stock: %d)\n", item.name, item.qty) end
+                    for _, item in ipairs(categorizedItems[cat]) do 
+                        displayString = displayString .. string.format(" • %s  [CPS: %s] (Stock: %d)\n", item.name, item.qty) 
+                    end
                     displayString = displayString .. "\n"
                 end
             end
