@@ -98,68 +98,140 @@ local success, errorMessage = pcall(function()
     local TargetToolNameAction = "Block Cup"
 
     -- ==========================================
-    -- DATABASE & PARSER
+    -- DATABASE & PARSER (STATICALLY EMBEDDED)
     -- ==========================================
-    local database = {}
-    local RarityList = {"Common", "Rare", "Epic", "Legendary", "Mythic", "Godly", "Exclusive", "Volcanic", "Celestial"}
-    local parsedRarityCount = 0
-    local parsedEntitiesCount = 0
-
-    local function cleanItemName(name)
-        return name:match("^%s*(.-)%s*$")
-    end
-
-    local function parseRarityData()
-        if not isfile or not readfile or not isfile("Untuk Auto Trade/raritydata.txt") then return end
-        local content = readfile("Untuk Auto Trade/raritydata.txt")
-        local currentRarity = nil
-        local inPools = false
-        for line in string.gmatch(content, "[^\r\n]+") do
-            if string.find(line, "BrainrotPool") then inPools = true end
-            if inPools then
-                local rarityHeader = string.match(line, '^%s*%["([%w%s]+)"%]%s*=%s*{')
-                if rarityHeader then currentRarity = rarityHeader end
-                local nameMatch = string.match(line, '^%s*%["Name"%]%s*=%s*"([^"]+)"')
-                if nameMatch and currentRarity then
-                    local name = cleanItemName(nameMatch)
-                    if not database[name] then database[name] = {} end
-                    database[name].Rarity = currentRarity
-                    parsedRarityCount = parsedRarityCount + 1
-                end
-            end
-        end
-    end
-
-    local function parseEntitiesData()
-        if not isfile or not readfile or not isfile("Untuk Auto Trade/entitiesdata.txt") then return end
-        local content = readfile("Untuk Auto Trade/entitiesdata.txt")
-        local currentEntity = nil
-        for line in string.gmatch(content, "[^\r\n]+") do
-            local entityHeader = string.match(line, '^%s*%["([^"]+)"%]%s*=%s*{')
-            if entityHeader then
-                currentEntity = cleanItemName(entityHeader)
-                if not database[currentEntity] then database[currentEntity] = {} end
-            elseif currentEntity then
-                local rarityMatch = string.match(line, '^%s*%["Rarity"%]%s*=%s*"([^"]+)"')
-                if rarityMatch then database[currentEntity].Rarity = rarityMatch end
-                local cpsVal = string.match(line, '^%s*%["CPS"%]%s*=%s*v_u_2%.new%("([^"]+)"%)') or
-                               string.match(line, '^%s*%["CPS"%]%s*=%s*v_u_2%.new%(([%d%.]+)%)') or
-                               string.match(line, '^%s*%["CPS"%]%s*=%s*([%d%.e%+%-]+)')
-                if cpsVal then
-                    local base, exp = string.match(cpsVal, "^([%d%.e%+%-]+)%s*,%s*([%d]+)$")
-                    if base and exp then
-                        database[currentEntity].BaseCPS = tonumber(base) * (10 ^ tonumber(exp))
-                    else
-                        database[currentEntity].BaseCPS = tonumber(cpsVal)
-                    end
-                    parsedEntitiesCount = parsedEntitiesCount + 1
-                end
-            end
-        end
-    end
-
-    pcall(parseRarityData)
-    pcall(parseEntitiesData)
+    local RarityList = {"Common", "Rare", "Epic", "Legendary", "Mythic", "Godly", "Exclusive", "Volcanic", "Celestial", "Abyssal", "Demon", "Secret", "Rainbow", "Eternal", "Hacked"}
+    local database = {
+        ["1x1x1x1"] = { Rarity = "Hacked", BaseCPS = 0 },
+        ["67"] = { Rarity = "Mythic", BaseCPS = 0 },
+        ["Agarrini La Palini"] = { Rarity = "Demon", BaseCPS = 0 },
+        ["Alessio"] = { Rarity = "Hacked", BaseCPS = 0 },
+        ["Anpali Babel"] = { Rarity = "Abyssal", BaseCPS = 0 },
+        ["Astro Tim"] = { Rarity = "Abyssal", BaseCPS = 0 },
+        ["Baba Yaga"] = { Rarity = "Abyssal", BaseCPS = 0 },
+        ["Ballerina Cappuccina"] = { Rarity = "Rare", BaseCPS = 19 },
+        ["Bambini Crostini"] = { Rarity = "Legendary", BaseCPS = 0 },
+        ["Bananita Dolphinita"] = { Rarity = "Mythic", BaseCPS = 0 },
+        ["Bangello"] = { Rarity = "Mythic", BaseCPS = 0 },
+        ["Barbelloni Gymrattoni"] = { Rarity = "Abyssal", BaseCPS = 0 },
+        ["Beluga Beluga"] = { Rarity = "Abyssal", BaseCPS = 0 },
+        ["Blackhole Goat"] = { Rarity = "Celestial", BaseCPS = 0 },
+        ["Block Cup"] = { Rarity = "Exclusive", BaseCPS = 0 },
+        ["Bobrito Bandito"] = { Rarity = "Rare", BaseCPS = 17 },
+        ["Bombardiro Crocodilo"] = { Rarity = "Secret", BaseCPS = 0 },
+        ["Bombini Gusini"] = { Rarity = "Secret", BaseCPS = 0 },
+        ["Boneca Ambalabu"] = { Rarity = "Rare", BaseCPS = 17 },
+        ["Brr Brr Patapim"] = { Rarity = "Rare", BaseCPS = 22 },
+        ["Burbaloni Luliloli"] = { Rarity = "Mythic", BaseCPS = 0 },
+        ["Burguro"] = { Rarity = "Secret", BaseCPS = 0 },
+        ["Cacto Hipopotamo"] = { Rarity = "Rare", BaseCPS = 26 },
+        ["Cactus Pingu"] = { Rarity = "Demon", BaseCPS = 0 },
+        ["Capi Taco"] = { Rarity = "Legendary", BaseCPS = 0 },
+        ["Cappuccino Assassino"] = { Rarity = "Rare", BaseCPS = 22 },
+        ["Cappuccino Clownino"] = { Rarity = "Celestial", BaseCPS = 0 },
+        ["Capybara Eggplant"] = { Rarity = "Mythic", BaseCPS = 0 },
+        ["Cavallo Virtuso"] = { Rarity = "Rainbow", BaseCPS = 0 },
+        ["Chef Crabracadabra"] = { Rarity = "Mythic", BaseCPS = 0 },
+        ["Chicleteira Bicicleteira"] = { Rarity = "Abyssal", BaseCPS = 0 },
+        ["Chillin Chilli"] = { Rarity = "Eternal", BaseCPS = 0 },
+        ["Chimpanzini Bananini"] = { Rarity = "Legendary", BaseCPS = 0 },
+        ["Cocofanto Elefanto"] = { Rarity = "Rainbow", BaseCPS = 0 },
+        ["Coinator Baconator"] = { Rarity = "Abyssal", BaseCPS = 0 },
+        ["Compactoroni Diskaloni"] = { Rarity = "Celestial", BaseCPS = 0 },
+        ["Cordraculo"] = { Rarity = "Abyssal", BaseCPS = 0 },
+        ["Corn Sahur"] = { Rarity = "Eternal", BaseCPS = 0 },
+        ["Crazylone Pizaione"] = { Rarity = "Eternal", BaseCPS = 0 },
+        ["Dipperi Chiperini"] = { Rarity = "Hacked", BaseCPS = 0 },
+        ["Divinello Starblock"] = { Rarity = "Abyssal", BaseCPS = 0 },
+        ["Don Tiramisotto"] = { Rarity = "Abyssal", BaseCPS = 0 },
+        ["Dragonfrutina Dolphinita"] = { Rarity = "Abyssal", BaseCPS = 0 },
+        ["Dribbloni Spaghetti"] = { Rarity = "Abyssal", BaseCPS = 0 },
+        ["Dumbelloni"] = { Rarity = "Abyssal", BaseCPS = 0 },
+        ["Elefanto Frigo"] = { Rarity = "Godly", BaseCPS = 0 },
+        ["Elefantucci Bananucci"] = { Rarity = "Legendary", BaseCPS = 0 },
+        ["Espresso Shockantoni"] = { Rarity = "Abyssal", BaseCPS = 0 },
+        ["Espresso Signora"] = { Rarity = "Hacked", BaseCPS = 0 },
+        ["Eternal"] = { Rarity = "Exclusive", BaseCPS = 0 },
+        ["Frigo Camelo"] = { Rarity = "Secret", BaseCPS = 0 },
+        ["Fruli Frula"] = { Rarity = "Common", BaseCPS = 7 },
+        ["Fryuro"] = { Rarity = "Secret", BaseCPS = 0 },
+        ["Gangster Footera"] = { Rarity = "Rare", BaseCPS = 15 },
+        ["Garamararam"] = { Rarity = "Epic", BaseCPS = 40 },
+        ["Gattatino Nyanino"] = { Rarity = "Legendary", BaseCPS = 0 },
+        ["Girafa Celeste"] = { Rarity = "Rainbow", BaseCPS = 0 },
+        ["Glorbo Fruttodrillo"] = { Rarity = "Godly", BaseCPS = 0 },
+        ["Gorillo Watermelondrillo"] = { Rarity = "Rainbow", BaseCPS = 0 },
+        ["Guerriro Digitale"] = { Rarity = "Abyssal", BaseCPS = 0 },
+        ["Guest666"] = { Rarity = "Rainbow", BaseCPS = 0 },
+        ["Harpini Goosini"] = { Rarity = "Abyssal", BaseCPS = 0 },
+        ["John Pork"] = { Rarity = "Epic", BaseCPS = 0 },
+        ["Karkerkar Kurkur"] = { Rarity = "Demon", BaseCPS = 0 },
+        ["Ketupat Kepat"] = { Rarity = "Abyssal", BaseCPS = 0 },
+        ["Kicky"] = { Rarity = "Abyssal", BaseCPS = 0 },
+        ["Krupuk Pagi Pagi"] = { Rarity = "Abyssal", BaseCPS = 0 },
+        ["La Vacca Saturno Saturnita"] = { Rarity = "Demon", BaseCPS = 0 },
+        ["Lirili Larila"] = { Rarity = "Common", BaseCPS = 3 },
+        ["Los Primos"] = { Rarity = "Abyssal", BaseCPS = 0 },
+        ["Los Primos Blue"] = { Rarity = "Demon", BaseCPS = 0 },
+        ["Lucky Fella"] = { Rarity = "Abyssal", BaseCPS = 0 },
+        ["Madung"] = { Rarity = "Epic", BaseCPS = 44 },
+        ["Mangolini Parrocini"] = { Rarity = "Epic", BaseCPS = 0 },
+        ["Mastodontico Telepiedone"] = { Rarity = "Abyssal", BaseCPS = 0 },
+        ["Matteo"] = { Rarity = "Hacked", BaseCPS = 0 },
+        ["Meowl"] = { Rarity = "Eternal", BaseCPS = 0 },
+        ["MutationChances"] = { Rarity = "Unknown", BaseCPS = 0 },
+        ["Noobini Pizzanini"] = { Rarity = "Common", BaseCPS = 2 },
+        ["Nuclearo Dinossauro"] = { Rarity = "Celestial", BaseCPS = 0 },
+        ["OctoDJ"] = { Rarity = "Abyssal", BaseCPS = 0 },
+        ["Octopusini Bluberini"] = { Rarity = "Godly", BaseCPS = 0 },
+        ["Orangutini Ananasini"] = { Rarity = "Secret", BaseCPS = 0 },
+        ["Orcalero"] = { Rarity = "Epic", BaseCPS = 64 },
+        ["Pandaccini Bananini"] = { Rarity = "Godly", BaseCPS = 0 },
+        ["Pannaburro"] = { Rarity = "Epic", BaseCPS = 62 },
+        ["Peant Jarro"] = { Rarity = "Rainbow", BaseCPS = 0 },
+        ["Penguino Cocosino"] = { Rarity = "Mythic", BaseCPS = 0 },
+        ["Pesto Mortioni"] = { Rarity = "Epic", BaseCPS = 52 },
+        ["Pipi Kiwi"] = { Rarity = "Common", BaseCPS = 6 },
+        ["Plan Blue"] = { Rarity = "Legendary", BaseCPS = 0 },
+        ["Plan Red"] = { Rarity = "Legendary", BaseCPS = 0 },
+        ["Pool"] = { Rarity = "Unknown", BaseCPS = 0 },
+        ["Pot Hotspot"] = { Rarity = "Abyssal", BaseCPS = 0 },
+        ["Professora 67"] = { Rarity = "Abyssal", BaseCPS = 0 },
+        ["Pulcino Pistoletti"] = { Rarity = "Abyssal", BaseCPS = 0 },
+        ["Rainbow"] = { Rarity = "Exclusive", BaseCPS = 0 },
+        ["RandomBrainrot"] = { Rarity = "Random", BaseCPS = 0 },
+        ["Rexosaurus"] = { Rarity = "Hacked", BaseCPS = 0 },
+        ["Rhino Toasterino"] = { Rarity = "Secret", BaseCPS = 0 },
+        ["Rinooccio Verdini"] = { Rarity = "Godly", BaseCPS = 0 },
+        ["SWAG SODA"] = { Rarity = "Hacked", BaseCPS = 0 },
+        ["Salamino Pinguino"] = { Rarity = "Mythic", BaseCPS = 0 },
+        ["Sigma Boy"] = { Rarity = "Godly", BaseCPS = 0 },
+        ["Smelloni Papayoni"] = { Rarity = "Abyssal", BaseCPS = 0 },
+        ["Stoppo Luminino"] = { Rarity = "Hacked", BaseCPS = 0 },
+        ["Strawberelli Flamingelli"] = { Rarity = "Godly", BaseCPS = 0 },
+        ["Strawberry Elephant"] = { Rarity = "Abyssal", BaseCPS = 0 },
+        ["Svinina Bombardino"] = { Rarity = "Common", BaseCPS = 5 },
+        ["Ta Ta Ta Ta Sahur"] = { Rarity = "Rare", BaseCPS = 18 },
+        ["Talpa Di Fero"] = { Rarity = "Common", BaseCPS = 4 },
+        ["Tictac Sahur"] = { Rarity = "Demon", BaseCPS = 0 },
+        ["Tim Cheese"] = { Rarity = "Common", BaseCPS = 3 },
+        ["Torrtuginni Dragonfrutini"] = { Rarity = "Demon", BaseCPS = 0 },
+        ["Tralaledon"] = { Rarity = "Abyssal", BaseCPS = 0 },
+        ["Tralalerita Tralala"] = { Rarity = "Rainbow", BaseCPS = 0 },
+        ["Tralalero Tralala"] = { Rarity = "Rainbow", BaseCPS = 0 },
+        ["Tripi Tropi Tropa Tripa"] = { Rarity = "Hacked", BaseCPS = 0 },
+        ["Trippi Troppi"] = { Rarity = "Common", BaseCPS = 7 },
+        ["Trulimero Trulicina"] = { Rarity = "Legendary", BaseCPS = 0 },
+        ["Tubafante"] = { Rarity = "Abyssal", BaseCPS = 0 },
+        ["Tuff Toucan"] = { Rarity = "Secret", BaseCPS = 0 },
+        ["Turtinella Melodica"] = { Rarity = "Abyssal", BaseCPS = 0 },
+        ["Udin Din Din Dun"] = { Rarity = "Godly", BaseCPS = 0 },
+        ["Virus"] = { Rarity = "Exclusive", BaseCPS = 0 },
+        ["Volcanic"] = { Rarity = "Exclusive", BaseCPS = 0 },
+        ["Waterdino"] = { Rarity = "Epic", BaseCPS = 50 },
+        ["Weather"] = { Rarity = "Exclusive", BaseCPS = 0 },
+        ["Zibra Zubra Zibralini"] = { Rarity = "Rainbow", BaseCPS = 0 },
+    }
 
     -- ==========================================
     -- FUNGSI INTI & INVENTORY SCANNER
@@ -1006,9 +1078,10 @@ local success, errorMessage = pcall(function()
     end)
     ConsoleStats = SecStats:AddConsole("Trade History Logs")
     pcall(function()
-        ConsoleStats:Log("Database initialized successfully.", "info")
-        ConsoleStats:Log("Parsed " .. parsedRarityCount .. " entries from raritydata.txt", "info")
-        ConsoleStats:Log("Parsed " .. parsedEntitiesCount .. " entries from entitiesdata.txt", "info")
+        local dbCount = 0
+        for _ in pairs(database) do dbCount = dbCount + 1 end
+        ConsoleStats:Log("Static database embedded successfully.", "success")
+        ConsoleStats:Log("Loaded " .. tostring(dbCount) .. " entity templates.", "info")
     end)
     
     updateStatsDisplay = function()
