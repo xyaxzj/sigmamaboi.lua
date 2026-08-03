@@ -309,6 +309,62 @@ local success, errorMessage = pcall(function()
         return nil
     end
 
+    local function getCPSFromDisplayName(fullName)
+        if not fullName or fullName == "" then return nil end
+        
+        local level = 1
+        local lvlMatch = string.match(fullName, "%(Lv%.(%d+)%)")
+        if not lvlMatch then lvlMatch = string.match(fullName, "Lv%.(%d+)") end
+        if lvlMatch then
+            level = tonumber(lvlMatch) or 1
+        end
+        
+        local mutation = nil
+        local mutMatch = string.match(fullName, "%[(.-)%]")
+        if mutMatch then
+            mutation = mutMatch
+        end
+        
+        local baseName = fullName
+        baseName = string.gsub(baseName, "%s*%[(.-)%]", "")
+        baseName = string.gsub(baseName, "%s*%(Lv%.%d+%)", "")
+        baseName = string.gsub(baseName, "%s*%(Lv%.%s*%d+%)", "")
+        baseName = string.trim and string.trim(baseName) or baseName:match("^%s*(.-)%s*$")
+        
+        local EntitiesDataModule, MutationDataModule
+        pcall(function()
+            local Shared = ReplicatedStorage:FindFirstChild("Shared")
+            local Data = Shared and Shared:FindFirstChild("Data")
+            
+            local EntitiesDataObj = Data and Data:FindFirstChild("EntitiesData")
+            if EntitiesDataObj then EntitiesDataModule = require(EntitiesDataObj) end
+            
+            local MutationDataObj = Data and Data:FindFirstChild("MutationData")
+            if MutationDataObj then MutationDataModule = require(MutationDataObj) end
+        end)
+        
+        if EntitiesDataModule and EntitiesDataModule.Brainrots and EntitiesDataModule.Brainrots[baseName] then
+            local info = EntitiesDataModule.Brainrots[baseName]
+            local baseCPS = info.CPS
+            if baseCPS then
+                local levelMult = 1
+                if EntitiesDataModule.GetMultiplierPerLevel then
+                    pcall(function()
+                        levelMult = EntitiesDataModule.GetMultiplierPerLevel(level)
+                    end)
+                end
+                
+                local mutMult = 1
+                if mutation and MutationDataModule and MutationDataModule.Buffs and MutationDataModule.Buffs[mutation] then
+                    mutMult = MutationDataModule.Buffs[mutation].Value or 1
+                end
+                
+                return baseCPS * levelMult * mutMult
+            end
+        end
+        return nil
+    end
+
     local function isTradeable(tool) return tool and tool:IsA("Tool") and getToolGUID(tool) ~= nil end
     
     local function getPlayerList()
@@ -509,8 +565,24 @@ local success, errorMessage = pcall(function()
 
     local function updateTradeHUD()
         local queueCount = #CurrentQueue
+        local InfiniteMath
+        pcall(function()
+            local Shared = ReplicatedStorage:FindFirstChild("Shared")
+            local Utility = Shared and Shared:FindFirstChild("Utility")
+            local IMObj = Utility and Utility:FindFirstChild("InfiniteMath")
+            if IMObj then InfiniteMath = require(IMObj) end
+        end)
+        local queueCPS = InfiniteMath and InfiniteMath.new(0) or 0
+        for _, tool in ipairs(CurrentQueue) do
+            local toolCPS = getToolCPS(tool)
+            if toolCPS then
+                queueCPS = queueCPS + toolCPS
+            end
+        end
+        local queueCpsStr = tostring(queueCPS)
+        
         if queueCount > 0 then
-            hudQueueLine:SetText("Queue: " .. queueCount .. " items remaining")
+            hudQueueLine:SetText("Queue: " .. queueCount .. " items (" .. queueCpsStr .. " CPS)")
             hudQueueLine:SetColor(Color3.fromRGB(255, 200, 50))
         else
             hudQueueLine:SetText("Queue: Empty")
@@ -579,8 +651,30 @@ local success, errorMessage = pcall(function()
     local CartStatus = SecCart3:AddParagraph("Trade Cart Content", "Empty.")
     local function updateCartDisplay()
         local text = ""; local total = 0
-        for name, qty in pairs(ShoppingCart) do if qty > 0 then text = text .. "- " .. name .. " (x" .. qty .. ")\n"; total = total + qty end end
-        CartStatus:Set("Trade Cart Content", total == 0 and "Empty." or text .. "\nTotal Items: " .. total)
+        local InfiniteMath
+        pcall(function()
+            local Shared = ReplicatedStorage:FindFirstChild("Shared")
+            local Utility = Shared and Shared:FindFirstChild("Utility")
+            local IMObj = Utility and Utility:FindFirstChild("InfiniteMath")
+            if IMObj then InfiniteMath = require(IMObj) end
+        end)
+        local totalCPS = InfiniteMath and InfiniteMath.new(0) or 0
+        
+        for name, qty in pairs(ShoppingCart) do 
+            if qty > 0 then 
+                local itemCPS = getCPSFromDisplayName(name)
+                local cpsText = ""
+                if itemCPS then
+                    cpsText = " │ CPS: " .. tostring(itemCPS)
+                    local itemCpsTotal = itemCPS * qty
+                    totalCPS = totalCPS + itemCpsTotal
+                end
+                text = text .. "- " .. name .. " (x" .. qty .. cpsText .. ")\n"
+                total = total + qty 
+            end 
+        end
+        local totalCpsStr = tostring(totalCPS)
+        CartStatus:Set("Trade Cart Content", total == 0 and "Empty." or text .. "\nTotal Items: " .. total .. "  │  Total CPS: " .. totalCpsStr)
     end
     
     SecCart3:AddButton("➕ Add Custom by Amount", function() 
@@ -633,8 +727,30 @@ local success, errorMessage = pcall(function()
     local SellCartStatus = SecSell1:AddParagraph("🛒 Sell Cart", "Empty.")
     local function updateSellCartDisplay()
         local text = ""; local total = 0
-        for name, qty in pairs(SellCart) do if qty > 0 then text = text .. "- " .. name .. " (x" .. qty .. ")\n"; total = total + qty end end
-        SellCartStatus:Set("🛒 Sell Cart", total == 0 and "Empty." or text .. "\nTotal Items: " .. total)
+        local InfiniteMath
+        pcall(function()
+            local Shared = ReplicatedStorage:FindFirstChild("Shared")
+            local Utility = Shared and Shared:FindFirstChild("Utility")
+            local IMObj = Utility and Utility:FindFirstChild("InfiniteMath")
+            if IMObj then InfiniteMath = require(IMObj) end
+        end)
+        local totalCPS = InfiniteMath and InfiniteMath.new(0) or 0
+        
+        for name, qty in pairs(SellCart) do 
+            if qty > 0 then 
+                local itemCPS = getCPSFromDisplayName(name)
+                local cpsText = ""
+                if itemCPS then
+                    cpsText = " │ CPS: " .. tostring(itemCPS)
+                    local itemCpsTotal = itemCPS * qty
+                    totalCPS = totalCPS + itemCpsTotal
+                end
+                text = text .. "- " .. name .. " (x" .. qty .. cpsText .. ")\n"
+                total = total + qty 
+            end 
+        end
+        local totalCpsStr = tostring(totalCPS)
+        SellCartStatus:Set("🛒 Sell Cart", total == 0 and "Empty." or text .. "\nTotal Items: " .. total .. "  │  Total CPS: " .. totalCpsStr)
     end
     
     SecSell1:AddButton("➕ Add Custom by Amount", function() 
@@ -705,8 +821,30 @@ local success, errorMessage = pcall(function()
     local BaseCartStatus = SecBase1:AddParagraph("🛒 Base Cart", "Empty.")
     local function updateBaseCartDisplay()
         local text = ""; local total = 0
-        for name, qty in pairs(BaseCart) do if qty > 0 then text = text .. "- " .. name .. " (x" .. qty .. ")\n"; total = total + qty end end
-        BaseCartStatus:Set("🛒 Base Cart", total == 0 and "Empty." or text .. "\nTotal Items: " .. total)
+        local InfiniteMath
+        pcall(function()
+            local Shared = ReplicatedStorage:FindFirstChild("Shared")
+            local Utility = Shared and Shared:FindFirstChild("Utility")
+            local IMObj = Utility and Utility:FindFirstChild("InfiniteMath")
+            if IMObj then InfiniteMath = require(IMObj) end
+        end)
+        local totalCPS = InfiniteMath and InfiniteMath.new(0) or 0
+        
+        for name, qty in pairs(BaseCart) do 
+            if qty > 0 then 
+                local itemCPS = getCPSFromDisplayName(name)
+                local cpsText = ""
+                if itemCPS then
+                    cpsText = " │ CPS: " .. tostring(itemCPS)
+                    local itemCpsTotal = itemCPS * qty
+                    totalCPS = totalCPS + itemCpsTotal
+                end
+                text = text .. "- " .. name .. " (x" .. qty .. cpsText .. ")\n"
+                total = total + qty 
+            end 
+        end
+        local totalCpsStr = tostring(totalCPS)
+        BaseCartStatus:Set("🛒 Base Cart", total == 0 and "Empty." or text .. "\nTotal Items: " .. total .. "  │  Total CPS: " .. totalCpsStr)
     end
     
     SecBase1:AddButton("➕ Add Custom by Amount", function() 
@@ -734,6 +872,46 @@ local success, errorMessage = pcall(function()
         updateBaseCartDisplay()
     end)
     SecBase1:AddButton("🗑️ Clear Base Cart", function() BaseCart = {}; updateBaseCartDisplay() end)
+    SecBase1:AddButton("🔥 Add 30 Highest CPS", function()
+        BaseCart = {}
+        local tools = {}
+        for _, tool in ipairs(getAllTools()) do
+            if isTradeable(tool) then
+                local cps = getToolCPS(tool)
+                table.insert(tools, {
+                    tool = tool,
+                    name = getFullItemName(tool),
+                    cps = cps or 0
+                })
+            end
+        end
+        
+        table.sort(tools, function(x, y)
+            local a = x.cps
+            local b = y.cps
+            local typeA = typeof(a)
+            local typeB = typeof(b)
+            if typeA == typeB then
+                return a > b
+            elseif typeA == "table" or typeA == "userdata" then
+                return true
+            else
+                return false
+            end
+        end)
+        
+        local added = 0
+        local limit = math.min(30, #tools)
+        for i = 1, limit do
+            local item = tools[i]
+            local name = item.name
+            BaseCart[name] = (BaseCart[name] or 0) + 1
+            added = added + 1
+        end
+        
+        updateBaseCartDisplay()
+        Library:Notify("Base Cart", "Auto-loaded top " .. added .. " highest CPS items.", 3)
+    end)
     
     local SecBase2 = TabBase:AddSection("2. Base Coordinate Settings")
     SecBase2:AddInput({Name = "Start from Slot-", Placeholder = "Default: 1"}, function(Text) local num = tonumber(Text); if num and num > 0 then StartSlot = num end end)
@@ -936,6 +1114,22 @@ local success, errorMessage = pcall(function()
             playerSent[name] = (playerSent[name] or 0) + 1
         end
 
+        local InfiniteMath
+        pcall(function()
+            local Shared = ReplicatedStorage:FindFirstChild("Shared")
+            local Utility = Shared and Shared:FindFirstChild("Utility")
+            local IMObj = Utility and Utility:FindFirstChild("InfiniteMath")
+            if IMObj then InfiniteMath = require(IMObj) end
+        end)
+        local batchCPSVal = InfiniteMath and InfiniteMath.new(0) or 0
+        for _, t in ipairs(batch) do
+            local tCPS = getToolCPS(t)
+            if tCPS then
+                batchCPSVal = batchCPSVal + tCPS
+            end
+        end
+        local batchCpsStr = tostring(batchCPSVal)
+
         if ConsoleStats then
             if _G.TradeLogsMode == "Documentation" then
                 local details = getCumulativeDetails(playerSent)
@@ -943,11 +1137,11 @@ local success, errorMessage = pcall(function()
             elseif _G.TradeLogsMode == "Both" then
                 local detailed = groupItems(names)
                 local cumulative = getCumulativeDetails(playerSent)
-                ConsoleStats:Log("Send: " .. detailed .. " to " .. target.Name, "success")
+                ConsoleStats:Log("Send: " .. detailed .. " (CPS: " .. batchCpsStr .. ") to " .. target.Name, "success")
                 ConsoleStats:Log("Total Sent to " .. target.Name .. ": " .. cumulative, "info")
             else -- Detailed
                 local details = groupItems(names)
-                ConsoleStats:Log("Send: " .. details .. " to " .. target.Name, "success")
+                ConsoleStats:Log("Send: " .. details .. " (CPS: " .. batchCpsStr .. ") to " .. target.Name, "success")
             end
         end
         
@@ -1058,16 +1252,32 @@ local success, errorMessage = pcall(function()
                                     playerRec[name] = (playerRec[name] or 0) + 1
                                 end
 
+                                local InfiniteMath
+                                pcall(function()
+                                    local Shared = ReplicatedStorage:FindFirstChild("Shared")
+                                    local Utility = Shared and Shared:FindFirstChild("Utility")
+                                    local IMObj = Utility and Utility:FindFirstChild("InfiniteMath")
+                                    if IMObj then InfiniteMath = require(IMObj) end
+                                end)
+                                local recCPSVal = InfiniteMath and InfiniteMath.new(0) or 0
+                                for _, name in ipairs(receivedNames) do
+                                    local itemCPS = getCPSFromDisplayName(name)
+                                    if itemCPS then
+                                        recCPSVal = recCPSVal + itemCPS
+                                    end
+                                end
+                                local recCpsStr = tostring(recCPSVal)
+
                                 if _G.TradeLogsMode == "Documentation" then
                                     local details = getCumulativeDetails(playerRec)
                                     ConsoleStats:Log("Total Received from " .. partnerName .. ": " .. details, "info")
                                 elseif _G.TradeLogsMode == "Both" then
                                     local detailed = groupItems(receivedNames)
                                     local cumulative = getCumulativeDetails(playerRec)
-                                    ConsoleStats:Log("Receive: " .. detailed .. " from " .. partnerName, "info")
+                                    ConsoleStats:Log("Receive: " .. detailed .. " (CPS: " .. recCpsStr .. ") from " .. partnerName, "info")
                                     ConsoleStats:Log("Total Received from " .. partnerName .. ": " .. cumulative, "info")
                                 else -- Detailed
-                                    ConsoleStats:Log("Receive: " .. groupItems(receivedNames) .. " from " .. partnerName, "info")
+                                    ConsoleStats:Log("Receive: " .. groupItems(receivedNames) .. " (CPS: " .. recCpsStr .. ") from " .. partnerName, "info")
                                 end
                             else
                                 ConsoleStats:Log("Receive: Incoming trade completed successfully.", "info")
