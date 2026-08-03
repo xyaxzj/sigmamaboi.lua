@@ -1444,7 +1444,7 @@ local success, errorMessage = pcall(function()
             
             if rarityPass and mutationPass then
                 itemFilterPassed[itemName] = true
-                local category = "🏆 " .. string.upper(itemRarity) .. " ITEMS"
+                local category = "🏆 " .. string.upper(itemRarity) .. (itemMutation and (" " .. string.upper(itemMutation)) or "") .. " ITEMS"
                 if not categorizedItems[category] then
                     categorizedItems[category] = {}
                     categoryTotals[category] = 0
