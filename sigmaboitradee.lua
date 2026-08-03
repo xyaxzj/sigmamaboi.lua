@@ -1501,7 +1501,33 @@ local success, errorMessage = pcall(function()
             table.sort(sortedCategories)
             for _, cat in ipairs(sortedCategories) do
                 displayString = displayString .. "=== " .. cat .. " (Total: " .. categoryTotals[cat] .. ") ===\n"
-                table.sort(categorizedItems[cat], function(a, b) return a.name < b.name end)
+                table.sort(categorizedItems[cat], function(x, y)
+                    local a = x.cps
+                    local b = y.cps
+                    local typeA = typeof(a)
+                    local typeB = typeof(b)
+                    if typeA == typeB then
+                        if typeA == "nil" then
+                            return x.name < y.name
+                        end
+                        if a == b then
+                            return x.name < y.name
+                        end
+                        return a > b
+                    elseif typeA == "table" or typeA == "userdata" then
+                        return true
+                    elseif typeB == "table" or typeB == "userdata" then
+                        return false
+                    else
+                        if a ~= nil and b == nil then
+                            return true
+                        elseif a == nil and b ~= nil then
+                            return false
+                        else
+                            return x.name < y.name
+                        end
+                    end
+                end)
                 for _, item in ipairs(categorizedItems[cat]) do 
                     local cpsStr = item.cps and (" │ CPS: " .. tostring(item.cps)) or ""
                     displayString = displayString .. string.format(" • %s (Stock: %d%s)\n", item.name, item.qty, cpsStr) 
