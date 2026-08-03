@@ -1183,10 +1183,12 @@ local success, errorMessage = pcall(function()
         for itemName, amount in pairs(CachedInventoryData) do
             local itemRarity = "Unknown"
             local itemMutation = nil
+            local itemCPS = nil
             for _, tool in ipairs(getAllTools()) do
                 if isTradeable(tool) and getFullItemName(tool) == itemName then
                     itemRarity = getItemInfo(tool)
                     itemMutation = getToolMutation(tool)
+                    itemCPS = getToolCPS(tool)
                     break
                 end
             end
@@ -1226,7 +1228,7 @@ local success, errorMessage = pcall(function()
                     categorizedItems[category] = {}
                     categoryTotals[category] = 0
                 end
-                table.insert(categorizedItems[category], {name = itemName, qty = amount, rarity = itemRarity})
+                table.insert(categorizedItems[category], {name = itemName, qty = amount, rarity = itemRarity, cps = itemCPS})
                 categoryTotals[category] = categoryTotals[category] + amount
                 filteredTotalCount = filteredTotalCount + amount
             end
@@ -1272,7 +1274,8 @@ local success, errorMessage = pcall(function()
                 displayString = displayString .. "=== " .. cat .. " (Total: " .. categoryTotals[cat] .. ") ===\n"
                 table.sort(categorizedItems[cat], function(a, b) return a.name < b.name end)
                 for _, item in ipairs(categorizedItems[cat]) do 
-                    displayString = displayString .. string.format(" • %s (Stock: %d)\n", item.name, item.qty) 
+                    local cpsStr = item.cps and (" │ CPS: " .. tostring(item.cps)) or ""
+                    displayString = displayString .. string.format(" • %s (Stock: %d%s)\n", item.name, item.qty, cpsStr) 
                 end
                 displayString = displayString .. "\n"
             end
