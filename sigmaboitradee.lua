@@ -1179,16 +1179,27 @@ local success, errorMessage = pcall(function()
         local totalCPSVal = InfiniteMath and InfiniteMath.new(0) or 0
         local filteredCPSVal = InfiniteMath and InfiniteMath.new(0) or 0
         local itemFilterPassed = {}
+        local itemCPSMap = {}
+        
+        -- Run the single-pass tool loop first to sum and cache CPS for all tools
+        for _, tool in ipairs(getAllTools()) do
+            if isTradeable(tool) then
+                local toolCPS = getToolCPS(tool)
+                if toolCPS then
+                    totalCPSVal = totalCPSVal + toolCPS
+                    local fullName = getFullItemName(tool)
+                    itemCPSMap[fullName] = toolCPS
+                end
+            end
+        end
         
         for itemName, amount in pairs(CachedInventoryData) do
             local itemRarity = "Unknown"
             local itemMutation = nil
-            local itemCPS = nil
             for _, tool in ipairs(getAllTools()) do
                 if isTradeable(tool) and getFullItemName(tool) == itemName then
                     itemRarity = getItemInfo(tool)
                     itemMutation = getToolMutation(tool)
-                    itemCPS = getToolCPS(tool)
                     break
                 end
             end
@@ -1228,20 +1239,28 @@ local success, errorMessage = pcall(function()
                     categorizedItems[category] = {}
                     categoryTotals[category] = 0
                 end
-                table.insert(categorizedItems[category], {name = itemName, qty = amount, rarity = itemRarity, cps = itemCPS})
+                
+                -- Read calculated CPS from the lookup cache map
+                local itemCPS = itemCPSMap[itemName]
+                
+                table.insert(categorizedItems[category], {
+                    name = itemName, 
+                    qty = amount, 
+                    rarity = itemRarity, 
+                    cps = itemCPS
+                })
                 categoryTotals[category] = categoryTotals[category] + amount
                 filteredTotalCount = filteredTotalCount + amount
             end
         end
         
-        -- Single-pass optimization to sum all tools' CPS
+        -- Sum filtered CPS for items that passed the filters
         for _, tool in ipairs(getAllTools()) do
             if isTradeable(tool) then
-                local toolCPS = getToolCPS(tool)
-                if toolCPS then
-                    totalCPSVal = totalCPSVal + toolCPS
-                    local fullName = getFullItemName(tool)
-                    if itemFilterPassed[fullName] then
+                local fullName = getFullItemName(tool)
+                if itemFilterPassed[fullName] then
+                    local toolCPS = itemCPSMap[fullName]
+                    if toolCPS then
                         filteredCPSVal = filteredCPSVal + toolCPS
                     end
                 end
