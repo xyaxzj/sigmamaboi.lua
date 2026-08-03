@@ -803,7 +803,9 @@ local success, errorMessage = pcall(function()
         Options = RarityList,
         Default = {}
     }, function()
-        refreshInventoryText()
+        if refreshInventoryText then
+            refreshInventoryText()
+        end
     end)
     
     InvMutationDropdown = SecInvFilter:AddMultiDropdown({
@@ -811,13 +813,17 @@ local success, errorMessage = pcall(function()
         Options = {},
         Default = {}
     }, function()
-        refreshInventoryText()
+        if refreshInventoryText then
+            refreshInventoryText()
+        end
     end)
     
     SecInvFilter:AddButton("🧹 Clear Filters", function()
         pcall(function() InvRarityDropdown:Set({}) end)
         pcall(function() InvMutationDropdown:Set({}) end)
-        refreshInventoryText()
+        if refreshInventoryText then
+            refreshInventoryText()
+        end
     end)
     
     local SecInv = TabInventory:AddSection("Information")
