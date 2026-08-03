@@ -263,6 +263,52 @@ local success, errorMessage = pcall(function()
         return m and tostring(m) or nil
     end
 
+    local function getToolCPS(tool)
+        if not tool then return nil end
+        local baseName = tool.Name
+        
+        local lvlValue = tool:GetAttribute("Level") or tool:GetAttribute("level") or tool:GetAttribute("Lvl")
+        if not lvlValue then
+            local lvlObj = tool:FindFirstChild("Level") or tool:FindFirstChild("level") or tool:FindFirstChild("Lvl")
+            if lvlObj and (lvlObj:IsA("IntValue") or lvlObj:IsA("NumberValue") or lvlObj:IsA("StringValue")) then lvlValue = lvlObj.Value end
+        end
+        local level = tonumber(lvlValue) or 1
+        local mutation = getToolMutation(tool)
+        
+        local EntitiesDataModule, MutationDataModule
+        pcall(function()
+            local Shared = ReplicatedStorage:FindFirstChild("Shared")
+            local Data = Shared and Shared:FindFirstChild("Data")
+            
+            local EntitiesDataObj = Data and Data:FindFirstChild("EntitiesData")
+            if EntitiesDataObj then EntitiesDataModule = require(EntitiesDataObj) end
+            
+            local MutationDataObj = Data and Data:FindFirstChild("MutationData")
+            if MutationDataObj then MutationDataModule = require(MutationDataObj) end
+        end)
+        
+        if EntitiesDataModule and EntitiesDataModule.Brainrots and EntitiesDataModule.Brainrots[baseName] then
+            local info = EntitiesDataModule.Brainrots[baseName]
+            local baseCPS = info.CPS
+            if baseCPS then
+                local levelMult = 1
+                if EntitiesDataModule.GetMultiplierPerLevel then
+                    pcall(function()
+                        levelMult = EntitiesDataModule.GetMultiplierPerLevel(level)
+                    end)
+                end
+                
+                local mutMult = 1
+                if mutation and MutationDataModule and MutationDataModule.Buffs and MutationDataModule.Buffs[mutation] then
+                    mutMult = MutationDataModule.Buffs[mutation].Value or 1
+                end
+                
+                return baseCPS * levelMult * mutMult
+            end
+        end
+        return nil
+    end
+
     local function isTradeable(tool) return tool and tool:IsA("Tool") and getToolGUID(tool) ~= nil end
     
     local function getPlayerList()
@@ -1122,6 +1168,18 @@ local success, errorMessage = pcall(function()
         local categoryTotals = {}
         local filteredTotalCount = 0
         
+        local InfiniteMath
+        pcall(function()
+            local Shared = ReplicatedStorage:FindFirstChild("Shared")
+            local Utility = Shared and Shared:FindFirstChild("Utility")
+            local IMObj = Utility and Utility:FindFirstChild("InfiniteMath")
+            if IMObj then InfiniteMath = require(IMObj) end
+        end)
+        
+        local totalCPSVal = InfiniteMath and InfiniteMath.new(0) or 0
+        local filteredCPSVal = InfiniteMath and InfiniteMath.new(0) or 0
+        local itemFilterPassed = {}
+        
         for itemName, amount in pairs(CachedInventoryData) do
             local itemRarity = "Unknown"
             local itemMutation = nil
@@ -1162,6 +1220,7 @@ local success, errorMessage = pcall(function()
             end
             
             if rarityPass and mutationPass then
+                itemFilterPassed[itemName] = true
                 local category = "🏆 " .. string.upper(itemRarity) .. " ITEMS"
                 if not categorizedItems[category] then
                     categorizedItems[category] = {}
@@ -1173,14 +1232,33 @@ local success, errorMessage = pcall(function()
             end
         end
         
+        -- Single-pass optimization to sum all tools' CPS
+        for _, tool in ipairs(getAllTools()) do
+            if isTradeable(tool) then
+                local toolCPS = getToolCPS(tool)
+                if toolCPS then
+                    totalCPSVal = totalCPSVal + toolCPS
+                    local fullName = getFullItemName(tool)
+                    if itemFilterPassed[fullName] then
+                        filteredCPSVal = filteredCPSVal + toolCPS
+                    end
+                end
+            end
+        end
+        
+        local totalCpsStr = tostring(totalCPSVal)
+        local filteredCpsStr = tostring(filteredCPSVal)
+        
         local displayString = ""
         if isFiltered then
-            displayString = string.format("Showing %d / %d Items (Filtered)\n\n", filteredTotalCount, CachedTotalCount)
+            displayString = string.format("Showing %d / %d Items (Filtered)\n", filteredTotalCount, CachedTotalCount)
+            displayString = displayString .. "Filtered CPS: " .. filteredCpsStr .. "  │  Total CPS: " .. totalCpsStr .. "\n\n"
             if filteredTotalCount == 0 then
                 displayString = displayString .. "No items match the selected filters."
             end
         else
-            displayString = "Total All Items: " .. CachedTotalCount .. "\n\n"
+            displayString = "Total All Items: " .. CachedTotalCount .. "\n"
+            displayString = displayString .. "Total CPS: " .. totalCpsStr .. "\n\n"
             if CachedTotalCount == 0 then
                 displayString = displayString .. "Empty."
             end
