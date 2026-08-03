@@ -41,6 +41,11 @@ local success, errorMessage = pcall(function()
     local SellCart = {}      -- Sell
     local BaseCart = {}      -- Place Base
     
+    local CachedInventoryData = {}
+    local CachedTotalCount = 0
+    local InvRarityDropdown = nil
+    local InvMutationDropdown = nil
+    
     local ItemsProcessed = 0
     local IsProcessing = false 
     local AutoLoopEnabled = false
@@ -342,6 +347,22 @@ local success, errorMessage = pcall(function()
         local list = {}
         if not hasMut then return {"[NO MUTATION]"} end
         for k, v in pairs(mutCounts) do table.insert(list, k .. " | Stock: " .. v) end
+        table.sort(list)
+        return list
+    end
+
+    local function getInventoryMutationList()
+        local mutCounts = {}
+        for _, tool in ipairs(getAllTools()) do
+            if isTradeable(tool) then
+                local m = getToolMutation(tool) or "No Mutation"
+                mutCounts[m] = (mutCounts[m] or 0) + 1
+            end
+        end
+        local list = {}
+        for k, v in pairs(mutCounts) do
+            table.insert(list, k .. " | Stock: " .. v)
+        end
         table.sort(list)
         return list
     end
@@ -774,6 +795,31 @@ local success, errorMessage = pcall(function()
     -- TAB 5: STOCK & STORAGE (INVENTORY)
     -- ==========================================
     local TabInventory = Window:MakeTab("🎒")
+    
+    local SecInvFilter = TabInventory:AddSection("Filter Settings")
+    
+    InvRarityDropdown = SecInvFilter:AddMultiDropdown({
+        Name = "Filter by Rarity",
+        Options = RarityList,
+        Default = {}
+    }, function()
+        refreshInventoryText()
+    end)
+    
+    InvMutationDropdown = SecInvFilter:AddMultiDropdown({
+        Name = "Filter by Mutation",
+        Options = {},
+        Default = {}
+    }, function()
+        refreshInventoryText()
+    end)
+    
+    SecInvFilter:AddButton("🧹 Clear Filters", function()
+        pcall(function() InvRarityDropdown:Set({}) end)
+        pcall(function() InvMutationDropdown:Set({}) end)
+        refreshInventoryText()
+    end)
+    
     local SecInv = TabInventory:AddSection("Information")
     local FullInventoryLabel = SecInv:AddParagraph("Item List & Total", "Syncing...")
     SecInv:AddButton("🔄 Manual Update Inventory Data", function() updateInventoryDisplay() end)
@@ -1031,7 +1077,128 @@ local success, errorMessage = pcall(function()
     -- ==========================================
     -- INVENTORY SYNC ENGINE
     -- ==========================================
-    local isSyncingUI = false 
+    local refreshInventoryText
+    refreshInventoryText = function()
+        if not CachedInventoryData then return end
+        
+        local selectedRarities = {}
+        if InvRarityDropdown then
+            selectedRarities = InvRarityDropdown:Get()
+            if type(selectedRarities) ~= "table" then selectedRarities = {selectedRarities} end
+        end
+        
+        local selectedMutations = {}
+        if InvMutationDropdown then
+            selectedMutations = InvMutationDropdown:Get()
+            if type(selectedMutations) ~= "table" then selectedMutations = {selectedMutations} end
+        end
+        
+        local hasRarityFilter = false
+        for _, r in pairs(selectedRarities) do
+            if r ~= "" then
+                hasRarityFilter = true
+                break
+            end
+        end
+        
+        local hasMutationFilter = false
+        for _, m in pairs(selectedMutations) do
+            local cleanM = getBaseName(m)
+            if cleanM ~= "" then
+                hasMutationFilter = true
+                break
+            end
+        end
+        
+        local isFiltered = hasRarityFilter or hasMutationFilter
+        
+        local categorizedItems = {}
+        local categoryTotals = {}
+        local filteredTotalCount = 0
+        
+        for itemName, amount in pairs(CachedInventoryData) do
+            local itemRarity = "Unknown"
+            local itemMutation = nil
+            for _, tool in ipairs(getAllTools()) do
+                if isTradeable(tool) and getFullItemName(tool) == itemName then
+                    itemRarity = getItemInfo(tool)
+                    itemMutation = getToolMutation(tool)
+                    break
+                end
+            end
+            local filterMut = itemMutation or "No Mutation"
+            
+            -- Rarity filter match check
+            local rarityPass = true
+            if hasRarityFilter then
+                local found = false
+                for _, r in pairs(selectedRarities) do
+                    if r == itemRarity then
+                        found = true
+                        break
+                    end
+                end
+                if not found then rarityPass = false end
+            end
+            
+            -- Mutation filter match check
+            local mutationPass = true
+            if hasMutationFilter then
+                local found = false
+                for _, m in pairs(selectedMutations) do
+                    local cleanM = getBaseName(m)
+                    if cleanM == filterMut then
+                        found = true
+                        break
+                    end
+                end
+                if not found then mutationPass = false end
+            end
+            
+            if rarityPass and mutationPass then
+                local category = "🏆 " .. string.upper(itemRarity) .. " ITEMS"
+                if not categorizedItems[category] then
+                    categorizedItems[category] = {}
+                    categoryTotals[category] = 0
+                end
+                table.insert(categorizedItems[category], {name = itemName, qty = amount, rarity = itemRarity})
+                categoryTotals[category] = categoryTotals[category] + amount
+                filteredTotalCount = filteredTotalCount + amount
+            end
+        end
+        
+        local displayString = ""
+        if isFiltered then
+            displayString = string.format("Showing %d / %d Items (Filtered)\n\n", filteredTotalCount, CachedTotalCount)
+            if filteredTotalCount == 0 then
+                displayString = displayString .. "No items match the selected filters."
+            end
+        else
+            displayString = "Total All Items: " .. CachedTotalCount .. "\n\n"
+            if CachedTotalCount == 0 then
+                displayString = displayString .. "Empty."
+            end
+        end
+        
+        if filteredTotalCount > 0 then
+            local sortedCategories = {}
+            for cat, _ in pairs(categorizedItems) do table.insert(sortedCategories, cat) end
+            table.sort(sortedCategories)
+            for _, cat in ipairs(sortedCategories) do
+                displayString = displayString .. "=== " .. cat .. " (Total: " .. categoryTotals[cat] .. ") ===\n"
+                table.sort(categorizedItems[cat], function(a, b) return a.name < b.name end)
+                for _, item in ipairs(categorizedItems[cat]) do 
+                    displayString = displayString .. string.format(" • %s (Stock: %d)\n", item.name, item.qty) 
+                end
+                displayString = displayString .. "\n"
+            end
+        end
+        
+        if FullInventoryLabel then
+            FullInventoryLabel:Set("Item List & Total", displayString)
+        end
+    end
+
     updateInventoryDisplay = function()
         if isSyncingUI then return end
         isSyncingUI = true
@@ -1045,6 +1212,8 @@ local success, errorMessage = pcall(function()
                     totalCount = totalCount + 1  
                 end
             end  
+            CachedInventoryData = inventoryData
+            CachedTotalCount = totalCount
             
             local itemsList = {"[ANY ASSET]"}  
             for name, count in pairs(inventoryData) do 
@@ -1069,35 +1238,12 @@ local success, errorMessage = pcall(function()
             BaseMutationDropdown:Refresh(mutList)
             PlayerDropdown:Refresh(getPlayerList())
             
-            local displayString = "Total All Items: " .. totalCount .. "\n\n"  
-            if totalCount == 0 then displayString = displayString .. "Empty." else
-                local categorizedItems = {}; local categoryTotals = {}
-                for itemName, amount in pairs(inventoryData) do
-                    local rarity = "Unknown"
-                    for _, tool in ipairs(getAllTools()) do
-                        if isTradeable(tool) and getFullItemName(tool) == itemName then
-                            rarity = getItemInfo(tool)
-                            break
-                        end
-                    end
-                    local category = "🏆 " .. string.upper(rarity) .. " ITEMS"
-                    if not categorizedItems[category] then categorizedItems[category] = {}; categoryTotals[category] = 0 end
-                    
-                    table.insert(categorizedItems[category], {name = itemName, qty = amount, rarity = rarity})
-                    categoryTotals[category] = categoryTotals[category] + amount
-                end
-                local sortedCategories = {}
-                for cat, _ in pairs(categorizedItems) do table.insert(sortedCategories, cat) end; table.sort(sortedCategories)
-                for _, cat in ipairs(sortedCategories) do
-                    displayString = displayString .. "=== " .. cat .. " (Total: " .. categoryTotals[cat] .. ") ===\n"
-                    table.sort(categorizedItems[cat], function(a, b) return a.name < b.name end)
-                    for _, item in ipairs(categorizedItems[cat]) do 
-                        displayString = displayString .. string.format(" • %s (Stock: %d)\n", item.name, item.qty) 
-                    end
-                    displayString = displayString .. "\n"
-                end
+            local invMutList = getInventoryMutationList()
+            if InvMutationDropdown then
+                InvMutationDropdown:Refresh(invMutList)
             end
-            FullInventoryLabel:Set("Item List & Total", displayString)
+            
+            refreshInventoryText()
             isSyncingUI = false 
         end)
     end
