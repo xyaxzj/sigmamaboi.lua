@@ -83,9 +83,10 @@ local function musnahkanKarakter(player)
         
         -- 2. PERANGKAP: Jika dia respawn atau wujudnya baru loading, langsung hapus!
         player.CharacterAdded:Connect(function(char)
-            -- Beri jeda sangat singkat agar game selesai memuat wujudnya, lalu musnahkan
-            task.wait(0.1) 
-            pcall(function() char:Destroy() end)
+            -- Menggunakan task.defer agar dihancurkan di akhir antrean frame saat ini sebelum sempat dirender (mencegah kedipan)
+            task.defer(function()
+                pcall(function() char:Destroy() end)
+            end)
         end)
     end
 end
@@ -242,7 +243,7 @@ task.spawn(function()
 end)
 
 ---------------------------------------------------------
--- MEKANIK 3: AUTO TELEPORT LUCK MACHINE WEATHER EVENT
+-- MEKANIK 3: AUTO TELEPORT WEATHER EVENTS
 ---------------------------------------------------------
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -272,6 +273,35 @@ local function teleportToLuckMachine()
     end)
 end
 
+local function teleportToGymMachine()
+    task.spawn(function()
+        local debris = workspace:WaitForChild("Debris", 10)
+        if not debris then return end
+        
+        local gymMachine = debris:WaitForChild("GymMachine", 15)
+        if not gymMachine then return end
+        
+        -- Cari part target untuk teleportasi (PrimaryPart atau BasePart pertama)
+        local targetPart = gymMachine.PrimaryPart
+        if not targetPart then
+            for _, child in ipairs(gymMachine:GetDescendants()) do
+                if child:IsA("BasePart") then
+                    targetPart = child
+                    break
+                end
+            end
+        end
+        
+        if targetPart then
+            local char = lp.Character or lp.CharacterAdded:Wait()
+            local hrp = char:WaitForChild("HumanoidRootPart", 10)
+            if hrp then
+                hrp.CFrame = targetPart.CFrame + Vector3.new(0, 3, 0) -- Teleport di atas part agar tidak stuck
+            end
+        end
+    end)
+end
+
 -- Hubungkan ke Remote Event rev_AddedWeather secara dinamis dengan proteksi pcall
 local success, weatherRemote = pcall(function()
     return ReplicatedStorage:WaitForChild("Shared", 10)
@@ -284,6 +314,8 @@ if success and weatherRemote then
     weatherRemote.OnClientEvent:Connect(function(weatherType, ...)
         if weatherType == "LuckMachine" then
             teleportToLuckMachine()
+        elseif weatherType == "LiftMachine" then
+            teleportToGymMachine()
         end
     end)
 end
