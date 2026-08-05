@@ -1091,7 +1091,7 @@ local success, errorMessage = pcall(function()
             if guid then r_trade_i:FireServer("AddItem", tostring(guid)); task.wait(InsertDelay) end
         end
         
-        task.wait(5.5); r_trade_i:FireServer("Confirm"); task.wait(0.5)
+        task.wait(5.1); r_trade_i:FireServer("Confirm"); task.wait(0.5)
 
         local waitTimeout = 0
         while tradeFrame and tradeFrame.Parent and tradeFrame.Visible do
@@ -1101,7 +1101,7 @@ local success, errorMessage = pcall(function()
         end
 
         if tradeFrame and tradeFrame.Parent and tradeFrame.Visible then
-            task.wait(5.5); r_trade_i:FireServer("Confirm")
+            task.wait(5.1); r_trade_i:FireServer("Confirm")
             while tradeFrame and tradeFrame.Parent and tradeFrame.Visible do task.wait(0.5) end
         end
         
@@ -1210,10 +1210,10 @@ local success, errorMessage = pcall(function()
                         task.wait(1)
                     else
                         while tradeFrame.Visible and not isOpponentConfirmed(tradeFrame) do task.wait(0.2) end
-                        if tradeFrame.Visible and isOpponentConfirmed(tradeFrame) then task.wait(5.5); r_trade_i:FireServer("Confirm"); task.wait(1) end
+                        if tradeFrame.Visible and isOpponentConfirmed(tradeFrame) then task.wait(5.1); r_trade_i:FireServer("Confirm"); task.wait(1) end
                         while tradeFrame.Visible and isOpponentConfirmed(tradeFrame) do task.wait(0.2) end
                         while tradeFrame.Visible and not isOpponentConfirmed(tradeFrame) do task.wait(0.2) end
-                        if tradeFrame.Visible and isOpponentConfirmed(tradeFrame) then task.wait(5.5); r_trade_i:FireServer("Confirm") end
+                        if tradeFrame.Visible and isOpponentConfirmed(tradeFrame) then task.wait(5.1); r_trade_i:FireServer("Confirm") end
                         while tradeFrame.Visible do task.wait(0.5) end
                         local receivedNames = {}
                         pcall(function()
