@@ -1,4 +1,3 @@
-setfpscap(10)
 local Players = game:GetService("Players")
 local Lighting = game:GetService("Lighting")
 local StarterGui = game:GetService("StarterGui")
@@ -152,12 +151,14 @@ local function klikGaib(guiObj)
     end
 end
 
+local tempPauseBarbell = false
+
 ---------------------------------------------------------
 -- MEKANIK 1: AUTO USE BARBELL
 ---------------------------------------------------------
 task.spawn(function()
     while task.wait(0.1) do
-        if not _G.autoUseBarbell then continue end
+        if not _G.autoUseBarbell or tempPauseBarbell then continue end
         
         local char = lp.Character
         local hum = char and char:FindFirstChildOfClass("Humanoid")
@@ -248,6 +249,29 @@ end)
 ---------------------------------------------------------
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local function teleportWithBarbellPause(targetPart)
+    task.spawn(function()
+        tempPauseBarbell = true
+        
+        -- Lepas semua tools yang sedang dipegang
+        local char = lp.Character or lp.CharacterAdded:Wait()
+        local hum = char:WaitForChild("Humanoid", 10)
+        if hum then
+            hum:UnequipTools()
+        end
+        
+        -- Teleportasi
+        local hrp = char:WaitForChild("HumanoidRootPart", 10)
+        if hrp and targetPart and targetPart:IsA("BasePart") then
+            hrp.CFrame = targetPart.CFrame + Vector3.new(0, 3, 0)
+        end
+        
+        -- Jeda 1.5 detik sebelum memakai kembali
+        task.wait(1.5)
+        tempPauseBarbell = false
+    end)
+end
+
 local function teleportToLuckMachine()
     task.spawn(function()
         local debris = workspace:WaitForChild("Debris", 10)
@@ -265,11 +289,7 @@ local function teleportToLuckMachine()
             or standingPlatforms:WaitForChild("3", 5)
             
         if targetPart and targetPart:IsA("BasePart") then
-            local char = lp.Character or lp.CharacterAdded:Wait()
-            local hrp = char:WaitForChild("HumanoidRootPart", 10)
-            if hrp then
-                hrp.CFrame = targetPart.CFrame + Vector3.new(0, 3, 0) -- Teleport di atas platform agar tidak stuck
-            end
+            teleportWithBarbellPause(targetPart)
         end
     end)
 end
@@ -294,11 +314,7 @@ local function teleportToGymMachine()
         end
         
         if targetPart then
-            local char = lp.Character or lp.CharacterAdded:Wait()
-            local hrp = char:WaitForChild("HumanoidRootPart", 10)
-            if hrp then
-                hrp.CFrame = targetPart.CFrame + Vector3.new(0, 3, 0) -- Teleport di atas part agar tidak stuck
-            end
+            teleportWithBarbellPause(targetPart)
         end
     end)
 end
