@@ -1,3 +1,4 @@
+setfpscap(10)
 local Players = game:GetService("Players")
 local Lighting = game:GetService("Lighting")
 local StarterGui = game:GetService("StarterGui")
