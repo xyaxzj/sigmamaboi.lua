@@ -1,4 +1,4 @@
-setfpscap(8)
+setfpscap(5)
 local Players = game:GetService("Players")
 local Lighting = game:GetService("Lighting")
 local StarterGui = game:GetService("StarterGui")
@@ -396,12 +396,13 @@ local function getKickPower()
     return power
 end
 
--- 4. Loop Update Statistik Setiap 1 Menit (60 Detik)
+-- 4. Loop Update Statistik (FPS & Waktu tiap 1 detik, Kick Power tiap 60 detik)
 local startTime = os.time()
+local cachedKickPower = "Menghitung..."
+local kickPowerUpdateCounter = 0
 
 local function updateMonitorText()
     local elapsedSeconds = os.time() - startTime
-    local currentKickPower = getKickPower()
     
     infoLabel.Text = string.format(
         "=== AFK STATS MONITOR ===\n\n" ..
@@ -411,15 +412,24 @@ local function updateMonitorText()
         "=========================",
         fps,
         elapsedSeconds,
-        currentKickPower
+        cachedKickPower
     )
 end
 
 task.spawn(function()
     task.wait(2) -- Jeda awal agar UI game selesai dimuat sepenuhnya
+    cachedKickPower = getKickPower()
     updateMonitorText()
     
-    while task.wait(60) do
+    while task.wait(1) do
+        kickPowerUpdateCounter = kickPowerUpdateCounter + 1
+        
+        -- Perbarui Kick Power hanya setelah 60 detik (1 menit)
+        if kickPowerUpdateCounter >= 60 then
+            kickPowerUpdateCounter = 0
+            cachedKickPower = getKickPower()
+        end
+        
         updateMonitorText()
     end
 end)
