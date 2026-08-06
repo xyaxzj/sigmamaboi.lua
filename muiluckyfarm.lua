@@ -1,4 +1,4 @@
-setfpscap(5)
+setfpscap(8)
 local Players = game:GetService("Players")
 local Lighting = game:GetService("Lighting")
 local StarterGui = game:GetService("StarterGui")
@@ -328,4 +328,98 @@ lp.Idled:Connect(function()
         VirtualUser:CaptureController()
         VirtualUser:ClickButton2(Vector2.new())
     end)
+end)
+
+---------------------------------------------------------
+-- MEKANIK 5: AFK BLACKSCREEN (STATS MONITOR)
+---------------------------------------------------------
+local RunService = game:GetService("RunService")
+
+-- 1. Buat ScreenGui Hitam Fullscreen
+local blackScreenGui = Instance.new("ScreenGui")
+blackScreenGui.Name = "AFKBlackscreen"
+blackScreenGui.IgnoreGuiInset = true
+blackScreenGui.Parent = playerGui
+
+local blackFrame = Instance.new("Frame")
+blackFrame.Size = UDim2.new(1, 0, 1, 0)
+blackFrame.BackgroundColor3 = Color3.new(0, 0, 0)
+blackFrame.BorderSizePixel = 0
+blackFrame.Parent = blackScreenGui
+
+local infoLabel = Instance.new("TextLabel")
+infoLabel.Size = UDim2.new(0.8, 0, 0.4, 0)
+infoLabel.Position = UDim2.new(0.1, 0, 0.3, 0)
+infoLabel.BackgroundTransparency = 1
+infoLabel.TextColor3 = Color3.new(1, 1, 1)
+infoLabel.Font = Enum.Font.Code
+infoLabel.TextSize = 22
+infoLabel.TextXAlignment = Enum.TextXAlignment.Center
+infoLabel.TextYAlignment = Enum.TextYAlignment.Center
+infoLabel.Text = "Menghitung Statistik AFK..."
+infoLabel.Parent = blackFrame
+
+-- 2. Sistem Penghitung FPS
+local fps = 0
+local frameCount = 0
+local nextFpsUpdate = os.clock() + 1
+
+RunService.Heartbeat:Connect(function()
+    frameCount = frameCount + 1
+    local now = os.clock()
+    if now >= nextFpsUpdate then
+        fps = frameCount
+        frameCount = 0
+        nextFpsUpdate = now + 1
+    end
+end)
+
+-- 3. Fungsi Ambil Kick Power dari GUI Game
+local function getKickPower()
+    local power = "Tidak Terdeteksi"
+    pcall(function()
+        for _, gui in ipairs(playerGui:GetChildren()) do
+            if gui:IsA("ScreenGui") and gui.Name ~= "AFKBlackscreen" then
+                local bottomLeft = gui:FindFirstChild("BottomLeft", true)
+                if bottomLeft and bottomLeft:IsA("Frame") then
+                    local kickLevel = bottomLeft:FindFirstChild("KickLevel")
+                    if kickLevel and kickLevel:IsA("Frame") then
+                        local textLabel = kickLevel:FindFirstChildOfClass("TextLabel")
+                        if textLabel then
+                            power = textLabel.Text
+                        end
+                    end
+                end
+            end
+        end
+    end)
+    return power
+end
+
+-- 4. Loop Update Statistik Setiap 1 Menit (60 Detik)
+local startTime = os.time()
+
+local function updateMonitorText()
+    local elapsedSeconds = os.time() - startTime
+    local currentKickPower = getKickPower()
+    
+    infoLabel.Text = string.format(
+        "=== AFK STATS MONITOR ===\n\n" ..
+        "FPS : %d\n" ..
+        "Waktu AFK : %d detik\n" ..
+        "Kick Power : %s\n\n" ..
+        "=========================",
+        fps,
+        elapsedSeconds,
+        currentKickPower
+    )
+end
+
+task.spawn(function()
+    task.wait(2) -- Jeda awal agar UI game selesai dimuat sepenuhnya
+    updateMonitorText()
+    
+    while task.wait(60) do
+        updateMonitorText()
+    end
 end)
