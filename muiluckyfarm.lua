@@ -374,31 +374,85 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
--- 3. Fungsi Ambil Kick Power dari GUI Game
-local function getKickPower()
-    local power = "Tidak Terdeteksi"
+-- 3. Fungsi Deteksi Statistik Dinamis (Attributes / Leaderstats / GUI)
+local function getStatValue(statName)
+    local val = nil
+    
+    -- A. Coba cari di attributes LocalPlayer
+    pcall(function()
+        val = lp:GetAttribute(statName) 
+            or lp:GetAttribute(statName .. "Level") 
+            or lp:GetAttribute(statName .. "Value")
+            or lp:GetAttribute(statName .. "Speed")
+    end)
+    if val then return tostring(val) end
+    
+    -- B. Coba cari di leaderstats / Stats folder
+    pcall(function()
+        for _, folder in ipairs(lp:GetChildren()) do
+            if folder:IsA("Folder") or folder:IsA("Configuration") then
+                local obj = folder:FindFirstChild(statName) 
+                    or folder:FindFirstChild(statName .. "Level")
+                    or folder:FindFirstChild(statName .. "Speed")
+                if obj then
+                    val = obj.Value
+                    break
+                end
+            end
+        end
+    end)
+    if val then return tostring(val) end
+    
+    -- C. Coba cari di GUI BottomLeft
     pcall(function()
         for _, gui in ipairs(playerGui:GetChildren()) do
             if gui:IsA("ScreenGui") and gui.Name ~= "AFKBlackscreen" then
                 local bottomLeft = gui:FindFirstChild("BottomLeft", true)
                 if bottomLeft and bottomLeft:IsA("Frame") then
-                    local kickLevel = bottomLeft:FindFirstChild("KickLevel")
-                    if kickLevel and kickLevel:IsA("Frame") then
-                        local textLabel = kickLevel:FindFirstChildOfClass("TextLabel")
-                        if textLabel then
-                            power = textLabel.Text
+                    for _, child in ipairs(bottomLeft:GetChildren()) do
+                        if string.find(string.lower(child.Name), string.lower(statName)) then
+                            local textLabel = child:FindFirstChildOfClass("TextLabel")
+                            if textLabel and textLabel.Text ~= "" then
+                                val = textLabel.Text
+                                break
+                            end
                         end
                     end
                 end
             end
+            if val then break end
         end
     end)
-    return power
+    
+    return val and tostring(val) or nil
 end
 
--- 4. Loop Update Statistik (FPS & Waktu tiap 1 detik, Kick Power tiap 60 detik)
+local function getKickPower()
+    return getStatValue("KickLevel") or getStatValue("KickPower") or "Tidak Terdeteksi"
+end
+
+-- 3.5. Fungsi Ambil Speed dari GUI Game (Fallback ke WalkSpeed Karakter)
+local function getPlayerSpeed()
+    local speedVal = getStatValue("Speed") or getStatValue("WalkSpeed")
+    
+    -- Fallback ke WalkSpeed game engine jika GUI tidak ada
+    if not speedVal then
+        pcall(function()
+            local char = lp.Character
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if hum then
+                speedVal = tostring(math.floor(hum.WalkSpeed + 0.5))
+            end
+        end)
+    end
+    
+    return speedVal or "Tidak Terdeteksi"
+end
+
+-- 4. Loop Update Statistik (FPS & Waktu tiap 1 detik, Kick Power tiap 60 detik, Speed sekali saja)
 local startTime = os.time()
 local cachedKickPower = "Menghitung..."
+local cachedSpeed = "Menghitung..."
 local kickPowerUpdateCounter = 0
 
 local function updateMonitorText()
@@ -408,10 +462,12 @@ local function updateMonitorText()
         "=== AFK STATS MONITOR ===\n\n" ..
         "FPS : %d\n" ..
         "Waktu AFK : %d detik\n" ..
+        "Speed : %s\n" ..
         "Kick Power : %s\n\n" ..
         "=========================",
         fps,
         elapsedSeconds,
+        cachedSpeed,
         cachedKickPower
     )
 end
@@ -419,6 +475,7 @@ end
 task.spawn(function()
     task.wait(2) -- Jeda awal agar UI game selesai dimuat sepenuhnya
     cachedKickPower = getKickPower()
+    cachedSpeed = getPlayerSpeed() -- Ambil data speed hanya satu kali di awal
     updateMonitorText()
     
     while task.wait(1) do
