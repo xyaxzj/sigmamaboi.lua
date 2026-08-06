@@ -403,18 +403,27 @@ local function getStatValue(statName)
     end)
     if val then return tostring(val) end
     
-    -- C. Coba cari di GUI BottomLeft
+    -- C. Coba cari di GUI di seluruh PlayerGui (rekursif)
     pcall(function()
         for _, gui in ipairs(playerGui:GetChildren()) do
             if gui:IsA("ScreenGui") and gui.Name ~= "AFKBlackscreen" then
-                local bottomLeft = gui:FindFirstChild("BottomLeft", true)
-                if bottomLeft and bottomLeft:IsA("Frame") then
-                    for _, child in ipairs(bottomLeft:GetChildren()) do
-                        if string.find(string.lower(child.Name), string.lower(statName)) then
-                            local textLabel = child:FindFirstChildOfClass("TextLabel")
-                            if textLabel and textLabel.Text ~= "" then
-                                val = textLabel.Text
-                                break
+                for _, obj in ipairs(gui:GetDescendants()) do
+                    if obj:IsA("TextLabel") then
+                        local objName = string.lower(obj.Name)
+                        local parentName = obj.Parent and string.lower(obj.Parent.Name) or ""
+                        local searchPattern = string.lower(statName)
+                        
+                        -- Cek apakah nama objek atau nama parent-nya mengandung nama stat yang dicari
+                        if string.find(objName, searchPattern) or string.find(parentName, searchPattern) then
+                            local text = obj.Text
+                            -- Filter out teks belanja/upgrade
+                            if text and text ~= "" 
+                               and not string.find(string.lower(text), "upgrade") 
+                               and not string.find(string.lower(text), "cost") 
+                               and not string.find(string.lower(text), "beli") then
+                               
+                               val = text
+                               break
                             end
                         end
                     end
@@ -428,14 +437,76 @@ local function getStatValue(statName)
 end
 
 local function getKickPower()
-    return getStatValue("KickLevel") or getStatValue("KickPower") or "Tidak Terdeteksi"
+    local power = nil
+    pcall(function()
+        for _, gui in ipairs(playerGui:GetChildren()) do
+            if gui:IsA("ScreenGui") and gui.Name ~= "AFKBlackscreen" then
+                local bottomLeft = gui:FindFirstChild("BottomLeft", true)
+                if bottomLeft and bottomLeft:IsA("Frame") then
+                    local kickLevel = bottomLeft:FindFirstChild("KickLevel")
+                    if kickLevel and kickLevel:IsA("Frame") then
+                        local textLabel = kickLevel:FindFirstChildOfClass("TextLabel")
+                        if textLabel and textLabel.Text ~= "" then
+                            power = textLabel.Text
+                            break
+                        end
+                    end
+                end
+            end
+        end
+    end)
+    return power or "Tidak Terdeteksi"
 end
 
--- 3.5. Fungsi Ambil Speed dari GUI Game (Fallback ke WalkSpeed Karakter)
+-- 3.5. Fungsi Pemindaian GUI Speed dengan Algoritma Sibling (Bukan di BottomLeft)
+local function findSpeedInUI()
+    local val = nil
+    pcall(function()
+        for _, gui in ipairs(playerGui:GetChildren()) do
+            if gui:IsA("ScreenGui") and gui.Name ~= "AFKBlackscreen" then
+                for _, obj in ipairs(gui:GetDescendants()) do
+                    if obj:IsA("TextLabel") then
+                        local text = string.lower(obj.Text)
+                        local name = string.lower(obj.Name)
+                        
+                        -- Cari yang memiliki unsur kata "speed"
+                        if string.find(text, "speed") or string.find(name, "speed") then
+                            -- Kasus A: Nilai speed berada langsung di dalam label ini (e.g. "Speed: 150")
+                            local numStr = string.match(obj.Text, "%d+%.?%d*[KkMmBbtT]?")
+                            if numStr and not string.find(text, "cost") and not string.find(text, "upgrade") then
+                                val = obj.Text
+                                break
+                            end
+                            
+                            -- Kasus B: Label ini hanya judul static (e.g. "Speed"), nilainya ada di saudaranya (sibling)
+                            local parent = obj.Parent
+                            if parent then
+                                for _, sibling in ipairs(parent:GetChildren()) do
+                                    if sibling:IsA("TextLabel") and sibling ~= obj then
+                                        local sibText = sibling.Text
+                                        -- Nilai speed biasanya dimulai dengan angka (e.g. "120", "1.5K")
+                                        if string.match(sibText, "^%d") then
+                                            val = sibText
+                                            break
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                    if val then break end
+                end
+            end
+            if val then break end
+        end
+    end)
+    return val
+end
+
 local function getPlayerSpeed()
-    local speedVal = getStatValue("Speed") or getStatValue("WalkSpeed")
+    local speedVal = findSpeedInUI()
     
-    -- Fallback ke WalkSpeed game engine jika GUI tidak ada
+    -- Fallback ke WalkSpeed game engine jika tidak ditemukan sama sekali di GUI
     if not speedVal then
         pcall(function()
             local char = lp.Character
