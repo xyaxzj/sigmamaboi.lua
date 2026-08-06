@@ -9,7 +9,7 @@ _G.autoUseBarbell = true
 _G.autoClaimX2 = true
 
 ---------------------------------------------------------
--- 1. UBAH MAP JADI POTATO (LANTAI AMAN)
+-- 1. UBAH MAP JADI POTATO (PUTIH & PLASTIC)
 ---------------------------------------------------------
 for _, v in ipairs(workspace:GetDescendants()) do
     pcall(function()
@@ -17,7 +17,7 @@ for _, v in ipairs(workspace:GetDescendants()) do
             v.Material = Enum.Material.Plastic
             v.Reflectance = 0
             v.CastShadow = false
-            v.Color = Color3.new(0.5, 0.5, 0.5) 
+            v.Color = Color3.new(1, 1, 1) -- Mengubah warna map jadi putih bersih
             
             if v:IsA("MeshPart") then
                 v.TextureID = ""
@@ -29,42 +29,7 @@ for _, v in ipairs(workspace:GetDescendants()) do
 end
 
 ---------------------------------------------------------
--- 2. HAPUS SEMUA GUI KECUALI TOMBOL X2 & BLACKLIST GUI BARU
----------------------------------------------------------
-local function bersihkanGui(screenGui)
-    if screenGui:IsA("ScreenGui") then
-        local hasX2 = false
-        for _, element in ipairs(screenGui:GetDescendants()) do
-            if (element:IsA("ImageButton") or element:IsA("ImageLabel")) and string.find(element.Image or "", "138499790425912") then
-                hasX2 = true
-                break
-            end
-        end
-        if not hasX2 then
-            pcall(function() screenGui:Destroy() end)
-        end
-    end
-end
-
-if playerGui then
-    -- Bersihkan GUI yang sudah terlanjur ada saat ini
-    for _, screenGui in ipairs(playerGui:GetChildren()) do
-        bersihkanGui(screenGui)
-    end
-    
-    -- Pantau secara real-time jika ada GUI baru yang muncul agar tidak menumpuk (anti memory-leak)
-    playerGui.ChildAdded:Connect(function(child)
-        task.spawn(function()
-            task.wait(0.5) -- Beri jeda agar komponen di dalam GUI selesai loading
-            if child:IsDescendantOf(game) then
-                bersihkanGui(child)
-            end
-        end)
-    end)
-end
-
----------------------------------------------------------
--- 3. MUSNAHKAN EFEK LIGHTING & LANGIT
+-- 2. MUSNAHKAN EFEK LIGHTING & LANGIT
 ---------------------------------------------------------
 Lighting.GlobalShadows = false
 Lighting.FogEnd = 9e9
@@ -75,7 +40,7 @@ for _, v in ipairs(Lighting:GetDescendants()) do
 end
 
 ---------------------------------------------------------
--- 4. HAPUS FOLDER PLOT 1 SAMPAI 5
+-- 3. HAPUS FOLDER PLOT 1 SAMPAI 5
 ---------------------------------------------------------
 local plotsFolder = workspace:FindFirstChild("Plots")
 if plotsFolder then
@@ -88,19 +53,19 @@ if plotsFolder then
 end
 
 ---------------------------------------------------------
--- 5. PEMBANTAIAN PLAYER (DISEMBUNYIKAN SECARA AMAN)
+-- 4. PEMBANTAIAN PLAYER (REMOVE PLAYER LAIN)
 ---------------------------------------------------------
 local function musnahkanKarakter(player)
     if player ~= lp then
-        -- 1. Pindahkan wujudnya ke nil jika sudah ada di map
+        -- 1. Hapus jika wujudnya saat ini sudah ada di map
         if player.Character then
-            pcall(function() player.Character.Parent = nil end)
+            pcall(function() player.Character:Destroy() end)
         end
         
-        -- 2. PERANGKAP: Jika dia respawn atau wujudnya baru loading, langsung sembunyikan!
+        -- 2. PERANGKAP: Jika dia respawn atau wujudnya baru loading, langsung hapus!
         player.CharacterAdded:Connect(function(char)
             task.defer(function()
-                pcall(function() char.Parent = nil end)
+                pcall(function() char:Destroy() end)
             end)
         end)
     end
@@ -117,7 +82,7 @@ Players.PlayerAdded:Connect(function(player)
 end)
 
 ---------------------------------------------------------
--- 6. NOTIFIKASI
+-- 5. NOTIFIKASI
 ---------------------------------------------------------
 pcall(function()
     StarterGui:SetCore("SendNotification", {
