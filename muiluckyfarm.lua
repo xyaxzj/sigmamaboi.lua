@@ -1,4 +1,4 @@
-setfpscap(10)
+setfpscap(5)
 local Players = game:GetService("Players")
 local Lighting = game:GetService("Lighting")
 local StarterGui = game:GetService("StarterGui")
@@ -29,23 +29,38 @@ for _, v in ipairs(workspace:GetDescendants()) do
 end
 
 ---------------------------------------------------------
--- 2. HAPUS SEMUA GUI KECUALI TOMBOL X2
+-- 2. HAPUS SEMUA GUI KECUALI TOMBOL X2 & BLACKLIST GUI BARU
 ---------------------------------------------------------
-if playerGui then
-    for _, screenGui in ipairs(playerGui:GetChildren()) do
-        if screenGui:IsA("ScreenGui") then
-            local hasX2 = false
-            for _, element in ipairs(screenGui:GetDescendants()) do
-                if (element:IsA("ImageButton") or element:IsA("ImageLabel")) and string.find(element.Image or "", "138499790425912") then
-                    hasX2 = true
-                    break
-                end
-            end
-            if not hasX2 then
-                pcall(function() screenGui:Destroy() end)
+local function bersihkanGui(screenGui)
+    if screenGui:IsA("ScreenGui") then
+        local hasX2 = false
+        for _, element in ipairs(screenGui:GetDescendants()) do
+            if (element:IsA("ImageButton") or element:IsA("ImageLabel")) and string.find(element.Image or "", "138499790425912") then
+                hasX2 = true
+                break
             end
         end
+        if not hasX2 then
+            pcall(function() screenGui:Destroy() end)
+        end
     end
+end
+
+if playerGui then
+    -- Bersihkan GUI yang sudah terlanjur ada saat ini
+    for _, screenGui in ipairs(playerGui:GetChildren()) do
+        bersihkanGui(screenGui)
+    end
+    
+    -- Pantau secara real-time jika ada GUI baru yang muncul agar tidak menumpuk (anti memory-leak)
+    playerGui.ChildAdded:Connect(function(child)
+        task.spawn(function()
+            task.wait(0.5) -- Beri jeda agar komponen di dalam GUI selesai loading
+            if child:IsDescendantOf(game) then
+                bersihkanGui(child)
+            end
+        end)
+    end)
 end
 
 ---------------------------------------------------------
@@ -73,20 +88,23 @@ if plotsFolder then
 end
 
 ---------------------------------------------------------
--- 5. PEMBANTAIAN PLAYER (ABSOLUT & OTOMATIS)
+-- 5. PEMBANTAIAN PLAYER (DISEMBUNYIKAN SECARA AMAN)
 ---------------------------------------------------------
+local hiddenFolder = Instance.new("Folder")
+hiddenFolder.Name = "HiddenCharacters"
+hiddenFolder.Parent = game:GetService("Lighting")
+
 local function musnahkanKarakter(player)
     if player ~= lp then
-        -- 1. Hapus jika wujudnya saat ini sudah ada di map
+        -- 1. Pindahkan wujudnya ke folder tersembunyi jika sudah ada di map
         if player.Character then
-            pcall(function() player.Character:Destroy() end)
+            pcall(function() player.Character.Parent = hiddenFolder end)
         end
         
-        -- 2. PERANGKAP: Jika dia respawn atau wujudnya baru loading, langsung hapus!
+        -- 2. PERANGKAP: Jika dia respawn atau wujudnya baru loading, langsung sembunyikan!
         player.CharacterAdded:Connect(function(char)
-            -- Menggunakan task.defer agar dihancurkan di akhir antrean frame saat ini sebelum sempat dirender (mencegah kedipan)
             task.defer(function()
-                pcall(function() char:Destroy() end)
+                pcall(function() char.Parent = hiddenFolder end)
             end)
         end)
     end
@@ -158,7 +176,8 @@ local tempPauseBarbell = false
 -- MEKANIK 1: AUTO USE BARBELL
 ---------------------------------------------------------
 task.spawn(function()
-    while task.wait(0.1) do
+    while true do
+        task.wait(0.2) -- Frekuensi cek diubah ke 0.2 detik agar lebih ringan
         if not _G.autoUseBarbell or tempPauseBarbell then continue end
         
         local char = lp.Character
@@ -171,12 +190,13 @@ task.spawn(function()
         
         if currentTool and string.match(currentTool.Name, "Barbell$") then
             currentTool:Activate()
+            task.wait(0.3) -- Jeda ekstra setelah aktivasi agar tidak terjadi spam paket data ke server
         else
             if backpack then
                 for _, tool in ipairs(backpack:GetChildren()) do
                     if tool:IsA("Tool") and string.match(tool.Name, "Barbell$") then
                         hum:EquipTool(tool)
-                        task.wait(0.1) 
+                        task.wait(0.2) 
                         tool:Activate()
                         break
                     end
