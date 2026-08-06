@@ -1,4 +1,4 @@
-setfpscap(5)
+setfpscap(8)
 local Players = game:GetService("Players")
 local Lighting = game:GetService("Lighting")
 local StarterGui = game:GetService("StarterGui")
@@ -458,72 +458,9 @@ local function getKickPower()
     return power or "Tidak Terdeteksi"
 end
 
--- 3.5. Fungsi Pemindaian GUI Speed dengan Algoritma Sibling (Bukan di BottomLeft)
-local function findSpeedInUI()
-    local val = nil
-    pcall(function()
-        for _, gui in ipairs(playerGui:GetChildren()) do
-            if gui:IsA("ScreenGui") and gui.Name ~= "AFKBlackscreen" then
-                for _, obj in ipairs(gui:GetDescendants()) do
-                    if obj:IsA("TextLabel") then
-                        local text = string.lower(obj.Text)
-                        local name = string.lower(obj.Name)
-                        
-                        -- Cari yang memiliki unsur kata "speed"
-                        if string.find(text, "speed") or string.find(name, "speed") then
-                            -- Kasus A: Nilai speed berada langsung di dalam label ini (e.g. "Speed: 150")
-                            local numStr = string.match(obj.Text, "%d+%.?%d*[KkMmBbtT]?")
-                            if numStr and not string.find(text, "cost") and not string.find(text, "upgrade") then
-                                val = obj.Text
-                                break
-                            end
-                            
-                            -- Kasus B: Label ini hanya judul static (e.g. "Speed"), nilainya ada di saudaranya (sibling)
-                            local parent = obj.Parent
-                            if parent then
-                                for _, sibling in ipairs(parent:GetChildren()) do
-                                    if sibling:IsA("TextLabel") and sibling ~= obj then
-                                        local sibText = sibling.Text
-                                        -- Nilai speed biasanya dimulai dengan angka (e.g. "120", "1.5K")
-                                        if string.match(sibText, "^%d") then
-                                            val = sibText
-                                            break
-                                        end
-                                    end
-                                end
-                            end
-                        end
-                    end
-                    if val then break end
-                end
-            end
-            if val then break end
-        end
-    end)
-    return val
-end
-
-local function getPlayerSpeed()
-    local speedVal = findSpeedInUI()
-    
-    -- Fallback ke WalkSpeed game engine jika tidak ditemukan sama sekali di GUI
-    if not speedVal then
-        pcall(function()
-            local char = lp.Character
-            local hum = char and char:FindFirstChildOfClass("Humanoid")
-            if hum then
-                speedVal = tostring(math.floor(hum.WalkSpeed + 0.5))
-            end
-        end)
-    end
-    
-    return speedVal or "Tidak Terdeteksi"
-end
-
--- 4. Loop Update Statistik (FPS & Waktu tiap 1 detik, Kick Power tiap 60 detik, Speed sekali saja)
+-- 4. Loop Update Statistik (FPS & Waktu tiap 1 detik, Kick Power tiap 60 detik)
 local startTime = os.time()
 local cachedKickPower = "Menghitung..."
-local cachedSpeed = "Menghitung..."
 local kickPowerUpdateCounter = 0
 
 local function updateMonitorText()
@@ -533,12 +470,10 @@ local function updateMonitorText()
         "=== AFK STATS MONITOR ===\n\n" ..
         "FPS : %d\n" ..
         "Waktu AFK : %d detik\n" ..
-        "Speed : %s\n" ..
         "Kick Power : %s\n\n" ..
         "=========================",
         fps,
         elapsedSeconds,
-        cachedSpeed,
         cachedKickPower
     )
 end
@@ -546,7 +481,6 @@ end
 task.spawn(function()
     task.wait(2) -- Jeda awal agar UI game selesai dimuat sepenuhnya
     cachedKickPower = getKickPower()
-    cachedSpeed = getPlayerSpeed() -- Ambil data speed hanya satu kali di awal
     updateMonitorText()
     
     while task.wait(1) do
