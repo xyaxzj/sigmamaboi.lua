@@ -90,21 +90,17 @@ end
 ---------------------------------------------------------
 -- 5. PEMBANTAIAN PLAYER (DISEMBUNYIKAN SECARA AMAN)
 ---------------------------------------------------------
-local hiddenFolder = Instance.new("Folder")
-hiddenFolder.Name = "HiddenCharacters"
-hiddenFolder.Parent = game:GetService("Lighting")
-
 local function musnahkanKarakter(player)
     if player ~= lp then
-        -- 1. Pindahkan wujudnya ke folder tersembunyi jika sudah ada di map
+        -- 1. Pindahkan wujudnya ke nil jika sudah ada di map
         if player.Character then
-            pcall(function() player.Character.Parent = hiddenFolder end)
+            pcall(function() player.Character.Parent = nil end)
         end
         
         -- 2. PERANGKAP: Jika dia respawn atau wujudnya baru loading, langsung sembunyikan!
         player.CharacterAdded:Connect(function(char)
             task.defer(function()
-                pcall(function() char.Parent = hiddenFolder end)
+                pcall(function() char.Parent = nil end)
             end)
         end)
     end
