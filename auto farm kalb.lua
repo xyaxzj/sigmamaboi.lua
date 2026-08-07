@@ -60,7 +60,7 @@ task.spawn(function()
         local hrp = char:WaitForChild("HumanoidRootPart", 10)
         local hum = char:WaitForChild("Humanoid", 10)
         
-        if not hrp or not hum then
+        if not hrp or not hum or hum.Health <= 0 then
             task.wait(1)
             continue
         end
@@ -72,8 +72,9 @@ task.spawn(function()
         -- 2. Lakukan Kick ke Server
         rev_KickEvent:FireServer(1, 1)
         
-        -- 3. Tunggu sampai event rev_kickPhase2 terpicu
-        while _G.autoFarmKalb and not phase2Fired do
+        -- 3. Tunggu sampai event rev_kickPhase2 terpicu (Timeout 10 detik agar tidak stuck)
+        local startPhase2Wait = os.clock()
+        while _G.autoFarmKalb and not phase2Fired and (os.clock() - startPhase2Wait < 10) do
             task.wait(0.05)
         end
         
@@ -82,18 +83,39 @@ task.spawn(function()
         -- 4. Jeda 5 detik untuk animasi gacha selesai
         task.wait(5)
         
-        -- 5. Jalan kaki balik ke Safe Zone (bukan teleport)
-        if _G.autoFarmKalb and hum and hrp then
-            hum:MoveTo(safeZonePosition)
-            pcall(function()
-                hum.MoveToFinished:Wait()
-            end)
+        -- 5. Jalan kaki balik ke Safe Zone (bukan teleport, loop koreksi otomatis agar tidak macet di jalan)
+        if _G.autoFarmKalb then
+            local distance = 9999
+            local startWalkTime = os.clock()
+            
+            while _G.autoFarmKalb and distance > 4 do
+                local curChar = lp.Character
+                local curHum = curChar and curChar:FindFirstChildOfClass("Humanoid")
+                local curHrp = curChar and curChar:FindFirstChild("HumanoidRootPart")
+                
+                if not curChar or not curChar:IsDescendantOf(workspace) or not curHum or curHum.Health <= 0 or not curHrp then
+                    task.wait(1)
+                    break
+                end
+                
+                distance = (curHrp.Position - safeZonePosition).Magnitude
+                if distance <= 4 then break end
+                
+                curHum:MoveTo(safeZonePosition)
+                task.wait(0.5) -- Loop-move setiap 0.5 detik agar terus berjalan jika menabrak/terhenti
+                
+                -- Batasi waktu jalan maksimal 15 detik agar tidak stuck di dinding selamanya
+                if os.clock() - startWalkTime > 15 then
+                    break
+                end
+            end
         end
         
         if not _G.autoFarmKalb then continue end
         
-        -- 6. Tunggu sampai event rev_Collected terpicu
-        while _G.autoFarmKalb and not collectedFired do
+        -- 6. Tunggu sampai event rev_Collected terpicu (Timeout 10 detik agar tidak stuck)
+        local startCollectedWait = os.clock()
+        while _G.autoFarmKalb and not collectedFired and (os.clock() - startCollectedWait < 10) do
             task.wait(0.05)
         end
     end
