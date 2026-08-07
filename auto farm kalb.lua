@@ -178,7 +178,7 @@ end
 
 if rev_PlayMessage then
     rev_PlayMessage.OnClientEvent:Connect(function(msg, msgType)
-        if string.find(tostring(msg), "Luck has been increased") or tostring(msgType) == "Reward" then
+        if tostring(msg) == "Luck has been increased to x8" then
             luckBuffObtained = true
         end
     end)
@@ -364,8 +364,8 @@ task.spawn(function()
                 end
             end
             
-            -- Jika buff keberuntungan sudah tercapai atau failsafe 360 detik terpenuhi
-            if luckBuffObtained or _G.stateTimer >= 360 then
+            -- Jika buff keberuntungan sudah tercapai atau failsafe 240 detik terpenuhi
+            if luckBuffObtained or _G.stateTimer >= 240 then
                 pcall(function()
                     hum:UnequipTools()
                 end)
