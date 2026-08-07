@@ -3,11 +3,7 @@ _G.autoFarmKalb = true
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StarterGui = game:GetService("StarterGui")
-
-local VirtualUser = nil
-pcall(function()
-    VirtualUser = game:GetService("VirtualUser")
-end)
+local VirtualUser = game:GetService("VirtualUser")
 
 local lp = Players.LocalPlayer
 
@@ -18,10 +14,8 @@ local safeZonePosition = Vector3.new(698.030701, 3.298559, 233.707077)
 -- Mencegah Kick AFK
 lp.Idled:Connect(function()
     pcall(function()
-        if VirtualUser then
-            VirtualUser:CaptureController()
-            VirtualUser:ClickButton2(Vector2.new())
-        end
+        VirtualUser:CaptureController()
+        VirtualUser:ClickButton2(Vector2.new())
     end)
 end)
 
@@ -62,30 +56,32 @@ task.spawn(function()
         phase2Fired = false
         collectedFired = false
         
-        -- Dapatkan karakter hidup (menunggu respawn jika mati)
+        -- Cek karakter hidup (jika mati, tunggu respawn)
         local char = lp.Character
-        if not char or not char:IsDescendantOf(workspace) or not char:FindFirstChild("Humanoid") or char.Humanoid.Health <= 0 then
+        local hum = char and char:FindFirstChild("Humanoid")
+        if not char or not char:IsDescendantOf(workspace) or not hum or hum.Health <= 0 then
             char = lp.CharacterAdded:Wait()
+            hum = char:WaitForChild("Humanoid", 10)
         end
         local hrp = char:WaitForChild("HumanoidRootPart", 10)
-        local hum = char:WaitForChild("Humanoid", 10)
         
-        if not hrp or not hum or hum.Health <= 0 then
+        if not hrp or not hum then
             task.wait(1)
             continue
         end
         
-        -- 1. Teleport ke Safe Zone (kembali menggunakan CFrame asli tanpa Y-offset agar tidak menabrak atap)
+        -- 1. Teleport ke Safe Zone
         hrp.CFrame = safeZoneCFrame
         task.wait(0.3) -- Jeda singkat agar fisika stabil setelah teleport
         
         -- 2. Lakukan Kick ke Server
         rev_KickEvent:FireServer(1, 1)
         
-        -- 3. Tunggu sampai event rev_kickPhase2 terpicu (dengan timeout 8 detik agar tidak macet)
-        local startPhase2Wait = tick()
-        while _G.autoFarmKalb and not phase2Fired and (tick() - startPhase2Wait < 8) do
+        -- 3. Tunggu sampai event rev_kickPhase2 terpicu (dengan timeout iterasi 10 detik / 200 loop)
+        local counter2 = 0
+        while _G.autoFarmKalb and not phase2Fired and counter2 < 200 do
             task.wait(0.05)
+            counter2 = counter2 + 1
         end
         
         if not _G.autoFarmKalb then continue end
@@ -93,22 +89,30 @@ task.spawn(function()
         -- 4. Jeda 5 detik untuk animasi gacha selesai
         task.wait(5)
         
-        -- 5. Jalan kaki balik ke Safe Zone (bukan teleport, dipanggil 2 kali terpisah agar tidak kena timeout 8 detik Roblox)
+        -- 5. Jalan kaki balik ke Safe Zone (bukan teleport)
         if _G.autoFarmKalb and hum and hrp and hum.Health > 0 then
             hum:MoveTo(safeZonePosition)
-            task.wait(6) -- Berjalan selama 6 detik pertama
-            if _G.autoFarmKalb and hum and hrp and hum.Health > 0 then
-                hum:MoveTo(safeZonePosition) -- Panggil lagi untuk sisa perjalanan (melanjutkan perjalanan)
-                task.wait(6) -- Berjalan selama 6 detik kedua
+            pcall(function()
+                hum.MoveToFinished:Wait()
+            end)
+            
+            -- Pengecekan sisa jarak: Jika masih jauh (misal terhenti di jalan karena timeout 8s), jalankan lagi!
+            local dist = (hrp.Position - safeZonePosition).Magnitude
+            if _G.autoFarmKalb and dist > 4 and hum and hrp and hum.Health > 0 then
+                hum:MoveTo(safeZonePosition)
+                pcall(function()
+                    hum.MoveToFinished:Wait()
+                end)
             end
         end
         
         if not _G.autoFarmKalb then continue end
         
-        -- 6. Tunggu sampai event rev_Collected terpicu (dengan timeout 8 detik agar tidak macet)
-        local startCollectedWait = tick()
-        while _G.autoFarmKalb and not collectedFired and (tick() - startCollectedWait < 8) do
+        -- 6. Tunggu sampai event rev_Collected terpicu (dengan timeout iterasi 10 detik / 200 loop)
+        local counter6 = 0
+        while _G.autoFarmKalb and not collectedFired and counter6 < 200 do
             task.wait(0.05)
+            counter6 = counter6 + 1
         end
     end
 end)
