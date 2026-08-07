@@ -287,7 +287,7 @@ task.spawn(function()
             end
             
             -- Jika buff keberuntungan sudah tercapai atau failsafe 60 detik terpenuhi
-            if luckBuffObtained or _G.stateTimer >= 120 then
+            if luckBuffObtained or _G.stateTimer >= 240 then
                 pcall(function()
                     hum:UnequipTools()
                 end)
