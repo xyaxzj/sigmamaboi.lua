@@ -240,8 +240,8 @@ task.spawn(function()
         -- [ FASE 1: IDLE / NENDANG (JEDA HANYA DI SPAWN) ]
         if _G.targetAction == "Idle" then
             if distToSafeZone > 10 then
-                -- Jeda 4 detik setelah hidup di spawn sebelum teleport
-                if _G.stateTimer >= 4 then
+                -- Jeda 1 detik setelah hidup di spawn sebelum teleport agar cepat aktif
+                if _G.stateTimer >= 1 then
                     hrp.CFrame = safeZoneCFrame
                     task.wait(0.1) 
                     _G.stateTimer = 0 
