@@ -263,7 +263,7 @@ task.spawn(function()
             if phase2Fired then
                 phase2Fired = false
                 _G.targetAction = "PlayingAnim"
-            elseif _G.stateTimer > 15 then
+            elseif _G.stateTimer > 5 then
                 _G.targetAction = "Idle"
             end
 
@@ -293,7 +293,7 @@ task.spawn(function()
                     kickRemote:FireServer(1, 1) 
                 end
                 _G.targetAction = "WaitingForPhase2"
-            elseif _G.stateTimer > 15 then
+            elseif _G.stateTimer > 5 then
                 _G.targetAction = "Idle"
             end
 
