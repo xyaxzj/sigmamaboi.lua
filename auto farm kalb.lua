@@ -119,12 +119,14 @@ end
 
 local rev_kickPhase2 = networkFolder and networkFolder:WaitForChild("rev_kickPhase2", 15)
 local rev_Collected = networkFolder and networkFolder:WaitForChild("rev_Collected", 15)
+local rev_KickEventEnded = networkFolder and networkFolder:WaitForChild("rev_KickEventEnded", 15)
 
 -- =============================================
 -- 📡 DAFTAR EVENT LISTENER
 -- =============================================
 local phase2Fired = false
 local collectedFired = false
+local kickEndedFired = false
 
 if rev_kickPhase2 then
     rev_kickPhase2.OnClientEvent:Connect(function(...)
@@ -135,6 +137,12 @@ end
 if rev_Collected then
     rev_Collected.OnClientEvent:Connect(function(...)
         collectedFired = true
+    end)
+end
+
+if rev_KickEventEnded then
+    rev_KickEventEnded.OnClientEvent:Connect(function(...)
+        kickEndedFired = true
     end)
 end
 
@@ -189,7 +197,7 @@ task.spawn(function()
 
         local distToSafeZone = (hrp.Position - safeZone).Magnitude
 
-        -- [ FASE 1: IDLE / NENDANG (JEDA 4 DETIK) ]
+        -- [ FASE 1: IDLE / NENDANG (JEDA HANYA DI SPAWN) ]
         if _G.targetAction == "Idle" then
             if distToSafeZone > 10 then
                 -- Jeda 4 detik setelah hidup di spawn sebelum teleport
@@ -199,15 +207,14 @@ task.spawn(function()
                     _G.stateTimer = 0 
                 end
             else
-                -- Jeda 4 detik setelah tiba di Safe Zone sebelum nendang
-                if _G.stateTimer >= 4 then
-                    phase2Fired = false
-                    collectedFired = false
-                    if kickRemote then 
-                        kickRemote:FireServer(1, 1) 
-                    end
-                    _G.targetAction = "WaitingForPhase2"
+                -- Jika sudah di Safe Zone, langsung kick tanpa delay!
+                phase2Fired = false
+                collectedFired = false
+                kickEndedFired = false
+                if kickRemote then 
+                    kickRemote:FireServer(1, 1) 
                 end
+                _G.targetAction = "WaitingForPhase2"
             end
 
         -- [ FASE 2: NUNGGU PHASE 2 ]
@@ -230,16 +237,24 @@ task.spawn(function()
             hum:MoveTo(safeZone)
             if distToSafeZone < 8 then
                 collectedFired = false
+                kickEndedFired = false
                 _G.targetAction = "WaitingForCollected"
             end
 
-        -- [ FASE 5: NUNGGU COLLECTED (+1) ]
+        -- [ FASE 5: NUNGGU COLLECTED ATAU KICKENDED (LANGSUNG KICK KEMBALI) ]
         elseif _G.targetAction == "WaitingForCollected" then
-            if collectedFired then
+            if collectedFired or kickEndedFired then
                 collectedFired = false
+                kickEndedFired = false
                 _G.mutationCount = _G.mutationCount + 1
                 if countLabel then countLabel.Text = "Mutation Counter = " .. tostring(_G.mutationCount) end
-                _G.targetAction = "Idle" 
+                
+                -- Langsung lakukan kick kembali tanpa delay
+                phase2Fired = false
+                if kickRemote then 
+                    kickRemote:FireServer(1, 1) 
+                end
+                _G.targetAction = "WaitingForPhase2"
             elseif _G.stateTimer > 15 then
                 _G.targetAction = "Idle"
             end
