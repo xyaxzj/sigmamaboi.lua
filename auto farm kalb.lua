@@ -3,7 +3,11 @@ _G.autoFarmKalb = true
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StarterGui = game:GetService("StarterGui")
-local VirtualUser = game:GetService("VirtualUser")
+
+local VirtualUser = nil
+pcall(function()
+    VirtualUser = game:GetService("VirtualUser")
+end)
 
 local lp = Players.LocalPlayer
 
@@ -14,8 +18,10 @@ local safeZonePosition = Vector3.new(698.030701, 3.298559, 233.707077)
 -- Mencegah Kick AFK
 lp.Idled:Connect(function()
     pcall(function()
-        VirtualUser:CaptureController()
-        VirtualUser:ClickButton2(Vector2.new())
+        if VirtualUser then
+            VirtualUser:CaptureController()
+            VirtualUser:ClickButton2(Vector2.new())
+        end
     end)
 end)
 
@@ -77,8 +83,8 @@ task.spawn(function()
         rev_KickEvent:FireServer(1, 1)
         
         -- 3. Tunggu sampai event rev_kickPhase2 terpicu (dengan timeout 8 detik agar tidak macet)
-        local startPhase2Wait = os.clock()
-        while _G.autoFarmKalb and not phase2Fired and (os.clock() - startPhase2Wait < 8) do
+        local startPhase2Wait = tick()
+        while _G.autoFarmKalb and not phase2Fired and (tick() - startPhase2Wait < 8) do
             task.wait(0.05)
         end
         
@@ -100,8 +106,8 @@ task.spawn(function()
         if not _G.autoFarmKalb then continue end
         
         -- 6. Tunggu sampai event rev_Collected terpicu (dengan timeout 8 detik agar tidak macet)
-        local startCollectedWait = os.clock()
-        while _G.autoFarmKalb and not collectedFired and (os.clock() - startCollectedWait < 8) do
+        local startCollectedWait = tick()
+        while _G.autoFarmKalb and not collectedFired and (tick() - startCollectedWait < 8) do
             task.wait(0.05)
         end
     end
