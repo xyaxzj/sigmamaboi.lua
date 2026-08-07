@@ -461,14 +461,41 @@ end
 local function getSpeedStat()
     local val = "Tidak Terdeteksi"
     pcall(function()
-        local frames = playerGui:FindFirstChild("Frames")
-        local speedUpgrades = frames and frames:FindFirstChild("SpeedUpgrades")
-        local scrollingFrame = speedUpgrades and speedUpgrades:FindFirstChild("ScrollingFrame")
-        local plusSpeed = scrollingFrame and scrollingFrame:FindFirstChild("+1 Speed")
-        local buttonFrame = plusSpeed and plusSpeed:FindFirstChild("ButtonFrame")
-        local nameLabel = buttonFrame and buttonFrame:FindFirstChild("NameLabel")
-        if nameLabel then
-            val = nameLabel.Text
+        local frames = playerGui:WaitForChild("Frames", 10)
+        if frames then
+            -- 1. Cari exact match "+1 Speed"
+            for _, obj in ipairs(frames:GetDescendants()) do
+                if obj.Name == "+1 Speed" then
+                    local buttonFrame = obj:FindFirstChild("ButtonFrame")
+                    local nameLabel = buttonFrame and buttonFrame:FindFirstChild("NameLabel")
+                    if nameLabel then
+                        val = nameLabel.Text
+                        return val
+                    end
+                end
+            end
+            -- 2. Fallback: Cari yang mengandung "1 Speed" atau "1Speed"
+            for _, obj in ipairs(frames:GetDescendants()) do
+                if string.find(obj.Name, "1 Speed") or string.find(obj.Name, "1Speed") then
+                    local buttonFrame = obj:FindFirstChild("ButtonFrame")
+                    local nameLabel = buttonFrame and buttonFrame:FindFirstChild("NameLabel")
+                    if nameLabel then
+                        val = nameLabel.Text
+                        return val
+                    end
+                end
+            end
+            -- 3. Fallback Ekstrem: Cari yang mengandung "Speed" dan bertipe ImageLabel
+            for _, obj in ipairs(frames:GetDescendants()) do
+                if obj:IsA("ImageLabel") and string.find(obj.Name, "Speed") then
+                    local buttonFrame = obj:FindFirstChild("ButtonFrame")
+                    local nameLabel = buttonFrame and buttonFrame:FindFirstChild("NameLabel")
+                    if nameLabel then
+                        val = nameLabel.Text
+                        return val
+                    end
+                end
+            end
         end
     end)
     return val
@@ -477,11 +504,31 @@ end
 local function getRebirthStat()
     local val = "Tidak Terdeteksi"
     pcall(function()
-        local frames = playerGui:FindFirstChild("Frames")
-        local rebirthFrame = frames and frames:FindFirstChild("Rebirth")
-        local rebirthLevel = rebirthFrame and rebirthFrame:FindFirstChild("RebirthLevel")
-        if rebirthLevel then
-            val = rebirthLevel.Text
+        local frames = playerGui:WaitForChild("Frames", 10)
+        if frames then
+            -- 1. Cari exact name "Rebirth" -> "RebirthLevel"
+            local rebirthFrame = frames:FindFirstChild("Rebirth")
+            local rebirthLevel = rebirthFrame and rebirthFrame:FindFirstChild("RebirthLevel")
+            if rebirthLevel then
+                val = rebirthLevel.Text
+                return val
+            end
+            
+            -- 2. Fallback: Cari secara rekursif objek bernama "RebirthLevel"
+            for _, obj in ipairs(frames:GetDescendants()) do
+                if obj.Name == "RebirthLevel" and obj:IsA("TextLabel") then
+                    val = obj.Text
+                    return val
+                end
+            end
+            
+            -- 3. Fallback Ekstrem: Cari objek mengandung nama "Rebirth" bertipe TextLabel
+            for _, obj in ipairs(frames:GetDescendants()) do
+                if obj:IsA("TextLabel") and string.find(obj.Name, "Rebirth") then
+                    val = obj.Text
+                    return val
+                end
+            end
         end
     end)
     return val
