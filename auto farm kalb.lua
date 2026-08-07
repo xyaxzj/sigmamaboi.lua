@@ -1,3 +1,4 @@
+setfpscap(20)
 if not game:IsLoaded() then game.Loaded:Wait() end
 
 local Players = game:GetService("Players")
@@ -5,6 +6,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local VirtualUser = game:GetService("VirtualUser")
 local CoreGui = game:GetService("CoreGui")
 local RunService = game:GetService("RunService")
+local Lighting = game:GetService("Lighting")
 local lp = Players.LocalPlayer
 
 -- =============================================
@@ -12,6 +14,74 @@ local lp = Players.LocalPlayer
 -- =============================================
 _G.autoFarm = true              
 _G.animDelay = 5              
+
+-- =============================================
+-- 🚀 SYSTEM ANTI-LAG & OPTIMISASI EKSTREM
+-- =============================================
+-- 1. UBAH MAP JADI POTATO (PUTIH & PLASTIC)
+for _, v in ipairs(workspace:GetDescendants()) do
+    pcall(function()
+        if v:IsA("BasePart") then
+            v.Material = Enum.Material.Plastic
+            v.Reflectance = 0
+            v.CastShadow = false
+            v.Color = Color3.new(1, 1, 1) -- Mengubah warna map jadi putih bersih
+            
+            if v:IsA("MeshPart") then
+                v.TextureID = ""
+            end
+        elseif v:IsA("Decal") or v:IsA("Texture") or v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Beam") or v:IsA("Fire") or v:IsA("Smoke") or v:IsA("Sparkles") or v:IsA("SpecialMesh") then
+            v:Destroy()
+        end
+    end)
+end
+
+-- 2. MUSNAHKAN EFEK LIGHTING & LANGIT
+Lighting.GlobalShadows = false
+Lighting.FogEnd = 9e9
+for _, v in ipairs(Lighting:GetDescendants()) do
+    if v:IsA("PostEffect") or v:IsA("BlurEffect") or v:IsA("SunRaysEffect") or v:IsA("ColorCorrectionEffect") or v:IsA("BloomEffect") or v:IsA("DepthOfFieldEffect") or v:IsA("Sky") then
+        pcall(function() v:Destroy() end)
+    end
+end
+
+-- 3. HAPUS FOLDER PLOT 1 SAMPAI 5
+local plotsFolder = workspace:FindFirstChild("Plots")
+if plotsFolder then
+    for i = 1, 5 do
+        local plot = plotsFolder:FindFirstChild("Plot" .. tostring(i))
+        if plot then
+            pcall(function() plot:Destroy() end)
+        end
+    end
+end
+
+-- 4. PEMBANTAIAN PLAYER (REMOVE PLAYER LAIN)
+local function musnahkanKarakter(player)
+    if player ~= lp then
+        -- Hapus jika wujudnya saat ini sudah ada di map
+        if player.Character then
+            pcall(function() player.Character:Destroy() end)
+        end
+        
+        -- PERANGKAP: Jika dia respawn atau wujudnya baru loading, langsung hapus!
+        player.CharacterAdded:Connect(function(char)
+            task.defer(function()
+                pcall(function() char:Destroy() end)
+            end)
+        end)
+    end
+end
+
+-- Eksekusi ke player yang sudah ada di server sekarang
+for _, player in ipairs(Players:GetPlayers()) do
+    musnahkanKarakter(player)
+end
+
+-- Eksekusi ke player yang baru join ke server nanti
+Players.PlayerAdded:Connect(function(player)
+    musnahkanKarakter(player)
+end)
 
 -- =============================================
 -- 🧠 VARIABEL OTAK UTAMA (STATE MACHINE)
@@ -296,4 +366,4 @@ task.spawn(function()
             end
         end
     end
-end)
+end)  
