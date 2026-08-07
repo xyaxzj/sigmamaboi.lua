@@ -1,4 +1,4 @@
-setfpscap(8)
+setfpscap(5)
 local Players = game:GetService("Players")
 local Lighting = game:GetService("Lighting")
 local StarterGui = game:GetService("StarterGui")
@@ -458,9 +458,40 @@ local function getKickPower()
     return power or "Tidak Terdeteksi"
 end
 
+local function getSpeedStat()
+    local val = "Tidak Terdeteksi"
+    pcall(function()
+        local frames = playerGui:FindFirstChild("Frames")
+        local speedUpgrades = frames and frames:FindFirstChild("SpeedUpgrades")
+        local scrollingFrame = speedUpgrades and speedUpgrades:FindFirstChild("ScrollingFrame")
+        local plusSpeed = scrollingFrame and scrollingFrame:FindFirstChild("+1 Speed")
+        local buttonFrame = plusSpeed and plusSpeed:FindFirstChild("ButtonFrame")
+        local nameLabel = buttonFrame and buttonFrame:FindFirstChild("NameLabel")
+        if nameLabel then
+            val = nameLabel.Text
+        end
+    end)
+    return val
+end
+
+local function getRebirthStat()
+    local val = "Tidak Terdeteksi"
+    pcall(function()
+        local frames = playerGui:FindFirstChild("Frames")
+        local rebirthFrame = frames and frames:FindFirstChild("Rebirth")
+        local rebirthLevel = rebirthFrame and rebirthFrame:FindFirstChild("RebirthLevel")
+        if rebirthLevel then
+            val = rebirthLevel.Text
+        end
+    end)
+    return val
+end
+
 -- 4. Loop Update Statistik (FPS & Waktu tiap 1 detik, Kick Power tiap 60 detik)
 local startTime = os.time()
 local cachedKickPower = "Menghitung..."
+local cachedSpeedStat = "Menghitung..."
+local cachedRebirthStat = "Menghitung..."
 local kickPowerUpdateCounter = 0
 
 local function updateMonitorText()
@@ -470,10 +501,14 @@ local function updateMonitorText()
         "=== AFK STATS MONITOR ===\n\n" ..
         "FPS : %d\n" ..
         "Waktu AFK : %d detik\n" ..
+        "Speed : %s\n" ..
+        "Rebirth : %s\n" ..
         "Kick Power : %s\n\n" ..
         "=========================",
         fps,
         elapsedSeconds,
+        cachedSpeedStat,
+        cachedRebirthStat,
         cachedKickPower
     )
 end
@@ -481,6 +516,8 @@ end
 task.spawn(function()
     task.wait(2) -- Jeda awal agar UI game selesai dimuat sepenuhnya
     cachedKickPower = getKickPower()
+    cachedSpeedStat = getSpeedStat() -- Hanya dibaca sekali di awal eksekusi
+    cachedRebirthStat = getRebirthStat() -- Hanya dibaca sekali di awal eksekusi
     updateMonitorText()
     
     while task.wait(1) do
