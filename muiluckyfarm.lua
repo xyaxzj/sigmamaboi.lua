@@ -542,12 +542,12 @@ local function updateMonitorText()
     local elapsedSeconds = os.time() - startTime
     
     infoLabel.Text = string.format(
-        "=== AFK STATS MONITOR ===\n\n" ..
+        "=== ACCOUNT STATS MONITOR ===\n\n" ..
         "FPS : %d\n" ..
         "Waktu AFK : %d detik\n" ..
-        "Speed : %s\n" ..
-        "Rebirth : %s\n" ..
-        "Kick Power : %s\n\n" ..
+        "%s\n" ..
+        "%s\n" ..
+        "%s\n\n" ..
         "=========================",
         fps,
         elapsedSeconds,
