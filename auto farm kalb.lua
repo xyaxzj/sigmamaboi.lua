@@ -39,6 +39,18 @@ rev_Collected.OnClientEvent:Connect(function(...)
 end)
 
 -- Loop Utama Auto Farm
+-- Fungsi untuk mendapatkan Character aktif yang masih hidup
+local function getActiveCharacter()
+    local char = lp.Character
+    if not char or not char:Parent or not char:FindFirstChild("HumanoidRootPart") or not char:FindFirstChild("Humanoid") or char.Humanoid.Health <= 0 then
+        char = lp.CharacterAdded:Wait()
+        char:WaitForChild("HumanoidRootPart", 10)
+        char:WaitForChild("Humanoid", 10)
+    end
+    return char
+end
+
+-- Loop Utama Auto Farm
 task.spawn(function()
     pcall(function()
         StarterGui:SetCore("SendNotification", {
@@ -56,17 +68,18 @@ task.spawn(function()
         phase2Fired = false
         collectedFired = false
         
-        local char = lp.Character or lp.CharacterAdded:Wait()
-        local hrp = char:WaitForChild("HumanoidRootPart", 10)
-        local hum = char:WaitForChild("Humanoid", 10)
+        -- Dapatkan karakter aktif
+        local char = getActiveCharacter()
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        local hum = char:FindFirstChild("Humanoid")
         
-        if not hrp or not hum or hum.Health <= 0 then
+        if not hrp or not hum then
             task.wait(1)
             continue
         end
         
-        -- 1. Teleport ke Safe Zone
-        hrp.CFrame = safeZoneCFrame
+        -- 1. Teleport ke Safe Zone (dengan tambahan offset Y agar kaki tidak tertanam di tanah)
+        hrp.CFrame = safeZoneCFrame + Vector3.new(0, 2.5, 0)
         task.wait(0.3) -- Jeda singkat agar fisika stabil setelah teleport
         
         -- 2. Lakukan Kick ke Server
@@ -83,31 +96,29 @@ task.spawn(function()
         -- 4. Jeda 5 detik untuk animasi gacha selesai
         task.wait(5)
         
-        -- 5. Jalan kaki balik ke Safe Zone (bukan teleport, loop koreksi otomatis agar tidak macet di jalan)
+        -- 5. Jalan kaki balik ke Safe Zone (bukan teleport, loop deteksi pergerakan terhenti)
         if _G.autoFarmKalb then
-            local distance = 9999
             local startWalkTime = os.clock()
-            
-            while _G.autoFarmKalb and distance > 4 do
-                local curChar = lp.Character
-                local curHum = curChar and curChar:FindFirstChildOfClass("Humanoid")
-                local curHrp = curChar and curChar:FindFirstChild("HumanoidRootPart")
+            while _G.autoFarmKalb and (os.clock() - startWalkTime < 15) do
+                local curChar = getActiveCharacter()
+                local curHum = curChar:FindFirstChild("Humanoid")
+                local curHrp = curChar:FindFirstChild("HumanoidRootPart")
                 
-                if not curChar or not curChar:IsDescendantOf(workspace) or not curHum or curHum.Health <= 0 or not curHrp then
-                    task.wait(1)
+                if not curHum or curHum.Health <= 0 or not curHrp then
                     break
                 end
                 
-                distance = (curHrp.Position - safeZonePosition).Magnitude
-                if distance <= 4 then break end
-                
-                curHum:MoveTo(safeZonePosition)
-                task.wait(0.5) -- Loop-move setiap 0.5 detik agar terus berjalan jika menabrak/terhenti
-                
-                -- Batasi waktu jalan maksimal 15 detik agar tidak stuck di dinding selamanya
-                if os.clock() - startWalkTime > 15 then
+                local distance = (curHrp.Position - safeZonePosition).Magnitude
+                if distance <= 4 then
                     break
                 end
+                
+                -- Hanya panggil MoveTo jika karakter tidak sedang melangkah/berhenti
+                if curHum.MoveDirection.Magnitude == 0 then
+                    curHum:MoveTo(safeZonePosition)
+                end
+                
+                task.wait(0.2) -- Pengecekan status berjalan secara responsif
             end
         end
         
