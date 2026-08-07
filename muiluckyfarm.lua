@@ -466,8 +466,7 @@ local function getSpeedStat()
             -- 1. Cari exact match "+1 Speed"
             for _, obj in ipairs(frames:GetDescendants()) do
                 if obj.Name == "+1 Speed" then
-                    local buttonFrame = obj:FindFirstChild("ButtonFrame")
-                    local nameLabel = buttonFrame and buttonFrame:FindFirstChild("NameLabel")
+                    local nameLabel = obj:FindFirstChild("NameLabel")
                     if nameLabel then
                         val = nameLabel.Text
                         return val
@@ -477,8 +476,7 @@ local function getSpeedStat()
             -- 2. Fallback: Cari yang mengandung "1 Speed" atau "1Speed"
             for _, obj in ipairs(frames:GetDescendants()) do
                 if string.find(obj.Name, "1 Speed") or string.find(obj.Name, "1Speed") then
-                    local buttonFrame = obj:FindFirstChild("ButtonFrame")
-                    local nameLabel = buttonFrame and buttonFrame:FindFirstChild("NameLabel")
+                    local nameLabel = obj:FindFirstChild("NameLabel")
                     if nameLabel then
                         val = nameLabel.Text
                         return val
@@ -488,8 +486,7 @@ local function getSpeedStat()
             -- 3. Fallback Ekstrem: Cari yang mengandung "Speed" dan bertipe ImageLabel
             for _, obj in ipairs(frames:GetDescendants()) do
                 if obj:IsA("ImageLabel") and string.find(obj.Name, "Speed") then
-                    local buttonFrame = obj:FindFirstChild("ButtonFrame")
-                    local nameLabel = buttonFrame and buttonFrame:FindFirstChild("NameLabel")
+                    local nameLabel = obj:FindFirstChild("NameLabel")
                     if nameLabel then
                         val = nameLabel.Text
                         return val
