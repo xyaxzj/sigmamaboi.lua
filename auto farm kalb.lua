@@ -57,30 +57,37 @@ if plotsFolder then
 end
 
 -- 4. PEMBANTAIAN PLAYER (REMOVE PLAYER LAIN)
-local function musnahkanKarakter(player)
+local function musnahkanPlayer(player)
     if player ~= lp then
-        -- Hapus jika wujudnya saat ini sudah ada di map
+        -- 1. Hapus jika wujud karakternya saat ini sudah ada di map
         if player.Character then
             pcall(function() player.Character:Destroy() end)
         end
         
-        -- PERANGKAP: Jika dia respawn atau wujudnya baru loading, langsung hapus!
-        player.CharacterAdded:Connect(function(char)
-            task.defer(function()
-                pcall(function() char:Destroy() end)
-            end)
-        end)
+        -- 2. Hapus objek Player fisik beserta datanya dari game.Players di sisi client
+        pcall(function() player:Destroy() end)
     end
 end
 
 -- Eksekusi ke player yang sudah ada di server sekarang
 for _, player in ipairs(Players:GetPlayers()) do
-    musnahkanKarakter(player)
+    musnahkanPlayer(player)
 end
 
 -- Eksekusi ke player yang baru join ke server nanti
 Players.PlayerAdded:Connect(function(player)
-    musnahkanKarakter(player)
+    task.defer(function()
+        musnahkanPlayer(player)
+    end)
+end)
+
+-- Perangkap Ekstrem: Pantau jika ada karakter player lain yang muncul di Workspace
+workspace.ChildAdded:Connect(function(child)
+    task.defer(function()
+        if child:IsA("Model") and child.Name ~= lp.Name and child:FindFirstChild("Humanoid") then
+            pcall(function() child:Destroy() end)
+        end
+    end)
 end)
 
 -- =============================================
@@ -357,8 +364,8 @@ task.spawn(function()
                 end
             end
             
-            -- Jika buff keberuntungan sudah tercapai atau failsafe 240 detik terpenuhi
-            if luckBuffObtained or _G.stateTimer >= 240 then
+            -- Jika buff keberuntungan sudah tercapai atau failsafe 360 detik terpenuhi
+            if luckBuffObtained or _G.stateTimer >= 360 then
                 pcall(function()
                     hum:UnequipTools()
                 end)
