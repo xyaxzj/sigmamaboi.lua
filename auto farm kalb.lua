@@ -150,7 +150,7 @@ end
 -- ⚙️ MAIN LOOP (STATE MACHINE - OPTIMIZED)
 -- =============================================
 task.spawn(function()
-    while task.wait(0.2) do
+    while task.wait(0.05) do
         if not _G.autoFarm then continue end
 
         local char = lp.Character
@@ -184,8 +184,8 @@ task.spawn(function()
             _G.stateTimer = 0 
             _G.lastAction = _G.targetAction
         else
-            _G.globalStuckTimer = _G.globalStuckTimer + 0.2
-            _G.stateTimer = _G.stateTimer + 0.2 
+            _G.globalStuckTimer = _G.globalStuckTimer + 0.05
+            _G.stateTimer = _G.stateTimer + 0.05 
             
             if _G.globalStuckTimer >= 25 then
                 _G.globalStuckTimer = 0
@@ -236,8 +236,6 @@ task.spawn(function()
         elseif _G.targetAction == "WalkToSafeZone" then
             hum:MoveTo(safeZone)
             if distToSafeZone < 8 then
-                collectedFired = false
-                kickEndedFired = false
                 _G.targetAction = "WaitingForCollected"
             end
 
