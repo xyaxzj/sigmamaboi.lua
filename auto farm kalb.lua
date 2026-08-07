@@ -1,4 +1,3 @@
-setfpscap(20)
 if not game:IsLoaded() then game.Loaded:Wait() end
 
 local Players = game:GetService("Players")
@@ -243,18 +242,19 @@ task.spawn(function()
                 -- Jeda 1 detik setelah hidup di spawn sebelum teleport agar cepat aktif
                 if _G.stateTimer >= 1 then
                     hrp.CFrame = safeZoneCFrame
-                    task.wait(0.1) 
                     _G.stateTimer = 0 
                 end
             else
-                -- Jika sudah di Safe Zone, langsung kick tanpa delay!
-                phase2Fired = false
-                collectedFired = false
-                kickEndedFired = false
-                if kickRemote then 
-                    kickRemote:FireServer(1, 1) 
+                -- Jeda 0.5 detik setelah teleport agar server mereplikasi posisi baru sebelum kick
+                if _G.stateTimer >= 0.5 then
+                    phase2Fired = false
+                    collectedFired = false
+                    kickEndedFired = false
+                    if kickRemote then 
+                        kickRemote:FireServer(1, 1) 
+                    end
+                    _G.targetAction = "WaitingForPhase2"
                 end
-                _G.targetAction = "WaitingForPhase2"
             end
 
         -- [ FASE 2: NUNGGU PHASE 2 ]
