@@ -124,9 +124,11 @@ local Window = Library:CreateWindow({
 
 -- TAB 1: MAIN FUNCTION
 local MainTab = Window:MakeTab({ Icon = 'Gear', Name = 'Main' })
-local FarmSec = MainTab:AddSection('Auto Farm Settings', true)
+local FarmSec = MainTab:AddSection('Auto Farm Settings', false) -- non-collapsible agar selalu terbuka
 
-FarmSec:AddToggle({ Name='Auto Farm Kalb', Default=_G.autoFarm, Flag='auto_farm_flag' }, function(v)
+FarmSec:AddLabel("Aktifkan saklar di bawah untuk memulai/menghentikan bot:")
+
+FarmSec:AddToggle({ Name='ON / OFF Auto Farm', Default=_G.autoFarm, Flag='auto_farm_flag' }, function(v)
     _G.autoFarm = v
 end)
 
