@@ -1,3 +1,4 @@
+setfpscap(20)
 if not game:IsLoaded() then game.Loaded:Wait() end
 
 local Players = game:GetService("Players")
@@ -80,13 +81,26 @@ Players.PlayerAdded:Connect(function(player)
     end)
 end)
 
--- Perangkap Ekstrem: Pantau jika ada karakter player lain yang muncul di Workspace
-workspace.ChildAdded:Connect(function(child)
-    task.defer(function()
-        if child:IsA("Model") and child.Name ~= lp.Name and child:FindFirstChild("Humanoid") then
-            pcall(function() child:Destroy() end)
+-- Perangkap Ekstrem & Pembersihan Karakter (Mendeteksi Humanoid secara rekursif)
+local function periksaDanHapus(descendant)
+    if descendant:IsA("Humanoid") then
+        local charModel = descendant.Parent
+        if charModel and charModel:IsA("Model") and charModel.Name ~= lp.Name then
+            pcall(function() charModel:Destroy() end)
         end
-    end)
+    end
+end
+
+-- Bersihkan karakter player lain yang sudah terlanjur ada di workspace
+for _, descendant in ipairs(workspace:GetDescendants()) do
+    if descendant:IsA("Model") and descendant:FindFirstChildOfClass("Humanoid") and descendant.Name ~= lp.Name then
+        pcall(function() descendant:Destroy() end)
+    end
+end
+
+-- Pasang listener real-time untuk mendeteksi humanoid baru yang di-load
+workspace.DescendantAdded:Connect(function(descendant)
+    task.defer(periksaDanHapus, descendant)
 end)
 
 -- =============================================
