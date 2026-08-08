@@ -107,10 +107,20 @@ end)
 -- 🎨 LOAD SIGMA UI LIBRARY V4
 -- =============================================
 local Library = nil
-if readfile and isfile and isfile("UI sigma.lua") then
-    Library = loadstring(readfile("UI sigma.lua"))()
-else
-    Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/xyaxzj/sigmamaboi.lua/refs/heads/main/NcHO.lua"))()
+local getSuccess, getErr = pcall(function()
+    Library = loadstring(game:HttpGet("https://github.com/xyaxzj/sigmamaboi.lua/raw/main/NcHO.lua"))()
+end)
+
+if not getSuccess or not Library then
+    pcall(function()
+        if readfile and isfile and isfile("UI sigma.lua") then
+            Library = loadstring(readfile("UI sigma.lua"))()
+        end
+    end)
+end
+
+if not Library then
+    error("Gagal memuat Sigma UI Library! Pastikan executor Anda terhubung ke internet.")
 end
 
 local Window = Library:CreateWindow({
@@ -122,30 +132,30 @@ local Window = Library:CreateWindow({
     Watermark  = true,
 })
 
--- TAB 1: MAIN FUNCTION
-local MainTab = Window:MakeTab({ Icon = 'Gear', Name = 'Main' })
-local FarmSec = MainTab:AddSection('Auto Farm Settings', false) -- non-collapsible agar selalu terbuka
+-- TAB 1: MAIN FUNCTION (Menggunakan emoji string tunggal seperti di auto trade)
+local MainTab = Window:MakeTab("⚙️")
+local FarmSec = MainTab:AddSection("Auto Farm Settings")
 
 FarmSec:AddLabel("Aktifkan saklar di bawah untuk memulai/menghentikan bot:")
 
-FarmSec:AddToggle({ Name='ON / OFF Auto Farm', Default=_G.autoFarm, Flag='auto_farm_flag' }, function(v)
+FarmSec:AddToggle({ Name = "ON / OFF Auto Farm", Default = _G.autoFarm }, function(v)
     _G.autoFarm = v
 end)
 
-FarmSec:AddSlider({ Name='Anim Delay (Seconds)', Min=1, Max=15, Default=_G.animDelay, Step=1, Flag='anim_delay_flag' }, function(v)
+FarmSec:AddSlider({ Name = "Anim Delay (Seconds)", Min = 1, Max = 15, Default = _G.animDelay, Step = 1 }, function(v)
     _G.animDelay = v
 end)
 
 -- SECTION: STATS MONITOR
-local StatsSec = MainTab:AddSection('Stats Monitor', true)
+local StatsSec = MainTab:AddSection("Stats Monitor")
 local statusPara = StatsSec:AddParagraph("Status: Idle", "User: " .. lp.Name .. "\nMutation Count: 0\nAFK Time: 0 Detik\nFps: 0")
 
 -- TAB 2: CONFIG MANAGER
-local CfgTab = Window:MakeTab({ Icon = 'Save', Name = 'Config' })
+local CfgTab = Window:MakeTab("💾")
 CfgTab:AddConfigManager()
 
 -- NOTIFICATION SUCCESS LOAD
-Library:Notify({ Title='Sigma UI Loaded', Content='Auto Farm Kalb 2 ready!', Type='Success' })
+Library:Notify({ Title = 'Sigma UI Loaded', Content = 'Auto Farm Kalb 2 ready!', Type = 'Success' })
 
 -- =============================================
 -- 🧠 VARIABEL OTAK UTAMA (STATE MACHINE)
