@@ -232,18 +232,23 @@ local success, errorMessage = pcall(function()
     -- ==========================================
     -- FUNGSI INTI & INVENTORY SCANNER
     -- ==========================================
-    local function getBaseName(dropdownString) 
+    local getBaseName, formatTime, getAllTools, getToolGUID, getToolMutation, getToolCPS
+    local getCPSFromDisplayName, isTradeable, getPlayerList, getItemInfo, getFullItemName
+    local getRealStock, addRaritiesToCart, getMutationList, getInventoryMutationList
+    local isOpponentConfirmed, isLocalConfirmed, addMutationsToCart
+
+    function getBaseName(dropdownString) 
         return string.split(dropdownString, " | ")[1] or dropdownString 
     end
 
-    local function formatTime(seconds)
+    function formatTime(seconds)
         local h = math.floor(seconds / 3600)
         local m = math.floor((seconds % 3600) / 60)
         local s = math.floor(seconds % 60)
         return string.format("%02d:%02d:%02d", h, m, s)
     end
 
-    local function getAllTools()
+    function getAllTools()
         local tools = {}
         local bp = localPlayer:FindFirstChild("Backpack")
         if bp then for _, t in ipairs(bp:GetChildren()) do if t:IsA("Tool") then table.insert(tools, t) end end end
@@ -252,18 +257,18 @@ local success, errorMessage = pcall(function()
         return tools
     end
 
-    local function getToolGUID(tool) 
+    function getToolGUID(tool) 
         if not tool then return nil end
         return tool:GetAttribute("guid") or tool:GetAttribute("GUID") or tool:GetAttribute("uid")
     end
     
-    local function getToolMutation(tool)
+    function getToolMutation(tool)
         if not tool then return nil end
         local m = tool:GetAttribute("Mutation") or tool:GetAttribute("Variant") or (tool:FindFirstChild("Mutation") and tool:FindFirstChild("Mutation").Value)
         return m and tostring(m) or nil
     end
 
-    local function getToolCPS(tool)
+    function getToolCPS(tool)
         if not tool then return nil end
         local baseName = tool.Name
         
@@ -309,7 +314,7 @@ local success, errorMessage = pcall(function()
         return nil
     end
 
-    local function getCPSFromDisplayName(fullName)
+    function getCPSFromDisplayName(fullName)
         local status, result = pcall(function()
             if not fullName or fullName == "" then return nil end
             
@@ -373,9 +378,9 @@ local success, errorMessage = pcall(function()
         end
     end
 
-    local function isTradeable(tool) return tool and tool:IsA("Tool") and getToolGUID(tool) ~= nil end
+    function isTradeable(tool) return tool and tool:IsA("Tool") and getToolGUID(tool) ~= nil end
     
-    local function getPlayerList()
+    function getPlayerList()
         local tbl = {}
         for _, p in ipairs(Players:GetPlayers()) do 
             if p ~= localPlayer then table.insert(tbl, p.Name) end 
@@ -383,7 +388,7 @@ local success, errorMessage = pcall(function()
         return tbl
     end
 
-    local function getItemInfo(tool)
+    function getItemInfo(tool)
         if not tool then return "Unknown" end
         local baseName = tool.Name
         local dbInfo = database[baseName]
@@ -414,7 +419,7 @@ local success, errorMessage = pcall(function()
         return rarity
     end
 
-    local function addRaritiesToCart(TargetCart, SelectedRarities, QtyLimit, IsMax)
+    function addRaritiesToCart(TargetCart, SelectedRarities, QtyLimit, IsMax)
         if type(SelectedRarities) ~= "table" then SelectedRarities = {SelectedRarities} end
         local activeRarities = {}
         for _, r in pairs(SelectedRarities) do
@@ -442,7 +447,7 @@ local success, errorMessage = pcall(function()
 
 
 
-    local function getMutationList()
+    function getMutationList()
         local mutCounts = {}
         local hasMut = false
         for _, tool in ipairs(getAllTools()) do
@@ -461,7 +466,7 @@ local success, errorMessage = pcall(function()
         return list
     end
 
-    local function getInventoryMutationList()
+    function getInventoryMutationList()
         local mutCounts = {}
         for _, tool in ipairs(getAllTools()) do
             if isTradeable(tool) then
@@ -477,7 +482,7 @@ local success, errorMessage = pcall(function()
         return list
     end
 
-    local function getFullItemName(tool)
+    function getFullItemName(tool)
         local displayName = tool.Name
         local mutValue = getToolMutation(tool)
         if mutValue then displayName = displayName .. " [" .. mutValue .. "]" end  
@@ -491,7 +496,7 @@ local success, errorMessage = pcall(function()
         return displayName
     end
 
-    local function getRealStock(targetName)
+    function getRealStock(targetName)
         local count = 0
         for _, tool in ipairs(getAllTools()) do 
             if isTradeable(tool) and getFullItemName(tool) == targetName then count = count + 1 end 
@@ -499,19 +504,19 @@ local success, errorMessage = pcall(function()
         return count
     end
 
-    local function isOpponentConfirmed(tradeFrame)
+    function isOpponentConfirmed(tradeFrame)
         if not tradeFrame then return false end
         local p2Confirm = tradeFrame:FindFirstChild("P2_Frame") and tradeFrame.P2_Frame:FindFirstChild("Confirmed")
         return p2Confirm and p2Confirm.Visible or false
     end
 
-    local function isLocalConfirmed(tradeFrame)
+    function isLocalConfirmed(tradeFrame)
         if not tradeFrame then return false end
         local p1Confirm = tradeFrame:FindFirstChild("P1_Frame") and tradeFrame.P1_Frame:FindFirstChild("Confirmed")
         return p1Confirm and p1Confirm.Visible or false
     end
 
-    local function addMutationsToCart(TargetCart, SelectedOptions, QtyLimit, IsMax)
+    function addMutationsToCart(TargetCart, SelectedOptions, QtyLimit, IsMax)
         if type(SelectedOptions) ~= "table" then SelectedOptions = {SelectedOptions} end
         local activeMutations = {}
         for _, opt in pairs(SelectedOptions) do
