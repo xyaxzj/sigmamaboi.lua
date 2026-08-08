@@ -658,7 +658,7 @@ local success, errorMessage = pcall(function()
     
     local CartStatus = SecCart3:AddParagraph("Trade Cart Content", "Empty.")
     local function updateCartDisplay()
-        pcall(function()
+        local success, err = pcall(function()
             local text = ""; local total = 0
             local InfiniteMath
             pcall(function()
@@ -687,61 +687,99 @@ local success, errorMessage = pcall(function()
             local totalCpsStr = tostring(totalCPS)
             CartStatus:Set("Trade Cart Content", total == 0 and "Empty." or text .. "\nTotal Items: " .. total .. "  │  Total CPS: " .. totalCpsStr)
         end)
+        if not success then
+            warn("ERROR IN updateCartDisplay:", err)
+        end
     end
     
     SecCart3:AddButton("➕ Add Custom by Amount", function() 
-        pcall(function()
-            local TradeMixQty = tonumber(qtyInputTrade:Get()) or 0
+        local success, err = pcall(function()
+            local rawAmount = qtyInputTrade:Get()
+            local TradeMixQty = tonumber(rawAmount) or 0
             local liveSelectedItems = ItemDropdown:Get(); if type(liveSelectedItems) ~= "table" then liveSelectedItems = {liveSelectedItems} end
+            
+            print("--- Add Custom by Amount Clicked ---")
+            print("Raw Input Amount:", tostring(rawAmount))
+            print("Parsed Quantity:", tostring(TradeMixQty))
+            print("Selected items count in dropdown:", #liveSelectedItems)
+            
             for _, optionStr in pairs(liveSelectedItems) do 
                 local itemName = getBaseName(optionStr); 
+                print("Processing selected option:", tostring(optionStr), "-> Extracted name:", tostring(itemName))
                 if itemName ~= "" and itemName ~= "[ANY ASSET]" and TradeMixQty > 0 then 
                     local rs = getRealStock(itemName); 
+                    print("Found Real Stock for " .. itemName .. ": " .. tostring(rs))
                     local cur = ShoppingCart[itemName] or 0; 
                     ShoppingCart[itemName] = (cur + TradeMixQty > rs) and rs or (cur + TradeMixQty) 
                 end 
             end
             updateCartDisplay() 
         end)
+        if not success then
+            warn("ERROR IN Add Custom by Amount Button:", err)
+        end
     end)
     SecCart3:AddButton("➕ Add Custom All Stock (Max)", function() 
-        pcall(function()
+        local success, err = pcall(function()
             local liveSelectedItems = ItemDropdown:Get(); if type(liveSelectedItems) ~= "table" then liveSelectedItems = {liveSelectedItems} end
+            
+            print("--- Add Custom All Stock (Max) Clicked ---")
+            print("Selected items count in dropdown:", #liveSelectedItems)
+            
             for _, optionStr in pairs(liveSelectedItems) do 
                 local itemName = getBaseName(optionStr); 
+                print("Processing selected option:", tostring(optionStr), "-> Extracted name:", tostring(itemName))
                 if itemName ~= "" and itemName ~= "[ANY ASSET]" then 
-                    ShoppingCart[itemName] = getRealStock(itemName) 
+                    local rs = getRealStock(itemName); 
+                    print("Found Real Stock for " .. itemName .. ": " .. tostring(rs))
+                    ShoppingCart[itemName] = rs
                 end 
             end
             updateCartDisplay() 
         end)
+        if not success then
+            warn("ERROR IN Add Custom All Stock (Max) Button:", err)
+        end
     end)
     SecCart3:AddButton("✨ Add by Mutation (by Amount)", function() 
-        pcall(function()
+        local success, err = pcall(function()
             local TradeMixQty = tonumber(qtyInputTrade:Get()) or 0
             addMutationsToCart(ShoppingCart, TradeMutationDropdown:Get(), TradeMixQty, false)
             updateCartDisplay()
         end)
+        if not success then warn("ERROR IN Add by Mutation (by Amount) Button:", err) end
     end)
     SecCart3:AddButton("✨ Add by Mutation (Max Stock)", function() 
-        pcall(function()
+        local success, err = pcall(function()
             local TradeMixQty = tonumber(qtyInputTrade:Get()) or 0
             addMutationsToCart(ShoppingCart, TradeMutationDropdown:Get(), TradeMixQty, true)
             updateCartDisplay()
         end)
+        if not success then warn("ERROR IN Add by Mutation (Max Stock) Button:", err) end
     end)
     SecCart3:AddButton("⭐ Add by Rarity (by Amount)", function() 
-        local qty = tonumber(qtyInputTrade:Get()) or 0
-        local selectedRarities = TradeRarityDropdown:Get()
-        addRaritiesToCart(ShoppingCart, selectedRarities, qty, false)
-        updateCartDisplay()
+        local success, err = pcall(function()
+            local qty = tonumber(qtyInputTrade:Get()) or 0
+            local selectedRarities = TradeRarityDropdown:Get()
+            addRaritiesToCart(ShoppingCart, selectedRarities, qty, false)
+            updateCartDisplay()
+        end)
+        if not success then warn("ERROR IN Add by Rarity (by Amount) Button:", err) end
     end)
     SecCart3:AddButton("⭐ Add by Rarity (Max Stock)", function() 
-        local selectedRarities = TradeRarityDropdown:Get()
-        addRaritiesToCart(ShoppingCart, selectedRarities, 0, true)
-        updateCartDisplay()
+        local success, err = pcall(function()
+            local selectedRarities = TradeRarityDropdown:Get()
+            addRaritiesToCart(ShoppingCart, selectedRarities, 0, true)
+            updateCartDisplay()
+        end)
+        if not success then warn("ERROR IN Add by Rarity (Max Stock) Button:", err) end
     end)
-    SecCart3:AddButton("🗑️ Clear Cart", function() ShoppingCart = {}; updateCartDisplay() end)
+    SecCart3:AddButton("🗑️ Clear Cart", function() 
+        pcall(function()
+            ShoppingCart = {}
+            updateCartDisplay() 
+        end)
+    end)
     
     SecCart3:AddButton("🚀 Create Queue from Cart", function() 
         if TargetPlayerName == "" then return Library:Notify("Attention", "Select target first.", 2) end
