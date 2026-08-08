@@ -91,10 +91,10 @@ local function periksaDanHapus(descendant)
     end
 end
 
--- Bersihkan karakter player lain yang sudah terlanjur ada di workspace
-for _, descendant in ipairs(workspace:GetDescendants()) do
-    if descendant:IsA("Model") and descendant:FindFirstChildOfClass("Humanoid") and descendant.Name ~= lp.Name then
-        pcall(function() descendant:Destroy() end)
+-- Bersihkan karakter player lain yang sudah terlanjur ada di workspace (Direct children agar tidak timeout/lag)
+for _, child in ipairs(workspace:GetChildren()) do
+    if child:IsA("Model") and child.Name ~= lp.Name and child:FindFirstChildOfClass("Humanoid") then
+        pcall(function() child:Destroy() end)
     end
 end
 
