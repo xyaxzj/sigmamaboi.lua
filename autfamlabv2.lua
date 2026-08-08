@@ -12,8 +12,9 @@ local playerGui = lp:WaitForChild("PlayerGui", 10)
 -- =============================================
 -- ⚙️ KONFIGURASI AWAL
 -- =============================================
-_G.autoFarm = false              
-_G.animDelay = 5              
+_G.autoFarm = false -- Mematikan V1 script jika sedang berjalan
+local autoFarmActive = false              
+local animDelay = 5              
 
 -- =============================================
 -- 🚀 SYSTEM ANTI-LAG & OPTIMISASI EKSTREM
@@ -138,12 +139,12 @@ local FarmSec = MainTab:AddSection("Auto Farm Settings")
 
 FarmSec:AddLabel("Aktifkan saklar di bawah untuk memulai/menghentikan bot:")
 
-FarmSec:AddToggle({ Name = "ON / OFF Auto Farm", Default = _G.autoFarm }, function(v)
-    _G.autoFarm = v
+FarmSec:AddToggle({ Name = "ON / OFF Auto Farm", Default = autoFarmActive }, function(v)
+    autoFarmActive = v
 end)
 
-FarmSec:AddSlider({ Name = "Anim Delay (Seconds)", Min = 1, Max = 15, Default = _G.animDelay, Step = 1 }, function(v)
-    _G.animDelay = v
+FarmSec:AddSlider({ Name = "Anim Delay (Seconds)", Min = 1, Max = 15, Default = animDelay, Step = 1 }, function(v)
+    animDelay = v
 end)
 
 -- SECTION: STATS MONITOR
@@ -158,15 +159,15 @@ CfgTab:AddConfigManager()
 Library:Notify({ Title = 'Sigma UI Loaded', Content = 'Auto Farm Kalb 2 ready!', Type = 'Success' })
 
 -- =============================================
--- 🧠 VARIABEL OTAK UTAMA (STATE MACHINE)
+-- 🧠 VARIABEL OTAK UTAMA (STATE MACHINE - LOCAL)
 -- =============================================
-_G.targetAction = "Idle"
-_G.lastAction = "Idle"
-_G.nextAction = "Idle"          
-_G.stateTimer = 0               
-_G.globalStuckTimer = 0         
-_G.mutationCount = 0            
-_G.targetItemPos = nil          
+local targetAction = "Idle"
+local lastAction = "Idle"
+local nextAction = "Idle"          
+local stateTimer = 0               
+local globalStuckTimer = 0         
+local mutationCount = 0            
+local targetItemPos = nil          
 local safeZone = Vector3.new(698.030701, 3.298559, 233.707077)
 local safeZoneCFrame = CFrame.new(698.030701, 3.298559, 233.707077, -0.061024, -0.000000, 0.998136, -0.000000, 1.000000, 0.000000, -0.998136, -0.000000, -0.061024)
 local startTime = os.time()
@@ -271,21 +272,21 @@ task.spawn(function()
         pcall(function()
             local elapsedSeconds = os.time() - startTime
             statusPara:Set(
-                "Status: " .. tostring(_G.targetAction),
+                "Status: " .. tostring(targetAction),
                 string.format(
                     "User: %s\n" ..
                     "Mutation Count: %d\n" ..
                     "AFK Time: %d Detik\n" ..
                     "Fps: %d",
                     lp.Name,
-                    _G.mutationCount,
+                    mutationCount,
                     elapsedSeconds,
                     fps
                 )
             )
         end)
 
-        if not _G.autoFarm then continue end
+        if not autoFarmActive then continue end
 
         local char = lp.Character
         local hum = char and char:FindFirstChild("Humanoid")
@@ -298,33 +299,33 @@ task.spawn(function()
 
         -- [ PENDETEKSI MATI ]
         if hum.Health <= 0 then
-            _G.targetAction = "WaitingRespawn"
-            _G.lastAction = "WaitingRespawn"
-            _G.globalStuckTimer = 0
+            targetAction = "WaitingRespawn"
+            lastAction = "WaitingRespawn"
+            globalStuckTimer = 0
             continue 
         end
 
         -- [ PENDETEKSI HIDUP KEMBALI ]
-        if _G.targetAction == "WaitingRespawn" and hum.Health > 0 then
-            _G.targetAction = "Idle"
-            _G.lastAction = "Idle"
+        if targetAction == "WaitingRespawn" and hum.Health > 0 then
+            targetAction = "Idle"
+            lastAction = "Idle"
         end
 
         -- ==========================================
         -- 🚨 PENGATUR WAKTU OTOMATIS & FAILSAFE 25s
         -- ==========================================
-        if _G.targetAction ~= _G.lastAction then
-            _G.globalStuckTimer = 0
-            _G.stateTimer = 0 
-            _G.lastAction = _G.targetAction
+        if targetAction ~= lastAction then
+            globalStuckTimer = 0
+            stateTimer = 0 
+            lastAction = targetAction
         else
-            _G.globalStuckTimer = _G.globalStuckTimer + 0.05
-            _G.stateTimer = _G.stateTimer + 0.05 
+            globalStuckTimer = globalStuckTimer + 0.05
+            stateTimer = stateTimer + 0.05 
             
             -- Failsafe 25 detik dinonaktifkan saat sedang berada di Luck Machine agar tidak mati prematur
-            if _G.globalStuckTimer >= 25 and _G.targetAction ~= "LuckMachineTraining" and _G.targetAction ~= "LuckMachineTeleport" then
-                _G.globalStuckTimer = 0
-                _G.targetAction = "WaitingRespawn"
+            if globalStuckTimer >= 25 and targetAction ~= "LuckMachineTraining" and targetAction ~= "LuckMachineTeleport" then
+                globalStuckTimer = 0
+                targetAction = "WaitingRespawn"
                 hum.Health = 0 
                 continue
             end
@@ -332,80 +333,80 @@ task.spawn(function()
 
         -- [ INTERUPSI EVENT CUACA (PAUSE AUTO FARM KECUALI SEDANG PULANG KE SAFE ZONE) ]
         if weatherEventPending then
-            if _G.targetAction ~= "WalkToSafeZone" then
+            if targetAction ~= "WalkToSafeZone" then
                 weatherEventPending = false
                 luckBuffObtained = false
                 pcall(function()
                     hum:UnequipTools()
                 end)
-                _G.targetAction = "LuckMachineTeleport"
+                targetAction = "LuckMachineTeleport"
             end
         end
 
         local distToSafeZone = (hrp.Position - safeZone).Magnitude
 
         -- [ FASE 1: IDLE / NENDANG (JEDA HANYA DI SPAWN) ]
-        if _G.targetAction == "Idle" then
+        if targetAction == "Idle" then
             if distToSafeZone > 10 then
                 -- Jeda 1 detik setelah hidup di spawn sebelum teleport agar cepat aktif
-                if _G.stateTimer >= 1 then
+                if stateTimer >= 1 then
                     hrp.CFrame = safeZoneCFrame
-                    _G.stateTimer = 0 
+                    stateTimer = 0 
                 end
             else
                 -- Jeda 0.5 detik setelah teleport agar server mereplikasi posisi baru sebelum kick
-                if _G.stateTimer >= 0.5 then
+                if stateTimer >= 0.5 then
                     phase2Fired = false
                     collectedFired = false
                     kickEndedFired = false
                     if kickRemote then 
                         kickRemote:FireServer(1, 1) 
                     end
-                    _G.targetAction = "WaitingForPhase2"
+                    targetAction = "WaitingForPhase2"
                 end
             end
 
         -- [ FASE 2: NUNGGU PHASE 2 ]
-        elseif _G.targetAction == "WaitingForPhase2" then
+        elseif targetAction == "WaitingForPhase2" then
             if phase2Fired then
                 phase2Fired = false
-                _G.targetAction = "PlayingAnim"
-            elseif _G.stateTimer > 5 then
-                _G.targetAction = "Idle"
+                targetAction = "PlayingAnim"
+            elseif stateTimer > 5 then
+                targetAction = "Idle"
             end
 
         -- [ FASE 3: NUNGGU ANIMASI GACHA (5 DETIK) ]
-        elseif _G.targetAction == "PlayingAnim" then
-            if _G.stateTimer >= _G.animDelay then
-                _G.targetAction = "WalkToSafeZone"
+        elseif targetAction == "PlayingAnim" then
+            if stateTimer >= animDelay then
+                targetAction = "WalkToSafeZone"
             end
 
         -- [ FASE 4: JALAN BALIK KE SAFE ZONE ]
-        elseif _G.targetAction == "WalkToSafeZone" then
+        elseif targetAction == "WalkToSafeZone" then
             hum:MoveTo(safeZone)
             if distToSafeZone < 8 then
-                _G.targetAction = "WaitingForCollected"
+                targetAction = "WaitingForCollected"
             end
 
         -- [ FASE 5: NUNGGU COLLECTED ATAU KICKENDED (LANGSUNG KICK KEMBALI) ]
-        elseif _G.targetAction == "WaitingForCollected" then
+        elseif targetAction == "WaitingForCollected" then
             if collectedFired or kickEndedFired then
                 collectedFired = false
                 kickEndedFired = false
-                _G.mutationCount = _G.mutationCount + 1
+                mutationCount = mutationCount + 1
                 
                 -- Langsung lakukan kick kembali tanpa delay
                 phase2Fired = false
                 if kickRemote then 
                     kickRemote:FireServer(1, 1) 
                 end
-                _G.targetAction = "WaitingForPhase2"
-            elseif _G.stateTimer > 5 then
-                _G.targetAction = "Idle"
+                targetAction = "WaitingForPhase2"
+            elseif stateTimer > 5 then
+                targetAction = "Idle"
             end
 
         -- [ FASE EX-1: TELEPORT KE LUCK MACHINE ]
-        elseif _G.targetAction == "LuckMachineTeleport" then
+        elseif targetAction == "LuckMachineTeleport" then
             local targetPart = nil
             pcall(function()
                 local debris = workspace:FindFirstChild("Debris")
@@ -421,15 +422,15 @@ task.spawn(function()
             if targetPart then
                 hrp.CFrame = targetPart.CFrame + Vector3.new(0, 3, 0)
                 task.wait(0.5)
-                _G.targetAction = "LuckMachineTraining"
+                targetAction = "LuckMachineTraining"
             else
-                if _G.stateTimer >= 3 then
-                    _G.targetAction = "Idle"
+                if stateTimer >= 3 then
+                    targetAction = "Idle"
                 end
             end
 
         -- [ FASE EX-2: AUTO USE BARBELL DI LUCK MACHINE SAMPAI DAPAT LUCK BUFF ]
-        elseif _G.targetAction == "LuckMachineTraining" then
+        elseif targetAction == "LuckMachineTraining" then
             local targetPart = nil
             pcall(function()
                 local debris = workspace:FindFirstChild("Debris")
@@ -465,12 +466,12 @@ task.spawn(function()
             end
             
             -- Jika buff keberuntungan sudah tercapai atau failsafe 240 detik terpenuhi
-            if luckBuffObtained or _G.stateTimer >= 240 then
+            if luckBuffObtained or stateTimer >= 240 then
                 pcall(function()
                     hum:UnequipTools()
                 end)
                 luckBuffObtained = false
-                _G.targetAction = "Idle" -- Restart auto farm (Idle akan teleport balik ke safe zone)
+                targetAction = "Idle" -- Restart auto farm (Idle akan teleport balik ke safe zone)
             end
         end
     end
