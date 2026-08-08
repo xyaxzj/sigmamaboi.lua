@@ -310,59 +310,67 @@ local success, errorMessage = pcall(function()
     end
 
     local function getCPSFromDisplayName(fullName)
-        if not fullName or fullName == "" then return nil end
-        
-        local level = 1
-        local lvlMatch = string.match(fullName, "%(Lv%.(%d+)%)")
-        if not lvlMatch then lvlMatch = string.match(fullName, "Lv%.(%d+)") end
-        if lvlMatch then
-            level = tonumber(lvlMatch) or 1
-        end
-        
-        local mutation = nil
-        local mutMatch = string.match(fullName, "%[(.-)%]")
-        if mutMatch then
-            mutation = mutMatch
-        end
-        
-        local baseName = fullName
-        baseName = string.gsub(baseName, "%s*%[(.-)%]", "")
-        baseName = string.gsub(baseName, "%s*%(Lv%.%d+%)", "")
-        baseName = string.gsub(baseName, "%s*%(Lv%.%s*%d+%)", "")
-        baseName = string.trim and string.trim(baseName) or baseName:match("^%s*(.-)%s*$")
-        
-        local EntitiesDataModule, MutationDataModule
-        pcall(function()
-            local Shared = ReplicatedStorage:FindFirstChild("Shared")
-            local Data = Shared and Shared:FindFirstChild("Data")
+        local status, result = pcall(function()
+            if not fullName or fullName == "" then return nil end
             
-            local EntitiesDataObj = Data and Data:FindFirstChild("EntitiesData")
-            if EntitiesDataObj then EntitiesDataModule = require(EntitiesDataObj) end
-            
-            local MutationDataObj = Data and Data:FindFirstChild("MutationData")
-            if MutationDataObj then MutationDataModule = require(MutationDataObj) end
-        end)
-        
-        if EntitiesDataModule and EntitiesDataModule.Brainrots and EntitiesDataModule.Brainrots[baseName] then
-            local info = EntitiesDataModule.Brainrots[baseName]
-            local baseCPS = info.CPS
-            if baseCPS then
-                local levelMult = 1
-                if EntitiesDataModule.GetMultiplierPerLevel then
-                    pcall(function()
-                        levelMult = EntitiesDataModule.GetMultiplierPerLevel(level)
-                    end)
-                end
-                
-                local mutMult = 1
-                if mutation and MutationDataModule and MutationDataModule.Buffs and MutationDataModule.Buffs[mutation] then
-                    mutMult = MutationDataModule.Buffs[mutation].Value or 1
-                end
-                
-                return baseCPS * levelMult * mutMult
+            local level = 1
+            local lvlMatch = string.match(fullName, "%(Lv%.(%d+)%)")
+            if not lvlMatch then lvlMatch = string.match(fullName, "Lv%.(%d+)") end
+            if lvlMatch then
+                level = tonumber(lvlMatch) or 1
             end
+            
+            local mutation = nil
+            local mutMatch = string.match(fullName, "%[(.-)%]")
+            if mutMatch then
+                mutation = mutMatch
+            end
+            
+            local baseName = fullName
+            baseName = string.gsub(baseName, "%s*%[(.-)%]", "")
+            baseName = string.gsub(baseName, "%s*%(Lv%.%d+%)", "")
+            baseName = string.gsub(baseName, "%s*%(Lv%.%s*%d+%)", "")
+            baseName = string.trim and string.trim(baseName) or baseName:match("^%s*(.-)%s*$")
+            
+            local EntitiesDataModule, MutationDataModule
+            pcall(function()
+                local Shared = ReplicatedStorage:FindFirstChild("Shared")
+                local Data = Shared and Shared:FindFirstChild("Data")
+                
+                local EntitiesDataObj = Data and Data:FindFirstChild("EntitiesData")
+                if EntitiesDataObj then EntitiesDataModule = require(EntitiesDataObj) end
+                
+                local MutationDataObj = Data and Data:FindFirstChild("MutationData")
+                if MutationDataObj then MutationDataModule = require(MutationDataObj) end
+            end)
+            
+            if EntitiesDataModule and EntitiesDataModule.Brainrots and EntitiesDataModule.Brainrots[baseName] then
+                local info = EntitiesDataModule.Brainrots[baseName]
+                local baseCPS = info.CPS
+                if baseCPS then
+                    local levelMult = 1
+                    if EntitiesDataModule.GetMultiplierPerLevel then
+                        pcall(function()
+                            levelMult = EntitiesDataModule.GetMultiplierPerLevel(level)
+                        end)
+                    end
+                    
+                    local mutMult = 1
+                    if mutation and MutationDataModule and MutationDataModule.Buffs and MutationDataModule.Buffs[mutation] then
+                        mutMult = MutationDataModule.Buffs[mutation].Value or 1
+                    end
+                    
+                    return baseCPS * levelMult * mutMult
+                end
+            end
+            return nil
+        end)
+        if status then
+            return result
+        else
+            warn("Error in getCPSFromDisplayName for " .. tostring(fullName) .. ":", result)
+            return nil
         end
-        return nil
     end
 
     local function isTradeable(tool) return tool and tool:IsA("Tool") and getToolGUID(tool) ~= nil end
@@ -650,46 +658,78 @@ local success, errorMessage = pcall(function()
     
     local CartStatus = SecCart3:AddParagraph("Trade Cart Content", "Empty.")
     local function updateCartDisplay()
-        local text = ""; local total = 0
-        local InfiniteMath
         pcall(function()
-            local Shared = ReplicatedStorage:FindFirstChild("Shared")
-            local Utility = Shared and Shared:FindFirstChild("Utility")
-            local IMObj = Utility and Utility:FindFirstChild("InfiniteMath")
-            if IMObj then InfiniteMath = require(IMObj) end
+            local text = ""; local total = 0
+            local InfiniteMath
+            pcall(function()
+                local Shared = ReplicatedStorage:FindFirstChild("Shared")
+                local Utility = Shared and Shared:FindFirstChild("Utility")
+                local IMObj = Utility and Utility:FindFirstChild("InfiniteMath")
+                if IMObj then InfiniteMath = require(IMObj) end
+            end)
+            local totalCPS = InfiniteMath and InfiniteMath.new(0) or 0
+            
+            for name, qty in pairs(ShoppingCart) do 
+                if qty > 0 then 
+                    local itemCPS = getCPSFromDisplayName(name)
+                    local cpsText = ""
+                    if itemCPS then
+                        pcall(function()
+                            cpsText = " │ CPS: " .. tostring(itemCPS)
+                            local itemCpsTotal = itemCPS * qty
+                            totalCPS = totalCPS + itemCpsTotal
+                        end)
+                    end
+                    text = text .. "- " .. name .. " (x" .. qty .. cpsText .. ")\n"
+                    total = total + qty 
+                end 
+            end
+            local totalCpsStr = tostring(totalCPS)
+            CartStatus:Set("Trade Cart Content", total == 0 and "Empty." or text .. "\nTotal Items: " .. total .. "  │  Total CPS: " .. totalCpsStr)
         end)
-        local totalCPS = InfiniteMath and InfiniteMath.new(0) or 0
-        
-        for name, qty in pairs(ShoppingCart) do 
-            if qty > 0 then 
-                local itemCPS = getCPSFromDisplayName(name)
-                local cpsText = ""
-                if itemCPS then
-                    cpsText = " │ CPS: " .. tostring(itemCPS)
-                    local itemCpsTotal = itemCPS * qty
-                    totalCPS = totalCPS + itemCpsTotal
-                end
-                text = text .. "- " .. name .. " (x" .. qty .. cpsText .. ")\n"
-                total = total + qty 
-            end 
-        end
-        local totalCpsStr = tostring(totalCPS)
-        CartStatus:Set("Trade Cart Content", total == 0 and "Empty." or text .. "\nTotal Items: " .. total .. "  │  Total CPS: " .. totalCpsStr)
     end
     
     SecCart3:AddButton("➕ Add Custom by Amount", function() 
-        local TradeMixQty = tonumber(qtyInputTrade:Get()) or 0
-        local liveSelectedItems = ItemDropdown:Get(); if type(liveSelectedItems) ~= "table" then liveSelectedItems = {liveSelectedItems} end
-        for _, optionStr in pairs(liveSelectedItems) do local itemName = getBaseName(optionStr); if itemName ~= "" and itemName ~= "[ANY ASSET]" and TradeMixQty > 0 then local rs = getRealStock(itemName); local cur = ShoppingCart[itemName] or 0; ShoppingCart[itemName] = (cur + TradeMixQty > rs) and rs or (cur + TradeMixQty) end end
-        updateCartDisplay() 
+        pcall(function()
+            local TradeMixQty = tonumber(qtyInputTrade:Get()) or 0
+            local liveSelectedItems = ItemDropdown:Get(); if type(liveSelectedItems) ~= "table" then liveSelectedItems = {liveSelectedItems} end
+            for _, optionStr in pairs(liveSelectedItems) do 
+                local itemName = getBaseName(optionStr); 
+                if itemName ~= "" and itemName ~= "[ANY ASSET]" and TradeMixQty > 0 then 
+                    local rs = getRealStock(itemName); 
+                    local cur = ShoppingCart[itemName] or 0; 
+                    ShoppingCart[itemName] = (cur + TradeMixQty > rs) and rs or (cur + TradeMixQty) 
+                end 
+            end
+            updateCartDisplay() 
+        end)
     end)
     SecCart3:AddButton("➕ Add Custom All Stock (Max)", function() 
-        local liveSelectedItems = ItemDropdown:Get(); if type(liveSelectedItems) ~= "table" then liveSelectedItems = {liveSelectedItems} end
-        for _, optionStr in pairs(liveSelectedItems) do local itemName = getBaseName(optionStr); if itemName ~= "" and itemName ~= "[ANY ASSET]" then ShoppingCart[itemName] = getRealStock(itemName) end end
-        updateCartDisplay() 
+        pcall(function()
+            local liveSelectedItems = ItemDropdown:Get(); if type(liveSelectedItems) ~= "table" then liveSelectedItems = {liveSelectedItems} end
+            for _, optionStr in pairs(liveSelectedItems) do 
+                local itemName = getBaseName(optionStr); 
+                if itemName ~= "" and itemName ~= "[ANY ASSET]" then 
+                    ShoppingCart[itemName] = getRealStock(itemName) 
+                end 
+            end
+            updateCartDisplay() 
+        end)
     end)
-    SecCart3:AddButton("✨ Add by Mutation (by Amount)", function() local TradeMixQty = tonumber(qtyInputTrade:Get()) or 0; addMutationsToCart(ShoppingCart, TradeMutationDropdown:Get(), TradeMixQty, false); updateCartDisplay() end)
-    SecCart3:AddButton("✨ Add by Mutation (Max Stock)", function() local TradeMixQty = tonumber(qtyInputTrade:Get()) or 0; addMutationsToCart(ShoppingCart, TradeMutationDropdown:Get(), TradeMixQty, true); updateCartDisplay() end)
+    SecCart3:AddButton("✨ Add by Mutation (by Amount)", function() 
+        pcall(function()
+            local TradeMixQty = tonumber(qtyInputTrade:Get()) or 0
+            addMutationsToCart(ShoppingCart, TradeMutationDropdown:Get(), TradeMixQty, false)
+            updateCartDisplay()
+        end)
+    end)
+    SecCart3:AddButton("✨ Add by Mutation (Max Stock)", function() 
+        pcall(function()
+            local TradeMixQty = tonumber(qtyInputTrade:Get()) or 0
+            addMutationsToCart(ShoppingCart, TradeMutationDropdown:Get(), TradeMixQty, true)
+            updateCartDisplay()
+        end)
+    end)
     SecCart3:AddButton("⭐ Add by Rarity (by Amount)", function() 
         local qty = tonumber(qtyInputTrade:Get()) or 0
         local selectedRarities = TradeRarityDropdown:Get()
@@ -726,51 +766,85 @@ local success, errorMessage = pcall(function()
     
     local SellCartStatus = SecSell1:AddParagraph("🛒 Sell Cart", "Empty.")
     local function updateSellCartDisplay()
-        local text = ""; local total = 0
-        local InfiniteMath
         pcall(function()
-            local Shared = ReplicatedStorage:FindFirstChild("Shared")
-            local Utility = Shared and Shared:FindFirstChild("Utility")
-            local IMObj = Utility and Utility:FindFirstChild("InfiniteMath")
-            if IMObj then InfiniteMath = require(IMObj) end
+            local text = ""; local total = 0
+            local InfiniteMath
+            pcall(function()
+                local Shared = ReplicatedStorage:FindFirstChild("Shared")
+                local Utility = Shared and Shared:FindFirstChild("Utility")
+                local IMObj = Utility and Utility:FindFirstChild("InfiniteMath")
+                if IMObj then InfiniteMath = require(IMObj) end
+            end)
+            local totalCPS = InfiniteMath and InfiniteMath.new(0) or 0
+            
+            for name, qty in pairs(SellCart) do 
+                if qty > 0 then 
+                    local itemCPS = getCPSFromDisplayName(name)
+                    local cpsText = ""
+                    if itemCPS then
+                        pcall(function()
+                            cpsText = " │ CPS: " .. tostring(itemCPS)
+                            local itemCpsTotal = itemCPS * qty
+                            totalCPS = totalCPS + itemCpsTotal
+                        end)
+                    end
+                    text = text .. "- " .. name .. " (x" .. qty .. cpsText .. ")\n"
+                    total = total + qty 
+                end 
+            end
+            local totalCpsStr = tostring(totalCPS)
+            SellCartStatus:Set("🛒 Sell Cart", total == 0 and "Empty." or text .. "\nTotal Items: " .. total .. "  │  Total CPS: " .. totalCpsStr)
         end)
-        local totalCPS = InfiniteMath and InfiniteMath.new(0) or 0
-        
-        for name, qty in pairs(SellCart) do 
-            if qty > 0 then 
-                local itemCPS = getCPSFromDisplayName(name)
-                local cpsText = ""
-                if itemCPS then
-                    cpsText = " │ CPS: " .. tostring(itemCPS)
-                    local itemCpsTotal = itemCPS * qty
-                    totalCPS = totalCPS + itemCpsTotal
-                end
-                text = text .. "- " .. name .. " (x" .. qty .. cpsText .. ")\n"
-                total = total + qty 
-            end 
-        end
-        local totalCpsStr = tostring(totalCPS)
-        SellCartStatus:Set("🛒 Sell Cart", total == 0 and "Empty." or text .. "\nTotal Items: " .. total .. "  │  Total CPS: " .. totalCpsStr)
     end
     
     SecSell1:AddButton("➕ Add Custom by Amount", function() 
-        local SelectedSellMixQty = tonumber(qtyInputSell:Get()) or 0
-        local lst = type(SelectedSellItems) == "table" and SelectedSellItems or {SelectedSellItems}
-        for _, optionStr in pairs(lst) do local itemName = getBaseName(optionStr); if itemName ~= "" and itemName ~= "[ANY ASSET]" and SelectedSellMixQty > 0 then local rs = getRealStock(itemName); local cur = SellCart[itemName] or 0; SellCart[itemName] = (cur + SelectedSellMixQty > rs) and rs or (cur + SelectedSellMixQty) end end
-        updateSellCartDisplay() 
+        pcall(function()
+            local SelectedSellMixQty = tonumber(qtyInputSell:Get()) or 0
+            local lst = type(SelectedSellItems) == "table" and SelectedSellItems or {SelectedSellItems}
+            for _, optionStr in pairs(lst) do 
+                local itemName = getBaseName(optionStr); 
+                if itemName ~= "" and itemName ~= "[ANY ASSET]" and SelectedSellMixQty > 0 then 
+                    local rs = getRealStock(itemName); 
+                    local cur = SellCart[itemName] or 0; 
+                    SellCart[itemName] = (cur + SelectedSellMixQty > rs) and rs or (cur + SelectedSellMixQty) 
+                end 
+            end
+            updateSellCartDisplay() 
+        end)
     end)
     SecSell1:AddButton("➕ Add Custom All Stock (Max)", function() 
-        local lst = type(SelectedSellItems) == "table" and SelectedSellItems or {SelectedSellItems}
-        for _, optionStr in pairs(lst) do local itemName = getBaseName(optionStr); if itemName ~= "" and itemName ~= "[ANY ASSET]" then SellCart[itemName] = getRealStock(itemName) end end
-        updateSellCartDisplay() 
+        pcall(function()
+            local lst = type(SelectedSellItems) == "table" and SelectedSellItems or {SelectedSellItems}
+            for _, optionStr in pairs(lst) do 
+                local itemName = getBaseName(optionStr); 
+                if itemName ~= "" and itemName ~= "[ANY ASSET]" then 
+                    SellCart[itemName] = getRealStock(itemName) 
+                end 
+            end
+            updateSellCartDisplay() 
+        end)
     end)
-    SecSell1:AddButton("✨ Add Mutation (by Amount)", function() local SelectedSellMixQty = tonumber(qtyInputSell:Get()) or 0; addMutationsToCart(SellCart, SellMutationDropdown:Get(), SelectedSellMixQty, false); updateSellCartDisplay() end)
-    SecSell1:AddButton("✨ Add Mutation (Max Stock)", function() local SelectedSellMixQty = tonumber(qtyInputSell:Get()) or 0; addMutationsToCart(SellCart, SellMutationDropdown:Get(), SelectedSellMixQty, true); updateSellCartDisplay() end)
+    SecSell1:AddButton("✨ Add Mutation (by Amount)", function() 
+        pcall(function()
+            local SelectedSellMixQty = tonumber(qtyInputSell:Get()) or 0
+            addMutationsToCart(SellCart, SellMutationDropdown:Get(), SelectedSellMixQty, false)
+            updateSellCartDisplay()
+        end)
+    end)
+    SecSell1:AddButton("✨ Add Mutation (Max Stock)", function() 
+        pcall(function()
+            local SelectedSellMixQty = tonumber(qtyInputSell:Get()) or 0
+            addMutationsToCart(SellCart, SellMutationDropdown:Get(), SelectedSellMixQty, true)
+            updateSellCartDisplay()
+        end)
+    end)
     SecSell1:AddButton("⭐ Add by Rarity (by Amount)", function() 
-        local qty = tonumber(qtyInputSell:Get()) or 0
-        local selectedRarities = SellRarityDropdown:Get()
-        addRaritiesToCart(SellCart, selectedRarities, qty, false)
-        updateSellCartDisplay()
+        pcall(function()
+            local qty = tonumber(qtyInputSell:Get()) or 0
+            local selectedRarities = SellRarityDropdown:Get()
+            addRaritiesToCart(SellCart, selectedRarities, qty, false)
+            updateSellCartDisplay()
+        end)
     end)
     SecSell1:AddButton("⭐ Add by Rarity (Max Stock)", function() 
         local selectedRarities = SellRarityDropdown:Get()
@@ -820,56 +894,92 @@ local success, errorMessage = pcall(function()
     
     local BaseCartStatus = SecBase1:AddParagraph("🛒 Base Cart", "Empty.")
     local function updateBaseCartDisplay()
-        local text = ""; local total = 0
-        local InfiniteMath
         pcall(function()
-            local Shared = ReplicatedStorage:FindFirstChild("Shared")
-            local Utility = Shared and Shared:FindFirstChild("Utility")
-            local IMObj = Utility and Utility:FindFirstChild("InfiniteMath")
-            if IMObj then InfiniteMath = require(IMObj) end
+            local text = ""; local total = 0
+            local InfiniteMath
+            pcall(function()
+                local Shared = ReplicatedStorage:FindFirstChild("Shared")
+                local Utility = Shared and Shared:FindFirstChild("Utility")
+                local IMObj = Utility and Utility:FindFirstChild("InfiniteMath")
+                if IMObj then InfiniteMath = require(IMObj) end
+            end)
+            local totalCPS = InfiniteMath and InfiniteMath.new(0) or 0
+            
+            for name, qty in pairs(BaseCart) do 
+                if qty > 0 then 
+                    local itemCPS = getCPSFromDisplayName(name)
+                    local cpsText = ""
+                    if itemCPS then
+                        pcall(function()
+                            cpsText = " │ CPS: " .. tostring(itemCPS)
+                            local itemCpsTotal = itemCPS * qty
+                            totalCPS = totalCPS + itemCpsTotal
+                        end)
+                    end
+                    text = text .. "- " .. name .. " (x" .. qty .. cpsText .. ")\n"
+                    total = total + qty 
+                end 
+            end
+            local totalCpsStr = tostring(totalCPS)
+            BaseCartStatus:Set("🛒 Base Cart", total == 0 and "Empty." or text .. "\nTotal Items: " .. total .. "  │  Total CPS: " .. totalCpsStr)
         end)
-        local totalCPS = InfiniteMath and InfiniteMath.new(0) or 0
-        
-        for name, qty in pairs(BaseCart) do 
-            if qty > 0 then 
-                local itemCPS = getCPSFromDisplayName(name)
-                local cpsText = ""
-                if itemCPS then
-                    cpsText = " │ CPS: " .. tostring(itemCPS)
-                    local itemCpsTotal = itemCPS * qty
-                    totalCPS = totalCPS + itemCpsTotal
-                end
-                text = text .. "- " .. name .. " (x" .. qty .. cpsText .. ")\n"
-                total = total + qty 
-            end 
-        end
-        local totalCpsStr = tostring(totalCPS)
-        BaseCartStatus:Set("🛒 Base Cart", total == 0 and "Empty." or text .. "\nTotal Items: " .. total .. "  │  Total CPS: " .. totalCpsStr)
     end
     
     SecBase1:AddButton("➕ Add Custom by Amount", function() 
-        local SelectedPlaceMixQty = tonumber(qtyInputBase:Get()) or 0
-        local lst = type(SelectedPlaceItems) == "table" and SelectedPlaceItems or {SelectedPlaceItems}
-        for _, optionStr in pairs(lst) do local itemName = getBaseName(optionStr); if itemName ~= "" and itemName ~= "[ANY ASSET]" and SelectedPlaceMixQty > 0 then local rs = getRealStock(itemName); local cur = BaseCart[itemName] or 0; BaseCart[itemName] = (cur + SelectedPlaceMixQty > rs) and rs or (cur + SelectedPlaceMixQty) end end
-        updateBaseCartDisplay() 
+        pcall(function()
+            local SelectedPlaceMixQty = tonumber(qtyInputBase:Get()) or 0
+            local lst = type(SelectedPlaceItems) == "table" and SelectedPlaceItems or {SelectedPlaceItems}
+            for _, optionStr in pairs(lst) do 
+                local itemName = getBaseName(optionStr); 
+                if itemName ~= "" and itemName ~= "[ANY ASSET]" and SelectedPlaceMixQty > 0 then 
+                    local rs = getRealStock(itemName); 
+                    local cur = BaseCart[itemName] or 0; 
+                    BaseCart[itemName] = (cur + SelectedPlaceMixQty > rs) and rs or (cur + SelectedPlaceMixQty) 
+                end 
+            end
+            updateBaseCartDisplay() 
+        end)
     end)
     SecBase1:AddButton("➕ Add Custom All Stock (Max)", function() 
-        local lst = type(SelectedPlaceItems) == "table" and SelectedPlaceItems or {SelectedPlaceItems}
-        for _, optionStr in pairs(lst) do local itemName = getBaseName(optionStr); if itemName ~= "" and itemName ~= "[ANY ASSET]" then BaseCart[itemName] = getRealStock(itemName) end end
-        updateBaseCartDisplay() 
+        pcall(function()
+            local lst = type(SelectedPlaceItems) == "table" and SelectedPlaceItems or {SelectedPlaceItems}
+            for _, optionStr in pairs(lst) do 
+                local itemName = getBaseName(optionStr); 
+                if itemName ~= "" and itemName ~= "[ANY ASSET]" then 
+                    BaseCart[itemName] = getRealStock(itemName) 
+                end 
+            end
+            updateBaseCartDisplay() 
+        end)
     end)
-    SecBase1:AddButton("✨ Add Mutation (by Amount)", function() local SelectedPlaceMixQty = tonumber(qtyInputBase:Get()) or 0; addMutationsToCart(BaseCart, BaseMutationDropdown:Get(), SelectedPlaceMixQty, false); updateBaseCartDisplay() end)
-    SecBase1:AddButton("✨ Add Mutation (Max Stock)", function() local SelectedPlaceMixQty = tonumber(qtyInputBase:Get()) or 0; addMutationsToCart(BaseCart, BaseMutationDropdown:Get(), SelectedPlaceMixQty, true); updateBaseCartDisplay() end)
+    SecBase1:AddButton("✨ Add Mutation (by Amount)", function() 
+        pcall(function()
+            local SelectedPlaceMixQty = tonumber(qtyInputBase:Get()) or 0
+            addMutationsToCart(BaseCart, BaseMutationDropdown:Get(), SelectedPlaceMixQty, false)
+            updateBaseCartDisplay()
+        end)
+    end)
+    SecBase1:AddButton("✨ Add Mutation (Max Stock)", function() 
+        pcall(function()
+            local SelectedPlaceMixQty = tonumber(qtyInputBase:Get()) or 0
+            addMutationsToCart(BaseCart, BaseMutationDropdown:Get(), SelectedPlaceMixQty, true)
+            updateBaseCartDisplay()
+        end)
+    end)
     SecBase1:AddButton("⭐ Add by Rarity (by Amount)", function() 
-        local qty = tonumber(qtyInputBase:Get()) or 0
-        local selectedRarities = BaseRarityDropdown:Get()
-        addRaritiesToCart(BaseCart, selectedRarities, qty, false)
-        updateBaseCartDisplay()
+        pcall(function()
+            local qty = tonumber(qtyInputBase:Get()) or 0
+            local selectedRarities = BaseRarityDropdown:Get()
+            addRaritiesToCart(BaseCart, selectedRarities, qty, false)
+            updateBaseCartDisplay()
+        end)
     end)
     SecBase1:AddButton("⭐ Add by Rarity (Max Stock)", function() 
-        local selectedRarities = BaseRarityDropdown:Get()
-        addRaritiesToCart(BaseCart, selectedRarities, 0, true)
-        updateBaseCartDisplay()
+        pcall(function()
+            local selectedRarities = BaseRarityDropdown:Get()
+            addRaritiesToCart(BaseCart, selectedRarities, 0, true)
+            updateBaseCartDisplay()
+        end)
     end)
     SecBase1:AddButton("🗑️ Clear Base Cart", function() BaseCart = {}; updateBaseCartDisplay() end)
     SecBase1:AddButton("🔥 Add 30 Highest CPS", function()
