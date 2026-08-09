@@ -17,8 +17,10 @@ end
 
 -- Configuration Variables
 local isAutoFarmActive = false
+local isDirectFarmActive = false
 local currentStageIndex = 1
 local stopAtStage = 20
+local directStageNumber = 20
 local heightOffset = 15
 local lootDelay = 0.12
 local autoEquipWeaponEnabled = false
@@ -67,21 +69,42 @@ local Window = Library:CreateWindow({
 local MainTab = Window:MakeTab("⚡")
 local FarmSec = MainTab:AddSection("Auto Farm Setup")
 
-FarmSec:AddToggle({ Name = "ON / OFF Auto Farm", Default = isAutoFarmActive }, function(v)
+local SeqToggle, DirToggle
+
+SeqToggle = FarmSec:AddToggle({ Name = "ON / OFF Auto Farm (Sequential)", Default = isAutoFarmActive }, function(v)
     isAutoFarmActive = v
-    if isAutoFarmActive then
+    if v then
+        isDirectFarmActive = false
+        if DirToggle then DirToggle:Set(false) end
         stageLootCount = 0
     else
         currentLockTarget = nil
     end
 end)
 
-FarmSec:AddToggle({ Name = "Loot Only at Stop Stage", Default = lootOnlyAtStopStage }, function(v)
+FarmSec:AddToggle({ Name = "Loot Only at Stop Stage (Sequential Only)", Default = lootOnlyAtStopStage }, function(v)
     lootOnlyAtStopStage = v
 end)
 
-FarmSec:AddSlider({ Name = "Stop at Stage", Min = 1, Max = 50, Default = stopAtStage, Step = 1 }, function(v)
+FarmSec:AddSlider({ Name = "Stop at Stage (Sequential Only)", Min = 1, Max = 50, Default = stopAtStage, Step = 1 }, function(v)
     stopAtStage = v
+end)
+
+FarmSec:AddLabel("━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+
+DirToggle = FarmSec:AddToggle({ Name = "ON / OFF Direct Stage Farm", Default = isDirectFarmActive }, function(v)
+    isDirectFarmActive = v
+    if v then
+        isAutoFarmActive = false
+        if SeqToggle then SeqToggle:Set(false) end
+        stageLootCount = 0
+    else
+        currentLockTarget = nil
+    end
+end)
+
+FarmSec:AddSlider({ Name = "Direct Stage Target", Min = 1, Max = 50, Default = directStageNumber, Step = 1 }, function(v)
+    directStageNumber = v
 end)
 
 -- TAB 2: ADVANCED SETTINGS
@@ -131,9 +154,19 @@ local function updateStatusMonitor(newStatus)
         bagText = string.format("🎒 Tas Stage: %d / %d Item", stageLootCount, MAX_STAGE_ITEMS)
     end
     
+    local activeModeText = "Idle"
+    local stageProgressText = ""
+    if isAutoFarmActive then
+        activeModeText = "Sequential Farm"
+        stageProgressText = string.format("Current Stage: %d / %d", currentStageIndex, stopAtStage)
+    elseif isDirectFarmActive then
+        activeModeText = "Direct Farm"
+        stageProgressText = string.format("Target Stage: %d", directStageNumber)
+    end
+    
     monitorPara:Set(
         "📊 Status & Inventory",
-        string.format("Status: %s\n%s\nCurrent Stage: %d / %d\nHeight Offset: %d studs", currentStatus, bagText, currentStageIndex, stopAtStage, heightOffset)
+        string.format("Mode: %s\nStatus: %s\n%s\n%s\nHeight Offset: %d studs", activeModeText, currentStatus, bagText, stageProgressText, heightOffset)
     )
 end
 
@@ -518,6 +551,71 @@ task.spawn(function()
                     end
                     break
                 end
+            end
+        elseif isDirectFarmActive then
+            -- Cek kondisi hidup player
+            while isDirectFarmActive and running and not checkPlayerAlive() do
+                currentLockTarget = nil
+                updateStatusMonitor("Waiting for Respawn...")
+                task.wait(1)
+            end
+
+            -- CEK SEBELUM START STAGE: Jika tas penuh, pulang base & reset
+            if stageLootCount >= MAX_STAGE_ITEMS then
+                returnToBaseAndReset()
+            else
+                currentStageIndex = directStageNumber
+                updateStatusMonitor(string.format("Direct Farm: Memicu Stage %d...", directStageNumber))
+
+                if netRemoteEvent then
+                    pcall(function()
+                        netRemoteEvent:FireServer("\xE5\x89\xAF\xE6\x9C\xAC\xE5\x85\xB3\xE5\x8D\xA1\xE5\x88\xB7\xE6\x80\xAA", directStageNumber)
+                        netRemoteEvent:FireServer("\xE8\xAE\xAD\xE7\xBB\x83\xE5\x9C\xBA\xE5\x8C\xBA\xE5\x9F\x9F\xE6\x9B\xB4\xE6\x96\xB0", {})
+                    end)
+                end
+
+                local waitForSpawn = 0
+                while isDirectFarmActive and running and waitForSpawn < 35 do
+                    local enemies = getActiveEnemies()
+                    if #enemies > 0 then break end
+                    updateStatusMonitor(string.format("Direct Farm: Menunggu Monster Stage %d (%ds)...", directStageNumber, 35 - waitForSpawn))
+                    task.wait(1)
+                    waitForSpawn = waitForSpawn + 1
+                end
+
+                local stageStartTime = tick()
+
+                while isDirectFarmActive and running and checkPlayerAlive() do
+                    autoEquipWeapon()
+                    local enemies = getActiveEnemies()
+
+                    if #enemies > 0 then
+                        local target = enemies[1]
+                        local hpText = target.MaxHP > 0 and math.floor((target.HP / target.MaxHP) * 100) .. "%" or tostring(target.HP)
+                        updateStatusMonitor(string.format("Direct Stage %d | Musuh: %d | HP: %s", directStageNumber, #enemies, hpText))
+
+                        currentLockTarget = target.HRP
+                    else
+                        currentLockTarget = nil
+                        updateStatusMonitor(string.format("Direct Farm: Monster Habis! Looting Stage %d...", directStageNumber))
+                        
+                        -- Untuk direct stage farm, selalu auto-loot di akhir
+                        sweepStageDrops(directStageNumber)
+
+                        task.wait(0.5)
+                        break
+                    end
+
+                    if tick() - stageStartTime > 600 then break end
+                    task.wait(0.12)
+                end
+
+                -- CEK SETELAH LOOTING: Jika tas penuh, pulang base & reset
+                if stageLootCount >= MAX_STAGE_ITEMS then
+                    returnToBaseAndReset()
+                end
+
+                task.wait(1.5)
             end
         else
             currentLockTarget = nil
