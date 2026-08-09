@@ -8,12 +8,22 @@ getgenv().CurrentAutoFarmID = scriptId
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local VirtualUser = game:GetService("VirtualUser")
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
 if PlayerGui:FindFirstChild("RGBAutoFarmUI") then
     PlayerGui.RGBAutoFarmUI:Destroy()
 end
+
+-- Built-in Anti-AFK System
+LocalPlayer.Idled:Connect(function()
+    pcall(function()
+        VirtualUser:CaptureController()
+        VirtualUser:ClickButton2(Vector2.new(0, 0))
+        warn("⚡ Sigma Hub: Anti-AFK memicu stimulasi input virtual. Timer idle telah di-reset!")
+    end)
+end)
 
 -- Configuration Variables
 local isAutoFarmActive = false
