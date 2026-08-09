@@ -22,16 +22,23 @@ local stopAtStage = 20
 local heightOffset = 15
 local lootDelay = 0.12
 local autoEquipWeaponEnabled = false
+local stageStartTime = 0
 
+local autoRebirthActive = false
+local rebirthInterval = 5
+local autoSellActive = false
+local sellInterval = 30
 local lootOnlyAtStopStage = true 
 local MAX_STAGE_ITEMS = 9 
 local stageLootCount = 0 
 local currentLockTarget = nil
 
--- Remote Event Setup
+-- Remote Setup
 local netRemoteEvent = nil
+local netRemoteFunction = nil
 pcall(function()
     netRemoteEvent = ReplicatedStorage.Msg.RemoteEvent.NetWorkRemoteEvent
+    netRemoteFunction = ReplicatedStorage.Msg.RemoteFunction.NetWorkRemoteFunction
 end)
 
 -- =============================================
@@ -99,6 +106,32 @@ end)
 AdvSec:AddToggle({ Name = "Auto Equip Weapon", Default = autoEquipWeaponEnabled }, function(v)
     autoEquipWeaponEnabled = v
 end)
+
+local UtilSec = AdvTab:AddSection("Utility Loops")
+
+UtilSec:AddToggle({ Name = "Auto Rebirth", Default = autoRebirthActive }, function(v)
+    autoRebirthActive = v
+end)
+
+local rebirthInput = UtilSec:AddInput({ Name = "Rebirth Interval (Seconds):", Placeholder = "Enter seconds..." }, function(v)
+    local n = tonumber(v)
+    if n and n > 0 then
+        rebirthInterval = n
+    end
+end)
+rebirthInput:Set("5")
+
+UtilSec:AddToggle({ Name = "Auto Sell", Default = autoSellActive }, function(v)
+    autoSellActive = v
+end)
+
+local sellInput = UtilSec:AddInput({ Name = "Sell Interval (Seconds):", Placeholder = "Enter seconds..." }, function(v)
+    local n = tonumber(v)
+    if n and n > 0 then
+        sellInterval = n
+    end
+end)
+sellInput:Set("30")
 
 -- SECTION: MONITOR
 local StatsSec = MainTab:AddSection("Stats Monitor")
@@ -219,6 +252,34 @@ task.spawn(function()
     while running and getgenv().CurrentAutoFarmID == scriptId do
         pcall(updateInventoryList)
         task.wait(1.5)
+    end
+end)
+
+-- Auto Rebirth Loop
+task.spawn(function()
+    while running and getgenv().CurrentAutoFarmID == scriptId do
+        if autoRebirthActive then
+            if netRemoteFunction then
+                pcall(function()
+                    netRemoteFunction:InvokeServer("玩家晋升")
+                end)
+            end
+        end
+        task.wait(rebirthInterval)
+    end
+end)
+
+-- Auto Sell Loop
+task.spawn(function()
+    while running and getgenv().CurrentAutoFarmID == scriptId do
+        if autoSellActive then
+            if netRemoteEvent then
+                pcall(function()
+                    netRemoteEvent:FireServer("副本回城")
+                end)
+            end
+        end
+        task.wait(sellInterval)
     end
 end)
 
