@@ -255,6 +255,20 @@ task.spawn(function()
     end
 end)
 
+-- Fungsi Auto Sell Materials (1-1000 IDs)
+local function performAutoSell()
+    if not netRemoteFunction then return end
+    pcall(function()
+        local onlyIDList = {}
+        for i = 1, 1000 do
+            table.insert(onlyIDList, i)
+        end
+        netRemoteFunction:InvokeServer("出售材料", {
+            ["onlyIDList"] = onlyIDList
+        })
+    end)
+end
+
 -- Auto Rebirth Loop
 task.spawn(function()
     while running and getgenv().CurrentAutoFarmID == scriptId do
@@ -273,11 +287,7 @@ end)
 task.spawn(function()
     while running and getgenv().CurrentAutoFarmID == scriptId do
         if autoSellActive then
-            if netRemoteEvent then
-                pcall(function()
-                    netRemoteEvent:FireServer("副本回城")
-                end)
-            end
+            performAutoSell()
         end
         task.wait(sellInterval)
     end
@@ -317,6 +327,10 @@ local function returnToBaseAndReset()
         end)
     end
     task.wait(2.5) -- Waktu jeda agar teleport balik base & auto-claim selesai
+    
+    -- Jual material otomatis saat kembali ke base
+    performAutoSell()
+    
     stageLootCount = 0
     updateStatusMonitor("🔄 Re-starting dari Stage 1...")
     task.wait(1)
