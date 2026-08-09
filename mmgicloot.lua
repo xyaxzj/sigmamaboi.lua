@@ -22,38 +22,6 @@ local stopAtStage = 20
 local heightOffset = 15
 local lootDelay = 0.12
 local autoEquipWeaponEnabled = false
-local stageStartTime = 0
-
--- Drop Timestamp Tracker for Stage-specific looting
-local dropTimestamps = {}
-local dropsFolder = workspace:FindFirstChild("DropsClient")
-local dropsConnection = nil
-local dropsRemoveConnection = nil
-
-local function connectDropsFolder(folder)
-    if dropsConnection then pcall(function() dropsConnection:Disconnect() end) end
-    if dropsRemoveConnection then pcall(function() dropsRemoveConnection:Disconnect() end) end
-    if not folder then return end
-    
-    dropsConnection = folder.ChildAdded:Connect(function(child)
-        dropTimestamps[child] = tick()
-    end)
-    dropsRemoveConnection = folder.ChildRemoved:Connect(function(child)
-        dropTimestamps[child] = nil
-    end)
-    for _, child in ipairs(folder:GetChildren()) do
-        dropTimestamps[child] = tick()
-    end
-end
-
-connectDropsFolder(dropsFolder)
-
-workspace.ChildAdded:Connect(function(child)
-    if child.Name == "DropsClient" then
-        dropsFolder = child
-        connectDropsFolder(child)
-    end
-end)
 
 local lootOnlyAtStopStage = true 
 local MAX_STAGE_ITEMS = 8 
@@ -371,14 +339,6 @@ local function sweepStageDrops(stage)
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
 
-    local function getDirectChild(prompt)
-        local obj = prompt.Parent
-        while obj and obj.Parent ~= dropsFolder do
-            obj = obj.Parent
-        end
-        return obj
-    end
-
     local prompts = {}
     for _, prompt in ipairs(dropsFolder:GetDescendants()) do
         if prompt:IsA("ProximityPrompt") and prompt.Parent then
@@ -396,15 +356,6 @@ local function sweepStageDrops(stage)
 
         if stageLootCount >= MAX_STAGE_ITEMS then
             break
-        end
-
-        local dropObj = getDirectChild(prompt)
-        if dropObj then
-            local t = dropTimestamps[dropObj] or 0
-            -- Abaikan drop yang dibuat sebelum stage aktif ini dimulai
-            if t < stageStartTime then
-                continue
-            end
         end
 
         if prompt and prompt.Parent then
@@ -490,7 +441,7 @@ task.spawn(function()
                     waitForSpawn = waitForSpawn + 1
                 end
 
-                stageStartTime = tick()
+                local stageStartTime = tick()
 
                 while isAutoFarmActive and running and checkPlayerAlive() do
                     autoEquipWeapon()
@@ -555,7 +506,6 @@ task.spawn(function()
                             currentLockTarget = nil
                             updateStatusMonitor(string.format("Stage %d: Menunggu Respawn / Looting...", stopAtStage))
                             sweepStageDrops(stopAtStage)
-                            stageStartTime = tick()
 
                             -- Jika tas penuh saat di stopAtStage loop
                             if stageLootCount >= MAX_STAGE_ITEMS then
