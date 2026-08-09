@@ -24,7 +24,7 @@ local lootDelay = 0.12
 local autoEquipWeaponEnabled = false
 
 local lootOnlyAtStopStage = true 
-local MAX_STAGE_ITEMS = 8 
+local MAX_STAGE_ITEMS = 9 
 local stageLootCount = 0 
 local currentLockTarget = nil
 
@@ -339,6 +339,8 @@ local function sweepStageDrops(stage)
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
 
+    local startPos = hrp.Position -- Catat posisi awal karakter di stage sebelum looting dimulai
+
     local prompts = {}
     for _, prompt in ipairs(dropsFolder:GetDescendants()) do
         if prompt:IsA("ProximityPrompt") and prompt.Parent then
@@ -359,16 +361,24 @@ local function sweepStageDrops(stage)
         end
 
         if prompt and prompt.Parent then
-            currentLockTarget = nil -- Lepaskan lock sementara untuk mengambil loot
             local targetPart = prompt.Parent
             if not targetPart:IsA("BasePart") then
                 targetPart = prompt:FindFirstAncestorOfClass("BasePart")
             end
 
-            if targetPart and checkPlayerAlive() then
-                hrp.CFrame = CFrame.new(targetPart.Position + Vector3.new(0, 2, 0))
-                hrp.AssemblyLinearVelocity = Vector3.zero
-                task.wait(0.08)
+            if targetPart then
+                -- Cek apakah jarak dari drop ke posisi awal stage lebih dari 100 stud (artinya itu drop dari stage lain)
+                local dist = (targetPart.Position - startPos).Magnitude
+                if dist > 100 then
+                    continue -- Lewati drop dari stage sebelumnya
+                end
+
+                currentLockTarget = nil -- Lepaskan lock sementara untuk mengambil loot
+                if checkPlayerAlive() then
+                    hrp.CFrame = CFrame.new(targetPart.Position + Vector3.new(0, 2, 0))
+                    hrp.AssemblyLinearVelocity = Vector3.zero
+                    task.wait(0.08)
+                end
             end
 
             if not checkPlayerAlive() or #getActiveEnemies() > 0 then break end
