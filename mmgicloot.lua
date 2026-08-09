@@ -26,16 +26,34 @@ local stageStartTime = 0
 
 -- Drop Timestamp Tracker for Stage-specific looting
 local dropTimestamps = {}
-local dropsFolder = workspace:WaitForChild("DropsClient")
-dropsFolder.ChildAdded:Connect(function(child)
-    dropTimestamps[child] = tick()
-end)
-dropsFolder.ChildRemoved:Connect(function(child)
-    dropTimestamps[child] = nil
-end)
-for _, child in ipairs(dropsFolder:GetChildren()) do
-    dropTimestamps[child] = tick()
+local dropsFolder = workspace:FindFirstChild("DropsClient")
+local dropsConnection = nil
+local dropsRemoveConnection = nil
+
+local function connectDropsFolder(folder)
+    if dropsConnection then pcall(function() dropsConnection:Disconnect() end) end
+    if dropsRemoveConnection then pcall(function() dropsRemoveConnection:Disconnect() end) end
+    if not folder then return end
+    
+    dropsConnection = folder.ChildAdded:Connect(function(child)
+        dropTimestamps[child] = tick()
+    end)
+    dropsRemoveConnection = folder.ChildRemoved:Connect(function(child)
+        dropTimestamps[child] = nil
+    end)
+    for _, child in ipairs(folder:GetChildren()) do
+        dropTimestamps[child] = tick()
+    end
 end
+
+connectDropsFolder(dropsFolder)
+
+workspace.ChildAdded:Connect(function(child)
+    if child.Name == "DropsClient" then
+        dropsFolder = child
+        connectDropsFolder(child)
+    end
+end)
 
 local lootOnlyAtStopStage = true 
 local MAX_STAGE_ITEMS = 8 
