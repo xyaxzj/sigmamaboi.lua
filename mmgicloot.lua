@@ -104,7 +104,12 @@ end)
 local StatsSec = MainTab:AddSection("Stats Monitor")
 local monitorPara = StatsSec:AddParagraph("📊 Status & Inventory", "Initializing...")
 
--- TAB 3: CONFIG MANAGER
+-- TAB 3: INVENTORY MANAGER
+local InvTab = Window:MakeTab("🎒")
+local InvSec = InvTab:AddSection("Backpack Inventory")
+local InvStatus = InvSec:AddParagraph("Items in Backpack", "Loading inventory...")
+
+-- TAB 4: CONFIG MANAGER
 local CfgTab = Window:MakeTab("💾")
 CfgTab:AddConfigManager()
 
@@ -132,12 +137,88 @@ local function updateStatusMonitor(newStatus)
     )
 end
 
--- Task Pembaruan Status Real-Time
+-- =========================================================
+-- BACKPACK INVENTORY SYSTEM
+-- =========================================================
+local function getBackpackTools()
+    local tools = {}
+    local bp = LocalPlayer:FindFirstChild("Backpack")
+    if bp then
+        for _, t in ipairs(bp:GetChildren()) do
+            if t:IsA("Tool") then
+                table.insert(tools, t)
+            end
+        end
+    end
+    local char = LocalPlayer.Character
+    if char then
+        for _, t in ipairs(char:GetChildren()) do
+            if t:IsA("Tool") then
+                table.insert(tools, t)
+            end
+        end
+    end
+    return tools
+end
+
+local function getToolDisplayName(tool)
+    local displayName = tool.Name
+    local lvlValue = tool:GetAttribute("Level") or tool:GetAttribute("level") or tool:GetAttribute("Lvl")
+    if not lvlValue then
+        local lvlObj = tool:FindFirstChild("Level") or tool:FindFirstChild("level") or tool:FindFirstChild("Lvl")
+        if lvlObj and (lvlObj:IsA("IntValue") or lvlObj:IsA("NumberValue") or lvlObj:IsA("StringValue")) then
+            lvlValue = lvlObj.Value
+        end
+    end
+    if lvlValue then displayName = displayName .. " (Lv." .. tostring(lvlValue) .. ")" end
+    
+    local rarity = tool:GetAttribute("Rarity") or tool:GetAttribute("rarity")
+    if not rarity then
+        local rarObj = tool:FindFirstChild("Rarity") or tool:FindFirstChild("rarity")
+        if rarObj and rarObj:IsA("StringValue") then
+            rarity = rarObj.Value
+        end
+    end
+    if rarity then displayName = displayName .. " | " .. tostring(rarity) end
+    
+    return displayName
+end
+
+local function updateInventoryList()
+    local tools = getBackpackTools()
+    if #tools == 0 then
+        InvStatus:Set("Items in Backpack", "Your backpack is empty.")
+        return
+    end
+    
+    local toolCounts = {}
+    for _, t in ipairs(tools) do
+        local dispName = getToolDisplayName(t)
+        toolCounts[dispName] = (toolCounts[dispName] or 0) + 1
+    end
+    
+    local lines = {}
+    for name, count in pairs(toolCounts) do
+        table.insert(lines, string.format("• %s (x%d)", name, count))
+    end
+    table.sort(lines)
+    
+    InvStatus:Set("Items in Backpack", table.concat(lines, "\n") .. "\n\nTotal Items: " .. #tools)
+end
+
+-- Task Pembaruan Status & Inventory Real-Time
 local running = true
 task.spawn(function()
     while running and getgenv().CurrentAutoFarmID == scriptId do
         pcall(updateStatusMonitor)
         task.wait(0.25)
+    end
+end)
+
+task.spawn(function()
+    while running and getgenv().CurrentAutoFarmID == scriptId do
+        pcall(updateInventoryList)
+        task.wait(1.5)
     end
 end)
 
