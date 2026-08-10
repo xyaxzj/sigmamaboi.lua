@@ -39,6 +39,8 @@ local rebirthInterval = 5
 local autoSellActive = false
 local sellInterval = 30
 local broomSkipEnabled = false
+local fpsBoostEnabled = false
+local disable3dRender = false
 local lootOnlyAtStopStage = true 
 local MAX_STAGE_ITEMS = 9 
 local stageLootCount = 0 
@@ -154,6 +156,26 @@ local sellInput = UtilSec:AddInput({ Name = "Sell Interval (Seconds):", Placehol
 end)
 sellInput:Set("30")
 
+local PerfSec = AdvTab:AddSection("Performance & Anti-Lag")
+
+PerfSec:AddToggle({ Name = "FPS Boost (Remove Effects/Shadows)", Default = fpsBoostEnabled }, function(v)
+    fpsBoostEnabled = v
+    if v then
+        cleanEffects()
+        logToScreen("🚀 Anti-Lag: FPS Boost diaktifkan (Partikel & Bayangan dihapus)!")
+    else
+        logToScreen("🚀 Anti-Lag: Silakan restart game untuk mengembalikan efek visual.")
+    end
+end)
+
+PerfSec:AddToggle({ Name = "Disable 3D Rendering (Ultra GPU Saver)", Default = disable3dRender }, function(v)
+    disable3dRender = v
+    pcall(function()
+        game:GetService("RunService"):Set3dRenderingEnabled(not v)
+    end)
+    logToScreen(v and "🖥️ Anti-Lag: 3D Rendering dinonaktifkan (GPU Saver Aktif)!" or "🖥️ Anti-Lag: 3D Rendering diaktifkan kembali.")
+end)
+
 -- SECTION: MONITOR
 local StatsSec = MainTab:AddSection("Stats Monitor")
 local monitorPara = StatsSec:AddParagraph("📊 Status & Inventory", "Initializing...")
@@ -187,6 +209,39 @@ local function logToScreen(msg)
             logPara:Set("📜 Activity Log", table.concat(liveLogs, "\n"))
         end)
     end
+end
+
+local function cleanEffects()
+    pcall(function()
+        local Lighting = game:GetService("Lighting")
+        Lighting.GlobalShadows = false
+        Lighting.ShadowMapEnabled = false
+        for _, effect in ipairs(Lighting:GetChildren()) do
+            if effect:IsA("BlurEffect") or effect:IsA("SunRaysEffect") or effect:IsA("ColorCorrectionEffect") or effect:IsA("BloomEffect") or effect:IsA("DepthOfFieldEffect") then
+                effect.Enabled = false
+            end
+        end
+        
+        for _, obj in ipairs(workspace:GetDescendants()) do
+            if obj:IsA("Decal") or obj:IsA("Texture") then
+                obj:Destroy()
+            elseif obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Smoke") or obj:IsA("Fire") or obj:IsA("Sparkles") then
+                obj.Enabled = false
+            end
+        end
+        
+        workspace.DescendantAdded:Connect(function(obj)
+            pcall(function()
+                if obj:IsA("Decal") or obj:IsA("Texture") then
+                    task.wait()
+                    obj:Destroy()
+                elseif obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Smoke") or obj:IsA("Fire") or obj:IsA("Sparkles") then
+                    task.wait()
+                    obj.Enabled = false
+                end
+            end)
+        end)
+    end)
 end
 
 local function logSpawnedEnemies(stage, enemies)
@@ -341,40 +396,37 @@ local function clickButton(btn)
     end
 end
 
--- Pencari Tombol Sell All
+-- Pencari Tombol Sell All (Mengikuti path penulisan dari pengguna)
 local function findSellAllButton()
-    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
-    if not playerGui then return nil end
+    local btn = nil
+    pcall(function()
+        btn = LocalPlayer.PlayerGui.ScreenGui.Sell.Bottom._SellAll.Btn
+    end)
+    if btn and btn:IsA("ImageButton") then
+        return btn
+    end
     
-    -- Struktur Utama: ScreenGui -> Sell -> Bottom -> _SellAll -> Btn
-    for _, gui in ipairs(playerGui:GetChildren()) do
-        if gui:IsA("ScreenGui") then
-            local sellFrame = gui:FindFirstChild("Sell")
-            if sellFrame and sellFrame:IsA("Frame") then
-                local bottomFrame = sellFrame:FindFirstChild("Bottom")
-                if bottomFrame and bottomFrame:IsA("Frame") then
-                    local sellAllFrame = bottomFrame:FindFirstChild("_SellAll")
-                    if sellAllFrame and sellAllFrame:IsA("Frame") then
-                        local btn = sellAllFrame:FindFirstChild("Btn")
-                        if btn and btn:IsA("ImageButton") then
-                            return btn
+    -- Fallback: Cari secara dinamis jika nama ScreenGui berbeda di server
+    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+    if playerGui then
+        for _, gui in ipairs(playerGui:GetChildren()) do
+            if gui:IsA("ScreenGui") then
+                local sellFrame = gui:FindFirstChild("Sell")
+                if sellFrame and sellFrame:IsA("Frame") then
+                    local bottomFrame = sellFrame:FindFirstChild("Bottom")
+                    if bottomFrame and bottomFrame:IsA("Frame") then
+                        local sellAllFrame = bottomFrame:FindFirstChild("_SellAll")
+                        if sellAllFrame and sellAllFrame:IsA("Frame") then
+                            local targetBtn = sellAllFrame:FindFirstChild("Btn")
+                            if targetBtn and targetBtn:IsA("ImageButton") then
+                                return targetBtn
+                            end
                         end
                     end
                 end
             end
         end
     end
-    
-    -- Fallback Pencarian Rekursif
-    for _, desc in ipairs(playerGui:GetDescendants()) do
-        if desc:IsA("ImageButton") and desc.Name == "Btn" then
-            local parent = desc.Parent
-            if parent and parent.Name == "_SellAll" and parent:IsA("Frame") then
-                return desc
-            end
-        end
-    end
-    
     return nil
 end
 
@@ -486,15 +538,24 @@ end
 -- =========================================================
 RunService.Heartbeat:Connect(function()
     if isAutoFarmActive and running and getgenv().CurrentAutoFarmID == scriptId then
-        if currentLockTarget and currentLockTarget.Parent and checkPlayerAlive() then
+        if currentLockTarget and checkPlayerAlive() then
             pcall(function()
                 local char = LocalPlayer.Character
                 local hrp = char and char:FindFirstChild("HumanoidRootPart")
                 if hrp then
-                    local destCFrame = CFrame.new(currentLockTarget.Position + Vector3.new(0, heightOffset, 0))
-                    hrp.CFrame = destCFrame
-                    hrp.AssemblyLinearVelocity = Vector3.zero
-                    hrp.AssemblyAngularVelocity = Vector3.zero
+                    local targetPos = nil
+                    if typeof(currentLockTarget) == "Vector3" then
+                        targetPos = currentLockTarget
+                    elseif currentLockTarget.Parent then
+                        targetPos = currentLockTarget.Position
+                    end
+                    
+                    if targetPos then
+                        local destCFrame = CFrame.new(targetPos + Vector3.new(0, heightOffset, 0))
+                        hrp.CFrame = destCFrame
+                        hrp.AssemblyLinearVelocity = Vector3.zero
+                        hrp.AssemblyAngularVelocity = Vector3.zero
+                    end
                 end
             end)
         end
@@ -705,6 +766,7 @@ task.spawn(function()
 
                 local waitForSpawn = 0
                 local loggedSpawn = false
+                local stageCenterPosition = nil
                 while isAutoFarmActive and running and waitForSpawn < 35 do
                     local enemies = getActiveEnemies()
                     if #enemies > 0 then 
@@ -712,6 +774,10 @@ task.spawn(function()
                             logSpawnedEnemies(stage, enemies)
                             loggedSpawn = true
                         end
+                        -- Ambil koordinat spawn musuh pertama sebagai titik tengah stage
+                        pcall(function()
+                            stageCenterPosition = enemies[1].HRP.Position
+                        end)
                         break 
                     end
                     updateStatusMonitor(string.format("Menunggu Monster Stage %d (%ds)...", stage, 35 - waitForSpawn))
@@ -730,7 +796,7 @@ task.spawn(function()
                         local hpText = target.MaxHP > 0 and math.floor((target.HP / target.MaxHP) * 100) .. "%" or tostring(target.HP)
                         updateStatusMonitor(string.format("Stage %d/%d | Musuh: %d | HP: %s", stage, stopAtStage, #enemies, hpText))
 
-                        currentLockTarget = target.HRP
+                        currentLockTarget = stageCenterPosition or target.HRP.Position
                     else
                         currentLockTarget = nil
                         updateStatusMonitor(string.format("Monster Habis! Melakukan Looting Stage %d...", stage))
@@ -766,6 +832,7 @@ task.spawn(function()
                     logToScreen(string.format("🔄 Mencapai Stage %d! Mode Infinite Loop Aktif...", stopAtStage))
                     
                     local enemiesWereAlive = false
+                    local loopStageCenter = nil
                     while isAutoFarmActive and running do
                         while isAutoFarmActive and running and not checkPlayerAlive() do
                             currentLockTarget = nil
@@ -780,12 +847,15 @@ task.spawn(function()
                             if not enemiesWereAlive then
                                 logSpawnedEnemies(stopAtStage, enemies)
                                 enemiesWereAlive = true
+                                pcall(function()
+                                    loopStageCenter = enemies[1].HRP.Position
+                                end)
                             end
                             local target = enemies[1]
                             local hpText = target.MaxHP > 0 and math.floor((target.HP / target.MaxHP) * 100) .. "%" or tostring(target.HP)
                             updateStatusMonitor(string.format("Stage %d (Loop) | Musuh: %d | HP: %s", stopAtStage, #enemies, hpText))
 
-                            currentLockTarget = target.HRP
+                            currentLockTarget = loopStageCenter or target.HRP.Position
                         else
                             enemiesWereAlive = false
                             currentLockTarget = nil
