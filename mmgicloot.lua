@@ -341,40 +341,37 @@ local function clickButton(btn)
     end
 end
 
--- Pencari Tombol Sell All
+-- Pencari Tombol Sell All (Mengikuti path penulisan dari pengguna)
 local function findSellAllButton()
-    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
-    if not playerGui then return nil end
+    local btn = nil
+    pcall(function()
+        btn = LocalPlayer.PlayerGui.ScreenGui.Sell.Bottom._SellAll.Btn
+    end)
+    if btn and btn:IsA("ImageButton") then
+        return btn
+    end
     
-    -- Struktur Utama: ScreenGui -> Sell -> Bottom -> _SellAll -> Btn
-    for _, gui in ipairs(playerGui:GetChildren()) do
-        if gui:IsA("ScreenGui") then
-            local sellFrame = gui:FindFirstChild("Sell")
-            if sellFrame and sellFrame:IsA("Frame") then
-                local bottomFrame = sellFrame:FindFirstChild("Bottom")
-                if bottomFrame and bottomFrame:IsA("Frame") then
-                    local sellAllFrame = bottomFrame:FindFirstChild("_SellAll")
-                    if sellAllFrame and sellAllFrame:IsA("Frame") then
-                        local btn = sellAllFrame:FindFirstChild("Btn")
-                        if btn and btn:IsA("ImageButton") then
-                            return btn
+    -- Fallback: Cari secara dinamis jika nama ScreenGui berbeda di server
+    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+    if playerGui then
+        for _, gui in ipairs(playerGui:GetChildren()) do
+            if gui:IsA("ScreenGui") then
+                local sellFrame = gui:FindFirstChild("Sell")
+                if sellFrame and sellFrame:IsA("Frame") then
+                    local bottomFrame = sellFrame:FindFirstChild("Bottom")
+                    if bottomFrame and bottomFrame:IsA("Frame") then
+                        local sellAllFrame = bottomFrame:FindFirstChild("_SellAll")
+                        if sellAllFrame and sellAllFrame:IsA("Frame") then
+                            local targetBtn = sellAllFrame:FindFirstChild("Btn")
+                            if targetBtn and targetBtn:IsA("ImageButton") then
+                                return targetBtn
+                            end
                         end
                     end
                 end
             end
         end
     end
-    
-    -- Fallback Pencarian Rekursif
-    for _, desc in ipairs(playerGui:GetDescendants()) do
-        if desc:IsA("ImageButton") and desc.Name == "Btn" then
-            local parent = desc.Parent
-            if parent and parent.Name == "_SellAll" and parent:IsA("Frame") then
-                return desc
-            end
-        end
-    end
-    
     return nil
 end
 
