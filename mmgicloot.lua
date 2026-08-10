@@ -89,8 +89,10 @@ FarmSec:AddToggle({ Name = "ON / OFF Auto Farm", Default = isAutoFarmActive }, f
     isAutoFarmActive = v
     if isAutoFarmActive then
         stageLootCount = 0
+        logToScreen("⚡ Auto Farm AKTIF!")
     else
         currentLockTarget = nil
+        logToScreen("🛑 Auto Farm MATI!")
     end
 end)
 
@@ -126,24 +128,28 @@ local UtilSec = AdvTab:AddSection("Utility Loops")
 
 UtilSec:AddToggle({ Name = "Auto Rebirth", Default = autoRebirthActive }, function(v)
     autoRebirthActive = v
+    logToScreen(v and "✨ Auto Rebirth AKTIF!" or "💤 Auto Rebirth MATI!")
 end)
 
 local rebirthInput = UtilSec:AddInput({ Name = "Rebirth Interval (Seconds):", Placeholder = "Enter seconds..." }, function(v)
     local n = tonumber(v)
     if n and n > 0 then
         rebirthInterval = n
+        logToScreen(string.format("⏱️ Jeda Rebirth diubah ke %d detik", n))
     end
 end)
 rebirthInput:Set("5")
 
 UtilSec:AddToggle({ Name = "Auto Sell", Default = autoSellActive }, function(v)
     autoSellActive = v
+    logToScreen(v and "💰 Auto Sell Materials AKTIF!" or "💤 Auto Sell Materials MATI!")
 end)
 
 local sellInput = UtilSec:AddInput({ Name = "Sell Interval (Seconds):", Placeholder = "Enter seconds..." }, function(v)
     local n = tonumber(v)
     if n and n > 0 then
         sellInterval = n
+        logToScreen(string.format("⏱️ Jeda Auto Sell diubah ke %d detik", n))
     end
 end)
 sellInput:Set("30")
@@ -152,14 +158,49 @@ sellInput:Set("30")
 local StatsSec = MainTab:AddSection("Stats Monitor")
 local monitorPara = StatsSec:AddParagraph("📊 Status & Inventory", "Initializing...")
 
--- TAB 3: INVENTORY MANAGER
+-- TAB 3: LIVE ACTIVITY LOGS
+local LogTab = Window:MakeTab("📋")
+local LogSec = LogTab:AddSection("Live Activity Logs")
+local logPara = LogSec:AddParagraph("📜 Activity Log", "Ready...\nWaiting for activity...")
+
+-- TAB 4: INVENTORY MANAGER
 local InvTab = Window:MakeTab("🎒")
 local InvSec = InvTab:AddSection("Backpack Inventory")
 local InvStatus = InvSec:AddParagraph("Items in Backpack", "Loading inventory...")
 
--- TAB 4: CONFIG MANAGER
+-- TAB 5: CONFIG MANAGER
 local CfgTab = Window:MakeTab("💾")
 CfgTab:AddConfigManager()
+
+-- Logging System
+local liveLogs = {}
+local MAX_LOG_LINES = 15
+
+local function logToScreen(msg)
+    local timestamp = os.date("%H:%M:%S")
+    table.insert(liveLogs, 1, string.format("[%s] %s", timestamp, msg))
+    if #liveLogs > MAX_LOG_LINES then
+        table.remove(liveLogs)
+    end
+    if logPara then
+        pcall(function()
+            logPara:Set("📜 Activity Log", table.concat(liveLogs, "\n"))
+        end)
+    end
+end
+
+local function logSpawnedEnemies(stage, enemies)
+    local counts = {}
+    for _, e in ipairs(enemies) do
+        local name = e.Model and e.Model.Name or "Monster"
+        counts[name] = (counts[name] or 0) + 1
+    end
+    local names = {}
+    for name, count in pairs(counts) do
+        table.insert(names, string.format("%s (x%d)", name, count))
+    end
+    logToScreen(string.format("👾 Stage %d: Spawned %s", stage, table.concat(names, ", ")))
+end
 
 Library:Notify({ Title = 'Sigma UI Loaded', Content = 'Magic Loot Auto Farm ready!', Type = 'Success' })
 
@@ -281,6 +322,7 @@ local function performAutoSell()
         netRemoteFunction:InvokeServer("出售材料", {
             ["onlyIDList"] = onlyIDList
         })
+        logToScreen("💰 Auto Sell: Berhasil menjual material (ID 1-1000)!")
     end)
 end
 
@@ -289,9 +331,12 @@ task.spawn(function()
     while running and getgenv().CurrentAutoFarmID == scriptId do
         if autoRebirthActive then
             if netRemoteFunction then
-                pcall(function()
+                local success = pcall(function()
                     netRemoteFunction:InvokeServer("玩家晋升")
                 end)
+                if success then
+                    logToScreen("✨ Auto Rebirth: Karakter berhasil naik tingkatan!")
+                end
             end
         end
         task.wait(rebirthInterval)
@@ -335,6 +380,7 @@ end
 
 local function returnToBaseAndReset()
     currentLockTarget = nil
+    logToScreen("🎒 Tas Penuh! Mengirim request pulang ke Base...")
     updateStatusMonitor("🎒 Tas Penuh (8/8)! Pulang ke Base...")
     if netRemoteEvent then
         pcall(function()
@@ -347,6 +393,7 @@ local function returnToBaseAndReset()
     performAutoSell()
     
     stageLootCount = 0
+    logToScreen("🔄 Memulai kembali Auto Farm dari Stage 1...")
     updateStatusMonitor("🔄 Re-starting dari Stage 1...")
     task.wait(1)
 end
@@ -477,6 +524,7 @@ local function sweepStageDrops(stage)
             prompt.RequiresLineOfSight = false
             prompt.MaxActivationDistance = 99999
 
+            local dropName = prompt.Parent and prompt.Parent.Name or "Unknown Item"
             local success = pcall(function()
                 if fireproximityprompt then
                     fireproximityprompt(prompt, 0, true)
@@ -488,6 +536,7 @@ local function sweepStageDrops(stage)
 
             if success then
                 stageLootCount = stageLootCount + 1
+                logToScreen(string.format("🎁 Looted: %s (Tas: %d/%d)", dropName, stageLootCount, MAX_STAGE_ITEMS))
             end
 
             task.wait(lootDelay)
@@ -509,6 +558,7 @@ task.spawn(function()
             local startStage = 1
             if broomSkipEnabled and stopAtStage >= 13 then
                 startStage = 13
+                logToScreen("🧹 Broom Skip: Melompati dungeon langsung ke Stage 13!")
                 updateStatusMonitor("⚡ Melompati Stage ke 13 (Broom)...")
                 if netRemoteEvent then
                     pcall(function()
@@ -545,9 +595,16 @@ task.spawn(function()
                 end
 
                 local waitForSpawn = 0
+                local loggedSpawn = false
                 while isAutoFarmActive and running and waitForSpawn < 35 do
                     local enemies = getActiveEnemies()
-                    if #enemies > 0 then break end
+                    if #enemies > 0 then 
+                        if not loggedSpawn then
+                            logSpawnedEnemies(stage, enemies)
+                            loggedSpawn = true
+                        end
+                        break 
+                    end
                     updateStatusMonitor(string.format("Menunggu Monster Stage %d (%ds)...", stage, 35 - waitForSpawn))
                     task.wait(1)
                     waitForSpawn = waitForSpawn + 1
@@ -597,7 +654,9 @@ task.spawn(function()
                 -- STAGE TARGET: REPEAT LOOP MUSUH & LOOTING
                 if stage == stopAtStage then
                     print(string.format("🔄 Mencapai Stage %d! Mode Infinite Loop Aktif...", stopAtStage))
+                    logToScreen(string.format("🔄 Mencapai Stage %d! Mode Infinite Loop Aktif...", stopAtStage))
                     
+                    local enemiesWereAlive = false
                     while isAutoFarmActive and running do
                         while isAutoFarmActive and running and not checkPlayerAlive() do
                             currentLockTarget = nil
@@ -609,12 +668,17 @@ task.spawn(function()
                         local enemies = getActiveEnemies()
 
                         if #enemies > 0 then
+                            if not enemiesWereAlive then
+                                logSpawnedEnemies(stopAtStage, enemies)
+                                enemiesWereAlive = true
+                            end
                             local target = enemies[1]
                             local hpText = target.MaxHP > 0 and math.floor((target.HP / target.MaxHP) * 100) .. "%" or tostring(target.HP)
                             updateStatusMonitor(string.format("Stage %d (Loop) | Musuh: %d | HP: %s", stopAtStage, #enemies, hpText))
 
                             currentLockTarget = target.HRP
                         else
+                            enemiesWereAlive = false
                             currentLockTarget = nil
                             updateStatusMonitor(string.format("Stage %d: Menunggu Respawn / Looting...", stopAtStage))
                             sweepStageDrops(stopAtStage)
