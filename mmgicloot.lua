@@ -39,8 +39,6 @@ local rebirthInterval = 5
 local autoSellActive = false
 local sellInterval = 30
 local broomSkipEnabled = false
-local fpsBoostEnabled = true
-local disable3dRender = false
 local lootOnlyAtStopStage = true 
 local MAX_STAGE_ITEMS = 9 
 local stageLootCount = 0 
@@ -156,26 +154,6 @@ local sellInput = UtilSec:AddInput({ Name = "Sell Interval (Seconds):", Placehol
 end)
 sellInput:Set("30")
 
-local PerfSec = AdvTab:AddSection("Performance & Anti-Lag")
-
-PerfSec:AddToggle({ Name = "FPS Boost (Remove Effects/Shadows)", Default = fpsBoostEnabled }, function(v)
-    fpsBoostEnabled = v
-    if v then
-        cleanEffects()
-        logToScreen("🚀 Anti-Lag: FPS Boost diaktifkan (Partikel & Bayangan dihapus)!")
-    else
-        logToScreen("🚀 Anti-Lag: Silakan restart game untuk mengembalikan efek visual.")
-    end
-end)
-
-PerfSec:AddToggle({ Name = "Disable 3D Rendering (Ultra GPU Saver)", Default = disable3dRender }, function(v)
-    disable3dRender = v
-    pcall(function()
-        game:GetService("RunService"):Set3dRenderingEnabled(not v)
-    end)
-    logToScreen(v and "🖥️ Anti-Lag: 3D Rendering dinonaktifkan (GPU Saver Aktif)!" or "🖥️ Anti-Lag: 3D Rendering diaktifkan kembali.")
-end)
-
 -- SECTION: MONITOR
 local StatsSec = MainTab:AddSection("Stats Monitor")
 local monitorPara = StatsSec:AddParagraph("📊 Status & Inventory", "Initializing...")
@@ -209,39 +187,6 @@ local function logToScreen(msg)
             logPara:Set("📜 Activity Log", table.concat(liveLogs, "\n"))
         end)
     end
-end
-
-local function cleanEffects()
-    pcall(function()
-        local Lighting = game:GetService("Lighting")
-        Lighting.GlobalShadows = false
-        Lighting.ShadowMapEnabled = false
-        for _, effect in ipairs(Lighting:GetChildren()) do
-            if effect:IsA("BlurEffect") or effect:IsA("SunRaysEffect") or effect:IsA("ColorCorrectionEffect") or effect:IsA("BloomEffect") or effect:IsA("DepthOfFieldEffect") then
-                effect.Enabled = false
-            end
-        end
-        
-        for _, obj in ipairs(workspace:GetDescendants()) do
-            if obj:IsA("Decal") or obj:IsA("Texture") then
-                obj:Destroy()
-            elseif obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Smoke") or obj:IsA("Fire") or obj:IsA("Sparkles") then
-                obj.Enabled = false
-            end
-        end
-        
-        workspace.DescendantAdded:Connect(function(obj)
-            pcall(function()
-                if obj:IsA("Decal") or obj:IsA("Texture") then
-                    task.wait()
-                    obj:Destroy()
-                elseif obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Smoke") or obj:IsA("Fire") or obj:IsA("Sparkles") then
-                    task.wait()
-                    obj.Enabled = false
-                end
-            end)
-        end)
-    end)
 end
 
 local function logSpawnedEnemies(stage, enemies)
@@ -396,37 +341,40 @@ local function clickButton(btn)
     end
 end
 
--- Pencari Tombol Sell All (Mengikuti path penulisan dari pengguna)
+-- Pencari Tombol Sell All
 local function findSellAllButton()
-    local btn = nil
-    pcall(function()
-        btn = LocalPlayer.PlayerGui.ScreenGui.Sell.Bottom._SellAll.Btn
-    end)
-    if btn and btn:IsA("ImageButton") then
-        return btn
-    end
-    
-    -- Fallback: Cari secara dinamis jika nama ScreenGui berbeda di server
     local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
-    if playerGui then
-        for _, gui in ipairs(playerGui:GetChildren()) do
-            if gui:IsA("ScreenGui") then
-                local sellFrame = gui:FindFirstChild("Sell")
-                if sellFrame and sellFrame:IsA("Frame") then
-                    local bottomFrame = sellFrame:FindFirstChild("Bottom")
-                    if bottomFrame and bottomFrame:IsA("Frame") then
-                        local sellAllFrame = bottomFrame:FindFirstChild("_SellAll")
-                        if sellAllFrame and sellAllFrame:IsA("Frame") then
-                            local targetBtn = sellAllFrame:FindFirstChild("Btn")
-                            if targetBtn and targetBtn:IsA("ImageButton") then
-                                return targetBtn
-                            end
+    if not playerGui then return nil end
+    
+    -- Struktur Utama: ScreenGui -> Sell -> Bottom -> _SellAll -> Btn
+    for _, gui in ipairs(playerGui:GetChildren()) do
+        if gui:IsA("ScreenGui") then
+            local sellFrame = gui:FindFirstChild("Sell")
+            if sellFrame and sellFrame:IsA("Frame") then
+                local bottomFrame = sellFrame:FindFirstChild("Bottom")
+                if bottomFrame and bottomFrame:IsA("Frame") then
+                    local sellAllFrame = bottomFrame:FindFirstChild("_SellAll")
+                    if sellAllFrame and sellAllFrame:IsA("Frame") then
+                        local btn = sellAllFrame:FindFirstChild("Btn")
+                        if btn and btn:IsA("ImageButton") then
+                            return btn
                         end
                     end
                 end
             end
         end
     end
+    
+    -- Fallback Pencarian Rekursif
+    for _, desc in ipairs(playerGui:GetDescendants()) do
+        if desc:IsA("ImageButton") and desc.Name == "Btn" then
+            local parent = desc.Parent
+            if parent and parent.Name == "_SellAll" and parent:IsA("Frame") then
+                return desc
+            end
+        end
+    end
+    
     return nil
 end
 
