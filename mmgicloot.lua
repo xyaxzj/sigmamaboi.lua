@@ -519,36 +519,53 @@ local function sweepStageDrops(stage)
                     continue -- Lewati drop dari stage sebelumnya
                 end
 
-                currentLockTarget = nil -- Lepaskan lock sementara untuk mengambil loot
-                if checkPlayerAlive() then
-                    hrp.CFrame = CFrame.new(targetPart.Position + Vector3.new(0, 2, 0))
-                    hrp.AssemblyLinearVelocity = Vector3.zero
-                    task.wait(0.08)
+                -- Mulai perulangan percobaan looting (maksimal 3 kali percobaan untuk mengatasi delay replikasi server)
+                local retries = 0
+                local looted = false
+                local dropName = dropObj.Name
+
+                while prompt and prompt.Parent and prompt:IsDescendantOf(workspace) and retries < 3 do
+                    if not checkPlayerAlive() or #getActiveEnemies() > 0 then 
+                        break 
+                    end
+
+                    currentLockTarget = nil -- Lepaskan lock sementara untuk mengambil loot
+                    if checkPlayerAlive() then
+                        hrp.CFrame = CFrame.new(targetPart.Position + Vector3.new(0, 2, 0))
+                        hrp.AssemblyLinearVelocity = Vector3.zero
+                    end
+
+                    prompt.HoldDuration = 0
+                    prompt.RequiresLineOfSight = false
+                    prompt.MaxActivationDistance = 99999
+
+                    pcall(function()
+                        if fireproximityprompt then
+                            fireproximityprompt(prompt, 0, true)
+                        else
+                            prompt:InputHoldBegin()
+                            prompt:InputHoldEnd()
+                        end
+                    end)
+
+                    task.wait(0.08) -- Tunggu sebentar untuk replikasi posisi dan cek penghapusan objek
+
+                    -- Jika objek prompt sudah hancur (berhasil diambil), tandai sukses
+                    if not prompt:IsDescendantOf(workspace) then
+                        looted = true
+                        break
+                    end
+
+                    retries = retries + 1
                 end
-            end
 
-            if not checkPlayerAlive() or #getActiveEnemies() > 0 then break end
-
-            prompt.HoldDuration = 0
-            prompt.RequiresLineOfSight = false
-            prompt.MaxActivationDistance = 99999
-
-            local dropName = dropObj.Name
-            local success = pcall(function()
-                if fireproximityprompt then
-                    fireproximityprompt(prompt, 0, true)
-                else
-                    prompt:InputHoldBegin()
-                    prompt:InputHoldEnd()
+                if looted then
+                    stageLootCount = stageLootCount + 1
+                    logToScreen(string.format("🎁 Looted: %s (Tas: %d/%d)", dropName, stageLootCount, MAX_STAGE_ITEMS))
                 end
-            end)
 
-            if success then
-                stageLootCount = stageLootCount + 1
-                logToScreen(string.format("🎁 Looted: %s (Tas: %d/%d)", dropName, stageLootCount, MAX_STAGE_ITEMS))
+                task.wait(lootDelay)
             end
-
-            task.wait(lootDelay)
         end
     end
 end
