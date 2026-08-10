@@ -485,6 +485,14 @@ local function sweepStageDrops(stage)
         end
     end
 
+    local function getDirectChild(prompt)
+        local obj = prompt.Parent
+        while obj and obj.Parent ~= dropsFolder do
+            obj = obj.Parent
+        end
+        return obj
+    end
+
     for _, prompt in ipairs(prompts) do
         -- Cek musuh: jika musuh respawn, hentikan looting
         local enemies = getActiveEnemies()
@@ -497,7 +505,8 @@ local function sweepStageDrops(stage)
             break
         end
 
-        if prompt and prompt.Parent then
+        local dropObj = getDirectChild(prompt)
+        if prompt and prompt.Parent and dropObj then
             local targetPart = prompt.Parent
             if not targetPart:IsA("BasePart") then
                 targetPart = prompt:FindFirstAncestorOfClass("BasePart")
@@ -524,7 +533,7 @@ local function sweepStageDrops(stage)
             prompt.RequiresLineOfSight = false
             prompt.MaxActivationDistance = 99999
 
-            local dropName = prompt.Parent and prompt.Parent.Name or "Unknown Item"
+            local dropName = dropObj.Name
             local success = pcall(function()
                 if fireproximityprompt then
                     fireproximityprompt(prompt, 0, true)
