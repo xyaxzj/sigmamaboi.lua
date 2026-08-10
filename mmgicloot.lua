@@ -311,18 +311,47 @@ task.spawn(function()
     end
 end)
 
--- Fungsi Auto Sell Materials (1-1000 IDs)
+-- Fungsi Auto Sell Materials
 local function performAutoSell()
     if not netRemoteFunction then return end
     pcall(function()
         local onlyIDList = {}
-        for i = 1, 1000 do
-            table.insert(onlyIDList, i)
+        local added = {}
+        
+        -- 1. Scan secara dinamis ID dari tool yang ada di tas saat ini
+        local tools = getBackpackTools()
+        for _, tool in ipairs(tools) do
+            local idVal = tool:GetAttribute("ID") or tool:GetAttribute("Id") or tool:GetAttribute("id")
+                       or tool:GetAttribute("ItemID") or tool:GetAttribute("ItemId") or tool:GetAttribute("itemId")
+            if not idVal then
+                local idObj = tool:FindFirstChild("ID") or tool:FindFirstChild("Id") or tool:FindFirstChild("id")
+                if idObj and (idObj:IsA("IntValue") or idObj:IsA("NumberValue") or idObj:IsA("StringValue")) then
+                    idVal = idObj.Value
+                end
+            end
+            local numId = tonumber(idVal)
+            if numId and not added[numId] then
+                added[numId] = true
+                table.insert(onlyIDList, numId)
+            end
         end
-        netRemoteFunction:InvokeServer("出售材料", {
-            ["onlyIDList"] = onlyIDList
-        })
-        logToScreen("💰 Auto Sell: Berhasil menjual material (ID 1-1000)!")
+        
+        -- 2. Gabungkan dengan range ID material yang umum (300 sampai 600) untuk fallback
+        for i = 300, 600 do
+            if not added[i] then
+                added[i] = true
+                table.insert(onlyIDList, i)
+            end
+        end
+        
+        -- Panggil remote function persis seperti format yang Anda minta
+        netRemoteFunction:InvokeServer(table.unpack({
+            [1] = "出售材料",
+            [2] = {
+                ["onlyIDList"] = onlyIDList,
+            },
+        }))
+        logToScreen("💰 Auto Sell: Berhasil memicu penjualan material!")
     end)
 end
 
