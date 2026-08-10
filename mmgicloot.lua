@@ -26,7 +26,7 @@ LocalPlayer.Idled:Connect(function()
 end)
 
 -- Configuration Variables
-local isAutoFarmActive = true
+local isAutoFarmActive = false
 local currentStageIndex = 1
 local stopAtStage = 17
 local heightOffset = 15
