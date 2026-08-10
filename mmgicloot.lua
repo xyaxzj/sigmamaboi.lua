@@ -40,7 +40,7 @@ local autoSellActive = false
 local sellInterval = 30
 local broomSkipEnabled = false
 local lootOnlyAtStopStage = true 
-local MAX_STAGE_ITEMS = 10 
+local MAX_STAGE_ITEMS = 9 
 local stageLootCount = 0 
 local currentLockTarget = nil
 
@@ -311,48 +311,102 @@ task.spawn(function()
     end
 end)
 
--- Fungsi Auto Sell Materials
-local function performAutoSell()
-    if not netRemoteFunction then return end
-    pcall(function()
-        local onlyIDList = {}
-        local added = {}
-        
-        -- 1. Scan secara dinamis ID dari tool yang ada di tas saat ini
-        local tools = getBackpackTools()
-        for _, tool in ipairs(tools) do
-            local idVal = tool:GetAttribute("ID") or tool:GetAttribute("Id") or tool:GetAttribute("id")
-                       or tool:GetAttribute("ItemID") or tool:GetAttribute("ItemId") or tool:GetAttribute("itemId")
-            if not idVal then
-                local idObj = tool:FindFirstChild("ID") or tool:FindFirstChild("Id") or tool:FindFirstChild("id")
-                if idObj and (idObj:IsA("IntValue") or idObj:IsA("NumberValue") or idObj:IsA("StringValue")) then
-                    idVal = idObj.Value
+-- Fungsi Helper Simulasi Klik GUI
+local function clickButton(btn)
+    if not btn then return end
+    local clicked = false
+    
+    if firesignal then
+        pcall(function()
+            firesignal(btn.MouseButton1Click)
+            clicked = true
+        end)
+        pcall(function()
+            firesignal(btn.Activated)
+            clicked = true
+        end)
+    end
+    
+    if not clicked and getconnections then
+        pcall(function()
+            for _, conn in ipairs(getconnections(btn.MouseButton1Click)) do
+                conn:Fire()
+            end
+        end)
+        pcall(function()
+            for _, conn in ipairs(getconnections(btn.Activated)) do
+                conn:Fire()
+            end
+        end)
+    end
+end
+
+-- Pencari Tombol Sell All
+local function findSellAllButton()
+    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+    if not playerGui then return nil end
+    
+    -- Struktur Utama: ScreenGui -> Sell -> Bottom -> _SellAll -> Btn
+    for _, gui in ipairs(playerGui:GetChildren()) do
+        if gui:IsA("ScreenGui") then
+            local sellFrame = gui:FindFirstChild("Sell")
+            if sellFrame and sellFrame:IsA("Frame") then
+                local bottomFrame = sellFrame:FindFirstChild("Bottom")
+                if bottomFrame and bottomFrame:IsA("Frame") then
+                    local sellAllFrame = bottomFrame:FindFirstChild("_SellAll")
+                    if sellAllFrame and sellAllFrame:IsA("Frame") then
+                        local btn = sellAllFrame:FindFirstChild("Btn")
+                        if btn and btn:IsA("ImageButton") then
+                            return btn
+                        end
+                    end
                 end
             end
-            local numId = tonumber(idVal)
-            if numId and not added[numId] then
-                added[numId] = true
-                table.insert(onlyIDList, numId)
+        end
+    end
+    
+    -- Fallback Pencarian Rekursif
+    for _, desc in ipairs(playerGui:GetDescendants()) do
+        if desc:IsA("ImageButton") and desc.Name == "Btn" then
+            local parent = desc.Parent
+            if parent and parent.Name == "_SellAll" and parent:IsA("Frame") then
+                return desc
             end
         end
-        
-        -- 2. Gabungkan dengan range ID material yang umum (300 sampai 600) untuk fallback
-        for i = 300, 600 do
-            if not added[i] then
-                added[i] = true
-                table.insert(onlyIDList, i)
-            end
-        end
-        
-        -- Panggil remote function persis seperti format yang Anda minta
-        netRemoteFunction:InvokeServer(table.unpack({
-            [1] = "出售材料",
-            [2] = {
-                ["onlyIDList"] = onlyIDList,
-            },
-        }))
-        logToScreen("💰 Auto Sell: Berhasil memicu penjualan material!")
-    end)
+    end
+    
+    return nil
+end
+
+-- Fungsi Auto Sell Materials
+local function performAutoSell()
+    local btn = findSellAllButton()
+    if btn then
+        pcall(function()
+            local parentGui = btn:FindFirstAncestorOfClass("ScreenGui")
+            local sellFrame = btn:FindFirstAncestor("Sell")
+            
+            local oldGuiEnabled = parentGui and parentGui.Enabled
+            local oldFrameVisible = sellFrame and sellFrame.Visible
+            
+            -- Pastikan di-enable agar event GUI terpicu di client
+            if parentGui then parentGui.Enabled = true end
+            if sellFrame then sellFrame.Visible = true end
+            
+            task.wait(0.05)
+            
+            clickButton(btn)
+            
+            task.wait(0.05)
+            
+            -- Kembalikan visibilitas semula
+            if parentGui then parentGui.Enabled = oldGuiEnabled end
+            if sellFrame then sellFrame.Visible = oldFrameVisible end
+        end)
+        logToScreen("💰 Auto Sell: Berhasil memicu klik 'Sell All'!")
+    else
+        logToScreen("⚠️ Auto Sell: Tombol 'Sell All' tidak ditemukan!")
+    end
 end
 
 -- Auto Rebirth Loop
