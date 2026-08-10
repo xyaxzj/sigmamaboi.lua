@@ -38,6 +38,7 @@ local autoRebirthActive = false
 local rebirthInterval = 5
 local autoSellActive = false
 local sellInterval = 30
+local broomSkipEnabled = false
 local lootOnlyAtStopStage = true 
 local MAX_STAGE_ITEMS = 9 
 local stageLootCount = 0 
@@ -99,6 +100,10 @@ end)
 
 FarmSec:AddSlider({ Name = "Stop at Stage", Min = 1, Max = 50, Default = stopAtStage, Step = 1 }, function(v)
     stopAtStage = v
+end)
+
+FarmSec:AddToggle({ Name = "Broom Skip to Stage 13 (Beta)", Default = broomSkipEnabled }, function(v)
+    broomSkipEnabled = v
 end)
 
 -- TAB 2: ADVANCED SETTINGS
@@ -501,7 +506,19 @@ end
 task.spawn(function()
     while running and getgenv().CurrentAutoFarmID == scriptId do
         if isAutoFarmActive then
-            for stage = 1, stopAtStage do
+            local startStage = 1
+            if broomSkipEnabled and stopAtStage >= 13 then
+                startStage = 13
+                updateStatusMonitor("⚡ Melompati Stage ke 13 (Broom)...")
+                if netRemoteEvent then
+                    pcall(function()
+                        netRemoteEvent:FireServer("关卡跳关请求", 13)
+                    end)
+                end
+                task.wait(1.5)
+            end
+
+            for stage = startStage, stopAtStage do
                 if not isAutoFarmActive or not running then break end
 
                 -- Cek kondisi hidup player
