@@ -40,7 +40,7 @@ local autoSellActive = false
 local sellInterval = 30
 local broomSkipEnabled = false
 local lootOnlyAtStopStage = true 
-local MAX_STAGE_ITEMS = 9 
+local MAX_STAGE_ITEMS = 10 
 local stageLootCount = 0 
 local currentLockTarget = nil
 
