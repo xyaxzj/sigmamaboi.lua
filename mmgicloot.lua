@@ -26,9 +26,9 @@ LocalPlayer.Idled:Connect(function()
 end)
 
 -- Configuration Variables
-local isAutoFarmActive = false
+local isAutoFarmActive = true
 local currentStageIndex = 1
-local stopAtStage = 20
+local stopAtStage = 24
 local heightOffset = 15
 local lootDelay = 0.12
 local autoEquipWeaponEnabled = false
@@ -36,9 +36,9 @@ local stageStartTime = 0
 
 local autoRebirthActive = false
 local rebirthInterval = 5
-local autoSellActive = false
+local autoSellActive = true
 local sellInterval = 5
-local broomSkipEnabled = false
+local broomSkipEnabled = true
 local fpsBoostEnabled = false
 local disable3dRender = false
 local lootOnlyAtStopStage = true 
