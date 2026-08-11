@@ -45,6 +45,9 @@ local lootOnlyAtStopStage = true
 local MAX_STAGE_ITEMS = 10 
 local stageLootCount = 0 
 local currentLockTarget = nil
+local lastTargetModel = nil
+local lastTargetHP = nil
+local lastAttackTime = nil
 
 -- Remote Setup
 local netRemoteEvent = nil
@@ -91,9 +94,15 @@ FarmSec:AddToggle({ Name = "ON / OFF Auto Farm", Default = isAutoFarmActive }, f
     isAutoFarmActive = v
     if isAutoFarmActive then
         stageLootCount = 0
+        lastAttackTime = nil
+        lastTargetModel = nil
+        lastTargetHP = nil
         logToScreen("⚡ Auto Farm AKTIF!")
     else
         currentLockTarget = nil
+        lastAttackTime = nil
+        lastTargetModel = nil
+        lastTargetHP = nil
         logToScreen("🛑 Auto Farm MATI!")
     end
 end)
@@ -528,9 +537,9 @@ local function returnToBaseAndReset()
     performAutoSell()
     
     stageLootCount = 0
-    logToScreen("🔄 Memulai kembali Auto Farm dari Stage 1...")
-    updateStatusMonitor("🔄 Re-starting dari Stage 1...")
-    task.wait(1)
+    logToScreen("🔄 Menunggu 4 detik sebelum memulai kembali dari Stage 1...")
+    updateStatusMonitor("🔄 Re-starting dalam 4 detik...")
+    task.wait(4)
 end
 
 -- =========================================================
@@ -715,6 +724,57 @@ local function sweepStageDrops(stage)
 end
 
 -- =========================================================
+-- SAFETY GUARD FUNCTIONS
+-- =========================================================
+local function checkAttackSafety(enemies)
+    if #enemies > 0 then
+        local target = enemies[1]
+        local targetModel = target.Model
+        local targetHP = target.HP
+        
+        local currentTime = tick()
+        
+        if not lastAttackTime then
+            -- First time detecting enemies, initialize safety guard
+            lastAttackTime = currentTime
+            lastTargetModel = targetModel
+            lastTargetHP = targetHP
+        elseif targetModel ~= lastTargetModel then
+            -- Target changed, reset safety guard
+            lastAttackTime = currentTime
+            lastTargetModel = targetModel
+            lastTargetHP = targetHP
+        elseif targetHP < lastTargetHP then
+            -- We dealt damage to the target! Update safety timer
+            lastAttackTime = currentTime
+            lastTargetHP = targetHP
+        else
+            -- Target is same and HP did not decrease. Check for 1-minute timeout.
+            if currentTime - lastAttackTime > 60 then
+                logToScreen("⚠️ Pengaman: Tidak terdeteksi attack musuh selama 1 menit! Respawn...")
+                pcall(function()
+                    local char = LocalPlayer.Character
+                    local hum = char and char:FindFirstChildOfClass("Humanoid")
+                    if hum then
+                        hum.Health = 0
+                    end
+                end)
+                lastAttackTime = nil
+                lastTargetModel = nil
+                lastTargetHP = nil
+                return true -- Trigger reset
+            end
+        end
+    else
+        -- No active enemies, reset safety guard
+        lastAttackTime = nil
+        lastTargetModel = nil
+        lastTargetHP = nil
+    end
+    return false
+end
+
+-- =========================================================
 -- MAIN AUTO FARM LOOP
 -- =========================================================
 getgenv().CancelAutoFarm = function()
@@ -738,8 +798,9 @@ task.spawn(function()
                 task.wait(1.5)
             end
 
+            local shouldResetFarm = false
             for stage = startStage, stopAtStage do
-                if not isAutoFarmActive or not running then break end
+                if not isAutoFarmActive or not running or shouldResetFarm then break end
 
                 -- Cek kondisi hidup player
                 while isAutoFarmActive and running and not checkPlayerAlive() do
@@ -797,6 +858,11 @@ task.spawn(function()
                         updateStatusMonitor(string.format("Stage %d/%d | Musuh: %d | HP: %s", stage, stopAtStage, #enemies, hpText))
 
                         currentLockTarget = stageCenterPosition or target.HRP.Position
+                        
+                        if checkAttackSafety(enemies) then
+                            shouldResetFarm = true
+                            break
+                        end
                     else
                         currentLockTarget = nil
                         updateStatusMonitor(string.format("Monster Habis! Melakukan Looting Stage %d...", stage))
@@ -820,6 +886,10 @@ task.spawn(function()
                     task.wait(0.12)
                 end
 
+                if shouldResetFarm then
+                    break
+                end
+
                 -- CEK SETELAH LOOTING: Jika tas penuh, pulang base & restart dari Stage 1
                 if stageLootCount >= MAX_STAGE_ITEMS then
                     returnToBaseAndReset()
@@ -834,6 +904,7 @@ task.spawn(function()
                     local enemiesWereAlive = false
                     local loopStageCenter = nil
                     while isAutoFarmActive and running do
+                        if shouldResetFarm then break end
                         while isAutoFarmActive and running and not checkPlayerAlive() do
                             currentLockTarget = nil
                             updateStatusMonitor("Waiting for Respawn...")
@@ -856,7 +927,13 @@ task.spawn(function()
                             updateStatusMonitor(string.format("Stage %d (Loop) | Musuh: %d | HP: %s", stopAtStage, #enemies, hpText))
 
                             currentLockTarget = loopStageCenter or target.HRP.Position
+                            
+                            if checkAttackSafety(enemies) then
+                                shouldResetFarm = true
+                                break
+                            end
                         else
+                            checkAttackSafety(enemies)
                             enemiesWereAlive = false
                             currentLockTarget = nil
                             updateStatusMonitor(string.format("Stage %d: Menunggu Respawn / Looting...", stopAtStage))
