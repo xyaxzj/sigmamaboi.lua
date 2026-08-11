@@ -36,7 +36,7 @@ local stageStartTime = 0
 
 local autoRebirthActive = false
 local rebirthInterval = 5
-local autoSellActive = true
+local autoSellActive = false
 local sellInterval = 5
 local broomSkipEnabled = true
 local fpsBoostEnabled = false
