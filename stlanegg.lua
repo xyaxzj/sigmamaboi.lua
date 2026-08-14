@@ -2,7 +2,7 @@
 -- STEAL AN EGG - AUTO TRADE & GIFTING SYSTEM (SIGMA UI V4)
 -- Game: Steal an Egg (Roblox)
 -- Framework: Sigma UI Library - V4 Ultimate Edition
--- Features: Auto Gifting, Backpack Scanner, Filtered Trade (Multi-Rarity, Weight, Mutation), Auto Accept, Server Tab (Job ID & Teleport)
+-- Features: Auto Gifting, Backpack Scanner, Filtered Trade (Multi-Rarity, Weight, Mutation), Auto Accept, Server Tab (Job ID, Teleport & Low Player Server Hop)
 -- ==========================================================
 
 local Players = game:GetService("Players")
@@ -308,7 +308,6 @@ local function ResolveTargetId()
     if Config.TargetPlayerId then return Config.TargetPlayerId end
     if not Config.TargetPlayerName or Config.TargetPlayerName == "" then return nil end
     
-    -- 1. Cek di server aktif
     local found = FindPlayerByName(Config.TargetPlayerName)
     if found then
         Config.TargetPlayerId = found.UserId
@@ -316,7 +315,6 @@ local function ResolveTargetId()
         return found.UserId
     end
     
-    -- 2. Cek via Roblox API
     local ok, id = pcall(function() return Players:GetUserIdFromNameAsync(Config.TargetPlayerName) end)
     if ok and id then
         Config.TargetPlayerId = id
@@ -327,7 +325,6 @@ local function ResolveTargetId()
     return nil
 end
 
--- Jalankan resolve awal
 task.spawn(ResolveTargetId)
 
 -- Cleanup handler
@@ -420,7 +417,6 @@ function StealAnEggTrade.GetToolRarity(tool)
     return "Normal"
 end
 
---- Memegang / Equip Tool ke Character Player dengan verifikasi & jeda replikasi
 function StealAnEggTrade.EquipTool(tool)
     if not tool or not tool:IsA("Tool") then 
         return false, "Objek yang diberikan bukan Tool" 
@@ -429,32 +425,27 @@ function StealAnEggTrade.EquipTool(tool)
     local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
     local humanoid = character:FindFirstChildOfClass("Humanoid")
     
-    -- Sudah dipegang
     if tool.Parent == character then
         return true, "Tool sudah aktif di tangan"
     end
     
-    -- Lepas tool lain yang mungkin sedang dipegang
     if humanoid then
         humanoid:UnequipTools()
         task.wait(0.08)
     end
     
-    -- Equip tool
     if humanoid and tool.Parent == LocalPlayer:FindFirstChild("Backpack") then
         humanoid:EquipTool(tool)
     else
         tool.Parent = character
     end
     
-    -- Tunggu sampai tool masuk ke character
     local startT = tick()
     while tool.Parent ~= character and (tick() - startT) < 1.0 do
         task.wait(0.05)
     end
     
     if tool.Parent == character then
-        -- Beri jeda agar server mencatat bahwa tool sedang dipegang
         task.wait(0.2)
         return true, "Tool berhasil dipegang"
     else
@@ -583,7 +574,6 @@ function StealAnEggTrade.ScanInventory()
     }
 end
 
---- Helper function untuk memeriksa kecocokan Rarity (Mendukung Multi-Rarity / Koma / Table)
 local function CheckRarityMatch(itemRarity, filterRarity)
     if not filterRarity or filterRarity == "All Rarities" or filterRarity == "All" or filterRarity == "" then
         return true
@@ -591,7 +581,6 @@ local function CheckRarityMatch(itemRarity, filterRarity)
     
     local iRarityClean = tostring(itemRarity):lower():gsub("%s+", "")
     
-    -- Jika filterRarity berbentuk tabel: { "Divine", "Eternal", "Secret" }
     if type(filterRarity) == "table" then
         for _, r in ipairs(filterRarity) do
             if tostring(r):lower():gsub("%s+", "") == iRarityClean then
@@ -601,7 +590,6 @@ local function CheckRarityMatch(itemRarity, filterRarity)
         return false
     end
     
-    -- Jika filterRarity berbentuk string dengan koma: "Divine, Eternal, Secret"
     local filterStr = tostring(filterRarity):lower()
     if filterStr:find(",") then
         for part in string.gmatch(filterStr, "[^,]+") do
@@ -616,7 +604,6 @@ local function CheckRarityMatch(itemRarity, filterRarity)
     return filterStr:gsub("%s+", "") == iRarityClean
 end
 
---- Memeriksa apakah suatu Tool cocok dengan kriteria filter (Termasuk Multi-Rarity)
 function StealAnEggTrade.MatchesFilter(tool, filterConfig)
     filterConfig = filterConfig or Config
     if not tool or not tool:IsA("Tool") then return false end
@@ -665,7 +652,6 @@ function StealAnEggTrade.MatchesFilter(tool, filterConfig)
     return true, info
 end
 
---- Mengirim Gift Tool ke Player Target (Dilengkapi Dual Invoker & Error Resolver)
 function StealAnEggTrade.SendGift(targetPlayerId, tool)
     local numericId = tonumber(targetPlayerId) or Config.TargetPlayerId or ResolveTargetId()
     if not numericId then
@@ -685,28 +671,24 @@ function StealAnEggTrade.SendGift(targetPlayerId, tool)
     
     local toolName = tool.Name
     
-    -- 1. Pegang barangnya terlebih dahulu
     local equipped, equipMsg = StealAnEggTrade.EquipTool(tool)
     if not equipped then
         return false, "Gagal memegang Tool: " .. tostring(equipMsg)
     end
     
-    -- 2. Dapatkan RemoteFunction Gifting
     local giftingRemote = StealAnEggTrade.GetGiftingRemote()
     if not giftingRemote then
         return false, "Remote 'Gifting: Send Request' tidak ditemukan di ReplicatedStorage.Network"
     end
     
-    -- 3. Cek apakah target ada di server saat ini
     local targetPlayerObj = Players:GetPlayerByUserId(numericId)
     if not targetPlayerObj and Config.TargetPlayerName and Config.TargetPlayerName ~= "" then
         targetPlayerObj = FindPlayerByName(Config.TargetPlayerName)
     end
     
-    print(string.format("[SendGift] Mencoba mengirim '%s' ke UserID: %s (Target In Server: %s)", 
+    print(string.format("[SendGift] Mengirim '%s' ke Target ID: %s (Player In Server: %s)", 
         toolName, tostring(numericId), targetPlayerObj and targetPlayerObj.Name or "TIDAK ADA DI SERVER"))
     
-    -- 4. InvokeServer (Coba Numeric ID & Player Object)
     local success, result = pcall(function()
         return giftingRemote:InvokeServer(numericId)
     end)
@@ -798,6 +780,85 @@ function StealAnEggTrade.Rejoin()
     return success, err
 end
 
+--- Pindah ke Server dengan jumlah pemain paling sedikit (Server Sepi)
+function StealAnEggTrade.HopSmallServer()
+    task.spawn(function()
+        local placeId = game.PlaceId
+        local foundServers = {}
+        local cursor = ""
+        local attempts = 0
+        local maxAttempts = 3
+        
+        while attempts < maxAttempts do
+            attempts = attempts + 1
+            local url = string.format("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100%s", placeId, cursor ~= "" and ("&cursor=" .. cursor) or "")
+            local success, raw = pcall(function() return game:HttpGet(url) end)
+            
+            if success and raw then
+                local ok, data = pcall(function() return HttpService:JSONDecode(raw) end)
+                if ok and data and data.data then
+                    for _, s in ipairs(data.data) do
+                        if s.id and s.id ~= game.JobId and s.playing and s.maxPlayers and s.playing < s.maxPlayers and s.playing > 0 then
+                            table.insert(foundServers, {
+                                id = s.id,
+                                playing = tonumber(s.playing) or 99,
+                                maxPlayers = tonumber(s.maxPlayers) or 0,
+                                ping = tonumber(s.ping) or 999
+                            })
+                        end
+                    end
+                    
+                    if data.nextPageCursor and data.nextPageCursor ~= "" then
+                        cursor = data.nextPageCursor
+                    else
+                        break
+                    end
+                else
+                    break
+                end
+            else
+                break
+            end
+        end
+        
+        if #foundServers > 0 then
+            table.sort(foundServers, function(a, b)
+                if a.playing == b.playing then
+                    return a.ping < b.ping
+                end
+                return a.playing < b.playing
+            end)
+            
+            local bestServer = foundServers[1]
+            print(string.format("[HopSmallServer] Menemukan Server Sepi! ID: %s | Pemain: %d/%d | Ping: %dms", 
+                bestServer.id, bestServer.playing, bestServer.maxPlayers, bestServer.ping))
+                
+            pcall(function()
+                Library:Notify({
+                    Title   = "Server Sepi Ditemukan! 🍃",
+                    Content = string.format("Pindah ke server dengan %d/%d pemain (Ping: %dms)", bestServer.playing, bestServer.maxPlayers, bestServer.ping),
+                    Type    = "Success",
+                    Duration = 4
+                })
+            end)
+            
+            task.wait(0.5)
+            TeleportService:TeleportToPlaceInstance(placeId, bestServer.id, LocalPlayer)
+        else
+            pcall(function()
+                Library:Notify({
+                    Title   = "Server Sepi Tidak Ditemukan",
+                    Content = "Mencoba teleport ke server publik umum...",
+                    Type    = "Warning",
+                    Duration = 3
+                })
+            end)
+            TeleportService:Teleport(placeId, LocalPlayer)
+        end
+    end)
+end
+
+--- Server Hop Acak (Random Server)
 function StealAnEggTrade.ServerHop()
     pcall(function()
         local placeId = game.PlaceId
@@ -1841,7 +1902,7 @@ end)
 
 
 -- ---------------------------------------------------------
--- TAB 5: 🌐 SERVER UTILITIES (JOB ID & TELEPORT)
+-- TAB 5: 🌐 SERVER UTILITIES (JOB ID & LOW-PLAYER HOP)
 -- ---------------------------------------------------------
 local ServerTab = Window:MakeTab("🌐")
 local ServerInfoSec = ServerTab:AddSection("Informasi Server Saat Ini")
@@ -1897,10 +1958,52 @@ ServerInfoSec:AddButton({
     end
 end)
 
-local TeleportSec = ServerTab:AddSection("🚀 Teleportasi ke Server Tertentu")
+local TeleportSec = ServerTab:AddSection("🚀 Pindah Server / Server Hop")
+
+-- Tombol Server Sepi (LOWEST PLAYER COUNT)
+TeleportSec:AddButton({
+    Name = "🍃 Hop ke Server Paling Sepi (Lowest Player)",
+    Tooltip = "Mencari server publik dengan jumlah pemain paling sedikit (1-3 player) lalu teleport ke sana"
+}, function()
+    Library:Notify({
+        Title   = "Mencari Server Sepi... 🍃",
+        Content = "Sedang memindai server publik dengan jumlah pemain paling sedikit...",
+        Type    = "Info",
+        Duration = 3.5
+    })
+    StealAnEggTrade.HopSmallServer()
+end)
+
+TeleportSec:AddButton({
+    Name = "🔀 Server Hop Acak (Random Server)",
+    Tooltip = "Pindah ke server publik lain secara acak"
+}, function()
+    Library:Notify({
+        Title   = "Server Hop Acak",
+        Content = "Mencari server publik lain...",
+        Type    = "Info",
+        Duration = 2.5
+    })
+    StealAnEggTrade.ServerHop()
+end)
+
+TeleportSec:AddButton({
+    Name = "🔄 Rejoin Server Saat Ini",
+    Tooltip = "Menghubungkan ulang ke server saat ini"
+}, function()
+    Library:Notify({
+        Title   = "Rejoining",
+        Content = "Sedang menghubungkan ulang ke server...",
+        Type    = "Info",
+        Duration = 2.5
+    })
+    StealAnEggTrade.Rejoin()
+end)
+
+local ManualTpSec = ServerTab:AddSection("🎯 Teleport ke Job ID Tertentu")
 
 local targetJobInput = ""
-TeleportSec:AddInput({
+ManualTpSec:AddInput({
     Name = "🎯 Masukkan Target Job ID",
     Placeholder = "Tempel / Ketik Job ID server tujuan di sini...",
     Tooltip = "Job ID server tujuan yang ingin Anda kunjungi"
@@ -1908,7 +2011,7 @@ TeleportSec:AddInput({
     targetJobInput = text or ""
 end)
 
-TeleportSec:AddButton({
+ManualTpSec:AddButton({
     Name = "🚀 Teleport ke Target Job ID",
     Tooltip = "Pindah ke server sesuai Job ID yang dimasukkan"
 }, function()
@@ -1938,32 +2041,6 @@ TeleportSec:AddButton({
             Duration = 4
         })
     end
-end)
-
-TeleportSec:AddButton({
-    Name = "🔄 Rejoin Server Saat Ini",
-    Tooltip = "Menghubungkan ulang ke server saat ini"
-}, function()
-    Library:Notify({
-        Title   = "Rejoining",
-        Content = "Sedang menghubungkan ulang ke server...",
-        Type    = "Info",
-        Duration = 2.5
-    })
-    StealAnEggTrade.Rejoin()
-end)
-
-TeleportSec:AddButton({
-    Name = "🔀 Server Hop (Cari Server Lain)",
-    Tooltip = "Pindah ke server publik lain secara acak"
-}, function()
-    Library:Notify({
-        Title   = "Server Hop",
-        Content = "Mencari server publik lain...",
-        Type    = "Info",
-        Duration = 2.5
-    })
-    StealAnEggTrade.ServerHop()
 end)
 
 
