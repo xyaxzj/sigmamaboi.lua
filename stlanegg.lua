@@ -63,6 +63,15 @@ function StealAnEggTrade.GetGiftingResponseRemote()
     return nil
 end
 
+--- Mencari RemoteEvent Gifting Request (Incoming Request) di ReplicatedStorage.Network
+function StealAnEggTrade.GetGiftingRequestRemote()
+    local network = ReplicatedStorage:FindFirstChild("Network")
+    if network then
+        return network:FindFirstChild("Gifting: Request")
+    end
+    return nil
+end
+
 --- Memegang / Equip Tool ke Character Player
 -- @param tool Instance Tool yang ingin dipegang
 -- @return boolean (success), string (message)
@@ -300,8 +309,8 @@ function StealAnEggTrade.SendGift(targetPlayerId, tool)
 end
 
 --- Menerima (Accept) Permintaan Gift yang Masuk
--- @param senderUserId UserID player pengirim gift
--- @param requestUid UID dari gift request yang diterima
+-- @param senderUserId UserID player pengirim gift (Arg 2 dari Gifting: Request)
+-- @param requestUid UID dari gift request yang diterima (Arg 4 dari Gifting: Request)
 -- @return boolean (success), any (result/error)
 function StealAnEggTrade.AcceptGift(senderUserId, requestUid)
     local responseRemote = StealAnEggTrade.GetGiftingResponseRemote()
@@ -389,6 +398,14 @@ local TradeStats = {
     LastItemName = "-"
 }
 
+local LastGiftRequest = {
+    SenderName = "-",
+    SenderId = nil,
+    ItemName = "-",
+    RequestUID = nil,
+    Time = 0
+}
+
 -- Cleanup handler
 getgenv().CancelStealAnEggTrade = function()
     Config.AutoTradeLoop = false
@@ -426,100 +443,98 @@ end
 
 
 -- ==========================================================
--- [SECTION 3] AUTO ACCEPT LISTENER & BACKEND HANDLER
+-- [SECTION 3] AUTO ACCEPT LISTENER (EXACT EVENT HANDLER)
+-- Signature: Gifting: Request -> OnClientEvent(username, userId, itemName, requestUID)
 -- ==========================================================
 
---- Parser untuk mendeteksi sender UserId & request UID dari argumen remote
-local function HandleIncomingGiftPayload(remoteName, ...)
-    local args = {...}
-    local sId, reqUid
+local LastRequestPara = nil
+
+--- Handler yang dipanggil saat ada event "Gifting: Request" masuk
+function StealAnEggTrade.OnGiftRequestReceived(senderUsername, senderUserId, itemName, requestUID)
+    local sName = tostring(senderUsername or "Unknown")
+    local sId = tonumber(senderUserId)
+    local iName = tostring(itemName or "Unknown Item")
+    local reqUid = tostring(requestUID or "")
     
-    -- Pola 1: args = { senderUserId, requestUid, ... }
-    if type(args[1]) == "number" and type(args[2]) == "string" then
-        sId = args[1]
-        reqUid = args[2]
-    -- Pola 2: args[1] adalah tabel { [1] = userId, [2] = uid } atau { Sender = ..., UID = ... }
-    elseif type(args[1]) == "table" then
-        local tbl = args[1]
-        sId = tbl.Sender or tbl.SenderId or tbl.UserId or tbl.From or tbl[1]
-        reqUid = tbl.UID or tbl.Uid or tbl.RequestUID or tbl.Id or tbl[2]
-    -- Pola 3: Pencarian nilai number & hash string dalam varargs
-    else
-        for _, arg in ipairs(args) do
-            if type(arg) == "number" and tostring(arg):len() >= 5 and not sId then
-                sId = arg
-            elseif type(arg) == "string" and arg:len() >= 16 and not reqUid then
-                reqUid = arg
-            end
-        end
+    LastGiftRequest.SenderName = sName
+    LastGiftRequest.SenderId = sId
+    LastGiftRequest.ItemName = iName
+    LastGiftRequest.RequestUID = reqUid
+    LastGiftRequest.Time = tick()
+    
+    print(string.format("[AutoAccept] Event Masuk: %s (ID: %s) mengirim '%s' [UID: %s]", sName, tostring(sId), iName, reqUid))
+    
+    if LastRequestPara then
+        LastRequestPara:Set("Permintaan Masuk Terakhir", string.format("Item: %s\nDari: %s (ID: %s)\nStatus: Menunggu Respon...", iName, sName, tostring(sId)))
     end
     
-    if sId and reqUid then
-        -- Cek Whitelist Target jika aktif
+    -- Eksekusi jika Auto Accept diaktifkan
+    if Config.AutoAcceptGift then
+        -- Cek Whitelist Target jika opsi aktif
         if Config.OnlyAcceptTarget and Config.TargetPlayerId then
-            if tonumber(sId) ~= tonumber(Config.TargetPlayerId) then
+            if sId ~= tonumber(Config.TargetPlayerId) then
+                if LastRequestPara then
+                    LastRequestPara:Set("Permintaan Masuk Terakhir", string.format("Item: %s\nDari: %s (ID: %s)\nStatus: Diabaikan (Bukan Target Whitelist) ❌", iName, sName, tostring(sId)))
+                end
                 return
             end
         end
         
-        task.wait(Config.AcceptDelay or 0.1)
+        -- Tunggu jeda (delay) jika disetel
+        if Config.AcceptDelay and Config.AcceptDelay > 0 then
+            task.wait(Config.AcceptDelay)
+        end
         
-        local ok, err = StealAnEggTrade.AcceptGift(sId, reqUid)
+        -- Kirim respon Accept ke server
+        local ok, result = StealAnEggTrade.AcceptGift(sId, reqUid)
         if ok then
             TradeStats.AcceptedCount = TradeStats.AcceptedCount + 1
+            if LastRequestPara then
+                LastRequestPara:Set("Permintaan Masuk Terakhir", string.format("Item: %s\nDari: %s (ID: %s)\nStatus: BERHASIL DITERIMA ✅", iName, sName, tostring(sId)))
+            end
             Library:Notify({
                 Title   = "Gift Diterima! 📥",
-                Content = "Berhasil auto accept gift dari UserID: " .. tostring(sId),
+                Content = string.format("Menerima '%s' dari %s", iName, sName),
                 Type    = "Success",
-                Duration = 3
+                Duration = 3.5
+            })
+        else
+            if LastRequestPara then
+                LastRequestPara:Set("Permintaan Masuk Terakhir", string.format("Item: %s\nDari: %s\nStatus: GAGAL DITERIMA ❌ (%s)", iName, sName, tostring(result)))
+            end
+            Library:Notify({
+                Title   = "Gagal Menerima Gift",
+                Content = "Error: " .. tostring(result),
+                Type    = "Error",
+                Duration = 3.5
             })
         end
     end
 end
 
--- Listener pada Folder ReplicatedStorage.Network
+-- Listener pada ReplicatedStorage.Network["Gifting: Request"]
 task.spawn(function()
     local network = ReplicatedStorage:WaitForChild("Network", 10)
     if not network then return end
     
-    for _, remote in ipairs(network:GetChildren()) do
-        if remote:IsA("RemoteEvent") then
-            remote.OnClientEvent:Connect(function(...)
-                if Config.AutoAcceptGift then
-                    pcall(HandleIncomingGiftPayload, remote.Name, ...)
-                end
-            end)
-        elseif remote:IsA("RemoteFunction") and remote.Name ~= "Gifting: Send Request" and remote.Name ~= "Gifting: Response" then
-            pcall(function()
-                local originalCallback = remote.OnClientInvoke
-                remote.OnClientInvoke = function(...)
-                    local args = {...}
-                    if Config.AutoAcceptGift then
-                        task.spawn(function()
-                            pcall(HandleIncomingGiftPayload, remote.Name, table.unpack(args))
-                        end)
-                    end
-                    if originalCallback then
-                        return originalCallback(...)
-                    end
-                    return true
-                end
-            end)
-        end
+    local giftingReq = network:FindFirstChild("Gifting: Request") or network:WaitForChild("Gifting: Request", 5)
+    if giftingReq and giftingReq:IsA("RemoteEvent") then
+        giftingReq.OnClientEvent:Connect(function(senderUsername, senderUserId, itemName, requestUID)
+            task.spawn(StealAnEggTrade.OnGiftRequestReceived, senderUsername, senderUserId, itemName, requestUID)
+        end)
     end
     
+    -- Listener backup untuk mendeteksi jika ada RemoteEvent baru yang ditambahkan
     network.ChildAdded:Connect(function(child)
-        if child:IsA("RemoteEvent") then
-            child.OnClientEvent:Connect(function(...)
-                if Config.AutoAcceptGift then
-                    pcall(HandleIncomingGiftPayload, child.Name, ...)
-                end
+        if child.Name == "Gifting: Request" and child:IsA("RemoteEvent") then
+            child.OnClientEvent:Connect(function(senderUsername, senderUserId, itemName, requestUID)
+                task.spawn(StealAnEggTrade.OnGiftRequestReceived, senderUsername, senderUserId, itemName, requestUID)
             end)
         end
     end)
 end)
 
--- Listener GUI Dialog Prompt Scanner di PlayerGui
+-- Listener GUI Dialog Prompt Scanner di PlayerGui (Backup jika game memunculkan tombol Accept)
 task.spawn(function()
     local playerGui = LocalPlayer:WaitForChild("PlayerGui", 10)
     if not playerGui then return end
@@ -555,17 +570,6 @@ task.spawn(function()
     end
     
     playerGui.DescendantAdded:Connect(checkAndClickAcceptButton)
-    
-    while getgenv().CurrentTradeScriptID == scriptId do
-        if Config.AutoAcceptGift then
-            pcall(function()
-                for _, child in ipairs(playerGui:GetDescendants()) do
-                    checkAndClickAcceptButton(child)
-                end
-            end)
-        end
-        task.wait(0.5)
-    end
 end)
 
 
@@ -822,20 +826,21 @@ end)
 -- Section 3: 📥 AUTO ACCEPT GIFT (PENERIMA / RECEIVER)
 local ReceiveSec = MainTab:AddSection("📥 Auto Accept Gift (Penerima)")
 
-local ReceiveStatusPara = ReceiveSec:AddParagraph("Status Auto Accept", "Auto Accept: Nonaktif (OFF)")
+local ReceiveStatusPara = ReceiveSec:AddParagraph("Status Auto Accept", "Auto Accept: Nonaktif (OFF) 🔴")
+LastRequestPara = ReceiveSec:AddParagraph("Permintaan Masuk Terakhir", "Belum ada permintaan gift yang masuk.")
 
 ReceiveSec:AddToggle({
     Name = "⚡ Auto Accept Semua Permintaan Gift Otomatis",
     Default = false,
     Flag = "AutoAcceptToggle",
-    Tooltip = "Otomatis menerima gift request dari player lain tanpa perlu klik manual"
+    Tooltip = "Menunggu event 'Gifting: Request' muncul lalu seketika mengirim 'Gifting: Response' (Accept)"
 }, function(Value)
     Config.AutoAcceptGift = Value
     if Value then
-        ReceiveStatusPara:Set("Status Auto Accept", "Status: AKTIF (Menerima Otomatis) 🟢")
+        ReceiveStatusPara:Set("Status Auto Accept", "Status: AKTIF (Menunggu Event 'Gifting: Request'...) 🟢")
         Library:Notify({
             Title   = "Auto Accept Aktif",
-            Content = "Setiap gift yang masuk akan diterima otomatis!",
+            Content = "Menunggu event gift masuk dan langsung di-accept otomatis!",
             Type    = "Success",
             Duration = 3
         })
@@ -868,15 +873,50 @@ ReceiveSec:AddToggle({
 end)
 
 ReceiveSec:AddSlider({
-    Name = "⏱️ Jeda Auto Accept (Detik)",
+    Name = "⏱️ Jeda Sebelum Accept (Detik)",
     Min = 0,
     Max = 2.0,
     Default = 0.1,
     Step = 0.1,
     Flag = "AcceptDelaySlider",
-    Tooltip = "Waktu tunggu sebelum merespon accept gift"
+    Tooltip = "Waktu tunggu setelah event gift muncul sebelum memanggil remote accept"
 }, function(val)
     Config.AcceptDelay = val
+end)
+
+ReceiveSec:AddButton({
+    Name = "📥 Terima (Accept) Permintaan Terakhir Secara Manual",
+    Tooltip = "Menerima permintaan gift yang terakhir kali masuk"
+}, function()
+    if LastGiftRequest.SenderId and LastGiftRequest.RequestUID then
+        local ok, result = StealAnEggTrade.AcceptGift(LastGiftRequest.SenderId, LastGiftRequest.RequestUID)
+        if ok then
+            TradeStats.AcceptedCount = TradeStats.AcceptedCount + 1
+            if LastRequestPara then
+                LastRequestPara:Set("Permintaan Masuk Terakhir", string.format("Item: %s\nDari: %s (ID: %s)\nStatus: MANUAL ACCEPT BERHASIL ✅", LastGiftRequest.ItemName, LastGiftRequest.SenderName, tostring(LastGiftRequest.SenderId)))
+            end
+            Library:Notify({
+                Title   = "Gift Diterima! 📥",
+                Content = "Manual accept berhasil: " .. tostring(LastGiftRequest.ItemName),
+                Type    = "Success",
+                Duration = 3
+            })
+        else
+            Library:Notify({
+                Title   = "Gagal Accept",
+                Content = "Error: " .. tostring(result),
+                Type    = "Error",
+                Duration = 3.5
+            })
+        end
+    else
+        Library:Notify({
+            Title   = "Tidak Ada Permintaan",
+            Content = "Belum ada event gift yang terdeteksi!",
+            Type    = "Warning",
+            Duration = 3
+        })
+    end
 end)
 
 
