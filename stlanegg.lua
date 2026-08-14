@@ -488,6 +488,142 @@ local function formatIncome(n)
     end
 end
 
+-- Blacklist Tool yang dikecualikan dari scan / trade (Bat dan Trap)
+local IGNORED_TOOL_PATTERNS = { "bat", "trap" }
+
+local function IsIgnoredTool(tool)
+    if not tool or not tool:IsA("Tool") then return true end
+    local nameLower = tool.Name:lower()
+    for _, pattern in ipairs(IGNORED_TOOL_PATTERNS) do
+        if nameLower:find(pattern, 1, true) then
+            return true
+        end
+    end
+    
+    local cfg = tool:FindFirstChild("Configuration") or tool:FindFirstChild("Config") or tool:FindFirstChild("Settings")
+    if cfg then
+        local disp = cfg:GetAttribute("displayName") or cfg:GetAttribute("DisplayName")
+        if disp then
+            local dispLower = tostring(disp):lower()
+            for _, pattern in ipairs(IGNORED_TOOL_PATTERNS) do
+                if dispLower:find(pattern, 1, true) then
+                    return true
+                end
+            end
+        end
+        local cat = cfg:GetAttribute("category") or cfg:GetAttribute("Category")
+        if cat then
+            local catLower = tostring(cat):lower()
+            for _, pattern in ipairs(IGNORED_TOOL_PATTERNS) do
+                if catLower:find(pattern, 1, true) then
+                    return true
+                end
+            end
+        end
+    end
+    
+    local toolDisp = tool:GetAttribute("DisplayName")
+    if toolDisp then
+        local toolDispLower = tostring(toolDisp):lower()
+        for _, pattern in ipairs(IGNORED_TOOL_PATTERNS) do
+            if toolDispLower:find(pattern, 1, true) then
+                return true
+            end
+        end
+    end
+    
+    return false
+end
+
+-- ==========================================================
+-- 👑 RARITY & MUTATION HIERARCHY RANKINGS
+-- ==========================================================
+local RARITY_RANK = {
+    ["admin"] = 100,
+    ["exclusive"] = 95,
+    ["limited"] = 90,
+    ["brainrotgod"] = 85,
+    ["prismatic"] = 80,
+    ["divine"] = 75,
+    ["eternal"] = 70,
+    ["secret"] = 65,
+    ["transcendent"] = 60,
+    ["superior"] = 55,
+    ["exotic"] = 50,
+    ["celestial"] = 45,
+    ["cosmic"] = 40,
+    ["mythical"] = 35,
+    ["mythic"] = 35,
+    ["legendary"] = 30,
+    ["epic"] = 25,
+    ["superrare"] = 20,
+    ["rare"] = 15,
+    ["uncommon"] = 10,
+    ["common"] = 5,
+    ["basic"] = 2,
+    ["normal"] = 1
+}
+
+local MUTATION_RANK = {
+    ["rainbow"] = 10,
+    ["void"] = 9,
+    ["diamond"] = 8,
+    ["dark"] = 7,
+    ["golden"] = 6,
+    ["shiny"] = 5,
+    ["normal"] = 1
+}
+
+local function GetRarityRank(rStr)
+    if not rStr then return 0 end
+    local rClean = tostring(rStr):lower():gsub("%s+", "")
+    return RARITY_RANK[rClean] or 1
+end
+
+local function GetMutationRank(mStr)
+    if not mStr then return 0 end
+    local mClean = tostring(mStr):lower():gsub("%s+", "")
+    return MUTATION_RANK[mClean] or 1
+end
+
+local function GetRarityBadge(rStr)
+    local r = tostring(rStr or ""):lower()
+    if r:find("divine") or r:find("god") then
+        return "👑 " .. tostring(rStr)
+    elseif r:find("eternal") or r:find("transcendent") then
+        return "🔥 " .. tostring(rStr)
+    elseif r:find("secret") or r:find("cosmic") or r:find("celestial") then
+        return "🌌 " .. tostring(rStr)
+    elseif r:find("mythic") then
+        return "🔮 " .. tostring(rStr)
+    elseif r:find("legend") then
+        return "⚡ " .. tostring(rStr)
+    elseif r:find("epic") or r:find("super") then
+        return "💎 " .. tostring(rStr)
+    elseif r:find("rare") then
+        return "🔷 " .. tostring(rStr)
+    else
+        return tostring(rStr)
+    end
+end
+
+local function GetMutationBadge(mStr)
+    local m = tostring(mStr or ""):lower()
+    if m:find("rainbow") then
+        return "🌈 " .. tostring(mStr)
+    elseif m:find("golden") then
+        return "✨ " .. tostring(mStr)
+    elseif m:find("dark") or m:find("void") then
+        return "🌑 " .. tostring(mStr)
+    elseif m:find("diamond") then
+        return "💎 " .. tostring(mStr)
+    elseif m:find("shiny") then
+        return "🌟 " .. tostring(mStr)
+    else
+        return tostring(mStr)
+    end
+end
+
 function StealAnEggTrade.GetToolRarity(tool)
     if not tool or not tool:IsA("Tool") then return "Normal" end
     
@@ -596,7 +732,7 @@ function StealAnEggTrade.EquipTool(tool)
 end
 
 function StealAnEggTrade.GetToolInfo(tool)
-    if not tool or not tool:IsA("Tool") then return nil end
+    if not tool or not tool:IsA("Tool") or IsIgnoredTool(tool) then return nil end
     local name = tool.Name
     
     local cfg = tool:FindFirstChild("Configuration") or tool:FindFirstChild("Config") or tool:FindFirstChild("Settings")
@@ -642,6 +778,8 @@ function StealAnEggTrade.GetToolInfo(tool)
     
     -- Rarity (Cth: "Divine", "Eternal", "Secret", "Mythical")
     local rarity = StealAnEggTrade.GetToolRarity(tool)
+    local rarityRank = GetRarityRank(rarity)
+    local mutationRank = GetMutationRank(baseMutation)
     
     -- Category, UID, Favorite, Scale
     local category = tool:GetAttribute("Category") or dispName
@@ -652,16 +790,22 @@ function StealAnEggTrade.GetToolInfo(tool)
     local eyeColor = cfg and cfg:GetAttribute("eyeColor") or nil
     local colorSeed = cfg and cfg:GetAttribute("colorSeed") or nil
     
+    local rBadge = GetRarityBadge(rarity)
+    local mBadge = GetMutationBadge(baseMutation)
     local incomeText = formatIncome(perSecond)
     local weightText = formatNumber(weight)
-    local optStr = string.format("%s [%s] (%s) - %s kg%s%s", 
-        tostring(dispName), 
-        tostring(baseMutation), 
-        tostring(rarity), 
-        weightText, 
-        incomeText,
-        fav and " ⭐" or ""
-    )
+    
+    local parts = {
+        string.format("[%s] %s [%s]", rBadge, tostring(dispName), mBadge),
+        string.format("⚖️ %s kg", weightText)
+    }
+    if incomeText ~= "" then
+        table.insert(parts, string.format("💰%s", incomeText))
+    end
+    local optStr = table.concat(parts, " • ")
+    if fav then
+        optStr = optStr .. " ⭐"
+    end
     
     return {
         Instance = tool,
@@ -675,6 +819,8 @@ function StealAnEggTrade.GetToolInfo(tool)
         Favorite = fav,
         ItemType = tostring(itemType),
         Rarity = tostring(rarity),
+        RarityRank = rarityRank,
+        MutationRank = mutationRank,
         Scale = tonumber(scale) or 1,
         EyeColor = eyeColor,
         ColorSeed = colorSeed,
@@ -689,7 +835,7 @@ function StealAnEggTrade.GetAllTools()
     
     if backpack then
         for _, item in ipairs(backpack:GetChildren()) do
-            if item:IsA("Tool") then
+            if item:IsA("Tool") and not IsIgnoredTool(item) then
                 table.insert(tools, item)
             end
         end
@@ -697,7 +843,7 @@ function StealAnEggTrade.GetAllTools()
     
     if character then
         for _, item in ipairs(character:GetChildren()) do
-            if item:IsA("Tool") then
+            if item:IsA("Tool") and not IsIgnoredTool(item) then
                 table.insert(tools, item)
             end
         end
@@ -706,8 +852,28 @@ function StealAnEggTrade.GetAllTools()
     return tools
 end
 
-function StealAnEggTrade.ScanInventory()
+local INVENTORY_SORT_OPTIONS = {
+    "👑 Rarity (Tertinggi ➔ Terendah)",
+    "📉 Rarity (Terendah ➔ Tertinggi)",
+    "💰 Income / Detik (Terbesar ➔ Terkecil)",
+    "📉 Income / Detik (Terkecil ➔ Terbesar)",
+    "⚖️ Berat (Terberat ➔ Teringan)",
+    "📉 Berat (Teringan ➔ Terberat)",
+    "🌈 Mutasi Terlangka",
+    "⭐ Favorit Teratas (Favorites First)",
+    "🔤 Nama Item (A ➔ Z)",
+    "🔤 Nama Item (Z ➔ A)"
+}
+
+local currentInventorySort = INVENTORY_SORT_OPTIONS[1]
+local currentInventorySearch = ""
+
+function StealAnEggTrade.ScanInventory(sortMethod, searchKeyword)
+    sortMethod = sortMethod or currentInventorySort
+    searchKeyword = (searchKeyword or currentInventorySearch or ""):lower():gsub("^%s+", ""):gsub("%s+$", "")
+    
     local tools = StealAnEggTrade.GetAllTools()
+    local toolDataList = {}
     local itemsByName = {}
     local uniqueNames = {"All Items"}
     local mutations = {"All Mutations"}
@@ -715,15 +881,26 @@ function StealAnEggTrade.ScanInventory()
     local mutationSet = {}
     local raritySet = { ["Divine, Eternal, Secret"] = true }
     local totalWeight = 0
+    local totalIncome = 0
     local favoriteCount = 0
-    local dropdownOptions = {}
+    local bestPet = nil
+    local heaviestPet = nil
     
     for _, tool in ipairs(tools) do
         local info = StealAnEggTrade.GetToolInfo(tool)
         if info then
             totalWeight = totalWeight + info.Weight
+            totalIncome = totalIncome + info.PerSecond
             if info.Favorite then
                 favoriteCount = favoriteCount + 1
+            end
+            
+            if not bestPet or info.RarityRank > bestPet.RarityRank or (info.RarityRank == bestPet.RarityRank and info.PerSecond > bestPet.PerSecond) then
+                bestPet = info
+            end
+            
+            if not heaviestPet or info.Weight > heaviestPet.Weight then
+                heaviestPet = info
             end
             
             local groupKey = info.DisplayName
@@ -747,8 +924,60 @@ function StealAnEggTrade.ScanInventory()
                 table.insert(rarities, info.Rarity)
             end
             
-            table.insert(dropdownOptions, info.OptionString)
+            local matchesSearch = true
+            if searchKeyword ~= "" then
+                local matchName = info.DisplayName:lower():find(searchKeyword, 1, true) ~= nil
+                local matchRarity = info.Rarity:lower():find(searchKeyword, 1, true) ~= nil
+                local matchMut = info.BaseMutation:lower():find(searchKeyword, 1, true) ~= nil
+                local matchRaw = info.Name:lower():find(searchKeyword, 1, true) ~= nil
+                matchesSearch = matchName or matchRarity or matchMut or matchRaw
+            end
+            
+            if matchesSearch then
+                table.insert(toolDataList, info)
+            end
         end
+    end
+    
+    table.sort(toolDataList, function(a, b)
+        if sortMethod == "👑 Rarity (Tertinggi ➔ Terendah)" then
+            if a.RarityRank ~= b.RarityRank then return a.RarityRank > b.RarityRank end
+            if a.PerSecond ~= b.PerSecond then return a.PerSecond > b.PerSecond end
+            return a.Weight > b.Weight
+        elseif sortMethod == "📉 Rarity (Terendah ➔ Tertinggi)" then
+            if a.RarityRank ~= b.RarityRank then return a.RarityRank < b.RarityRank end
+            return a.Weight < b.Weight
+        elseif sortMethod == "💰 Income / Detik (Terbesar ➔ Terkecil)" then
+            if a.PerSecond ~= b.PerSecond then return a.PerSecond > b.PerSecond end
+            return a.RarityRank > b.RarityRank
+        elseif sortMethod == "📉 Income / Detik (Terkecil ➔ Terbesar)" then
+            if a.PerSecond ~= b.PerSecond then return a.PerSecond < b.PerSecond end
+            return a.Weight < b.Weight
+        elseif sortMethod == "⚖️ Berat (Terberat ➔ Teringan)" then
+            if a.Weight ~= b.Weight then return a.Weight > b.Weight end
+            return a.RarityRank > b.RarityRank
+        elseif sortMethod == "📉 Berat (Teringan ➔ Terberat)" then
+            if a.Weight ~= b.Weight then return a.Weight < b.Weight end
+            return a.RarityRank < b.RarityRank
+        elseif sortMethod == "🌈 Mutasi Terlangka" then
+            if a.MutationRank ~= b.MutationRank then return a.MutationRank > b.MutationRank end
+            return a.RarityRank > b.RarityRank
+        elseif sortMethod == "⭐ Favorit Teratas (Favorites First)" then
+            if a.Favorite ~= b.Favorite then return a.Favorite == true end
+            return a.RarityRank > b.RarityRank
+        elseif sortMethod == "🔤 Nama Item (A ➔ Z)" then
+            return a.DisplayName:lower() < b.DisplayName:lower()
+        elseif sortMethod == "🔤 Nama Item (Z ➔ A)" then
+            return a.DisplayName:lower() > b.DisplayName:lower()
+        else
+            if a.RarityRank ~= b.RarityRank then return a.RarityRank > b.RarityRank end
+            return a.Weight > b.Weight
+        end
+    end)
+    
+    local dropdownOptions = {}
+    for _, info in ipairs(toolDataList) do
+        table.insert(dropdownOptions, info.OptionString)
     end
     
     for _, r in ipairs(KNOWN_RARITIES) do
@@ -758,18 +987,23 @@ function StealAnEggTrade.ScanInventory()
     end
     
     if #dropdownOptions == 0 then
-        table.insert(dropdownOptions, "Backpack Kosong")
+        table.insert(dropdownOptions, searchKeyword ~= "" and "Tidak ada item yang cocok dengan pencarian" or "Backpack Kosong")
     end
     
     return {
         Tools = tools,
+        FilteredTools = toolDataList,
         Count = #tools,
+        FilteredCount = #toolDataList,
         ItemsByName = itemsByName,
         UniqueNames = uniqueNames,
         Mutations = mutations,
         Rarities = rarities,
         TotalWeight = totalWeight,
+        TotalIncome = totalIncome,
         FavoriteCount = favoriteCount,
+        BestPet = bestPet,
+        HeaviestPet = heaviestPet,
         DropdownOptions = dropdownOptions
     }
 end
@@ -806,7 +1040,7 @@ end
 
 function StealAnEggTrade.MatchesFilter(tool, filterConfig)
     filterConfig = filterConfig or Config
-    if not tool or not tool:IsA("Tool") then return false end
+    if not tool or not tool:IsA("Tool") or IsIgnoredTool(tool) then return false end
     local info = StealAnEggTrade.GetToolInfo(tool)
     if not info then return false end
     
@@ -852,6 +1086,33 @@ function StealAnEggTrade.MatchesFilter(tool, filterConfig)
     return true, info
 end
 
+-- Helper Menunggu Tool Berpindah Tangan (Hilang dari Inventaris & Karakter)
+local function WaitForToolTransferred(tool, maxWaitSeconds)
+    maxWaitSeconds = maxWaitSeconds or 6.0
+    local startTime = tick()
+    local backpack = LocalPlayer:FindFirstChild("Backpack")
+    local character = LocalPlayer.Character
+    
+    while (tick() - startTime) < maxWaitSeconds do
+        if not tool or not tool.Parent or tool.Parent == nil then
+            return true
+        end
+        
+        local inBackpack = backpack and tool:IsDescendantOf(backpack)
+        local inCharacter = character and tool:IsDescendantOf(character)
+        
+        if not inBackpack and not inCharacter then
+            return true
+        end
+        
+        task.wait(0.1)
+    end
+    
+    local inBackpack = backpack and tool:IsDescendantOf(backpack)
+    local inCharacter = character and tool:IsDescendantOf(character)
+    return not inBackpack and not inCharacter
+end
+
 function StealAnEggTrade.SendGift(targetPlayerId, tool)
     local numericId, targetName = targetPlayerId, nil
     if not numericId then
@@ -869,8 +1130,8 @@ function StealAnEggTrade.SendGift(targetPlayerId, tool)
         end
     end
     
-    if not tool or not tool:IsA("Tool") or not tool.Parent then
-        return false, "Tidak ada Tool yang valid untuk dikirim!"
+    if not tool or not tool:IsA("Tool") or not tool.Parent or IsIgnoredTool(tool) then
+        return false, "Tidak ada Tool yang valid untuk dikirim (Item Bat/Trap diabaikan)!"
     end
     
     local toolName = tool.Name
@@ -907,10 +1168,20 @@ function StealAnEggTrade.SendGift(targetPlayerId, tool)
         end
     end
     
-    print(string.format("[SendGift Hasil] Sukses: %s | Result: %s", tostring(success), tostring(result)))
+    print(string.format("[SendGift Request Dikirim] Sukses: %s | Result: %s", tostring(success), tostring(result)))
     
     if success and result ~= false then
-        return true, result
+        -- ⏳ Tunggu sampai tool benar-benar hilang/berpindah dari inventaris kita ke penerima
+        print(string.format("[SendGift] Menunggu item '%s' diterima target & hilang dari inventaris...", toolName))
+        local transferred = WaitForToolTransferred(tool, 6.0)
+        
+        if transferred then
+            print(string.format("[SendGift Sukses] '%s' BERHASIL HILANG & DITERIMA TARGET ✅", toolName))
+            return true, "Tool berhasil dipindahtangankan"
+        else
+            print(string.format("[SendGift Peringatan] Timeout 6s: '%s' masih ada di inventaris!", toolName))
+            return false, "Timeout: Tool belum diterima oleh penerima"
+        end
     else
         local errMsg = tostring(result or "Server menolak pengiriman gift")
         if not targetPlayerObj then
@@ -1777,22 +2048,87 @@ end)
 
 
 -- ---------------------------------------------------------
--- TAB 2: 🎒 BACKPACK & INVENTORY SCANNER (WITH RARITY)
+-- TAB 2: 🎒 BACKPACK & INVENTORY EXPLORER (RPG REVAMPED)
 -- ---------------------------------------------------------
 local InvTab = Window:MakeTab("🎒")
-local InvSec = InvTab:AddSection("Live Inventory / Backpack")
+local InvSec = InvTab:AddSection("🎒 Penjelajah & Manajemen Inventaris")
 
-local initialScan = StealAnEggTrade.ScanInventory()
+local initialScan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch)
+local InvDropdown = nil
+local SelectedToolCardPara = nil
 
-local InvDropdown = InvSec:AddDropdown({
-    Name = "Pilih Tool dari Backpack",
+local function UpdateToolCard(info)
+    if not SelectedToolCardPara then return end
+    if not info then
+        SelectedToolCardPara:Set("🎴 Detail Tool Terpilih", "Pilih Tool dari dropdown untuk melihat detail lengkap.")
+        return
+    end
+    
+    local rBadge = GetRarityBadge(info.Rarity)
+    local mBadge = GetMutationBadge(info.BaseMutation)
+    local wStr = formatNumber(info.Weight)
+    local incStr = formatIncome(info.PerSecond)
+    local inChar = info.Instance and info.Instance.Parent == LocalPlayer.Character
+    
+    local desc = string.format("Nama Item: %s\nRarity: %s\nMutasi: %s\nBerat: %s kg (Skala: %.2fx)\nPasif Income: %s / detik%s\nStatus: %s\nLokasi: %s",
+        tostring(info.DisplayName),
+        rBadge,
+        mBadge,
+        wStr,
+        info.Scale or 1,
+        formatNumber(info.PerSecond),
+        incStr ~= "" and (" " .. incStr) or "",
+        info.Favorite and "⭐ Favorit" or "⚪ Biasa",
+        inChar and "✋ Di Tangan Karakter" or "🎒 Di Dalam Backpack"
+    )
+    SelectedToolCardPara:Set("🎴 Detail Tool Terpilih", desc)
+end
+
+-- 1. Live Search Input Bar
+InvSec:AddInput({
+    Name = "🔍 Cari Item di Backpack (Live Search)",
+    Placeholder = "Ketik nama, rarity, mutasi... (Cth: Unicorn, Divine, Rainbow)",
+    Tooltip = "Menyaring daftar tool secara instan berdasarkan kata kunci yang diketik"
+}, function(text)
+    currentInventorySearch = text or ""
+    local scan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch)
+    if InvDropdown then
+        InvDropdown:Refresh(scan.DropdownOptions)
+    end
+end)
+
+-- 2. Sort By Dropdown
+InvSec:AddDropdown({
+    Name = "🔀 Urutkan Berdasarkan (Sort By)",
+    Options = INVENTORY_SORT_OPTIONS,
+    Default = currentInventorySort,
+    Flag = "InvSortDropdown",
+    Tooltip = "Pilih kriteria pengurutan inventaris"
+}, function(selectedSort)
+    currentInventorySort = selectedSort or INVENTORY_SORT_OPTIONS[1]
+    local scan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch)
+    if InvDropdown then
+        InvDropdown:Refresh(scan.DropdownOptions)
+    end
+    Library:Notify({
+        Title   = "Urutan Diperbarui 🔀",
+        Content = "Inventaris diurutkan berdasarkan:\n" .. currentInventorySort,
+        Type    = "Info",
+        Duration = 2
+    })
+end)
+
+-- 3. Tool Selector Dropdown
+InvDropdown = InvSec:AddDropdown({
+    Name = "📦 Pilih Tool dari Backpack",
     Options = initialScan.DropdownOptions,
     Default = initialScan.DropdownOptions[1] or "",
     Flag = "InvToolDropdown",
-    Tooltip = "Pilih salah satu tool yang ada di backpack (menampilkan Nama, Mutasi, Rarity, Berat)"
+    Tooltip = "Pilih salah satu tool yang ada di backpack untuk melihat detail & aksi"
 }, function(selected)
-    if not selected or selected == "Backpack Kosong" then 
+    if not selected or selected == "Backpack Kosong" or selected:find("Tidak ada item") then 
         Config.SelectedInvTool = nil
+        UpdateToolCard(nil)
         return 
     end
     local tools = StealAnEggTrade.GetAllTools()
@@ -1800,25 +2136,16 @@ local InvDropdown = InvSec:AddDropdown({
         local info = StealAnEggTrade.GetToolInfo(t)
         if info and (info.OptionString == selected or info.Name == selected or info.DisplayName == selected) then
             Config.SelectedInvTool = t
+            UpdateToolCard(info)
             break
         end
     end
 end)
 
-InvSec:AddButton({
-    Name = "🔄 Refresh / Scan Ulang Backpack",
-    Tooltip = "Memperbarui daftar item, mutasi, rarity, dan statistik inventaris"
-}, function()
-    local scan = StealAnEggTrade.ScanInventory()
-    InvDropdown:Refresh(scan.DropdownOptions)
-    Library:Notify({
-        Title   = "Backpack Discan",
-        Content = string.format("Ditemukan %d Tool (Total: %.1f kg)", scan.Count, scan.TotalWeight),
-        Type    = "Info",
-        Duration = 3
-    })
-end)
+-- 4. Detail Tool Card Paragraph (No UID displayed)
+SelectedToolCardPara = InvSec:AddParagraph("🎴 Detail Tool Terpilih", "Pilih Tool dari dropdown di atas untuk melihat detail lengkap.")
 
+-- 5. Action Buttons
 InvSec:AddButton({
     Name = "✋ Equip / Pegang Tool Terpilih",
     Tooltip = "Memegang tool yang dipilih dari dropdown ke tangan karakter"
@@ -1827,6 +2154,8 @@ InvSec:AddButton({
         local ok, msg = StealAnEggTrade.EquipTool(Config.SelectedInvTool)
         if ok then
             Library:Notify({Title = "Equipped", Content = "Berhasil memegang: " .. Config.SelectedInvTool.Name, Type = "Success", Duration = 2.5})
+            local info = StealAnEggTrade.GetToolInfo(Config.SelectedInvTool)
+            UpdateToolCard(info)
         else
             Library:Notify({Title = "Gagal Equip", Content = tostring(msg), Type = "Error", Duration = 3})
         end
@@ -1855,28 +2184,55 @@ InvSec:AddButton({
         TradeStats.TotalSent = TradeStats.TotalSent + 1
         TradeStats.SuccessCount = TradeStats.SuccessCount + 1
         TradeStats.LastItemName = toolName
-        Library:Notify({Title = "Terkirim!", Content = string.format("Berhasil mengirim '%s' ke %s", toolName, targetName or tostring(targetId)), Type = "Success", Duration = 3})
+        Library:Notify({Title = "Terkirim! 🎁", Content = string.format("Berhasil mengirim '%s' ke %s", toolName, targetName or tostring(targetId)), Type = "Success", Duration = 3})
         
-        local scan = StealAnEggTrade.ScanInventory()
+        local scan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch)
         InvDropdown:Refresh(scan.DropdownOptions)
+        Config.SelectedInvTool = nil
+        UpdateToolCard(nil)
     else
         TradeStats.FailCount = TradeStats.FailCount + 1
         Library:Notify({Title = "Gagal Gift", Content = "Error: " .. tostring(err), Type = "Error", Duration = 4})
     end
 end)
 
-local InvStatSec = InvTab:AddSection("📊 Ringkasan Inventaris")
-local InvCountPara = InvStatSec:AddParagraph("Total Tool", tostring(initialScan.Count) .. " Items")
-local InvWeightPara = InvStatSec:AddParagraph("Total Berat", string.format("%.2f kg", initialScan.TotalWeight))
-local InvFavPara = InvStatSec:AddParagraph("Barang Favorit", tostring(initialScan.FavoriteCount) .. " Favorit ⭐")
+InvSec:AddButton({
+    Name = "🔄 Refresh / Scan Ulang Backpack",
+    Tooltip = "Memperbarui daftar item, mutasi, rarity, dan statistik inventaris"
+}, function()
+    local scan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch)
+    InvDropdown:Refresh(scan.DropdownOptions)
+    if Config.SelectedInvTool and Config.SelectedInvTool.Parent then
+        local info = StealAnEggTrade.GetToolInfo(Config.SelectedInvTool)
+        UpdateToolCard(info)
+    else
+        UpdateToolCard(nil)
+    end
+    Library:Notify({
+        Title   = "Backpack Discan 🎒",
+        Content = string.format("Ditemukan %d Tool (Total: %s kg)", scan.Count, formatNumber(scan.TotalWeight)),
+        Type    = "Info",
+        Duration = 2.5
+    })
+end)
+
+-- Section 2: Dashboard & Statistik Total Backpack
+local InvStatSec = InvTab:AddSection("📊 Ringkasan & Total Dashboard Backpack")
+local InvCountPara   = InvStatSec:AddParagraph("Total Koleksi", tostring(initialScan.Count) .. " Items")
+local InvWeightPara  = InvStatSec:AddParagraph("Total Berat Seluruh Tas", string.format("%s kg", formatNumber(initialScan.TotalWeight)))
+local InvIncomePara  = InvStatSec:AddParagraph("Total Pasif Income", string.format("+%s / detik 💰", formatNumber(initialScan.TotalIncome)))
+local InvBestPara    = InvStatSec:AddParagraph("👑 Item Tier Tertinggi", initialScan.BestPet and initialScan.BestPet.OptionString or "-")
+local InvHeavyPara   = InvStatSec:AddParagraph("⚖️ Item Terberat", initialScan.HeaviestPet and string.format("%s (%s kg)", initialScan.HeaviestPet.DisplayName, formatNumber(initialScan.HeaviestPet.Weight)) or "-")
 
 task.spawn(function()
     while getgenv().CurrentTradeScriptID == scriptId do
         pcall(function()
-            local scan = StealAnEggTrade.ScanInventory()
-            InvCountPara:Set("Total Tool", tostring(scan.Count) .. " Items di Backpack")
-            InvWeightPara:Set("Total Berat", string.format("%.2f kg", scan.TotalWeight))
-            InvFavPara:Set("Barang Favorit", tostring(scan.FavoriteCount) .. " Favorit ⭐")
+            local scan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch)
+            InvCountPara:Set("Total Koleksi", string.format("%d Tool di Backpack • %d Favorit ⭐", scan.Count, scan.FavoriteCount))
+            InvWeightPara:Set("Total Berat Seluruh Tas", string.format("%s kg (%.2f Juta kg)", formatNumber(scan.TotalWeight), scan.TotalWeight / 1000000))
+            InvIncomePara:Set("Total Pasif Income", string.format("+%s / detik 💰%s", formatNumber(scan.TotalIncome), formatIncome(scan.TotalIncome)))
+            InvBestPara:Set("👑 Item Tier Tertinggi", scan.BestPet and scan.BestPet.OptionString or "-")
+            InvHeavyPara:Set("⚖️ Item Terberat", scan.HeaviestPet and string.format("%s [%s] (%s kg)", scan.HeaviestPet.DisplayName, scan.HeaviestPet.BaseMutation, formatNumber(scan.HeaviestPet.Weight)) or "-")
         end)
         task.wait(2.5)
     end
