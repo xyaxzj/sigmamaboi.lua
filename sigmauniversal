@@ -835,28 +835,41 @@ local renderConn = RunService.RenderStepped:Connect(function()
     
     for player, objects in pairs(ESP.Players) do
         local char = player.Character
-        -- Streamed-out or partially loaded fallbacks
         local hrp = char and (char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso") or char:FindFirstChildOfClass("BasePart"))
         local hum = char and (char:FindFirstChildOfClass("Humanoid") or char:FindFirstChild("AnimationController"))
         
+        local positionToUse = nil
+        local isStreamedOut = false
+        local lastSeenDiff = 0
+        
         if hrp then
-            local dist = math.floor((hrp.Position - camera.CFrame.Position).Magnitude)
+            positionToUse = hrp.Position
+            objects.LastPosition = positionToUse
+            objects.LastSeenTime = tick()
+        elseif objects.LastPosition then
+            positionToUse = objects.LastPosition
+            isStreamedOut = true
+            lastSeenDiff = math.floor(tick() - (objects.LastSeenTime or tick()))
+        end
+        
+        if positionToUse then
+            local dist = math.floor((positionToUse - camera.CFrame.Position).Magnitude)
             
-            -- Hide if beyond max distance filter
-            if dist > ESP.MaxDistance then
+            -- Hide if beyond max distance filter or lost for too long (60 seconds)
+            if dist > ESP.MaxDistance or (isStreamedOut and lastSeenDiff > 60) then
                 hideESP(objects)
                 continue
             end
             
-            local health = hum and hum.Health or 100
-            local maxHealth = hum and hum.MaxHealth or 100
+            local health = (not isStreamedOut and hum) and hum.Health or 100
+            local maxHealth = (not isStreamedOut and hum) and hum.MaxHealth or 100
             
             if health > 0 then
                 local isTeammate = player.Team == LocalPlayer.Team
                 
                 -- Radar Dot rendering
                 if ESP.RadarEnabled and localHrp then
-                    local relativePos = localHrp.CFrame:PointToObjectSpace(hrp.Position)
+                    local relativePos = localHrp.CFrame:PointToObjectSpace(positionToUse)
                     local dx = relativePos.X * ESP.RadarZoom
                     local dz = relativePos.Z * ESP.RadarZoom
                     
@@ -865,7 +878,9 @@ local renderConn = RunService.RenderStepped:Connect(function()
                     local distance = math.sqrt(dx^2 + dz^2)
                     
                     local dotColor = ESP.BoxColor
-                    if ESP.UseTeamColor and player.TeamColor then
+                    if isStreamedOut then
+                        dotColor = Color3.fromRGB(120, 120, 120) -- faded grey
+                    elseif ESP.UseTeamColor and player.TeamColor then
                         dotColor = player.TeamColor.Color
                     elseif ESP.TeamCheck then
                         dotColor = isTeammate and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
@@ -882,7 +897,7 @@ local renderConn = RunService.RenderStepped:Connect(function()
                     objects.RadarDot.Visible = false
                 end
                 
-                local pos, onScreen = camera:WorldToViewportPoint(hrp.Position)
+                local pos, onScreen = camera:WorldToViewportPoint(positionToUse)
                 
                 -- Team check
                 if ESP.TeamCheck and isTeammate and ESP.HideTeammates then
@@ -892,7 +907,9 @@ local renderConn = RunService.RenderStepped:Connect(function()
                 
                 -- Decide Color
                 local espColor = ESP.BoxColor
-                if ESP.UseTeamColor and player.TeamColor then
+                if isStreamedOut then
+                    espColor = Color3.fromRGB(120, 120, 120) -- faded grey for streamed-out
+                elseif ESP.UseTeamColor and player.TeamColor then
                     espColor = player.TeamColor.Color
                 elseif ESP.TeamCheck then
                     espColor = isTeammate and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
@@ -902,13 +919,22 @@ local renderConn = RunService.RenderStepped:Connect(function()
                     -- Hide off-screen arrow
                     objects.Arrow.Visible = false
                     
-                    local head = char:FindFirstChild("Head")
-                    local headPos = head and camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0)) or pos
-                    local footPos = camera:WorldToViewportPoint(hrp.Position - Vector3.new(0, 3, 0))
+                    local boxHeight = 10
+                    local boxWidth = 6
                     
-                    -- Dynamic box sizing clamping to prevent sub-pixel issues at long distance
-                    local boxHeight = math.clamp(math.abs(headPos.Y - footPos.Y), 6, 2000)
-                    local boxWidth = math.clamp(boxHeight * 0.6, 4, 1500)
+                    -- Estimate box size dynamically depending on physical model availability
+                    local head = char and char:FindFirstChild("Head")
+                    if head and not isStreamedOut then
+                        local headPos = camera:WorldToViewportPoint(head.Position + Vector3.new(0, 0.5, 0))
+                        local footPos = camera:WorldToViewportPoint(positionToUse - Vector3.new(0, 3, 0))
+                        boxHeight = math.clamp(math.abs(headPos.Y - footPos.Y), 6, 2000)
+                        boxWidth = math.clamp(boxHeight * 0.6, 4, 1500)
+                    else
+                        -- Estimated size math for streamed-out targets
+                        local sizeFactor = (5 / dist) * (viewportSize.Y / (2 * math.tan(math.rad(camera.FieldOfView) / 2)))
+                        boxHeight = math.clamp(sizeFactor, 6, 2000)
+                        boxWidth = math.clamp(boxHeight * 0.6, 4, 1500)
+                    end
                     
                     -- Box Rendering (Normal vs Corner)
                     if ESP.Boxes then
@@ -991,7 +1017,7 @@ local renderConn = RunService.RenderStepped:Connect(function()
                     end
                     
                     -- Health Bar Rendering
-                    if ESP.HealthBar then
+                    if ESP.HealthBar and not isStreamedOut then
                         local healthPercent = math.clamp(health / maxHealth, 0, 1)
                         local barColor = Color3.fromRGB(255, 0, 0):Lerp(Color3.fromRGB(0, 255, 0), healthPercent)
                         
@@ -1021,7 +1047,9 @@ local renderConn = RunService.RenderStepped:Connect(function()
                     -- NameTag Rendering with font scaling based on distance
                     if ESP.Names then
                         local label = player.Name
-                        if ESP.Distance then
+                        if isStreamedOut then
+                            label = string.format("⏳ [LOST] %s [%dm]", player.Name, dist)
+                        elseif ESP.Distance then
                             label = string.format("%s [%dm]", player.Name, dist)
                         end
                         
@@ -1030,7 +1058,7 @@ local renderConn = RunService.RenderStepped:Connect(function()
                         
                         objects.NameTag.Text = label
                         objects.NameTag.Size = textScale
-                        objects.NameTag.Color = ESP.UseTeamColor and player.TeamColor and player.TeamColor.Color or ESP.NameColor
+                        objects.NameTag.Color = isStreamedOut and Color3.fromRGB(150, 150, 150) or (ESP.UseTeamColor and player.TeamColor and player.TeamColor.Color or ESP.NameColor)
                         objects.NameTag.Position = Vector2.new(pos.X, pos.Y - boxHeight / 2 - 15)
                         objects.NameTag.Visible = true
                     else
@@ -1056,7 +1084,7 @@ local renderConn = RunService.RenderStepped:Connect(function()
                         
                         objects.Tracer.From = Vector2.new(originX, originY)
                         objects.Tracer.To = Vector2.new(pos.X, pos.Y + boxHeight / 2)
-                        objects.Tracer.Color = ESP.UseTeamColor and player.TeamColor and player.TeamColor.Color or ESP.TracerColor
+                        objects.Tracer.Color = isStreamedOut and Color3.fromRGB(120, 120, 120) or (ESP.UseTeamColor and player.TeamColor and player.TeamColor.Color or ESP.TracerColor)
                         objects.Tracer.Visible = true
                     else
                         objects.TracerOutline.Visible = false
@@ -1064,7 +1092,8 @@ local renderConn = RunService.RenderStepped:Connect(function()
                     end
                     
                     -- Head Dot Rendering
-                    if ESP.HeadDot and head then
+                    local head = char and char:FindFirstChild("Head")
+                    if ESP.HeadDot and head and not isStreamedOut then
                         local headPos, onScreenHead = camera:WorldToViewportPoint(head.Position)
                         if onScreenHead then
                             local rad = math.clamp(120 / dist, 2, 8)
@@ -1080,7 +1109,7 @@ local renderConn = RunService.RenderStepped:Connect(function()
                     end
                     
                     -- Look Tracer (Facing Line)
-                    if ESP.LookTracers and head then
+                    if ESP.LookTracers and head and not isStreamedOut then
                         local start3d = head.Position
                         local end3d = head.Position + (head.CFrame.LookVector * 15)
                         
@@ -1100,7 +1129,7 @@ local renderConn = RunService.RenderStepped:Connect(function()
                     end
                     
                     -- Equipped Weapon/Tool ESP
-                    if ESP.Weapons then
+                    if ESP.Weapons and not isStreamedOut then
                         local weapon = char:FindFirstChildOfClass("Tool")
                         if weapon then
                             objects.WeaponTag.Text = string.upper(weapon.Name)
@@ -1115,7 +1144,7 @@ local renderConn = RunService.RenderStepped:Connect(function()
                     end
                     
                     -- Skeleton Rendering
-                    if ESP.Skeletons then
+                    if ESP.Skeletons and not isStreamedOut then
                         local boneIdx = 1
                         local isR15 = char:FindFirstChild("UpperTorso") ~= nil
                         local pairsList = isR15 and BonePairs.R15 or BonePairs.R6
@@ -1149,7 +1178,7 @@ local renderConn = RunService.RenderStepped:Connect(function()
                     end
                     
                     -- Highlight Chams rendering
-                    if ESP.Chams then
+                    if ESP.Chams and not isStreamedOut then
                         local highlight = char:FindFirstChildOfClass("Highlight")
                         if not highlight then
                             highlight = Instance.new("Highlight")
@@ -1164,9 +1193,11 @@ local renderConn = RunService.RenderStepped:Connect(function()
                         highlight.Enabled = true
                         objects.Highlight = highlight
                     else
-                        local highlight = char:FindFirstChildOfClass("Highlight")
-                        if highlight then
-                            pcall(function() highlight:Destroy() end)
+                        if char then
+                            local highlight = char:FindFirstChildOfClass("Highlight")
+                            if highlight then
+                                pcall(function() highlight:Destroy() end)
+                            end
                         end
                         objects.Highlight = nil
                     end
@@ -1188,7 +1219,7 @@ local renderConn = RunService.RenderStepped:Connect(function()
                     
                     -- Render Off-Screen Arrow if enabled
                     if ESP.OffScreenArrows then
-                        local relativePos = camera.CFrame:PointToObjectSpace(hrp.Position)
+                        local relativePos = camera.CFrame:PointToObjectSpace(positionToUse)
                         local angle = math.atan2(-relativePos.X, -relativePos.Z)
                         
                         local screenCenter = Vector2.new(viewportSize.X / 2, viewportSize.Y / 2)
@@ -1203,7 +1234,7 @@ local renderConn = RunService.RenderStepped:Connect(function()
                         objects.Arrow.PointA = pointA
                         objects.Arrow.PointB = pointB
                         objects.Arrow.PointC = pointC
-                        objects.Arrow.Color = ESP.UseTeamColor and player.TeamColor and player.TeamColor.Color or ESP.ArrowColor
+                        objects.Arrow.Color = isStreamedOut and Color3.fromRGB(120, 120, 120) or (ESP.UseTeamColor and player.TeamColor and player.TeamColor.Color or ESP.ArrowColor)
                         objects.Arrow.Visible = true
                     else
                         objects.Arrow.Visible = false
@@ -1491,6 +1522,385 @@ end)
 
 SecCoord:AddButton("❌ Delete Selected Location", function()
     deleteCoord(selectedSavedCoord)
+end)
+
+
+-- ===========================================================================
+--  6. TAB TOOL & CONFIGURATION INSPECTOR
+-- ===========================================================================
+local TabTool = Window:MakeTab("🛠️")
+local SecToolInspect = TabTool:AddSection("Tool & Configuration Inspector")
+
+-- Helper Clipboard
+local function copyToClipboard(text)
+    if setclipboard then
+        setclipboard(text)
+        return true
+    elseif toclipboard then
+        toclipboard(text)
+        return true
+    elseif syn and syn.write_clipboard then
+        syn.write_clipboard(text)
+        return true
+    end
+    return false
+end
+
+-- Helper Serialize ke Lua Code
+local function serializeValue(val, indent)
+    indent = indent or 1
+    local indStr = string.rep("    ", indent)
+    local indPrev = string.rep("    ", indent - 1)
+    
+    local t = typeof(val)
+    if t == "string" then
+        return string.format("%q", val)
+    elseif t == "number" then
+        if val == math.huge then return "math.huge" end
+        if val == -math.huge then return "-math.huge" end
+        if val ~= val then return "0/0" end
+        return tostring(val)
+    elseif t == "boolean" then
+        return tostring(val)
+    elseif t == "Vector3" then
+        return string.format("Vector3.new(%.4f, %.4f, %.4f)", val.X, val.Y, val.Z)
+    elseif t == "CFrame" then
+        return string.format("CFrame.new(%s)", table.concat({val:GetComponents()}, ", "))
+    elseif t == "Color3" then
+        return string.format("Color3.fromRGB(%d, %d, %d)", math.floor(val.R * 255), math.floor(val.G * 255), math.floor(val.B * 255))
+    elseif t == "BrickColor" then
+        return string.format("BrickColor.new(%q)", val.Name)
+    elseif t == "Instance" then
+        return string.format("game.%s", val:GetFullName())
+    elseif t == "table" then
+        local lines = {"{\n"}
+        local keys = {}
+        for k in pairs(val) do table.insert(keys, k) end
+        table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
+        
+        if #keys == 0 then return "{}" end
+        
+        for _, k in ipairs(keys) do
+            local v = val[k]
+            local keyStr
+            if type(k) == "string" and k:match("^[%a_][%w_]*$") then
+                keyStr = string.format("[\"%s\"]", k)
+            elseif type(k) == "number" then
+                keyStr = string.format("[%d]", k)
+            else
+                keyStr = string.format("[%q]", tostring(k))
+            end
+            table.insert(lines, string.format("%s%s = %s,\n", indStr, keyStr, serializeValue(v, indent + 1)))
+        end
+        table.insert(lines, string.format("%s}", indPrev))
+        return table.concat(lines)
+    else
+        return string.format("%q", tostring(val))
+    end
+end
+
+-- Helper Mengambil Tool Aktif di Tangan atau Backpack
+local function getAvailableTools()
+    local tools = {}
+    local held = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
+    if held then
+        table.insert(tools, held)
+    end
+    
+    local bp = LocalPlayer:FindFirstChild("Backpack")
+    if bp then
+        for _, item in ipairs(bp:GetChildren()) do
+            if item:IsA("Tool") and item ~= held then
+                table.insert(tools, item)
+            end
+        end
+    end
+    return tools
+end
+
+-- Helper key counter
+local function tool_keys(t)
+    local k = {}
+    if type(t) == "table" then
+        for key in pairs(t) do table.insert(k, key) end
+    end
+    return k
+end
+
+-- Helper Inspeksi Mendalam Tool & Konfigurasinya
+local function inspectTool(tool)
+    if not tool or not tool:IsA("Tool") then
+        return nil, "Tidak ada Tool yang dipilih atau dipegang!"
+    end
+    
+    local dump = {
+        ToolInfo = {
+            Name = tool.Name,
+            ClassName = tool.ClassName,
+            ToolTip = tool.ToolTip,
+            Parent = tool.Parent and tool.Parent.Name or "None",
+            CanBeDropped = tool.CanBeDropped,
+            RequiresHandle = tool.RequiresHandle
+        },
+        Attributes = {},
+        Configuration = {},
+        Values = {},
+        ModuleConfigs = {},
+        Children = {}
+    }
+    
+    -- 1. Attributes langsung pada Tool
+    local attrs = tool:GetAttributes()
+    for k, v in pairs(attrs) do
+        dump.Attributes[k] = v
+    end
+    
+    -- 2. Configuration & ValueBase Object Descendants
+    for _, desc in ipairs(tool:GetDescendants()) do
+        if desc:IsA("Configuration") or desc.Name == "Configuration" or desc.Name == "Config" or desc.Name == "Settings" then
+            local configAttrs = desc:GetAttributes()
+            for k, v in pairs(configAttrs) do
+                dump.Configuration[desc.Name .. "." .. k] = v
+            end
+        end
+        
+        if desc:IsA("ValueBase") then
+            local valName = desc.Name
+            local val = desc.Value
+            local pName = desc.Parent and desc.Parent.Name or "Root"
+            dump.Values[pName .. "/" .. valName] = val
+        end
+        
+        if desc:IsA("ModuleScript") then
+            local ok, modData = pcall(require, desc)
+            if ok and type(modData) == "table" then
+                dump.ModuleConfigs[desc.Name] = modData
+            end
+        end
+        
+        if desc.Parent == tool then
+            local extraInfo = nil
+            if desc:IsA("Animation") then
+                extraInfo = "AnimationId: " .. tostring(desc.AnimationId)
+            elseif desc:IsA("Sound") then
+                extraInfo = "SoundId: " .. tostring(desc.SoundId)
+            end
+            table.insert(dump.Children, {
+                Name = desc.Name,
+                ClassName = desc.ClassName,
+                Info = extraInfo
+            })
+        end
+    end
+    
+    return dump
+end
+
+local selectedTool = nil
+local ToolStatusPara = SecToolInspect:AddParagraph("Status Tool Terpilih", "Pegang tool di tangan atau pilih dari dropdown di bawah...")
+local ToolAttrPara = SecToolInspect:AddParagraph("Daftar Attributes Terdeteksi", "Belum ada data attributes...")
+local ToolConfigPara = SecToolInspect:AddParagraph("Daftar Configuration & Values", "Belum ada data configuration...")
+
+local function refreshToolInspection()
+    local held = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
+    local targetTool = selectedTool or held
+    
+    if targetTool and targetTool.Parent then
+        local dump = inspectTool(targetTool)
+        if dump then
+            -- Status Info
+            local statusStr = string.format("Nama Tool: %s\nLokasi: %s\nAttributes: %d Terdeteksi\nConfiguration: %d Terdeteksi\nValues: %d Terdeteksi\nChildren: %d Objek",
+                targetTool.Name,
+                targetTool.Parent and targetTool.Parent.Name or "Unknown",
+                #tool_keys(dump.Attributes),
+                #tool_keys(dump.Configuration),
+                #tool_keys(dump.Values),
+                #dump.Children
+            )
+            ToolStatusPara:Set("Status Tool Terpilih", statusStr)
+            
+            -- Attributes Preview
+            local attrLines = {}
+            for k, v in pairs(dump.Attributes) do
+                table.insert(attrLines, string.format("• %s = %s (%s)", tostring(k), tostring(v), typeof(v)))
+            end
+            table.sort(attrLines)
+            ToolAttrPara:Set("Daftar Attributes Terdeteksi", #attrLines > 0 and table.concat(attrLines, "\n") or "Tidak ada Attributes pada Tool ini.")
+            
+            -- Config & Values Preview
+            local cfgLines = {}
+            for k, v in pairs(dump.Configuration) do
+                table.insert(cfgLines, string.format("• [Config] %s = %s", tostring(k), tostring(v)))
+            end
+            for k, v in pairs(dump.Values) do
+                table.insert(cfgLines, string.format("• [Value] %s = %s", tostring(k), tostring(v)))
+            end
+            table.sort(cfgLines)
+            ToolConfigPara:Set("Daftar Configuration & Values", #cfgLines > 0 and table.concat(cfgLines, "\n") or "Tidak ada folder Configuration / ValueBase pada Tool ini.")
+        end
+    else
+        ToolStatusPara:Set("Status Tool Terpilih", "Tidak ada Tool yang sedang dipegang di tangan!")
+        ToolAttrPara:Set("Daftar Attributes Terdeteksi", "Pegang sebuah Tool di karakter Anda lalu tekan Refresh.")
+        ToolConfigPara:Set("Daftar Configuration & Values", "-")
+    end
+end
+
+local toolDropdownOptions = {"[Pegang di Tangan]"}
+local ToolDropdown = SecToolInspect:AddDropdown({
+    Name = "Pilih Tool dari Karakter / Backpack",
+    Options = toolDropdownOptions,
+    Default = toolDropdownOptions[1],
+    Tooltip = "Pilih tool yang ingin diinspeksi konfigurasinya"
+}, function(val)
+    if val == "[Pegang di Tangan]" or val == "" then
+        selectedTool = nil
+    else
+        local tools = getAvailableTools()
+        for _, t in ipairs(tools) do
+            if t.Name == val then
+                selectedTool = t
+                break
+            end
+        end
+    end
+    refreshToolInspection()
+end)
+
+SecToolInspect:AddButton("🔄 Refresh / Scan Ulang Tool", function()
+    local tools = getAvailableTools()
+    local opts = {"[Pegang di Tangan]"}
+    for _, t in ipairs(tools) do
+        table.insert(opts, t.Name)
+    end
+    ToolDropdown:Refresh(opts)
+    refreshToolInspection()
+    Library:Notify({Title = "Tool Discan", Content = string.format("Ditemukan %d Tool", #tools), Type = "Info", Duration = 2})
+end)
+
+-- Section 2: Salin ke Clipboard
+local SecToolCopy = TabTool:AddSection("Salin Data Konfigurasi ke Clipboard")
+
+SecToolCopy:AddButton("📋 Salin Seluruh Konfigurasi (Lua Table Format)", function()
+    local held = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
+    local targetTool = selectedTool or held
+    if not targetTool or not targetTool.Parent then
+        Library:Notify({Title = "Peringatan", Content = "Pegang sebuah Tool terlebih dahulu!", Type = "Warning", Duration = 3})
+        return
+    end
+    
+    local dump = inspectTool(targetTool)
+    if dump then
+        local luaCode = string.format([[-- ==========================================================
+-- [TOOL CONFIGURATION DUMP] %s
+-- Extracted via Sigma Universal Client
+-- ==========================================================
+local %s_Config = %s
+
+return %s_Config
+]], targetTool.Name, targetTool.Name:gsub("%W+", "_"), serializeValue(dump, 1), targetTool.Name:gsub("%W+", "_"))
+        
+        local ok = copyToClipboard(luaCode)
+        if ok then
+            Library:Notify({Title = "Disalin ke Clipboard! 📋", Content = "Seluruh konfigurasi & attributes berhasil disalin ke format Lua Table.", Type = "Success", Duration = 3.5})
+        else
+            Library:Notify({Title = "Gagal Salin", Content = "Executor Anda tidak mendukung fungsi clipboard.", Type = "Error", Duration = 3})
+        end
+    end
+end)
+
+SecToolCopy:AddButton("🏷️ Salin Attributes Saja (Lua Code)", function()
+    local held = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
+    local targetTool = selectedTool or held
+    if not targetTool or not targetTool.Parent then
+        Library:Notify({Title = "Peringatan", Content = "Pegang sebuah Tool terlebih dahulu!", Type = "Warning", Duration = 3})
+        return
+    end
+    
+    local dump = inspectTool(targetTool)
+    if dump then
+        local luaCode = string.format("local %s_Attributes = %s\n", targetTool.Name:gsub("%W+", "_"), serializeValue(dump.Attributes, 1))
+        local ok = copyToClipboard(luaCode)
+        if ok then
+            Library:Notify({Title = "Attributes Disalin! 🏷️", Content = string.format("%d Attributes berhasil disalin ke clipboard.", #tool_keys(dump.Attributes)), Type = "Success", Duration = 3})
+        end
+    end
+end)
+
+SecToolCopy:AddButton("⚙️ Salin Folder Configuration Saja", function()
+    local held = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
+    local targetTool = selectedTool or held
+    if not targetTool or not targetTool.Parent then
+        Library:Notify({Title = "Peringatan", Content = "Pegang sebuah Tool terlebih dahulu!", Type = "Warning", Duration = 3})
+        return
+    end
+    
+    local dump = inspectTool(targetTool)
+    if dump then
+        local combinedConfig = {}
+        for k, v in pairs(dump.Configuration) do combinedConfig[k] = v end
+        for k, v in pairs(dump.Values) do combinedConfig[k] = v end
+        
+        local luaCode = string.format("local %s_Configuration = %s\n", targetTool.Name:gsub("%W+", "_"), serializeValue(combinedConfig, 1))
+        local ok = copyToClipboard(luaCode)
+        if ok then
+            Library:Notify({Title = "Configuration Disalin! ⚙️", Content = "Data Configuration & Values berhasil disalin ke clipboard.", Type = "Success", Duration = 3})
+        end
+    end
+end)
+
+SecToolCopy:AddButton("📄 Salin Format JSON", function()
+    local held = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
+    local targetTool = selectedTool or held
+    if not targetTool or not targetTool.Parent then
+        Library:Notify({Title = "Peringatan", Content = "Pegang sebuah Tool terlebih dahulu!", Type = "Warning", Duration = 3})
+        return
+    end
+    
+    local dump = inspectTool(targetTool)
+    if dump then
+        local HttpService = game:GetService("HttpService")
+        local okJson, jsonStr = pcall(function() return HttpService:JSONEncode(dump) end)
+        if okJson and jsonStr then
+            local ok = copyToClipboard(jsonStr)
+            if ok then
+                Library:Notify({Title = "JSON Disalin! 📄", Content = "Data tool berhasil disalin ke format JSON.", Type = "Success", Duration = 3})
+            end
+        else
+            Library:Notify({Title = "Gagal Encode", Content = "Gagal mengubah data ke JSON format.", Type = "Error", Duration = 3})
+        end
+    end
+end)
+
+SecToolCopy:AddButton("📝 Salin Script Debug (Print Semua Data)", function()
+    local held = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Tool")
+    local toolName = (selectedTool or held) and (selectedTool or held).Name or "Tool"
+    local debugCode = string.format([[-- Print Attributes & Configuration dari Tool: %s
+local tool = game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChildOfClass("Tool")
+if tool then
+    print("=== [ATTRIBUTES] ===")
+    for k, v in pairs(tool:GetAttributes()) do
+        print(string.format("Attribute: %%s = %%s (%%s)", tostring(k), tostring(v), typeof(v)))
+    end
+    print("=== [DESCENDANTS] ===")
+    for _, d in ipairs(tool:GetDescendants()) do
+        if d:IsA("ValueBase") then
+            print(string.format("Value: %%s (%%s) = %%s", d.Name, d.ClassName, tostring(d.Value)))
+        end
+    end
+end
+]], toolName)
+    local ok = copyToClipboard(debugCode)
+    if ok then
+        Library:Notify({Title = "Script Debug Disalin! 📝", Content = "Kode snippet print debug berhasil disalin ke clipboard.", Type = "Success", Duration = 3})
+    end
+end)
+
+-- Auto-refresh live tool inspector
+task.spawn(function()
+    while true do
+        pcall(refreshToolInspection)
+        task.wait(1.5)
+    end
 end)
 
 Library:Notify({Title = "Sigma Hub", Content = "Sigma Universal Client v1.0 Loaded!", Type = "Info", Duration = 3})
