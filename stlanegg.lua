@@ -8,7 +8,7 @@
 -- CLEANUP THREAD & UI LAMA
 -- =========================================================
 if getgenv().CancelStealAnEggTrade then 
-    getgenv().CancelStealAnEggTrade() 
+    pcall(getgenv().CancelStealAnEggTrade)
 end
 local scriptId = tick()
 getgenv().CurrentTradeScriptID = scriptId
@@ -221,7 +221,7 @@ local function GetPlayerList()
 end
 
 local function GetUserIdFromSelection(selectionStr)
-    if not selectionStr then return nil end
+    if not selectionStr or selectionStr == "Tidak ada player lain" then return nil end
     local idStr = selectionStr:match("%((%d+)%)")
     if idStr then
         return tonumber(idStr)
@@ -251,15 +251,16 @@ local Window = Library:CreateWindow({
 -- ---------------------------------------------------------
 -- TAB 1: ⚡ AUTO TRADE (MAIN TAB)
 -- ---------------------------------------------------------
-local MainTab = Window:MakeTab({ Icon = "⚡", Name = "Auto Trade" })
+local MainTab = Window:MakeTab("⚡")
 
 -- Section 1: Target Player
-local TargetSec = MainTab:AddSection("Target Player Setup", true)
+local TargetSec = MainTab:AddSection("Target Player Setup")
 
+local playerList = GetPlayerList()
 local PlayerDropdown = TargetSec:AddDropdown({
     Name = "Pilih Player di Server",
-    Options = GetPlayerList(),
-    Default = GetPlayerList()[1] or "",
+    Options = playerList,
+    Default = playerList[1] or "",
     Flag = "TargetPlayerDropdown",
     Tooltip = "Pilih target penerima gift dari daftar player aktif"
 }, function(selected)
@@ -330,7 +331,7 @@ end)
 
 
 -- Section 2: Gifting Actions
-local ActionSec = MainTab:AddSection("Aksi Quick Trade / Gift", true)
+local ActionSec = MainTab:AddSection("Aksi Quick Trade / Gift")
 
 ActionSec:AddButton({
     Name = "🎁 Gift Barang yang Sedang Dipegang (1x)",
@@ -508,8 +509,8 @@ end)
 -- ---------------------------------------------------------
 -- TAB 2: ⚙️ FILTER & SETTINGS
 -- ---------------------------------------------------------
-local FilterTab = Window:MakeTab({ Icon = "⚙", Name = "Filter" })
-local FilterSec = FilterTab:AddSection("Pengaturan & Proteksi Item", true)
+local FilterTab = Window:MakeTab("⚙️")
+local FilterSec = FilterTab:AddSection("Pengaturan & Proteksi Item")
 
 FilterSec:AddToggle({
     Name = "⭐ Abaikan Barang Favorit (Favorite == true)",
@@ -540,7 +541,7 @@ FilterSec:AddInput({
     Config.FilterName = Text or ""
 end)
 
-local InspectSec = FilterTab:AddSection("🔍 Item Inspector (Held Tool)", true)
+local InspectSec = FilterTab:AddSection("🔍 Item Inspector (Held Tool)")
 local InspectPara = InspectSec:AddParagraph("Item Info", "Pegang barang di tangan untuk melihat data attributes...")
 
 InspectSec:AddButton({
@@ -581,8 +582,8 @@ end)
 -- ---------------------------------------------------------
 -- TAB 3: 📊 STATS & LOGS
 -- ---------------------------------------------------------
-local StatsTab = Window:MakeTab({ Icon = "📊", Name = "Stats" })
-local StatsSec = StatsTab:AddSection("Statistik Transaksi Gifting", true)
+local StatsTab = Window:MakeTab("📊")
+local StatsSec = StatsTab:AddSection("Statistik Transaksi Gifting")
 
 local TotalSentPara = StatsSec:AddParagraph("Total Terkirim", "0 Item")
 local SuccessPara   = StatsSec:AddParagraph("Status Sukses", "0 Sukses")
