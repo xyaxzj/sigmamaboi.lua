@@ -1,3 +1,4 @@
+setfpscap(20)
 if not game:IsLoaded() then game.Loaded:Wait() end
 
 local Players = game:GetService("Players")
@@ -13,6 +14,7 @@ local lp = Players.LocalPlayer
 -- =============================================
 _G.autoFarm = true              
 _G.animDelay = 5              
+_G.autoRemovePlayer = false -- true: Hapus player lain (FPS boost ekstrem), false: Biarkan player lain tetap ada
 
 -- =============================================
 -- 🚀 SYSTEM ANTI-LAG & OPTIMISASI EKSTREM
@@ -56,51 +58,56 @@ if plotsFolder then
 end
 
 -- 4. PEMBANTAIAN PLAYER (REMOVE PLAYER LAIN)
-local function musnahkanPlayer(player)
-    if player ~= lp then
-        -- 1. Hapus jika wujud karakternya saat ini sudah ada di map
-        if player.Character then
-            pcall(function() player.Character:Destroy() end)
+if _G.autoRemovePlayer or _G.removePlayer or _G.removePlayers then
+    local function musnahkanPlayer(player)
+        if player ~= lp then
+            -- 1. Hapus jika wujud karakternya saat ini sudah ada di map
+            if player.Character then
+                pcall(function() player.Character:Destroy() end)
+            end
+            
+            -- 2. Hapus objek Player fisik beserta datanya dari game.Players di sisi client
+            pcall(function() player:Destroy() end)
         end
-        
-        -- 2. Hapus objek Player fisik beserta datanya dari game.Players di sisi client
-        pcall(function() player:Destroy() end)
     end
-end
 
--- Eksekusi ke player yang sudah ada di server sekarang
-for _, player in ipairs(Players:GetPlayers()) do
-    musnahkanPlayer(player)
-end
-
--- Eksekusi ke player yang baru join ke server nanti
-Players.PlayerAdded:Connect(function(player)
-    task.defer(function()
+    -- Eksekusi ke player yang sudah ada di server sekarang
+    for _, player in ipairs(Players:GetPlayers()) do
         musnahkanPlayer(player)
-    end)
-end)
+    end
 
--- Perangkap Ekstrem & Pembersihan Karakter (Mendeteksi Humanoid secara rekursif)
-local function periksaDanHapus(descendant)
-    if descendant:IsA("Humanoid") then
-        local charModel = descendant.Parent
-        if charModel and charModel:IsA("Model") and charModel.Name ~= lp.Name then
-            pcall(function() charModel:Destroy() end)
+    -- Eksekusi ke player yang baru join ke server nanti
+    Players.PlayerAdded:Connect(function(player)
+        task.defer(function()
+            if _G.autoRemovePlayer or _G.removePlayer or _G.removePlayers then
+                musnahkanPlayer(player)
+            end
+        end)
+    end)
+
+    -- Perangkap Ekstrem & Pembersihan Karakter (Mendeteksi Humanoid secara rekursif)
+    local function periksaDanHapus(descendant)
+        if not (_G.autoRemovePlayer or _G.removePlayer or _G.removePlayers) then return end
+        if descendant:IsA("Humanoid") then
+            local charModel = descendant.Parent
+            if charModel and charModel:IsA("Model") and charModel.Name ~= lp.Name then
+                pcall(function() charModel:Destroy() end)
+            end
         end
     end
-end
 
--- Bersihkan karakter player lain yang sudah terlanjur ada di workspace
-for _, descendant in ipairs(workspace:GetDescendants()) do
-    if descendant:IsA("Model") and descendant:FindFirstChildOfClass("Humanoid") and descendant.Name ~= lp.Name then
-        pcall(function() descendant:Destroy() end)
+    -- Bersihkan karakter player lain yang sudah terlanjur ada di workspace (Direct children agar tidak timeout/lag)
+    for _, child in ipairs(workspace:GetChildren()) do
+        if child:IsA("Model") and child.Name ~= lp.Name and child:FindFirstChildOfClass("Humanoid") then
+            pcall(function() child:Destroy() end)
+        end
     end
-end
 
--- Pasang listener real-time untuk mendeteksi humanoid baru yang di-load
-workspace.DescendantAdded:Connect(function(descendant)
-    task.defer(periksaDanHapus, descendant)
-end)
+    -- Pasang listener real-time untuk mendeteksi humanoid baru yang di-load
+    workspace.DescendantAdded:Connect(function(descendant)
+        task.defer(periksaDanHapus, descendant)
+    end)
+end
 
 -- =============================================
 -- 🧠 VARIABEL OTAK UTAMA (STATE MACHINE)
