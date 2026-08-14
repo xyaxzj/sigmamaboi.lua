@@ -2,7 +2,7 @@
 -- STEAL AN EGG - AUTO TRADE & GIFTING SYSTEM (SIGMA UI V4)
 -- Game: Steal an Egg (Roblox)
 -- Framework: Sigma UI Library - V4 Ultimate Edition
--- Features: Auto Gifting, Backpack Scanner, Filtered Trade (Multi-Rarity, Weight, Mutation), Auto Accept, Server Tab (Job ID, Teleport & Low Player Server Hop)
+-- Features: Auto Gifting, Backpack Scanner, Filtered Trade (Multi-Rarity, Weight, Mutation), Auto Accept, Server Tab (Job ID, Uptime, Smart Deep Hop & Teleport)
 -- ==========================================================
 
 local Players = game:GetService("Players")
@@ -116,6 +116,21 @@ local function formatNumber(n)
     return formatted
 end
 
+-- Helper Format Waktu (Uptime)
+local function formatUptime(seconds)
+    if not seconds or seconds < 0 then return "0 Detik" end
+    local hours = math.floor(seconds / 3600)
+    local mins = math.floor((seconds % 3600) / 60)
+    local secs = math.floor(seconds % 60)
+    if hours > 0 then
+        return string.format("%d Jam %d Menit %d Detik", hours, mins, secs)
+    elseif mins > 0 then
+        return string.format("%d Menit %d Detik", mins, secs)
+    else
+        return string.format("%d Detik", secs)
+    end
+end
+
 -- Helper Clipboard
 local function CopyToClipboard(text)
     if setclipboard then
@@ -164,7 +179,6 @@ local isRarityLoaded = false
 local function LoadGameDirectoryRarities()
     if isRarityLoaded then return end
     
-    -- 1. Load Rarity Module (ReplicatedStorage.Directory.Rarity)
     pcall(function()
         local dir = ReplicatedStorage:FindFirstChild("Directory")
         local rarityMod = dir and (dir:FindFirstChild("Rarity") or dir:FindFirstChild("Rarities"))
@@ -203,7 +217,6 @@ local function LoadGameDirectoryRarities()
         end
     end)
 
-    -- 2. Scan seluruh Modul Item di ReplicatedStorage.Directory
     local itemCount = 0
     pcall(function()
         local dir = ReplicatedStorage:FindFirstChild("Directory") or ReplicatedStorage:FindFirstChild("Library")
@@ -327,7 +340,6 @@ end
 
 task.spawn(ResolveTargetId)
 
--- Cleanup handler
 getgenv().CancelStealAnEggTrade = function()
     Config.AutoTradeLoop = false
     Config.AutoTradeFilterLoop = false
@@ -752,6 +764,10 @@ function StealAnEggTrade.GetJobId()
     return tostring(game.JobId)
 end
 
+function StealAnEggTrade.GetServerUptime()
+    return workspace.DistributedGameTime
+end
+
 function StealAnEggTrade.CopyJobId()
     return CopyToClipboard(game.JobId)
 end
@@ -780,14 +796,17 @@ function StealAnEggTrade.Rejoin()
     return success, err
 end
 
---- Pindah ke Server dengan jumlah pemain paling sedikit (Server Sepi)
-function StealAnEggTrade.HopSmallServer()
+--- ❄️ SMART DEEP HOP: Mencari Server Sepi Dingin (Matchmaking Deprioritized / Sepi Lama)
+-- Memindai hingga 5 halaman API ke server bagian ekor yang sudah ditinggalkan pemain
+function StealAnEggTrade.HopSmartSmallServer()
     task.spawn(function()
         local placeId = game.PlaceId
         local foundServers = {}
         local cursor = ""
         local attempts = 0
-        local maxAttempts = 3
+        local maxAttempts = 5 -- Scan hingga 5 halaman (500 server)
+        
+        print("[SmartDeepHop] Memulai Deep Scan server sepi dingin...")
         
         while attempts < maxAttempts do
             attempts = attempts + 1
@@ -797,13 +816,20 @@ function StealAnEggTrade.HopSmallServer()
             if success and raw then
                 local ok, data = pcall(function() return HttpService:JSONDecode(raw) end)
                 if ok and data and data.data then
-                    for _, s in ipairs(data.data) do
+                    for index, s in ipairs(data.data) do
                         if s.id and s.id ~= game.JobId and s.playing and s.maxPlayers and s.playing < s.maxPlayers and s.playing > 0 then
+                            -- Skor Dingin: Halaman lebih dalam + pemain lebih sedikit = Prioritas utama
+                            local pageWeight = attempts * 10
+                            local playerCnt = tonumber(s.playing) or 99
+                            local pingVal = tonumber(s.ping) or 999
+                            
                             table.insert(foundServers, {
                                 id = s.id,
-                                playing = tonumber(s.playing) or 99,
+                                playing = playerCnt,
                                 maxPlayers = tonumber(s.maxPlayers) or 0,
-                                ping = tonumber(s.ping) or 999
+                                ping = pingVal,
+                                page = attempts,
+                                score = (playerCnt * 50) - (pageWeight * 2) + (pingVal * 0.1)
                             })
                         end
                     end
@@ -822,23 +848,27 @@ function StealAnEggTrade.HopSmallServer()
         end
         
         if #foundServers > 0 then
+            -- Urutkan berdasarkan: Pemain paling sedikit -> Halaman terdalam -> Ping terendah
             table.sort(foundServers, function(a, b)
-                if a.playing == b.playing then
+                if a.playing ~= b.playing then
+                    return a.playing < b.playing
+                elseif a.page ~= b.page then
+                    return a.page > b.page -- Prioritaskan server di halaman ekor
+                else
                     return a.ping < b.ping
                 end
-                return a.playing < b.playing
             end)
             
             local bestServer = foundServers[1]
-            print(string.format("[HopSmallServer] Menemukan Server Sepi! ID: %s | Pemain: %d/%d | Ping: %dms", 
-                bestServer.id, bestServer.playing, bestServer.maxPlayers, bestServer.ping))
+            print(string.format("[SmartDeepHop] Server Sepi Dingin Ditemukan! ID: %s | Pemain: %d/%d (Page %d) | Ping: %dms", 
+                bestServer.id, bestServer.playing, bestServer.maxPlayers, bestServer.page, bestServer.ping))
                 
             pcall(function()
                 Library:Notify({
-                    Title   = "Server Sepi Ditemukan! 🍃",
-                    Content = string.format("Pindah ke server dengan %d/%d pemain (Ping: %dms)", bestServer.playing, bestServer.maxPlayers, bestServer.ping),
+                    Title   = "Server Sepi Dingin Ditemukan! ❄️",
+                    Content = string.format("Server dengan %d/%d pemain (Halaman %d, Ping %dms)", bestServer.playing, bestServer.maxPlayers, bestServer.page, bestServer.ping),
                     Type    = "Success",
-                    Duration = 4
+                    Duration = 4.5
                 })
             end)
             
@@ -848,7 +878,7 @@ function StealAnEggTrade.HopSmallServer()
             pcall(function()
                 Library:Notify({
                     Title   = "Server Sepi Tidak Ditemukan",
-                    Content = "Mencoba teleport ke server publik umum...",
+                    Content = "Mencoba server publik acak...",
                     Type    = "Warning",
                     Duration = 3
                 })
@@ -856,6 +886,11 @@ function StealAnEggTrade.HopSmallServer()
             TeleportService:Teleport(placeId, LocalPlayer)
         end
     end)
+end
+
+--- Quick Small Server Hop (1-3 Player)
+function StealAnEggTrade.HopSmallServer()
+    StealAnEggTrade.HopSmartSmallServer()
 end
 
 --- Server Hop Acak (Random Server)
@@ -1902,21 +1937,24 @@ end)
 
 
 -- ---------------------------------------------------------
--- TAB 5: 🌐 SERVER UTILITIES (JOB ID & LOW-PLAYER HOP)
+-- TAB 5: 🌐 SERVER UTILITIES (JOB ID, UPTIME & SMART DEEP HOP)
 -- ---------------------------------------------------------
 local ServerTab = Window:MakeTab("🌐")
 local ServerInfoSec = ServerTab:AddSection("Informasi Server Saat Ini")
 
-local ServerJobIdPara = ServerInfoSec:AddParagraph("Job ID Server", tostring(game.JobId))
+local ServerJobIdPara  = ServerInfoSec:AddParagraph("Job ID Server", tostring(game.JobId))
+local ServerUptimePara = ServerInfoSec:AddParagraph("Uptime Server Ini", formatUptime(workspace.DistributedGameTime))
 local ServerPlayerPara = ServerInfoSec:AddParagraph("Jumlah Player", string.format("%d / %d Players", #Players:GetPlayers(), Players.MaxPlayers))
 
+-- Real-time updater informasi server & uptime
 task.spawn(function()
     while getgenv().CurrentTradeScriptID == scriptId do
         pcall(function()
             ServerJobIdPara:Set("Job ID Server", tostring(game.JobId))
+            ServerUptimePara:Set("Uptime Server Ini", formatUptime(workspace.DistributedGameTime))
             ServerPlayerPara:Set("Jumlah Player", string.format("%d / %d Players di Server", #Players:GetPlayers(), Players.MaxPlayers))
         end)
-        task.wait(3)
+        task.wait(1)
     end
 end)
 
@@ -1958,20 +1996,20 @@ ServerInfoSec:AddButton({
     end
 end)
 
-local TeleportSec = ServerTab:AddSection("🚀 Pindah Server / Server Hop")
+local TeleportSec = ServerTab:AddSection("🚀 Pindah Server / Smart Server Hop")
 
--- Tombol Server Sepi (LOWEST PLAYER COUNT)
+-- ❄️ TOMBOL UTAMA: SMART DEEP HOP (SERVER SEPI DINGIN)
 TeleportSec:AddButton({
-    Name = "🍃 Hop ke Server Paling Sepi (Lowest Player)",
-    Tooltip = "Mencari server publik dengan jumlah pemain paling sedikit (1-3 player) lalu teleport ke sana"
+    Name = "❄️ Smart Hop (Cari Server Sepi Dingin / Deep Scan)",
+    Tooltip = "Memindai hingga 500 server untuk mencari server 1-2 player di bagian ekor matchmaker (yang sepinya tahan lama)"
 }, function()
     Library:Notify({
-        Title   = "Mencari Server Sepi... 🍃",
-        Content = "Sedang memindai server publik dengan jumlah pemain paling sedikit...",
+        Title   = "Deep Scan Server Sepi... ❄️",
+        Content = "Sedang memindai hingga 500 server mencari server sepi yang matchmaking-nya dingin...",
         Type    = "Info",
-        Duration = 3.5
+        Duration = 4.0
     })
-    StealAnEggTrade.HopSmallServer()
+    StealAnEggTrade.HopSmartSmallServer()
 end)
 
 TeleportSec:AddButton({
