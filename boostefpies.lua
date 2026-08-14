@@ -2,6 +2,7 @@
 -- 🚀 SIGMA ULTIMATE FPS BOOSTER & ANTI-LAG (NO UI / STANDALONE)
 -- Kompatibel: Mobile (Delta, Codex, Arceus X, Hydrogen) & PC (Wave, Solara, etc.)
 -- Menggabungkan seluruh metode optimasi dari Auto Train, Auto Farm Kalb, & Magic Loot
+-- Dilengkapi Smart Plot Detector (Menghapus plot player lain & menjaga plot kita)
 -- ==============================================================================
 
 -- ⏳ TUNGGU GAME SELESAI LOADING
@@ -21,6 +22,7 @@ while not lp do
     lp = Players.LocalPlayer
 end
 local lpName = lp.Name
+local lpUserId = lp.UserId
 
 ---------------------------------------------------------
 -- ⚙️ PENGATURAN / KONFIGURASI (BISA DIUBAH SESUAI KEBUTUHAN)
@@ -29,7 +31,8 @@ local CONFIG = {
     FPS_CAP             = _G.fpsCap or 240,             -- Target FPS (contoh: 5 untuk ultra AFK, 60, 120, 240)
     WHITE_MAP_MODE      = _G.whiteMap ~= nil and _G.whiteMap or true,   -- true: Ubah seluruh map jadi Putih Bersih (Potato Mode Auto Train)
     REMOVE_OTHER_PLAYER = _G.autoRemovePlayer ~= nil and _G.autoRemovePlayer or true, -- true: Hapus player lain dari client (FPS Boost Ekstrem)
-    REMOVE_PLOTS_FOLDER = _G.removePlots ~= nil and _G.removePlots or true,           -- true: Hapus folder Plot 1-5 & folder Data (Auto Train & Kalb)
+    REMOVE_PLOTS_FOLDER = _G.removePlots ~= nil and _G.removePlots or true,           -- true: Hapus folder Plot player lain & folder Data
+    PRESERVE_MY_PLOT    = true,                         -- true: JANGAN hapus plot kita (Smart Detection via BillboardGui/Name/Icon)
     STRIP_ACCESSORIES   = _G.stripAccessories ~= nil and _G.stripAccessories or true, -- true: Hapus rambut, topi, baju player lain (jika player tidak dihapus)
     DISABLE_3D_RENDER   = _G.disable3dRender or false,  -- true: Matikan 3D Rendering layar (GPU Saver Magic Loot)
     OPTIMIZE_TERRAIN    = true,                         -- true: Matikan efek ombak air & dekorasi rumput
@@ -74,6 +77,75 @@ if CONFIG.ENABLE_ANTI_AFK and lp then
 end
 
 ---------------------------------------------------------
+-- 🎯 SMART DETEKTOR PLOT SENDIRI (JANGAN HAPUS PLOT KITA)
+---------------------------------------------------------
+local function isMyPlot(plotModel)
+    if not plotModel or not plotModel:IsA("Model") then return false end
+    if not CONFIG.PRESERVE_MY_PLOT then return false end
+
+    local myName = lpName
+    local myDisplayName = lp.DisplayName
+    local myUserIdStr = tostring(lpUserId)
+
+    -- 1. Deteksi Jalur Spesifik:
+    -- Plots -> [Model] -> PlotSign (Part) -> PlayerPlotSign (BillboardGui) -> Frame -> PlayerName (TextLabel) & PlayerIcon (ImageLabel)
+    local plotSign = plotModel:FindFirstChild("PlotSign", true)
+    if plotSign then
+        local playerPlotSign = plotSign:FindFirstChild("PlayerPlotSign", true)
+        if playerPlotSign then
+            -- Cek TextLabel (PlayerName)
+            local playerNameLabel = playerPlotSign:FindFirstChild("PlayerName", true)
+            if playerNameLabel and playerNameLabel:IsA("TextLabel") then
+                local txt = playerNameLabel.Text
+                if txt and (txt == myName or txt:find(myName, 1, true) or (myDisplayName and (txt == myDisplayName or txt:find(myDisplayName, 1, true)))) then
+                    return true
+                end
+            end
+
+            -- Cek ImageLabel (PlayerIcon -> rbxthumb dengan id kita)
+            local playerIcon = playerPlotSign:FindFirstChild("PlayerIcon", true)
+            if playerIcon and (playerIcon:IsA("ImageLabel") or playerIcon:IsA("ImageButton")) then
+                local img = playerIcon.Image
+                if img and (img:find("id=" .. myUserIdStr, 1, true) or img:find(myUserIdStr, 1, true)) then
+                    return true
+                end
+            end
+        end
+    end
+
+    -- 2. Deteksi Rekursif Descendant (Menangkap semua TextLabel/ImageLabel di dalam Plot)
+    for _, item in ipairs(plotModel:GetDescendants()) do
+        if item:IsA("TextLabel") then
+            local txt = item.Text
+            if txt and (txt == myName or (myDisplayName and txt == myDisplayName)) then
+                return true
+            end
+        elseif item:IsA("ImageLabel") or item:IsA("ImageButton") then
+            local img = item.Image
+            if img and (img:find("id=" .. myUserIdStr, 1, true) or img:find(myUserIdStr, 1, true)) then
+                return true
+            end
+        elseif item:IsA("StringValue") or item:IsA("ObjectValue") or item:IsA("IntValue") or item:IsA("NumberValue") then
+            if item.Value == myName or item.Value == myDisplayName or tostring(item.Value) == myUserIdStr or item.Value == lp then
+                return true
+            end
+        end
+    end
+
+    -- 3. Deteksi via Attribute (Owner, UserId, Player)
+    local ok, attributes = pcall(function() return plotModel:GetAttributes() end)
+    if ok and attributes then
+        for _, attrVal in pairs(attributes) do
+            if attrVal == myName or attrVal == myDisplayName or tostring(attrVal) == myUserIdStr or attrVal == lpUserId then
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
+---------------------------------------------------------
 -- 1. UBAH MAP JADI POTATO (PUTIH & SMOOTH PLASTIC)
 ---------------------------------------------------------
 local function optimizeObject(v)
@@ -93,8 +165,11 @@ local function optimizeObject(v)
             end
             cleanedCount = cleanedCount + 1
         elseif CONFIG.REMOVE_PARTICLES and (v:IsA("Decal") or v:IsA("Texture")) then
-            v:Destroy()
-            cleanedCount = cleanedCount + 1
+            -- Jaga agar PlayerIcon/Texture pada PlayerPlotSign kita tidak terhapus jika di dalam BillboardGui
+            if not v:FindFirstAncestorOfClass("BillboardGui") then
+                v:Destroy()
+                cleanedCount = cleanedCount + 1
+            end
         elseif CONFIG.REMOVE_PARTICLES and (
             v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Beam") or 
             v:IsA("Fire") or v:IsA("Smoke") or v:IsA("Sparkles") or 
@@ -141,37 +216,32 @@ if CONFIG.REMOVE_LIGHTING_FX then
 end
 
 ---------------------------------------------------------
--- 3. HAPUS FOLDER PLOT 1 SAMPAI 5 & FOLDER DATA (AUTO TRAIN & KALB)
+-- 3. HAPUS FOLDER PLOTS PLAYER LAIN (SMART DETECTION)
 ---------------------------------------------------------
 local function hapusPlotsDanData()
     if not CONFIG.REMOVE_PLOTS_FOLDER then return end
     pcall(function()
-        -- Hapus Plots di workspace
         local plotsFolder = workspace:FindFirstChild("Plots")
         if plotsFolder then
-            for i = 1, 10 do
-                local plot = plotsFolder:FindFirstChild("Plot" .. tostring(i))
-                if plot then
-                    pcall(function() 
-                        plot:Destroy() 
-                        cleanedCount = cleanedCount + 1
-                    end)
+            for _, plot in ipairs(plotsFolder:GetChildren()) do
+                if plot:IsA("Model") then
+                    if isMyPlot(plot) then
+                        print("🛡️ [Smart Plot] Menjaga Plot Milik Kita: " .. plot.Name)
+                    else
+                        pcall(function() 
+                            plot:Destroy() 
+                            cleanedCount = cleanedCount + 1
+                        end)
+                    end
                 end
-            end
-            -- Bersihkan isi plotsFolder lainnya
-            for _, child in ipairs(plotsFolder:GetChildren()) do
-                pcall(function() 
-                    child:Destroy() 
-                    cleanedCount = cleanedCount + 1
-                end)
             end
         end
 
-        -- Hapus folder Plot / Bases / PlayerData di workspace jika ada
-        local folderNames = { "Plots", "PlotFolder", "PlayerPlots", "Bases", "PlayerData" }
+        -- Hapus folder Plot / Bases / PlayerData milik orang lain di workspace jika ada
+        local folderNames = { "PlotFolder", "PlayerPlots", "Bases", "PlayerData" }
         for _, fName in ipairs(folderNames) do
             local folder = workspace:FindFirstChild(fName)
-            if folder and folder ~= workspace:FindFirstChild("Terrain") then
+            if folder and folder ~= workspace:FindFirstChild("Terrain") and not isMyPlot(folder) then
                 pcall(function() 
                     folder:Destroy() 
                     cleanedCount = cleanedCount + 1
@@ -263,20 +333,6 @@ local function stripPlayerAccessories(char)
     end)
 end
 
--- Fungsi periksa dan hapus Humanoid karakter player lain secara menyeluruh
-local function periksaDanHapusHumanoid(descendant)
-    if not CONFIG.REMOVE_OTHER_PLAYER then return end
-    pcall(function()
-        if descendant:IsA("Humanoid") then
-            local charModel = descendant.Parent
-            if charModel and charModel:IsA("Model") and charModel.Name ~= lpName and charModel ~= lp.Character then
-                charModel:Destroy()
-                cleanedCount = cleanedCount + 1
-            end
-        end
-    end)
-end
-
 -- EKSEKUSI PEMBANTAIAN PLAYER AWAL
 if CONFIG.REMOVE_OTHER_PLAYER then
     -- 1. Musnahkan dari list Players
@@ -318,15 +374,18 @@ end
 -- 7. REALTIME LISTENERS (AUTO CLEAN REALTIME & EVENT BARU)
 ---------------------------------------------------------
 if CONFIG.ENABLE_REALTIME_OPT then
-    -- Listener 1: Deteksi objek / model / humanoid baru yang dimuat di workspace
+    -- Listener 1: Deteksi objek / model / humanoid / plot baru yang dimuat di workspace
     workspace.DescendantAdded:Connect(function(descendant)
         task.defer(function()
-            -- Deteksi dan hapus Plots jika baru dimuat
-            if CONFIG.REMOVE_PLOTS_FOLDER then
-                if descendant.Name == "Plots" or descendant.Name:match("^Plot%d+") then
+            -- Deteksi Plot baru
+            if CONFIG.REMOVE_PLOTS_FOLDER and descendant:IsA("Model") and descendant.Parent and descendant.Parent.Name == "Plots" then
+                task.wait(0.3) -- Beri waktu agar BillboardGui termuat
+                if not isMyPlot(descendant) then
                     pcall(function() descendant:Destroy() end)
-                    return
+                else
+                    print("🛡️ [Smart Plot] Menjaga Plot Milik Kita yang baru dimuat: " .. descendant.Name)
                 end
+                return
             end
 
             -- Deteksi dan hapus Humanoid player lain
@@ -403,5 +462,5 @@ print(string.format("📊 Total Objek Dibersihkan : %d", cleanedCount))
 print(string.format("🎯 FPS Cap                 : %d", CONFIG.FPS_CAP))
 print(string.format("🥔 White Potato Mode       : %s", tostring(CONFIG.WHITE_MAP_MODE)))
 print(string.format("💀 Hapus Player Lain       : %s", tostring(CONFIG.REMOVE_OTHER_PLAYER)))
-print(string.format("🏡 Hapus Folder Plots/Data : %s", tostring(CONFIG.REMOVE_PLOTS_FOLDER)))
+print(string.format("🏡 Smart Plot Protection   : %s", tostring(CONFIG.PRESERVE_MY_PLOT)))
 print("══════════════════════════════════════════════════")
