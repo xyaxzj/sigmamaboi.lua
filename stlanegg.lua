@@ -42,9 +42,9 @@ local ACCOUNT_PROFILES = {
         FilterItem          = "All Items",      -- Filter jenis item
         FilterMutation      = "All Mutations",  -- Filter mutasi (Cth: "Golden", "Normal", "All Mutations")
         FilterRarity        = "Divine, Eternal, Secret", -- 👈 Multi-Rarity Filter (Divine, Eternal, Secret) atau "All Rarities"
-        MinWeightInMillions = 0,                -- Minimal berat (0 = Bebas / Kirim seluruh item Divine, Eternal, Secret)
-        MaxWeightInMillions = 0,                -- Tanpa batas maksimal (0 = Bebas)
-        MinIncomeInMillions = 0,                -- 👈 Minimal Income / detik dalam Juta (Cth: 100 = 100 Juta/s, 0 = Bebas)
+        MinWeightInMillions = 0,                -- Minimal berat dalam JUTA kg (0 = Bebas)
+        MaxWeightInMillions = 0,                -- Tanpa batas maksimal berat (0 = Bebas)
+        MinIncomeInMillions = 100,              -- 👈 MINIMAL INCOME: 100 = 100 JUTA/DETIK (100M/s). Item di bawah 100M TIDAK AKAN DIKIRIM!
         MaxIncomeInMillions = 0,                -- Tanpa batas maksimal income (0 = Bebas)
         IgnoreFavorites     = false,            -- Jangan abaikan barang favorit
         OnlyFavorites       = false,            -- Jangan batasi hanya favorit
@@ -1762,9 +1762,12 @@ function StealAnEggTrade.StartFilteredTradeLoop()
                 for _, tool in ipairs(tools) do
                     if not Config.AutoTradeFilterLoop then break end
                     
-                    if StealAnEggTrade.MatchesFilter(tool, Config) then
+                    local isMatch, info = StealAnEggTrade.MatchesFilter(tool, Config)
+                    if isMatch then
                         matchedCount = matchedCount + 1
-                        local tName = tool.Name
+                        local tName = info and info.DisplayName or tool.Name
+                        print(string.format("[AutoTradeFilter] Item LOLOS Filter: %s [Income: %s/s | Berat: %s kg] -> Mengirim ke target...", 
+                            tName, formatNumber(info.PerSecond), formatNumber(info.Weight)))
                         local ok, err = StealAnEggTrade.SendGift(targetId, tool)
                         if ok then
                             TradeStats.TotalSent = TradeStats.TotalSent + 1
