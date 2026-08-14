@@ -2,7 +2,7 @@
 -- STEAL AN EGG - AUTO TRADE & GIFTING SYSTEM (SIGMA UI V4)
 -- Game: Steal an Egg (Roblox)
 -- Framework: Sigma UI Library - V4 Ultimate Edition
--- Features: Auto Gifting, Backpack Scanner, Filtered Trade, Auto Accept, Per-Player Config
+-- Features: Auto Gifting, Backpack Scanner, Filtered Trade (Rarity, Weight, Mutation), Auto Accept
 -- ==========================================================
 
 local Players = game:GetService("Players")
@@ -12,7 +12,7 @@ local LocalPlayer = Players.LocalPlayer
 
 -- ==========================================================
 -- 👤 [KONFIGURASI PER-PLAYER / PROFIL AKUN]
--- Pengaturan otomatis disesuaikan berdasarkan Username akun yang sedang login!
+-- Pengaturan otomatis disesuaikan berdasarkan Username akun yang sedang login:
 -- ==========================================================
 local ACCOUNT_PROFILES = {
     -- [PROFIL 1] Khusus untuk akun "szeshuro" (Receiver / Penerima)
@@ -35,9 +35,10 @@ local ACCOUNT_PROFILES = {
         AutoTradeFilterLoop = true,             -- true = Langsung jalankan Trade By Filter
         DelayBetweenGifts   = 0.5,              -- Jeda antar gift (detik)
         FilterItem          = "All Items",      -- Filter jenis item
-        FilterMutation      = "All Mutations",  -- Filter mutasi
+        FilterMutation      = "All Mutations",  -- Filter mutasi (Cth: "Golden", "Normal", "All Mutations")
+        FilterRarity        = "All Rarities",   -- Filter Rarity (Cth: "Secret", "Divine", "Mythical", "Legendary", "BrainrotGod", "All Rarities")
         MinWeightInMillions = 1,                -- Minimal 1.000.000 kg (1 Juta kg)
-        MaxWeightInMillions = 0,                -- Tanpa batas maksimal
+        MaxWeightInMillions = 0,                -- Tanpa batas maksimal (0 = Bebas)
         IgnoreFavorites     = false,            -- Jangan abaikan barang favorit
         OnlyFavorites       = false,            -- Jangan batasi hanya favorit
         AutoAcceptGift      = false,            -- Matikan auto accept di akun pengirim
@@ -50,7 +51,6 @@ local ACCOUNT_PROFILES = {
 local currentUsername = LocalPlayer and LocalPlayer.Name or ""
 local activeProfile = nil
 
--- Cari profil yang cocok dengan nama akun (case-insensitive)
 for nameKey, profileData in pairs(ACCOUNT_PROFILES) do
     if nameKey ~= "DEFAULT" and currentUsername:lower() == nameKey:lower() then
         activeProfile = profileData
@@ -59,7 +59,6 @@ for nameKey, profileData in pairs(ACCOUNT_PROFILES) do
     end
 end
 
--- Jika tidak ada profil khusus, gunakan DEFAULT
 if not activeProfile then
     activeProfile = ACCOUNT_PROFILES["DEFAULT"] or {}
     print(string.format("[StealAnEgg] Profil Default Diterapkan untuk akun '%s' -> Role: %s", currentUsername, activeProfile.Role or "Default"))
@@ -76,6 +75,7 @@ local SCRIPT_CONFIG = {
     AcceptDelay         = activeProfile.AcceptDelay or 0.1,
     FilterItem          = activeProfile.FilterItem or "All Items",
     FilterMutation      = activeProfile.FilterMutation or "All Mutations",
+    FilterRarity        = activeProfile.FilterRarity or "All Rarities",
     MinWeightInMillions = activeProfile.MinWeightInMillions or 0,
     MaxWeightInMillions = activeProfile.MaxWeightInMillions or 0,
     IgnoreFavorites     = activeProfile.IgnoreFavorites == true,
@@ -115,6 +115,50 @@ end
 
 
 -- ==========================================================
+-- 💎 [RARITY SYSTEM & GAME DIRECTORY DATABASE]
+-- ==========================================================
+local KNOWN_RARITIES = {
+    "All Rarities",
+    "Basic", "Common", "Uncommon", "Rare", "SuperRare", "Epic",
+    "Legendary", "Mythic", "Mythical", "Cosmic", "Celestial",
+    "Exotic", "Superior", "Transcendent", "Secret", "Eternal",
+    "Divine", "BrainrotGod", "Rainbow", "Prismatic", "Exclusive",
+    "Limited", "Admin"
+}
+
+local ItemRarityDatabase = {}
+
+-- Auto load dan require module directory dari ReplicatedStorage.Library jika ada
+pcall(function()
+    local lib = ReplicatedStorage:FindFirstChild("Library") or ReplicatedStorage:FindFirstChild("Shared")
+    if lib then
+        for _, desc in ipairs(lib:GetDescendants()) do
+            if desc:IsA("ModuleScript") then
+                local dName = desc.Name:lower()
+                if dName:find("item") or dName:find("pet") or dName:find("egg") or dName:find("rarit") or dName:find("asset") then
+                    local ok, mod = pcall(require, desc)
+                    if ok and type(mod) == "table" then
+                        for k, v in pairs(mod) do
+                            if type(v) == "table" then
+                                local r = v.Rarity or v.Tier or v.RarityName or v.rarity
+                                if r then
+                                    local rStr = tostring(r)
+                                    ItemRarityDatabase[tostring(k):lower()] = rStr
+                                    if v.Name then ItemRarityDatabase[tostring(v.Name):lower()] = rStr end
+                                    if v.DisplayName then ItemRarityDatabase[tostring(v.DisplayName):lower()] = rStr end
+                                    if v.Category then ItemRarityDatabase[tostring(v.Category):lower()] = rStr end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+end)
+
+
+-- ==========================================================
 -- [SECTION 1] STATE & BACKEND CONFIGURATION
 -- ==========================================================
 
@@ -131,6 +175,7 @@ local Config = {
     DelayBetweenGifts   = SCRIPT_CONFIG.DelayBetweenGifts or 0.5,
     FilterItem          = SCRIPT_CONFIG.FilterItem or "All Items",
     FilterMutation      = SCRIPT_CONFIG.FilterMutation or "All Mutations",
+    FilterRarity        = SCRIPT_CONFIG.FilterRarity or "All Rarities",
     MinWeight           = (tonumber(SCRIPT_CONFIG.MinWeightInMillions) or 0) * 1000000,
     MaxWeight           = (tonumber(SCRIPT_CONFIG.MaxWeightInMillions) or 0) * 1000000,
     SelectedInvTool     = nil,
@@ -214,6 +259,44 @@ function StealAnEggTrade.GetGiftingRequestRemote()
     return nil
 end
 
+--- Mendapatkan Rarity dari Tool secara otomatis
+function StealAnEggTrade.GetToolRarity(tool)
+    if not tool or not tool:IsA("Tool") then return "Normal" end
+    
+    -- 1. Cek Attributes pada Tool
+    local attrRarity = tool:GetAttribute("Rarity") or tool:GetAttribute("Tier") or tool:GetAttribute("ItemRarity") or tool:GetAttribute("RarityName")
+    if attrRarity and tostring(attrRarity) ~= "" then
+        return tostring(attrRarity)
+    end
+    
+    -- 2. Cek Child Values
+    local rVal = tool:FindFirstChild("Rarity") or tool:FindFirstChild("Tier")
+    if rVal and rVal:IsA("ValueBase") and rVal.Value ~= "" then
+        return tostring(rVal.Value)
+    end
+    
+    -- 3. Cek Database modul game
+    local name = tool.Name:lower()
+    local dispName = (tool:GetAttribute("DisplayName") or ""):lower()
+    local category = (tool:GetAttribute("Category") or ""):lower()
+    
+    if ItemRarityDatabase[dispName] then return ItemRarityDatabase[dispName] end
+    if ItemRarityDatabase[name] then return ItemRarityDatabase[name] end
+    if ItemRarityDatabase[category] then return ItemRarityDatabase[category] end
+    
+    -- 4. Pola pencocokan kata kunci pada nama tool
+    for _, r in ipairs(KNOWN_RARITIES) do
+        if r ~= "All Rarities" then
+            local rLow = r:lower()
+            if name:find(rLow, 1, true) or dispName:find(rLow, 1, true) then
+                return r
+            end
+        end
+    end
+    
+    return "Normal"
+end
+
 --- Memegang / Equip Tool ke Character Player
 function StealAnEggTrade.EquipTool(tool)
     if not tool or not tool:IsA("Tool") then 
@@ -238,7 +321,7 @@ function StealAnEggTrade.EquipTool(tool)
     end
 end
 
---- Mengambil informasi Attributes dan Properties dari Tool
+--- Mengambil informasi Attributes, Properties, dan Rarity dari Tool
 function StealAnEggTrade.GetToolInfo(tool)
     if not tool or not tool:IsA("Tool") then return nil end
     local name = tool.Name
@@ -249,6 +332,7 @@ function StealAnEggTrade.GetToolInfo(tool)
     local uid = tool:GetAttribute("UID") or "-"
     local fav = tool:GetAttribute("Favorite") == true
     local itemType = tool:GetAttribute("ItemType") or "Asset"
+    local rarity = StealAnEggTrade.GetToolRarity(tool)
     
     return {
         Instance = tool,
@@ -259,7 +343,8 @@ function StealAnEggTrade.GetToolInfo(tool)
         Category = tostring(category),
         UID = tostring(uid),
         Favorite = fav,
-        ItemType = tostring(itemType)
+        ItemType = tostring(itemType),
+        Rarity = tostring(rarity)
     }
 end
 
@@ -288,13 +373,15 @@ function StealAnEggTrade.GetAllTools()
     return tools
 end
 
---- Memindai seluruh inventaris untuk statistik & pengelompokan
+--- Memindai seluruh inventaris untuk statistik & pengelompokan (dengan Rarity)
 function StealAnEggTrade.ScanInventory()
     local tools = StealAnEggTrade.GetAllTools()
     local itemsByName = {}
     local uniqueNames = {"All Items"}
     local mutations = {"All Mutations"}
+    local rarities = {"All Rarities"}
     local mutationSet = {}
+    local raritySet = {}
     local totalWeight = 0
     local favoriteCount = 0
     local dropdownOptions = {}
@@ -318,13 +405,28 @@ function StealAnEggTrade.ScanInventory()
             itemsByName[groupKey].Count = itemsByName[groupKey].Count + 1
             table.insert(itemsByName[groupKey].Items, tool)
             
+            -- Track Mutations
             if info.BaseMutation and not mutationSet[info.BaseMutation] then
                 mutationSet[info.BaseMutation] = true
                 table.insert(mutations, info.BaseMutation)
             end
             
-            local optStr = string.format("%s [%s] (%.1f kg)%s", info.DisplayName, info.BaseMutation, info.Weight, info.Favorite and " ⭐" or "")
+            -- Track Rarities
+            if info.Rarity and not raritySet[info.Rarity] then
+                raritySet[info.Rarity] = true
+                table.insert(rarities, info.Rarity)
+            end
+            
+            -- Format Dropdown lengkap dengan Rarity
+            local optStr = string.format("%s [%s] (%s) - %.1f kg%s", info.DisplayName, info.BaseMutation, info.Rarity, info.Weight, info.Favorite and " ⭐" or "")
             table.insert(dropdownOptions, optStr)
+        end
+    end
+    
+    -- Tambahkan Known Rarities jika belum masuk
+    for _, r in ipairs(KNOWN_RARITIES) do
+        if not raritySet[r] and r ~= "All Rarities" then
+            table.insert(rarities, r)
         end
     end
     
@@ -338,19 +440,21 @@ function StealAnEggTrade.ScanInventory()
         ItemsByName = itemsByName,
         UniqueNames = uniqueNames,
         Mutations = mutations,
+        Rarities = rarities,
         TotalWeight = totalWeight,
         FavoriteCount = favoriteCount,
         DropdownOptions = dropdownOptions
     }
 end
 
---- Memeriksa apakah suatu Tool cocok dengan kriteria filter
+--- Memeriksa apakah suatu Tool cocok dengan kriteria filter (Termasuk Rarity)
 function StealAnEggTrade.MatchesFilter(tool, filterConfig)
     filterConfig = filterConfig or Config
     if not tool or not tool:IsA("Tool") then return false end
     local info = StealAnEggTrade.GetToolInfo(tool)
     if not info then return false end
     
+    -- Filter Favorite
     if filterConfig.IgnoreFavorites and info.Favorite then
         return false
     end
@@ -358,6 +462,7 @@ function StealAnEggTrade.MatchesFilter(tool, filterConfig)
         return false
     end
     
+    -- Filter Nama Item / Category
     if filterConfig.FilterItem and filterConfig.FilterItem ~= "All Items" and filterConfig.FilterItem ~= "" then
         local targetName = filterConfig.FilterItem:lower()
         local matchesName = info.Name:lower():find(targetName, 1, true) ~= nil
@@ -368,18 +473,28 @@ function StealAnEggTrade.MatchesFilter(tool, filterConfig)
         end
     end
     
+    -- Filter Mutation
     if filterConfig.FilterMutation and filterConfig.FilterMutation ~= "All Mutations" and filterConfig.FilterMutation ~= "All" then
         if info.BaseMutation:lower() ~= filterConfig.FilterMutation:lower() then
             return false
         end
     end
     
+    -- Filter Rarity (BARU)
+    if filterConfig.FilterRarity and filterConfig.FilterRarity ~= "All Rarities" and filterConfig.FilterRarity ~= "All" and filterConfig.FilterRarity ~= "" then
+        if info.Rarity:lower() ~= filterConfig.FilterRarity:lower() then
+            return false
+        end
+    end
+    
+    -- Filter Minimum Weight (kg)
     if filterConfig.MinWeight and filterConfig.MinWeight > 0 then
         if info.Weight < filterConfig.MinWeight then
             return false
         end
     end
     
+    -- Filter Maximum Weight (kg)
     if filterConfig.MaxWeight and filterConfig.MaxWeight > 0 then
         if info.Weight > filterConfig.MaxWeight then
             return false
@@ -519,13 +634,15 @@ function StealAnEggTrade.SetFilter(filterTbl)
     if type(filterTbl) ~= "table" then return false end
     if filterTbl.Item then Config.FilterItem = filterTbl.Item end
     if filterTbl.Mutation then Config.FilterMutation = filterTbl.Mutation end
+    if filterTbl.Rarity or filterTbl.FilterRarity then Config.FilterRarity = filterTbl.Rarity or filterTbl.FilterRarity end
     if filterTbl.MinWeightMillions then Config.MinWeight = filterTbl.MinWeightMillions * 1000000 end
     if filterTbl.MinWeight then Config.MinWeight = filterTbl.MinWeight end
     if filterTbl.MaxWeightMillions then Config.MaxWeight = filterTbl.MaxWeightMillions * 1000000 end
     if filterTbl.MaxWeight then Config.MaxWeight = filterTbl.MaxWeight end
     if filterTbl.IgnoreFavorites ~= nil then Config.IgnoreFavorites = filterTbl.IgnoreFavorites end
     if filterTbl.OnlyFavorites ~= nil then Config.OnlyFavorites = filterTbl.OnlyFavorites end
-    print(string.format("[StealAnEgg API] Filter Updated -> Item: %s | Mutasi: %s | Min: %.2f Juta kg", tostring(Config.FilterItem), tostring(Config.FilterMutation), Config.MinWeight / 1000000))
+    print(string.format("[StealAnEgg API] Filter Updated -> Item: %s | Mutasi: %s | Rarity: %s | Min: %.2f Juta kg", 
+        tostring(Config.FilterItem), tostring(Config.FilterMutation), tostring(Config.FilterRarity), Config.MinWeight / 1000000))
     return true
 end
 
@@ -1104,7 +1221,7 @@ end)
 
 
 -- ---------------------------------------------------------
--- TAB 2: 🎒 BACKPACK & INVENTORY SCANNER
+-- TAB 2: 🎒 BACKPACK & INVENTORY SCANNER (WITH RARITY)
 -- ---------------------------------------------------------
 local InvTab = Window:MakeTab("🎒")
 local InvSec = InvTab:AddSection("Live Inventory / Backpack")
@@ -1116,7 +1233,7 @@ local InvDropdown = InvSec:AddDropdown({
     Options = initialScan.DropdownOptions,
     Default = initialScan.DropdownOptions[1] or "",
     Flag = "InvToolDropdown",
-    Tooltip = "Pilih salah satu tool yang ada di backpack"
+    Tooltip = "Pilih salah satu tool yang ada di backpack (menampilkan Nama, Mutasi, Rarity, Berat)"
 }, function(selected)
     if not selected or selected == "Backpack Kosong" then 
         Config.SelectedInvTool = nil
@@ -1125,7 +1242,7 @@ local InvDropdown = InvSec:AddDropdown({
     local tools = StealAnEggTrade.GetAllTools()
     for _, t in ipairs(tools) do
         local info = StealAnEggTrade.GetToolInfo(t)
-        local optStr = string.format("%s [%s] (%.1f kg)%s", info.DisplayName, info.BaseMutation, info.Weight, info.Favorite and " ⭐" or "")
+        local optStr = string.format("%s [%s] (%s) - %.1f kg%s", info.DisplayName, info.BaseMutation, info.Rarity, info.Weight, info.Favorite and " ⭐" or "")
         if optStr == selected then
             Config.SelectedInvTool = t
             break
@@ -1135,7 +1252,7 @@ end)
 
 InvSec:AddButton({
     Name = "🔄 Refresh / Scan Ulang Backpack",
-    Tooltip = "Memperbarui daftar item dan statistik inventaris"
+    Tooltip = "Memperbarui daftar item, mutasi, rarity, dan statistik inventaris"
 }, function()
     local scan = StealAnEggTrade.ScanInventory()
     InvDropdown:Refresh(scan.DropdownOptions)
@@ -1211,7 +1328,7 @@ end)
 
 
 -- ---------------------------------------------------------
--- TAB 3: 🎯 AUTO TRADE BY FILTER
+-- TAB 3: 🎯 AUTO TRADE BY FILTER (RARITY, WEIGHT, MUTATION)
 -- ---------------------------------------------------------
 local FilterTab = Window:MakeTab("🎯")
 local FilterSec = FilterTab:AddSection("Kriteria Filter Auto Trade")
@@ -1236,16 +1353,28 @@ local MutationDropdown = FilterSec:AddDropdown({
     Config.FilterMutation = selected or "All Mutations"
 end)
 
+-- Dropdown Filter Rarity (BARU)
+local RarityDropdown = FilterSec:AddDropdown({
+    Name = "Filter Berdasarkan Rarity",
+    Options = initialScan.Rarities,
+    Default = Config.FilterRarity or "All Rarities",
+    Flag = "FilterRarityDropdown",
+    Tooltip = "Pilih tingkat rarity (cth: Secret, Divine, Mythical, Legendary, BrainrotGod, etc.)"
+}, function(selected)
+    Config.FilterRarity = selected or "All Rarities"
+end)
+
 FilterSec:AddButton({
     Name = "🔄 Refresh Opsi Filter dari Backpack",
-    Tooltip = "Memperbarui daftar item dan mutasi yang terdeteksi di inventaris"
+    Tooltip = "Memperbarui daftar item, mutasi, dan rarity yang terdeteksi di inventaris"
 }, function()
     local scan = StealAnEggTrade.ScanInventory()
     ItemNameDropdown:Refresh(scan.UniqueNames)
     MutationDropdown:Refresh(scan.Mutations)
+    RarityDropdown:Refresh(scan.Rarities)
     Library:Notify({
         Title   = "Filter Diperbarui",
-        Content = string.format("%d Jenis Item & %d Mutasi terdeteksi", #scan.UniqueNames - 1, #scan.Mutations - 1),
+        Content = string.format("%d Item, %d Mutasi, %d Rarity terdeteksi", #scan.UniqueNames - 1, #scan.Mutations - 1, #scan.Rarities - 1),
         Type    = "Info",
         Duration = 2.5
     })
@@ -1349,12 +1478,13 @@ task.spawn(function()
             local minWStr = Config.MinWeight > 0 and string.format("%.2f Juta (%s kg)", Config.MinWeight / 1000000, formatNumber(Config.MinWeight)) or "Bebas"
             local maxWStr = Config.MaxWeight > 0 and string.format("%.2f Juta (%s kg)", Config.MaxWeight / 1000000, formatNumber(Config.MaxWeight)) or "Bebas"
             
-            local statusDesc = string.format("Item Cocok: %d dari %d Tool\nTarget: %s\nItem: %s | Mutasi: %s\nMin Berat: %s\nMax Berat: %s",
+            local statusDesc = string.format("Item Cocok: %d dari %d Tool\nTarget: %s\nItem: %s | Mutasi: %s | Rarity: %s\nMin Berat: %s\nMax Berat: %s",
                 matchCount,
                 #tools,
                 tostring(Config.TargetPlayerId or "Belum Diset"),
                 tostring(Config.FilterItem),
                 tostring(Config.FilterMutation),
+                tostring(Config.FilterRarity),
                 minWStr,
                 maxWStr
             )
@@ -1386,7 +1516,7 @@ FilterActionSec:AddToggle({
     if Value then
         Library:Notify({
             Title   = "Auto Trade Filter Aktif",
-            Content = "Loop filter aktif untuk: " .. tostring(Config.FilterItem) .. " [" .. tostring(Config.FilterMutation) .. "]",
+            Content = string.format("Loop filter aktif: %s [%s] (%s)", tostring(Config.FilterItem), tostring(Config.FilterMutation), tostring(Config.FilterRarity)),
             Type    = "Success",
             Duration = 3.5
         })
