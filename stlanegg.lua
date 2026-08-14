@@ -2,11 +2,13 @@
 -- STEAL AN EGG - AUTO TRADE & GIFTING SYSTEM (SIGMA UI V4)
 -- Game: Steal an Egg (Roblox)
 -- Framework: Sigma UI Library - V4 Ultimate Edition
--- Features: Auto Gifting, Backpack Scanner, Filtered Trade (Rarity, Weight, Mutation), Auto Accept
+-- Features: Auto Gifting, Backpack Scanner, Filtered Trade (Multi-Rarity, Weight, Mutation), Auto Accept, Server Tab (Job ID & Teleport)
 -- ==========================================================
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
 local VirtualUser = game:GetService("VirtualUser")
 local LocalPlayer = Players.LocalPlayer
 
@@ -27,6 +29,7 @@ local ACCOUNT_PROFILES = {
     },
     
     -- [PROFIL 2] Profil Default / Pengirim (Sender untuk akun lain / Alt)
+    -- Otomatis hanya mengirim item dengan Rarity: Divine, Eternal, Secret
     ["DEFAULT"] = {
         Role                = "Sender (Pengirim ke szeshuro)",
         TargetUsername      = "szeshuro",       -- Otomatis kirim ke akun szeshuro
@@ -36,8 +39,8 @@ local ACCOUNT_PROFILES = {
         DelayBetweenGifts   = 0.5,              -- Jeda antar gift (detik)
         FilterItem          = "All Items",      -- Filter jenis item
         FilterMutation      = "All Mutations",  -- Filter mutasi (Cth: "Golden", "Normal", "All Mutations")
-        FilterRarity        = "All Rarities",   -- Filter Rarity (Cth: "Eternal", "Divine", "Secret", "Mythical", "Legendary", "BrainrotGod", "All Rarities")
-        MinWeightInMillions = 1,                -- Minimal 1.000.000 kg (1 Juta kg)
+        FilterRarity        = "Divine, Eternal, Secret", -- 👈 Multi-Rarity Filter (Hanya kirim Divine, Eternal, Secret)
+        MinWeightInMillions = 0,                -- Minimal berat (0 = Bebas / Kirim seluruh item Divine, Eternal, Secret)
         MaxWeightInMillions = 0,                -- Tanpa batas maksimal (0 = Bebas)
         IgnoreFavorites     = false,            -- Jangan abaikan barang favorit
         OnlyFavorites       = false,            -- Jangan batasi hanya favorit
@@ -75,7 +78,7 @@ local SCRIPT_CONFIG = {
     AcceptDelay         = activeProfile.AcceptDelay or 0.1,
     FilterItem          = activeProfile.FilterItem or "All Items",
     FilterMutation      = activeProfile.FilterMutation or "All Mutations",
-    FilterRarity        = activeProfile.FilterRarity or "All Rarities",
+    FilterRarity        = activeProfile.FilterRarity or "Divine, Eternal, Secret",
     MinWeightInMillions = activeProfile.MinWeightInMillions or 0,
     MaxWeightInMillions = activeProfile.MaxWeightInMillions or 0,
     IgnoreFavorites     = activeProfile.IgnoreFavorites == true,
@@ -113,6 +116,21 @@ local function formatNumber(n)
     return formatted
 end
 
+-- Helper Clipboard
+local function CopyToClipboard(text)
+    if setclipboard then
+        setclipboard(text)
+        return true
+    elseif toclipboard then
+        toclipboard(text)
+        return true
+    elseif syn and syn.write_clipboard then
+        syn.write_clipboard(text)
+        return true
+    end
+    return false
+end
+
 
 -- ==========================================================
 -- 💎 [RARITY SYSTEM & GAME DIRECTORY DATABASE LOADER]
@@ -121,6 +139,7 @@ end
 -- ==========================================================
 local KNOWN_RARITIES = {
     "All Rarities",
+    "Divine, Eternal, Secret",
     "Basic", "Common", "Uncommon", "Rare", "SuperRare", "Epic",
     "Legendary", "Mythic", "Mythical", "Cosmic", "Celestial",
     "Exotic", "Superior", "Transcendent", "Secret", "Eternal",
@@ -185,10 +204,8 @@ local function LoadGameDirectoryRarities()
                     if ok and type(itemConfig) == "table" then
                         local rStr = nil
                         
-                        -- Jika Rarity berupa string langsung
                         if type(itemConfig.Rarity) == "string" then
                             rStr = itemConfig.Rarity
-                        -- Jika Rarity berupa table require(Directory.Rarity).Rarities.*
                         elseif type(itemConfig.Rarity) == "table" then
                             rStr = RarityTableToName[itemConfig.Rarity] 
                                 or itemConfig.Rarity.Name 
@@ -254,7 +271,7 @@ local Config = {
     DelayBetweenGifts   = SCRIPT_CONFIG.DelayBetweenGifts or 0.5,
     FilterItem          = SCRIPT_CONFIG.FilterItem or "All Items",
     FilterMutation      = SCRIPT_CONFIG.FilterMutation or "All Mutations",
-    FilterRarity        = SCRIPT_CONFIG.FilterRarity or "All Rarities",
+    FilterRarity        = SCRIPT_CONFIG.FilterRarity or "Divine, Eternal, Secret",
     MinWeight           = (tonumber(SCRIPT_CONFIG.MinWeightInMillions) or 0) * 1000000,
     MaxWeight           = (tonumber(SCRIPT_CONFIG.MaxWeightInMillions) or 0) * 1000000,
     SelectedInvTool     = nil,
@@ -342,7 +359,6 @@ end
 function StealAnEggTrade.GetToolRarity(tool)
     if not tool or not tool:IsA("Tool") then return "Normal" end
     
-    -- Pastikan directory rarity termuat
     if not isRarityLoaded then
         LoadGameDirectoryRarities()
     end
@@ -364,7 +380,6 @@ function StealAnEggTrade.GetToolRarity(tool)
     local dispName = tostring(tool:GetAttribute("DisplayName") or ""):lower()
     local category = tostring(tool:GetAttribute("Category") or ""):lower()
     
-    -- Bersihkan nama dari format "(xxxx kg)" dan mutation prefix
     local cleanName = rawName:gsub("%s*%b()", ""):gsub("^%s+", ""):gsub("%s+$", ""):lower()
     local baseName = cleanName:gsub("golden%s+", ""):gsub("rainbow%s+", ""):gsub("shiny%s+", ""):gsub("dark%s+", ""):gsub("void%s+", ""):gsub("diamond%s+", "")
     
@@ -386,7 +401,7 @@ function StealAnEggTrade.GetToolRarity(tool)
     
     -- 4. Fuzzy match dengan Known Rarities
     for _, r in ipairs(KNOWN_RARITIES) do
-        if r ~= "All Rarities" then
+        if r ~= "All Rarities" and not r:find(",") then
             local rLow = r:lower()
             if rawName:lower():find(rLow, 1, true) or dispName:find(rLow, 1, true) then
                 return r
@@ -479,9 +494,9 @@ function StealAnEggTrade.ScanInventory()
     local itemsByName = {}
     local uniqueNames = {"All Items"}
     local mutations = {"All Mutations"}
-    local rarities = {"All Rarities"}
+    local rarities = {"All Rarities", "Divine, Eternal, Secret"}
     local mutationSet = {}
-    local raritySet = {}
+    local raritySet = { ["Divine, Eternal, Secret"] = true }
     local totalWeight = 0
     local favoriteCount = 0
     local dropdownOptions = {}
@@ -523,7 +538,6 @@ function StealAnEggTrade.ScanInventory()
         end
     end
     
-    -- Tambahkan Known Rarities jika belum masuk
     for _, r in ipairs(KNOWN_RARITIES) do
         if not raritySet[r] and r ~= "All Rarities" then
             table.insert(rarities, r)
@@ -547,7 +561,40 @@ function StealAnEggTrade.ScanInventory()
     }
 end
 
---- Memeriksa apakah suatu Tool cocok dengan kriteria filter (Termasuk Rarity)
+--- Helper function untuk memeriksa kecocokan Rarity (Mendukung Multi-Rarity / Koma / Table)
+local function CheckRarityMatch(itemRarity, filterRarity)
+    if not filterRarity or filterRarity == "All Rarities" or filterRarity == "All" or filterRarity == "" then
+        return true
+    end
+    
+    local iRarityClean = tostring(itemRarity):lower():gsub("%s+", "")
+    
+    -- Jika filterRarity berbentuk tabel: { "Divine", "Eternal", "Secret" }
+    if type(filterRarity) == "table" then
+        for _, r in ipairs(filterRarity) do
+            if tostring(r):lower():gsub("%s+", "") == iRarityClean then
+                return true
+            end
+        end
+        return false
+    end
+    
+    -- Jika filterRarity berbentuk string dengan koma: "Divine, Eternal, Secret"
+    local filterStr = tostring(filterRarity):lower()
+    if filterStr:find(",") then
+        for part in string.gmatch(filterStr, "[^,]+") do
+            local cleanPart = part:gsub("%s+", "")
+            if cleanPart == iRarityClean then
+                return true
+            end
+        end
+        return false
+    end
+    
+    return filterStr:gsub("%s+", "") == iRarityClean
+end
+
+--- Memeriksa apakah suatu Tool cocok dengan kriteria filter (Termasuk Multi-Rarity)
 function StealAnEggTrade.MatchesFilter(tool, filterConfig)
     filterConfig = filterConfig or Config
     if not tool or not tool:IsA("Tool") then return false end
@@ -580,11 +627,9 @@ function StealAnEggTrade.MatchesFilter(tool, filterConfig)
         end
     end
     
-    -- Filter Rarity (BARU)
-    if filterConfig.FilterRarity and filterConfig.FilterRarity ~= "All Rarities" and filterConfig.FilterRarity ~= "All" and filterConfig.FilterRarity ~= "" then
-        if info.Rarity:lower() ~= filterConfig.FilterRarity:lower() then
-            return false
-        end
+    -- Filter Rarity (Mendukung "Divine, Eternal, Secret")
+    if not CheckRarityMatch(info.Rarity, filterConfig.FilterRarity) then
+        return false
     end
     
     -- Filter Minimum Weight (kg)
@@ -678,6 +723,62 @@ function StealAnEggTrade.DeclineGift(senderUserId, requestUid)
     end)
     
     return success, result
+end
+
+--- Fungsi Teleportasi Server & Helper
+function StealAnEggTrade.GetJobId()
+    return tostring(game.JobId)
+end
+
+function StealAnEggTrade.CopyJobId()
+    return CopyToClipboard(game.JobId)
+end
+
+function StealAnEggTrade.TeleportToJobId(targetJobId)
+    if not targetJobId or targetJobId == "" then
+        return false, "Job ID tidak boleh kosong!"
+    end
+    local cleanJobId = tostring(targetJobId):gsub("%s+", "")
+    local success, err = pcall(function()
+        TeleportService:TeleportToPlaceInstance(game.PlaceId, cleanJobId, LocalPlayer)
+    end)
+    return success, err
+end
+
+function StealAnEggTrade.Rejoin()
+    local success, err = pcall(function()
+        if #Players:GetPlayers() <= 1 then
+            LocalPlayer:Kick("\n[Rejoining Server...]")
+            task.wait(0.5)
+            TeleportService:Teleport(game.PlaceId, LocalPlayer)
+        else
+            TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
+        end
+    end)
+    return success, err
+end
+
+function StealAnEggTrade.ServerHop()
+    pcall(function()
+        local placeId = game.PlaceId
+        local serversUrl = "https://games.roblox.com/v1/games/" .. placeId .. "/servers/Public?sortOrder=Asc&limit=100"
+        local raw = game:HttpGet(serversUrl)
+        local data = HttpService:JSONDecode(raw)
+        if data and data.data then
+            local possibleServers = {}
+            for _, s in ipairs(data.data) do
+                if s.playing and s.maxPlayers and s.playing < s.maxPlayers and s.id ~= game.JobId then
+                    table.insert(possibleServers, s.id)
+                end
+            end
+            if #possibleServers > 0 then
+                local chosenId = possibleServers[math.random(1, #possibleServers)]
+                TeleportService:TeleportToPlaceInstance(placeId, chosenId, LocalPlayer)
+            else
+                TeleportService:Teleport(placeId, LocalPlayer)
+            end
+        end
+    end)
 end
 
 
@@ -1428,7 +1529,7 @@ end)
 
 
 -- ---------------------------------------------------------
--- TAB 3: 🎯 AUTO TRADE BY FILTER (RARITY, WEIGHT, MUTATION)
+-- TAB 3: 🎯 AUTO TRADE BY FILTER (MULTI-RARITY, WEIGHT, MUTATION)
 -- ---------------------------------------------------------
 local FilterTab = Window:MakeTab("🎯")
 local FilterSec = FilterTab:AddSection("Kriteria Filter Auto Trade")
@@ -1453,15 +1554,32 @@ local MutationDropdown = FilterSec:AddDropdown({
     Config.FilterMutation = selected or "All Mutations"
 end)
 
--- Dropdown Filter Rarity (BARU)
+-- Dropdown Filter Rarity (Termasuk opsi "Divine, Eternal, Secret")
 local RarityDropdown = FilterSec:AddDropdown({
     Name = "Filter Berdasarkan Rarity",
     Options = initialScan.Rarities,
-    Default = Config.FilterRarity or "All Rarities",
+    Default = Config.FilterRarity or "Divine, Eternal, Secret",
     Flag = "FilterRarityDropdown",
-    Tooltip = "Pilih tingkat rarity (cth: Eternal, Divine, Secret, Mythical, Legendary, BrainrotGod, etc.)"
+    Tooltip = "Pilih tingkat rarity atau 'Divine, Eternal, Secret'"
 }, function(selected)
     Config.FilterRarity = selected or "All Rarities"
+end)
+
+-- Input Custom Multi-Rarity
+FilterSec:AddInput({
+    Name = "✏️ Custom Multi-Rarity Filter (Pisahkan Koma)",
+    Placeholder = Config.FilterRarity or "Cth: Divine, Eternal, Secret",
+    Tooltip = "Ketik beberapa rarity sekaligus yang dipisahkan koma (Cth: Divine, Eternal, Secret)"
+}, function(text)
+    if text and text ~= "" then
+        Config.FilterRarity = text
+        Library:Notify({
+            Title   = "Rarity Filter Diset",
+            Content = "Filter Rarity: " .. text,
+            Type    = "Success",
+            Duration = 3
+        })
+    end
 end)
 
 FilterSec:AddButton({
@@ -1482,8 +1600,8 @@ end)
 
 FilterSec:AddInput({
     Name = "⚖️ Minimum Berat (Satuan: JUTA kg)",
-    Placeholder = Config.MinWeight > 0 and string.format("%.2f", Config.MinWeight / 1000000) or "Cth: 1 (= 1.000.000 kg), 0.5 (= 500.000 kg), 0 = Bebas",
-    Tooltip = "Input angka dalam satuan Juta kg. Contoh: 1 = 1.000.000 kg"
+    Placeholder = Config.MinWeight > 0 and string.format("%.2f", Config.MinWeight / 1000000) or "Cth: 1 (= 1.000.000 kg), 0 = Bebas",
+    Tooltip = "Input angka dalam satuan Juta kg. 0 = Bebas / Kirim berapapun beratnya"
 }, function(text)
     local num = tonumber(text)
     if num and num > 0 then
@@ -1578,7 +1696,7 @@ task.spawn(function()
             local minWStr = Config.MinWeight > 0 and string.format("%.2f Juta (%s kg)", Config.MinWeight / 1000000, formatNumber(Config.MinWeight)) or "Bebas"
             local maxWStr = Config.MaxWeight > 0 and string.format("%.2f Juta (%s kg)", Config.MaxWeight / 1000000, formatNumber(Config.MaxWeight)) or "Bebas"
             
-            local statusDesc = string.format("Item Cocok: %d dari %d Tool\nTarget: %s\nItem: %s | Mutasi: %s | Rarity: %s\nMin Berat: %s\nMax Berat: %s",
+            local statusDesc = string.format("Item Cocok: %d dari %d Tool\nTarget: %s\nItem: %s | Mutasi: %s\nRarity: %s\nMin Berat: %s | Max: %s",
                 matchCount,
                 #tools,
                 tostring(Config.TargetPlayerId or "Belum Diset"),
@@ -1673,6 +1791,135 @@ task.spawn(function()
         task.wait(1)
     end
 end)
+
+
+-- ---------------------------------------------------------
+-- TAB 5: 🌐 SERVER UTILITIES (JOB ID & TELEPORT)
+-- ---------------------------------------------------------
+local ServerTab = Window:MakeTab("🌐")
+local ServerInfoSec = ServerTab:AddSection("Informasi Server Saat Ini")
+
+local ServerJobIdPara = ServerInfoSec:AddParagraph("Job ID Server", tostring(game.JobId))
+local ServerPlayerPara = ServerInfoSec:AddParagraph("Jumlah Player", string.format("%d / %d Players", #Players:GetPlayers(), Players.MaxPlayers))
+
+-- Real-time updater informasi server
+task.spawn(function()
+    while getgenv().CurrentTradeScriptID == scriptId do
+        pcall(function()
+            ServerJobIdPara:Set("Job ID Server", tostring(game.JobId))
+            ServerPlayerPara:Set("Jumlah Player", string.format("%d / %d Players di Server", #Players:GetPlayers(), Players.MaxPlayers))
+        end)
+        task.wait(3)
+    end
+end)
+
+ServerInfoSec:AddButton({
+    Name = "📋 Salin Job ID Server (Copy Job ID)",
+    Tooltip = "Menyalin Job ID server saat ini ke clipboard keyboard"
+}, function()
+    local ok = CopyToClipboard(game.JobId)
+    if ok then
+        Library:Notify({
+            Title   = "Job ID Disalin! 📋",
+            Content = "Job ID berhasil disalin ke clipboard: \n" .. tostring(game.JobId),
+            Type    = "Success",
+            Duration = 3.5
+        })
+    else
+        Library:Notify({
+            Title   = "Job ID",
+            Content = "Job ID: " .. tostring(game.JobId),
+            Type    = "Info",
+            Duration = 4
+        })
+    end
+end)
+
+ServerInfoSec:AddButton({
+    Name = "📜 Salin Script Auto Teleport ke Server Ini",
+    Tooltip = "Menyalin satu baris script Luau untuk langsung join ke server ini dari akun lain"
+}, function()
+    local code = string.format('game:GetService("TeleportService"):TeleportToPlaceInstance(%d, "%s", game.Players.LocalPlayer)', game.PlaceId, game.JobId)
+    local ok = CopyToClipboard(code)
+    if ok then
+        Library:Notify({
+            Title   = "Script Disalin! 📜",
+            Content = "Script teleport berhasil disalin ke clipboard!",
+            Type    = "Success",
+            Duration = 3.5
+        })
+    end
+end)
+
+local TeleportSec = ServerTab:AddSection("🚀 Teleportasi ke Server Tertentu")
+
+local targetJobInput = ""
+TeleportSec:AddInput({
+    Name = "🎯 Masukkan Target Job ID",
+    Placeholder = "Tempel / Ketik Job ID server tujuan di sini...",
+    Tooltip = "Job ID server tujuan yang ingin Anda kunjungi"
+}, function(text)
+    targetJobInput = text or ""
+end)
+
+TeleportSec:AddButton({
+    Name = "🚀 Teleport ke Target Job ID",
+    Tooltip = "Pindah ke server sesuai Job ID yang dimasukkan"
+}, function()
+    if targetJobInput == "" then
+        Library:Notify({
+            Title   = "Peringatan",
+            Content = "Silakan masukkan Job ID target terlebih dahulu!",
+            Type    = "Warning",
+            Duration = 3
+        })
+        return
+    end
+    
+    Library:Notify({
+        Title   = "Memulai Teleport",
+        Content = "Menghubungkan ke Server: " .. targetJobInput,
+        Type    = "Info",
+        Duration = 3
+    })
+    
+    local ok, err = StealAnEggTrade.TeleportToJobId(targetJobInput)
+    if not ok then
+        Library:Notify({
+            Title   = "Gagal Teleport",
+            Content = "Error: " .. tostring(err),
+            Type    = "Error",
+            Duration = 4
+        })
+    end
+end)
+
+TeleportSec:AddButton({
+    Name = "🔄 Rejoin Server Saat Ini",
+    Tooltip = "Menghubungkan ulang ke server saat ini"
+}, function()
+    Library:Notify({
+        Title   = "Rejoining",
+        Content = "Sedang menghubungkan ulang ke server...",
+        Type    = "Info",
+        Duration = 2.5
+    })
+    StealAnEggTrade.Rejoin()
+end)
+
+TeleportSec:AddButton({
+    Name = "🔀 Server Hop (Cari Server Lain)",
+    Tooltip = "Pindah ke server publik lain secara acak"
+}, function()
+    Library:Notify({
+        Title   = "Server Hop",
+        Content = "Mencari server publik lain...",
+        Type    = "Info",
+        Duration = 2.5
+    })
+    StealAnEggTrade.ServerHop()
+end)
+
 
 Library:Notify({
     Title   = "Sigma Hub Loaded!",
