@@ -328,7 +328,18 @@ local Config = {
     MinIncome           = (tonumber(SCRIPT_CONFIG.MinIncomeInMillions) or 0) * 1000000,
     MaxIncome           = (tonumber(SCRIPT_CONFIG.MaxIncomeInMillions) or 0) * 1000000,
     SelectedInvTool     = nil,
-    ProfileRole         = SCRIPT_CONFIG.ProfileRole
+    ProfileRole         = SCRIPT_CONFIG.ProfileRole,
+    
+    -- Auto Sell Configuration
+    AutoSellLoop            = false,
+    AutoSellDelay           = 0.5,
+    AutoSellRarities        = "Basic, Common, Uncommon, Rare",
+    AutoSellItem            = "All Items",
+    AutoSellMutation        = "All Mutations",
+    AutoSellMaxIncome       = 0,
+    AutoSellMaxWeight       = 0,
+    AutoSellIgnoreFavorites = true,
+    AutoSellProtectGodTier  = true
 }
 
 local TradeStats = {
@@ -336,7 +347,9 @@ local TradeStats = {
     SuccessCount = 0,
     FailCount = 0,
     AcceptedCount = 0,
-    LastItemName = "-"
+    LastItemName = "-",
+    SellCount = 0,
+    LastSoldName = "-"
 }
 
 local LastGiftRequest = {
@@ -877,7 +890,17 @@ function StealAnEggTrade.GetToolInfo(tool)
     
     -- Category, UID, Favorite, Scale
     local category = tool:GetAttribute("Category") or dispName
-    local uid = tool:GetAttribute("UID") or (cfg and cfg:GetAttribute("UID")) or "-"
+    local uid = tool:GetAttribute("UID") 
+        or tool:GetAttribute("UUID")
+        or tool:GetAttribute("uid")
+        or tool:GetAttribute("uuid")
+        or tool:GetAttribute("AssetId")
+        or (cfg and (cfg:GetAttribute("UID") or cfg:GetAttribute("UUID") or cfg:GetAttribute("uid") or cfg:GetAttribute("uuid") or cfg:GetAttribute("AssetId") or cfg:GetAttribute("id")))
+        or (tool:FindFirstChild("UID") and tool.UID.Value)
+        or (cfg and cfg:FindFirstChild("UID") and cfg.UID.Value)
+        or name:match("([a-f0-9]{32})")
+        or name:match("([%a%d]+%-[%a%d]+%-[%a%d]+%-[%a%d]+%-[%a%d]+)")
+        or "-"
     local fav = tool:GetAttribute("Favorite") == true or (cfg and cfg:GetAttribute("Favorite") == true)
     local itemType = tool:GetAttribute("ItemType") or "Asset"
     local scale = cfg and cfg:GetAttribute("scale") or 1
@@ -1607,6 +1630,188 @@ end
 
 function StealAnEggTrade.GetConfig()
     return Config
+end
+
+-- ==========================================================
+-- 💰 AUTO SELL SYSTEM & REMOTE INTEGRATION
+-- ==========================================================
+local function GetSellRemote()
+    local network = ReplicatedStorage:FindFirstChild("Network")
+    if not network then return nil end
+    return network:FindFirstChild("AssetInventory: SellAsset") 
+        or network:WaitForChild("AssetInventory: SellAsset", 3)
+end
+
+function StealAnEggTrade.MatchesSellFilter(tool, sellConfig)
+    sellConfig = sellConfig or Config
+    if not tool or not tool:IsA("Tool") or IsIgnoredTool(tool) then return false end
+    local info = StealAnEggTrade.GetToolInfo(tool)
+    if not info then return false end
+    
+    -- 1. Validasi UID
+    if not info.UID or info.UID == "-" or info.UID == "" then
+        return false
+    end
+    
+    -- 2. Proteksi Favorit
+    if sellConfig.AutoSellIgnoreFavorites and info.Favorite then
+        return false
+    end
+    
+    -- 3. Proteksi Tier Dewa (Divine, Eternal, Secret, BrainrotGod, Prismatic)
+    if sellConfig.AutoSellProtectGodTier then
+        local rRank = info.RarityRank or GetRarityRank(info.Rarity)
+        if rRank >= 65 then -- Tier Secret (65), Eternal (70), Divine (75), BrainrotGod (85), dll.
+            return false
+        end
+    end
+    
+    -- 4. Filter Nama Jenis Item
+    if sellConfig.AutoSellItem and sellConfig.AutoSellItem ~= "All Items" and sellConfig.AutoSellItem ~= "" then
+        local targetName = sellConfig.AutoSellItem:lower()
+        local matchesName = info.Name:lower():find(targetName, 1, true) ~= nil
+        local matchesDisp = info.DisplayName:lower():find(targetName, 1, true) ~= nil
+        if not matchesName and not matchesDisp then
+            return false
+        end
+    end
+    
+    -- 5. Filter Mutasi
+    if sellConfig.AutoSellMutation and sellConfig.AutoSellMutation ~= "All Mutations" and sellConfig.AutoSellMutation ~= "All" then
+        if info.BaseMutation:lower() ~= sellConfig.AutoSellMutation:lower() then
+            return false
+        end
+    end
+    
+    -- 6. Filter Rarity untuk Dijual
+    if sellConfig.AutoSellRarities and sellConfig.AutoSellRarities ~= "" and sellConfig.AutoSellRarities ~= "All Rarities" then
+        if not CheckRarityMatch(info.Rarity, sellConfig.AutoSellRarities) then
+            return false
+        end
+    end
+    
+    -- 7. Batas Maksimal Income (Jual jika Income <= AutoSellMaxIncome)
+    if sellConfig.AutoSellMaxIncome and sellConfig.AutoSellMaxIncome > 0 then
+        if info.PerSecond > sellConfig.AutoSellMaxIncome then
+            return false
+        end
+    end
+    
+    -- 8. Batas Maksimal Berat (Jual jika Berat <= AutoSellMaxWeight)
+    if sellConfig.AutoSellMaxWeight and sellConfig.AutoSellMaxWeight > 0 then
+        if info.Weight > sellConfig.AutoSellMaxWeight then
+            return false
+        end
+    end
+    
+    return true, info
+end
+
+function StealAnEggTrade.SellItem(toolOrUid)
+    local uid = nil
+    local toolName = "Item"
+    if typeof(toolOrUid) == "Instance" and toolOrUid:IsA("Tool") then
+        local info = StealAnEggTrade.GetToolInfo(toolOrUid)
+        uid = info and info.UID
+        toolName = info and info.DisplayName or toolOrUid.Name
+    elseif type(toolOrUid) == "string" then
+        uid = toolOrUid
+        toolName = "UID " .. uid
+    end
+    
+    if not uid or uid == "-" or uid == "" then
+        return false, "UID item tidak valid / tidak ditemukan"
+    end
+    
+    local sellRemote = GetSellRemote()
+    if not sellRemote then
+        return false, "Remote 'AssetInventory: SellAsset' tidak ditemukan di ReplicatedStorage.Network"
+    end
+    
+    local ok, res = pcall(function()
+        sellRemote:FireServer({
+            [1] = tostring(uid)
+        })
+    end)
+    
+    if ok then
+        TradeStats.SellCount = (TradeStats.SellCount or 0) + 1
+        TradeStats.LastSoldName = toolName
+        print(string.format("[AutoSell] Berhasil menjual '%s' [UID: %s] 💰", toolName, tostring(uid)))
+        return true, "Berhasil dijual"
+    else
+        return false, tostring(res)
+    end
+end
+
+function StealAnEggTrade.SellFilteredBatch()
+    local tools = StealAnEggTrade.GetAllTools()
+    local toSell = {}
+    local uids = {}
+    for _, t in ipairs(tools) do
+        local isMatch, info = StealAnEggTrade.MatchesSellFilter(t, Config)
+        if isMatch and info and info.UID and info.UID ~= "-" then
+            table.insert(toSell, t)
+            table.insert(uids, tostring(info.UID))
+        end
+    end
+    
+    if #toSell == 0 then
+        return false, "Tidak ada item di tas yang cocok dengan kriteria Auto Sell saat ini!"
+    end
+    
+    local sellRemote = GetSellRemote()
+    if not sellRemote then
+        return false, "Remote Sell tidak ditemukan!"
+    end
+    
+    task.spawn(function()
+        for _, info in ipairs(toSell) do
+            local t = info
+            local tInfo = StealAnEggTrade.GetToolInfo(t)
+            if tInfo and tInfo.UID and tInfo.UID ~= "-" then
+                pcall(function()
+                    sellRemote:FireServer({
+                        [1] = tostring(tInfo.UID)
+                    })
+                end)
+                TradeStats.SellCount = (TradeStats.SellCount or 0) + 1
+                TradeStats.LastSoldName = tInfo.DisplayName
+                task.wait(Config.AutoSellDelay or 0.2)
+            end
+        end
+    end)
+    
+    return true, #toSell
+end
+
+function StealAnEggTrade.SetAutoSell(state)
+    Config.AutoSellLoop = (state == true)
+    print("[StealAnEgg API] AutoSellLoop set to:", Config.AutoSellLoop)
+    if Config.AutoSellLoop then
+        StealAnEggTrade.StartAutoSellLoop()
+    end
+end
+
+local isSellLoopRunning = false
+function StealAnEggTrade.StartAutoSellLoop()
+    if isSellLoopRunning then return end
+    isSellLoopRunning = true
+    task.spawn(function()
+        while Config.AutoSellLoop and getgenv().CurrentTradeScriptID == scriptId do
+            local tools = StealAnEggTrade.GetAllTools()
+            for _, t in ipairs(tools) do
+                if not Config.AutoSellLoop then break end
+                local isMatch, info = StealAnEggTrade.MatchesSellFilter(t, Config)
+                if isMatch and info and info.UID and info.UID ~= "-" then
+                    local ok, err = StealAnEggTrade.SellItem(t)
+                    task.wait(Config.AutoSellDelay or 0.5)
+                end
+            end
+            task.wait(1.5)
+        end
+        isSellLoopRunning = false
+    end)
 end
 
 _G.StealAnEggTrade = StealAnEggTrade
@@ -2747,16 +2952,265 @@ end)
 
 
 -- ---------------------------------------------------------
--- TAB 4: 📊 STATS & LOGS
+-- TAB 4: 💰 AUTO SELL (FILTER & BULK SELL)
+-- ---------------------------------------------------------
+local SellTab = Window:MakeTab("💰")
+local SellSec = SellTab:AddSection("⚙️ Kriteria Auto Sell Item")
+
+local initialSellScan = StealAnEggTrade.ScanInventory()
+
+local SellRarityDropdown = SellSec:AddDropdown({
+    Name = "Pilih Rarity untuk Dijual",
+    Options = {
+        "Basic, Common, Uncommon, Rare",
+        "Common, Basic",
+        "Basic, Common, Uncommon, Rare, SuperRare",
+        "Under Mythical (Basic to Epic)",
+        "All Rarities",
+        "Custom"
+    },
+    Default = Config.AutoSellRarities or "Basic, Common, Uncommon, Rare",
+    Flag = "AutoSellRarityDropdown",
+    Tooltip = "Pilih kelompok rarity yang ingin dijual otomatis"
+}, function(selected)
+    if selected == "Under Mythical (Basic to Epic)" then
+        Config.AutoSellRarities = "Basic, Common, Uncommon, Rare, SuperRare, Epic"
+    elseif selected == "All Rarities" then
+        Config.AutoSellRarities = "All Rarities"
+    else
+        Config.AutoSellRarities = selected
+    end
+    Library:Notify({
+        Title   = "Auto Sell Rarity Diset 💰",
+        Content = "Rarity yang akan dijual: " .. tostring(Config.AutoSellRarities),
+        Type    = "Info",
+        Duration = 2.5
+    })
+end)
+
+SellSec:AddInput({
+    Name = "✏️ Custom Multi-Rarity Sell (Pisahkan Koma)",
+    Placeholder = Config.AutoSellRarities or "Cth: Basic, Common, Uncommon, Rare",
+    Tooltip = "Ketik tingkat rarity yang ingin dijual otomatis secara spesifik dipisahkan koma"
+}, function(text)
+    if text and text ~= "" then
+        Config.AutoSellRarities = text
+        Library:Notify({
+            Title   = "Custom Sell Rarity Diset",
+            Content = "Rarity: " .. text,
+            Type    = "Success",
+            Duration = 2.5
+        })
+    end
+end)
+
+SellSec:AddInput({
+    Name = "💰 Jual Item dengan Income di Bawah (Max Income / detik)",
+    Placeholder = Config.AutoSellMaxIncome > 0 and string.format("%.2fM/s", Config.AutoSellMaxIncome / 1e6) or "Cth: 100M (= < 100M/s dijual), 0 = Bebas",
+    Tooltip = "Item dengan penghasilan di bawah angka ini akan otomatis dijual (Cth: 100M -> Semua item < 100M/s dijual)"
+}, function(text)
+    local val = ParseIncomeInput(text)
+    Config.AutoSellMaxIncome = val
+    if val > 0 then
+        Library:Notify({
+            Title   = "Max Income Auto Sell Diset 💰",
+            Content = string.format("Jual item berpenghasilan <= +%s/s%s", formatNumber(val), formatIncome(val)),
+            Type    = "Success",
+            Duration = 3
+        })
+    else
+        Library:Notify({
+            Title   = "Max Income Auto Sell Diset 💰",
+            Content = "Bebas / Tanpa batas income (Sesuai Rarity saja)",
+            Type    = "Info",
+            Duration = 2.5
+        })
+    end
+end)
+
+SellSec:AddInput({
+    Name = "⚖️ Jual Item dengan Berat di Bawah (Max Berat JUTA kg)",
+    Placeholder = Config.AutoSellMaxWeight > 0 and string.format("%.2f Juta kg", Config.AutoSellMaxWeight / 1e6) or "Cth: 1 (= < 1.000.000 kg dijual), 0 = Bebas",
+    Tooltip = "Item dengan berat di bawah angka ini akan otomatis dijual"
+}, function(text)
+    local num = tonumber(text)
+    if num and num > 0 then
+        Config.AutoSellMaxWeight = num * 1e6
+        Library:Notify({
+            Title   = "Max Berat Auto Sell Diset",
+            Content = string.format("Jual item dengan berat <= %.2f Juta kg", num),
+            Type    = "Success",
+            Duration = 3
+        })
+    else
+        Config.AutoSellMaxWeight = 0
+        Library:Notify({
+            Title   = "Max Berat Auto Sell Diset",
+            Content = "Bebas / Tanpa batas berat",
+            Type    = "Info",
+            Duration = 2.5
+        })
+    end
+end)
+
+SellSec:AddToggle({
+    Name = "⭐ Jangan Jual Item Favorit (Favorite Protection)",
+    Default = Config.AutoSellIgnoreFavorites,
+    Flag = "AutoSellProtectFavToggle",
+    Tooltip = "Proteksi keamanan: Item yang ditandai bintang ⭐ Favorite TIDAK AKAN PERNAH DIJUAL"
+}, function(val)
+    Config.AutoSellIgnoreFavorites = val
+end)
+
+SellSec:AddToggle({
+    Name = "👑 Kunci Rarity Tier Dewa (Divine, Eternal, Secret Lock)",
+    Default = Config.AutoSellProtectGodTier,
+    Flag = "AutoSellProtectGodTierToggle",
+    Tooltip = "Proteksi mutlak: Item tier Divine, Eternal, Secret, BrainrotGod TIDAK AKAN PERNAH DIJUAL"
+}, function(val)
+    Config.AutoSellProtectGodTier = val
+end)
+
+SellSec:AddSlider({
+    Name = "⏱️ Jeda Antar Penjualan (Detik)",
+    Min = 0.1,
+    Max = 3.0,
+    Default = Config.AutoSellDelay,
+    Step = 0.1,
+    Flag = "AutoSellDelaySlider",
+    Tooltip = "Waktu jeda antar remote sell dipanggil"
+}, function(val)
+    Config.AutoSellDelay = val
+end)
+
+local SellActionSec = SellTab:AddSection("⚡ Aksi & Background Loop Auto Sell")
+
+local SellStatusPara = SellActionSec:AddParagraph("Status Auto Sell", "Memindai item yang cocok untuk dijual...")
+
+task.spawn(function()
+    while getgenv().CurrentTradeScriptID == scriptId do
+        pcall(function()
+            local tools = StealAnEggTrade.GetAllTools()
+            local matchSellCount = 0
+            for _, t in ipairs(tools) do
+                if StealAnEggTrade.MatchesSellFilter(t, Config) then
+                    matchSellCount = matchSellCount + 1
+                end
+            end
+            
+            local maxIncStr = Config.AutoSellMaxIncome > 0 and string.format("<= +%s/s%s", formatNumber(Config.AutoSellMaxIncome), formatIncome(Config.AutoSellMaxIncome)) or "Bebas"
+            local maxWStr   = Config.AutoSellMaxWeight > 0 and string.format("<= %.2f Juta kg", Config.AutoSellMaxWeight / 1e6) or "Bebas"
+            
+            local desc = string.format("Item Cocok Dijual: %d dari %d Item di Tas\nRarity Target: %s\nBatas Max Income: %s\nBatas Max Berat: %s\nProteksi Favorit: %s | Kunci Tier Dewa: %s\nTotal Item Terjual Sesi Ini: %d Item 💰",
+                matchSellCount,
+                #tools,
+                tostring(Config.AutoSellRarities),
+                maxIncStr,
+                maxWStr,
+                Config.AutoSellIgnoreFavorites and "⭐ Aktif" or "❌ Nonaktif",
+                Config.AutoSellProtectGodTier and "👑 Terkunci Aman" or "❌ Bebas",
+                TradeStats.SellCount or 0
+            )
+            SellStatusPara:Set("Status Auto Sell", desc)
+        end)
+        task.wait(1.5)
+    end
+end)
+
+SellActionSec:AddToggle({
+    Name = "🔁 Aktifkan Auto Sell Otomatis (Background Loop)",
+    Default = Config.AutoSellLoop,
+    Flag = "AutoSellLoopToggle",
+    Tooltip = "Terus memindai tas dan otomatis menjual seluruh item sampah / item yang lolos kriteria sell"
+}, function(Value)
+    StealAnEggTrade.SetAutoSell(Value)
+    if Value then
+        Library:Notify({
+            Title   = "Auto Sell Aktif 💰",
+            Content = "Loop Auto Sell berjalan di latar belakang!",
+            Type    = "Success",
+            Duration = 3
+        })
+    else
+        Library:Notify({
+            Title   = "Auto Sell Dinonaktifkan",
+            Content = "Loop Auto Sell telah dimatikan.",
+            Type    = "Info",
+            Duration = 2.5
+        })
+    end
+end)
+
+SellActionSec:AddButton({
+    Name = "🗑️ Jual Semua Item Sesuai Kriteria Sell (1x Batch)",
+    Tooltip = "Menjual sekaligus semua item di tas yang saat ini cocok dengan kriteria Auto Sell"
+}, function()
+    local ok, countOrMsg = StealAnEggTrade.SellFilteredBatch()
+    if ok then
+        Library:Notify({
+            Title   = "Menjual Item 💰",
+            Content = string.format("Sedang memproses penjualan %d item...", countOrMsg),
+            Type    = "Success",
+            Duration = 3
+        })
+    else
+        Library:Notify({
+            Title   = "Peringatan",
+            Content = tostring(countOrMsg),
+            Type    = "Warning",
+            Duration = 3
+        })
+    end
+end)
+
+SellActionSec:AddButton({
+    Name = "✋ Jual Item yang Sedang Dipegang di Tangan (1x)",
+    Tooltip = "Menjual item yang saat ini sedang aktif dipegang oleh karakter"
+}, function()
+    local character = LocalPlayer.Character
+    local heldTool = character and character:FindFirstChildOfClass("Tool")
+    if not heldTool then
+        Library:Notify({
+            Title   = "Peringatan",
+            Content = "Pegang item di tangan terlebih dahulu!",
+            Type    = "Warning",
+            Duration = 3
+        })
+        return
+    end
+    
+    local ok, msg = StealAnEggTrade.SellItem(heldTool)
+    if ok then
+        Library:Notify({
+            Title   = "Item Terjual 💰",
+            Content = "Berhasil menjual item yang sedang dipegang!",
+            Type    = "Success",
+            Duration = 3
+        })
+    else
+        Library:Notify({
+            Title   = "Gagal Menjual",
+            Content = "Error: " .. tostring(msg),
+            Type    = "Error",
+            Duration = 3.5
+        })
+    end
+end)
+
+
+-- ---------------------------------------------------------
+-- TAB 5: 📊 STATS & LOGS
 -- ---------------------------------------------------------
 local StatsTab = Window:MakeTab("📊")
-local StatsSec = StatsTab:AddSection("Statistik Transaksi Gifting")
+local StatsSec = StatsTab:AddSection("Statistik Transaksi Gifting & Auto Sell")
 
-local TotalSentPara = StatsSec:AddParagraph("Total Terkirim", "0 Item")
+local TotalSentPara     = StatsSec:AddParagraph("Total Terkirim", "0 Item")
 local TotalAcceptedPara = StatsSec:AddParagraph("Total Diterima (Accept)", "0 Item Diterima 📥")
-local SuccessPara   = StatsSec:AddParagraph("Status Sukses", "0 Sukses")
-local FailPara      = StatsSec:AddParagraph("Status Gagal", "0 Gagal")
-local LastItemPara  = StatsSec:AddParagraph("Item Terakhir", "-")
+local TotalSoldPara     = StatsSec:AddParagraph("Total Item Terjual", "0 Item Terjual 💰")
+local SuccessPara       = StatsSec:AddParagraph("Status Sukses Gift", "0 Sukses")
+local FailPara          = StatsSec:AddParagraph("Status Gagal Gift", "0 Gagal")
+local LastItemPara      = StatsSec:AddParagraph("Item Terakhir Digift", "-")
+local LastSoldPara      = StatsSec:AddParagraph("Item Terakhir Dijual", "-")
 
 StatsSec:AddButton({
     Name = "🔄 Reset Statistik",
@@ -2766,10 +3220,12 @@ StatsSec:AddButton({
     TradeStats.SuccessCount = 0
     TradeStats.FailCount = 0
     TradeStats.AcceptedCount = 0
+    TradeStats.SellCount = 0
     TradeStats.LastItemName = "-"
+    TradeStats.LastSoldName = "-"
     Library:Notify({
         Title   = "Stats Reset",
-        Content = "Statistik transaksi berhasil di-reset!",
+        Content = "Statistik transaksi & penjualan berhasil di-reset!",
         Type    = "Info",
         Duration = 2
     })
@@ -2780,9 +3236,11 @@ task.spawn(function()
         pcall(function()
             TotalSentPara:Set("Total Terkirim", tostring(TradeStats.TotalSent) .. " Item Terkirim")
             TotalAcceptedPara:Set("Total Diterima (Accept)", tostring(TradeStats.AcceptedCount) .. " Gift Diterima 📥")
-            SuccessPara:Set("Status Sukses", tostring(TradeStats.SuccessCount) .. " Transaksi Sukses")
-            FailPara:Set("Status Gagal", tostring(TradeStats.FailCount) .. " Gagal")
-            LastItemPara:Set("Item Terakhir", tostring(TradeStats.LastItemName))
+            TotalSoldPara:Set("Total Item Terjual", tostring(TradeStats.SellCount or 0) .. " Item Terjual 💰")
+            SuccessPara:Set("Status Sukses Gift", tostring(TradeStats.SuccessCount) .. " Transaksi Sukses")
+            FailPara:Set("Status Gagal Gift", tostring(TradeStats.FailCount) .. " Gagal")
+            LastItemPara:Set("Item Terakhir Digift", tostring(TradeStats.LastItemName))
+            LastSoldPara:Set("Item Terakhir Dijual", tostring(TradeStats.LastSoldName or "-"))
         end)
         task.wait(1)
     end
