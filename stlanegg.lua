@@ -2,7 +2,7 @@
 -- STEAL AN EGG - AUTO TRADE & GIFTING SYSTEM (SIGMA UI V4)
 -- Game: Steal an Egg (Roblox)
 -- Framework: Sigma UI Library - V4 Ultimate Edition
--- Features: Auto Gifting, Backpack Scanner, Filtered Trade (Multi-Rarity, Weight, Mutation), Auto Accept, Server Tab (Job ID, Uptime, Smart Deep Hop & Teleport)
+-- Features: Auto Gifting, Multi-Target Whitelist, Backpack Scanner, Filtered Trade (Multi-Rarity, Weight, Mutation), Auto Accept, Server Tab (Job ID, Uptime, Smart Deep Hop & Teleport)
 -- ==========================================================
 
 local Players = game:GetService("Players")
@@ -18,21 +18,23 @@ local LocalPlayer = Players.LocalPlayer
 -- ==========================================================
 local ACCOUNT_PROFILES = {
     -- [PROFIL 1] Khusus untuk akun "szeshuro" (Receiver / Penerima)
-    -- Fitur yang aktif HANYA Auto Accept Gift saja
+    -- Fitur yang aktif HANYA Auto Accept Gift saja dari Whitelist
     ["szeshuro"] = {
         Role                = "Receiver (Hanya Auto Accept)",
         AutoAcceptGift      = true,             -- true = Otomatis aktifkan Auto Accept Gift
-        OnlyAcceptTarget    = false,            -- false = Terima gift dari siapa saja
+        OnlyAcceptTarget    = false,            -- false = Terima dari siapa saja | true = Hanya terima dari Whitelist
+        WhitelistUsernames  = { "szeshuro" },   -- 👈 Daftar username pengirim yang diizinkan (Bisa lebih dari 1)
         AcceptDelay         = 0.1,              -- Jeda waktu sebelum respon accept (detik)
         AutoTradeLoop       = false,            -- false = Matikan trade sending
         AutoTradeFilterLoop = false,            -- false = Matikan filter trade sending
     },
     
     -- [PROFIL 2] Profil Default / Pengirim (Sender untuk akun lain / Alt)
-    -- Otomatis hanya mengirim item dengan Rarity: Divine, Eternal, Secret
+    -- Otomatis mencari akun penerima yang ada di Whitelist dan mengirim Rarity: Divine, Eternal, Secret
     ["DEFAULT"] = {
-        Role                = "Sender (Pengirim ke szeshuro)",
-        TargetUsername      = "szeshuro",       -- Otomatis kirim ke akun szeshuro
+        Role                = "Sender (Pengirim ke Whitelist)",
+        TargetUsername      = "szeshuro",       -- Target default
+        WhitelistUsernames  = { "szeshuro" },   -- 👈 Daftar akun target penerima (Bisa lebih dari 1, cth: { "szeshuro", "alt_receiver", "player3" })
         TargetPlayerId      = nil,              -- Diisi otomatis lewat auto-resolve
         AutoTradeLoop       = false,            -- Trade semua tool
         AutoTradeFilterLoop = true,             -- true = Langsung jalankan Trade By Filter
@@ -47,6 +49,27 @@ local ACCOUNT_PROFILES = {
         AutoAcceptGift      = false,            -- Matikan auto accept di akun pengirim
     }
 }
+
+-- Helper Parsing Whitelist
+local function ParseWhitelist(input)
+    local list = {}
+    if type(input) == "table" then
+        for _, item in ipairs(input) do
+            local s = tostring(item):gsub("%s+", "")
+            if s ~= "" then
+                table.insert(list, s)
+            end
+        end
+    elseif type(input) == "string" then
+        for part in string.gmatch(input, "[^,]+") do
+            local s = part:gsub("%s+", "")
+            if s ~= "" then
+                table.insert(list, s)
+            end
+        end
+    end
+    return list
+end
 
 -- ==========================================================
 -- 🔍 DETEKSI AKUN AKTIF & LOAD PROFILE
@@ -70,6 +93,7 @@ end
 local SCRIPT_CONFIG = {
     TargetPlayerId      = activeProfile.TargetPlayerId,
     TargetUsername      = activeProfile.TargetUsername or "",
+    WhitelistUsernames  = ParseWhitelist(activeProfile.WhitelistUsernames or { activeProfile.TargetUsername or "szeshuro" }),
     AutoTradeLoop       = activeProfile.AutoTradeLoop or false,
     AutoTradeFilterLoop = activeProfile.AutoTradeFilterLoop or false,
     DelayBetweenGifts   = activeProfile.DelayBetweenGifts or 0.5,
@@ -149,9 +173,9 @@ end
 -- Helper Case-Insensitive Player Finder
 local function FindPlayerByName(nameStr)
     if not nameStr or nameStr == "" then return nil end
-    local nameLower = nameStr:lower()
+    local nameLower = nameStr:lower():gsub("%s+", "")
     for _, p in ipairs(Players:GetPlayers()) do
-        if p.Name:lower() == nameLower or p.DisplayName:lower() == nameLower then
+        if p.Name:lower():gsub("%s+", "") == nameLower or p.DisplayName:lower():gsub("%s+", "") == nameLower then
             return p
         end
     end
@@ -283,6 +307,7 @@ LoadGameDirectoryRarities()
 local Config = {
     TargetPlayerId      = SCRIPT_CONFIG.TargetPlayerId,
     TargetPlayerName    = SCRIPT_CONFIG.TargetUsername or "",
+    WhitelistUsernames  = SCRIPT_CONFIG.WhitelistUsernames or { "szeshuro" },
     AutoTradeLoop       = SCRIPT_CONFIG.AutoTradeLoop or false,
     AutoTradeFilterLoop = SCRIPT_CONFIG.AutoTradeFilterLoop or false,
     AutoAcceptGift      = SCRIPT_CONFIG.AutoAcceptGift or false,
@@ -316,29 +341,79 @@ local LastGiftRequest = {
     Time = 0
 }
 
---- Resolves Target Player ID (Synchronous & Background)
-local function ResolveTargetId()
-    if Config.TargetPlayerId then return Config.TargetPlayerId end
-    if not Config.TargetPlayerName or Config.TargetPlayerName == "" then return nil end
-    
-    local found = FindPlayerByName(Config.TargetPlayerName)
-    if found then
-        Config.TargetPlayerId = found.UserId
-        print(string.format("[StealAnEgg] Target '%s' ditemukan di server -> UserID: %d", found.Name, found.UserId))
-        return found.UserId
+--- Mencari Target Player aktif dari Whitelist yang ada di server saat ini
+local function GetActiveWhitelistTarget()
+    -- 1. Cek semua username di Whitelist yang ada di server saat ini
+    if Config.WhitelistUsernames and #Config.WhitelistUsernames > 0 then
+        for _, usn in ipairs(Config.WhitelistUsernames) do
+            local cleanUsn = tostring(usn):gsub("%s+", "")
+            if cleanUsn ~= "" then
+                local p = FindPlayerByName(cleanUsn)
+                if p and p ~= LocalPlayer then
+                    return p.UserId, p.Name
+                end
+            end
+        end
     end
     
-    local ok, id = pcall(function() return Players:GetUserIdFromNameAsync(Config.TargetPlayerName) end)
-    if ok and id then
-        Config.TargetPlayerId = id
-        print(string.format("[StealAnEgg] Target '%s' di-resolve via API -> UserID: %d", Config.TargetPlayerName, id))
-        return id
+    -- 2. Cek TargetPlayerName jika ada di server
+    if Config.TargetPlayerName and Config.TargetPlayerName ~= "" then
+        local p = FindPlayerByName(Config.TargetPlayerName)
+        if p and p ~= LocalPlayer then
+            return p.UserId, p.Name
+        end
     end
     
-    return nil
+    -- 3. Fallback TargetPlayerId
+    if Config.TargetPlayerId then
+        return Config.TargetPlayerId, Config.TargetPlayerName
+    end
+    
+    -- 4. Fallback resolve target pertama di Whitelist
+    if Config.WhitelistUsernames and #Config.WhitelistUsernames > 0 then
+        local firstUsn = tostring(Config.WhitelistUsernames[1]):gsub("%s+", "")
+        if firstUsn ~= "" then
+            local p = FindPlayerByName(firstUsn)
+            if p then return p.UserId, p.Name end
+            local ok, id = pcall(function() return Players:GetUserIdFromNameAsync(firstUsn) end)
+            if ok and id then return id, firstUsn end
+        end
+    end
+    
+    return nil, nil
 end
 
-task.spawn(ResolveTargetId)
+--- Memeriksa apakah suatu player termasuk dalam Whitelist
+local function IsPlayerInWhitelist(senderUsername, senderUserId)
+    if not Config.OnlyAcceptTarget then return true end
+    
+    local sNameLower = tostring(senderUsername or ""):lower():gsub("%s+", "")
+    local sId = tonumber(senderUserId)
+    
+    -- Cek TargetPlayerId jika diset
+    if Config.TargetPlayerId and sId == tonumber(Config.TargetPlayerId) then
+        return true
+    end
+    if Config.TargetPlayerName and Config.TargetPlayerName ~= "" and sNameLower == Config.TargetPlayerName:lower():gsub("%s+", "") then
+        return true
+    end
+    
+    -- Cek Whitelist Usernames
+    if Config.WhitelistUsernames and #Config.WhitelistUsernames > 0 then
+        for _, usn in ipairs(Config.WhitelistUsernames) do
+            local cleanUsn = tostring(usn):lower():gsub("%s+", "")
+            if cleanUsn ~= "" and (cleanUsn == sNameLower or cleanUsn == tostring(sId)) then
+                return true
+            end
+        end
+    end
+    
+    if (not Config.WhitelistUsernames or #Config.WhitelistUsernames == 0) and not Config.TargetPlayerId then
+        return true
+    end
+    
+    return false
+end
 
 getgenv().CancelStealAnEggTrade = function()
     Config.AutoTradeLoop = false
@@ -377,15 +452,61 @@ function StealAnEggTrade.GetGiftingRequestRemote()
     return nil
 end
 
+-- Helper Ekstraksi Berat dari Nama Tool jika attribute tidak ada
+local function ExtractWeightFromName(toolName)
+    if not toolName then return 0 end
+    local wStr = toolName:match("%(([%d%.,]+)%s*[kK][gG]%)") or toolName:match("%(([%d%.,]+)%)")
+    if wStr then
+        if wStr:find(",") and wStr:find("%.") then
+            wStr = wStr:gsub(",", "")
+        elseif wStr:find(",") and not wStr:find("%.") then
+            if wStr:match(",%d%d%d$") or wStr:match(",%d%d%d,") then
+                wStr = wStr:gsub(",", "")
+            else
+                wStr = wStr:gsub(",", ".")
+            end
+        end
+        return tonumber(wStr) or 0
+    end
+    return 0
+end
+
+-- Helper Format PerSecond / Income
+local function formatIncome(n)
+    n = tonumber(n)
+    if not n or n <= 0 then return "" end
+    if n >= 1e12 then
+        return string.format(" (%.2fT/s)", n / 1e12)
+    elseif n >= 1e9 then
+        return string.format(" (%.2fB/s)", n / 1e9)
+    elseif n >= 1e6 then
+        return string.format(" (%.2fM/s)", n / 1e6)
+    elseif n >= 1e3 then
+        return string.format(" (%.1fK/s)", n / 1e3)
+    else
+        return string.format(" (%d/s)", math.floor(n))
+    end
+end
+
 function StealAnEggTrade.GetToolRarity(tool)
     if not tool or not tool:IsA("Tool") then return "Normal" end
     
-    if not isRarityLoaded then
-        LoadGameDirectoryRarities()
+    -- 1. Cek dari objek Configuration (game structure: Configuration.rarity)
+    local cfg = tool:FindFirstChild("Configuration") or tool:FindFirstChild("Config") or tool:FindFirstChild("Settings")
+    if cfg then
+        local rAttr = cfg:GetAttribute("rarity") or cfg:GetAttribute("Rarity") or cfg:GetAttribute("Tier")
+        if rAttr and tostring(rAttr) ~= "" and tostring(rAttr) ~= "nil" then
+            return tostring(rAttr)
+        end
+        local rVal = cfg:FindFirstChild("Rarity") or cfg:FindFirstChild("rarity") or cfg:FindFirstChild("Tier")
+        if rVal and rVal:IsA("ValueBase") and rVal.Value ~= "" then
+            return tostring(rVal.Value)
+        end
     end
     
-    local attrRarity = tool:GetAttribute("Rarity") or tool:GetAttribute("Tier") or tool:GetAttribute("ItemRarity") or tool:GetAttribute("RarityName")
-    if attrRarity and tostring(attrRarity) ~= "" then
+    -- 2. Cek attribute langsung pada Tool
+    local attrRarity = tool:GetAttribute("Rarity") or tool:GetAttribute("rarity") or tool:GetAttribute("Tier") or tool:GetAttribute("ItemRarity") or tool:GetAttribute("RarityName")
+    if attrRarity and tostring(attrRarity) ~= "" and tostring(attrRarity) ~= "nil" then
         return tostring(attrRarity)
     end
     
@@ -394,8 +515,14 @@ function StealAnEggTrade.GetToolRarity(tool)
         return tostring(rVal.Value)
     end
     
+    if not isRarityLoaded then
+        LoadGameDirectoryRarities()
+    end
+    
+    -- 3. Cek Database ReplicatedStorage.Directory berdasarkan displayName / nama tool
     local rawName = tool.Name
-    local dispName = tostring(tool:GetAttribute("DisplayName") or ""):lower()
+    local dispName = cfg and (cfg:GetAttribute("displayName") or cfg:GetAttribute("DisplayName")) or tool:GetAttribute("DisplayName") or rawName
+    dispName = tostring(dispName):lower()
     local category = tostring(tool:GetAttribute("Category") or ""):lower()
     
     local cleanName = rawName:gsub("%s*%b()", ""):gsub("^%s+", ""):gsub("%s+$", ""):lower()
@@ -417,6 +544,7 @@ function StealAnEggTrade.GetToolRarity(tool)
         return ItemRarityDatabase[rawName:lower()]
     end
     
+    -- 4. Fallback pencocokan string nama
     for _, r in ipairs(KNOWN_RARITIES) do
         if r ~= "All Rarities" and not r:find(",") then
             local rLow = r:lower()
@@ -470,26 +598,87 @@ end
 function StealAnEggTrade.GetToolInfo(tool)
     if not tool or not tool:IsA("Tool") then return nil end
     local name = tool.Name
-    local dispName = tool:GetAttribute("DisplayName") or name
-    local baseMutation = tool:GetAttribute("BaseMutation") or tool:GetAttribute("Mutations") or "Normal"
-    local weight = tool:GetAttribute("Weight") or 0
-    local category = tool:GetAttribute("Category") or dispName
-    local uid = tool:GetAttribute("UID") or "-"
-    local fav = tool:GetAttribute("Favorite") == true
-    local itemType = tool:GetAttribute("ItemType") or "Asset"
+    
+    local cfg = tool:FindFirstChild("Configuration") or tool:FindFirstChild("Config") or tool:FindFirstChild("Settings")
+    
+    -- Display Name (Cth: "Unicorn", "El Maja")
+    local dispName = cfg and (cfg:GetAttribute("displayName") or cfg:GetAttribute("DisplayName"))
+        or tool:GetAttribute("DisplayName")
+        or name:gsub("%s*%b()", ""):gsub("^%s+", ""):gsub("%s+$", "")
+        
+    -- Mutation (Cth: "Rainbow", "Golden", "Normal")
+    local baseMutation = cfg and (cfg:GetAttribute("baseMutation") or cfg:GetAttribute("mutations") or cfg:GetAttribute("BaseMutation"))
+        or tool:GetAttribute("BaseMutation") 
+        or tool:GetAttribute("Mutations")
+        
+    if not baseMutation or tostring(baseMutation) == "" then
+        local lowerName = name:lower()
+        if lowerName:find("rainbow") then
+            baseMutation = "Rainbow"
+        elseif lowerName:find("golden") then
+            baseMutation = "Golden"
+        elseif lowerName:find("shiny") then
+            baseMutation = "Shiny"
+        elseif lowerName:find("dark") then
+            baseMutation = "Dark"
+        elseif lowerName:find("void") then
+            baseMutation = "Void"
+        elseif lowerName:find("diamond") then
+            baseMutation = "Diamond"
+        else
+            baseMutation = "Normal"
+        end
+    end
+    
+    -- Weight (Cth: 1070.25 kg, 250481 kg)
+    local weight = tool:GetAttribute("Weight")
+        or (cfg and (cfg:GetAttribute("weight") or cfg:GetAttribute("Weight")))
+        or ExtractWeightFromName(name)
+        or (cfg and cfg:GetAttribute("scale"))
+        or 0
+        
+    -- PerSecond / Income
+    local perSecond = cfg and (cfg:GetAttribute("perSecondDisplay") or cfg:GetAttribute("perSecond")) or 0
+    
+    -- Rarity (Cth: "Divine", "Eternal", "Secret", "Mythical")
     local rarity = StealAnEggTrade.GetToolRarity(tool)
+    
+    -- Category, UID, Favorite, Scale
+    local category = tool:GetAttribute("Category") or dispName
+    local uid = tool:GetAttribute("UID") or (cfg and cfg:GetAttribute("UID")) or "-"
+    local fav = tool:GetAttribute("Favorite") == true or (cfg and cfg:GetAttribute("Favorite") == true)
+    local itemType = tool:GetAttribute("ItemType") or "Asset"
+    local scale = cfg and cfg:GetAttribute("scale") or 1
+    local eyeColor = cfg and cfg:GetAttribute("eyeColor") or nil
+    local colorSeed = cfg and cfg:GetAttribute("colorSeed") or nil
+    
+    local incomeText = formatIncome(perSecond)
+    local weightText = formatNumber(weight)
+    local optStr = string.format("%s [%s] (%s) - %s kg%s%s", 
+        tostring(dispName), 
+        tostring(baseMutation), 
+        tostring(rarity), 
+        weightText, 
+        incomeText,
+        fav and " ⭐" or ""
+    )
     
     return {
         Instance = tool,
         Name = name,
-        DisplayName = dispName,
+        DisplayName = tostring(dispName),
         BaseMutation = tostring(baseMutation),
         Weight = tonumber(weight) or 0,
+        PerSecond = tonumber(perSecond) or 0,
         Category = tostring(category),
         UID = tostring(uid),
         Favorite = fav,
         ItemType = tostring(itemType),
-        Rarity = tostring(rarity)
+        Rarity = tostring(rarity),
+        Scale = tonumber(scale) or 1,
+        EyeColor = eyeColor,
+        ColorSeed = colorSeed,
+        OptionString = optStr
     }
 end
 
@@ -558,8 +747,7 @@ function StealAnEggTrade.ScanInventory()
                 table.insert(rarities, info.Rarity)
             end
             
-            local optStr = string.format("%s [%s] (%s) - %.1f kg%s", info.DisplayName, info.BaseMutation, info.Rarity, info.Weight, info.Favorite and " ⭐" or "")
-            table.insert(dropdownOptions, optStr)
+            table.insert(dropdownOptions, info.OptionString)
         end
     end
     
@@ -665,9 +853,13 @@ function StealAnEggTrade.MatchesFilter(tool, filterConfig)
 end
 
 function StealAnEggTrade.SendGift(targetPlayerId, tool)
-    local numericId = tonumber(targetPlayerId) or Config.TargetPlayerId or ResolveTargetId()
+    local numericId, targetName = targetPlayerId, nil
     if not numericId then
-        return false, "Target Player belum ditentukan atau belum berada di server!"
+        numericId, targetName = GetActiveWhitelistTarget()
+    end
+    
+    if not numericId then
+        return false, "Target Player Whitelist belum ditentukan atau belum berada di server!"
     end
     
     if not tool then
@@ -694,8 +886,8 @@ function StealAnEggTrade.SendGift(targetPlayerId, tool)
     end
     
     local targetPlayerObj = Players:GetPlayerByUserId(numericId)
-    if not targetPlayerObj and Config.TargetPlayerName and Config.TargetPlayerName ~= "" then
-        targetPlayerObj = FindPlayerByName(Config.TargetPlayerName)
+    if not targetPlayerObj and targetName then
+        targetPlayerObj = FindPlayerByName(targetName)
     end
     
     print(string.format("[SendGift] Mengirim '%s' ke Target ID: %s (Player In Server: %s)", 
@@ -722,7 +914,7 @@ function StealAnEggTrade.SendGift(targetPlayerId, tool)
     else
         local errMsg = tostring(result or "Server menolak pengiriman gift")
         if not targetPlayerObj then
-            errMsg = errMsg .. " (Pastikan target berada di server yang sama!)"
+            errMsg = errMsg .. " (Pastikan target whitelist berada di server yang sama!)"
         end
         return false, errMsg
     end
@@ -797,14 +989,13 @@ function StealAnEggTrade.Rejoin()
 end
 
 --- ❄️ SMART DEEP HOP: Mencari Server Sepi Dingin (Matchmaking Deprioritized / Sepi Lama)
--- Memindai hingga 5 halaman API ke server bagian ekor yang sudah ditinggalkan pemain
 function StealAnEggTrade.HopSmartSmallServer()
     task.spawn(function()
         local placeId = game.PlaceId
         local foundServers = {}
         local cursor = ""
         local attempts = 0
-        local maxAttempts = 5 -- Scan hingga 5 halaman (500 server)
+        local maxAttempts = 5
         
         print("[SmartDeepHop] Memulai Deep Scan server sepi dingin...")
         
@@ -818,8 +1009,6 @@ function StealAnEggTrade.HopSmartSmallServer()
                 if ok and data and data.data then
                     for index, s in ipairs(data.data) do
                         if s.id and s.id ~= game.JobId and s.playing and s.maxPlayers and s.playing < s.maxPlayers and s.playing > 0 then
-                            -- Skor Dingin: Halaman lebih dalam + pemain lebih sedikit = Prioritas utama
-                            local pageWeight = attempts * 10
                             local playerCnt = tonumber(s.playing) or 99
                             local pingVal = tonumber(s.ping) or 999
                             
@@ -828,8 +1017,7 @@ function StealAnEggTrade.HopSmartSmallServer()
                                 playing = playerCnt,
                                 maxPlayers = tonumber(s.maxPlayers) or 0,
                                 ping = pingVal,
-                                page = attempts,
-                                score = (playerCnt * 50) - (pageWeight * 2) + (pingVal * 0.1)
+                                page = attempts
                             })
                         end
                     end
@@ -848,12 +1036,11 @@ function StealAnEggTrade.HopSmartSmallServer()
         end
         
         if #foundServers > 0 then
-            -- Urutkan berdasarkan: Pemain paling sedikit -> Halaman terdalam -> Ping terendah
             table.sort(foundServers, function(a, b)
                 if a.playing ~= b.playing then
                     return a.playing < b.playing
                 elseif a.page ~= b.page then
-                    return a.page > b.page -- Prioritaskan server di halaman ekor
+                    return a.page > b.page
                 else
                     return a.ping < b.ping
                 end
@@ -888,12 +1075,10 @@ function StealAnEggTrade.HopSmartSmallServer()
     end)
 end
 
---- Quick Small Server Hop (1-3 Player)
 function StealAnEggTrade.HopSmallServer()
     StealAnEggTrade.HopSmartSmallServer()
 end
 
---- Server Hop Acak (Random Server)
 function StealAnEggTrade.ServerHop()
     pcall(function()
         local placeId = game.PlaceId
@@ -922,6 +1107,12 @@ end
 -- 🎮 PROGRAMMATIC SCRIPT CONTROLLERS (API)
 -- ==========================================================
 
+function StealAnEggTrade.SetWhitelist(whitelistTblOrString)
+    Config.WhitelistUsernames = ParseWhitelist(whitelistTblOrString)
+    print(string.format("[StealAnEgg API] Whitelist Updated (%d Akun): %s", #Config.WhitelistUsernames, table.concat(Config.WhitelistUsernames, ", ")))
+    return true, Config.WhitelistUsernames
+end
+
 function StealAnEggTrade.SetTarget(targetUserIdOrUsername)
     local num = tonumber(targetUserIdOrUsername)
     if num then
@@ -929,6 +1120,7 @@ function StealAnEggTrade.SetTarget(targetUserIdOrUsername)
         print("[StealAnEgg API] Target UserId diset ke:", num)
         return true, num
     elseif type(targetUserIdOrUsername) == "string" and targetUserIdOrUsername ~= "" then
+        Config.TargetPlayerName = targetUserIdOrUsername
         local foundPlayer = FindPlayerByName(targetUserIdOrUsername)
         if foundPlayer then
             Config.TargetPlayerId = foundPlayer.UserId
@@ -978,16 +1170,17 @@ function StealAnEggTrade.SetFilter(filterTbl)
     if filterTbl.MaxWeight then Config.MaxWeight = filterTbl.MaxWeight end
     if filterTbl.IgnoreFavorites ~= nil then Config.IgnoreFavorites = filterTbl.IgnoreFavorites end
     if filterTbl.OnlyFavorites ~= nil then Config.OnlyFavorites = filterTbl.OnlyFavorites end
+    if filterTbl.Whitelist then StealAnEggTrade.SetWhitelist(filterTbl.Whitelist) end
     print(string.format("[StealAnEgg API] Filter Updated -> Item: %s | Mutasi: %s | Rarity: %s | Min: %.2f Juta kg", 
         tostring(Config.FilterItem), tostring(Config.FilterMutation), tostring(Config.FilterRarity), Config.MinWeight / 1000000))
     return true
 end
 
 function StealAnEggTrade.GiftFilteredBatch()
-    local targetId = Config.TargetPlayerId or ResolveTargetId()
+    local targetId, targetName = GetActiveWhitelistTarget()
     if not targetId then
-        warn("[StealAnEgg API] Target Player belum diset / belum berada di server!")
-        return false, "Target Player belum diset / belum berada di server"
+        warn("[StealAnEgg API] Target Whitelist belum diset / belum berada di server!")
+        return false, "Target Whitelist belum diset / belum berada di server"
     end
     local tools = StealAnEggTrade.GetAllTools()
     local matched = {}
@@ -1032,7 +1225,7 @@ getgenv().StealAnEggTrade = StealAnEggTrade
 
 
 -- ==========================================================
--- [SECTION 3] AUTO ACCEPT LISTENER (EXACT EVENT HANDLER)
+-- [SECTION 3] AUTO ACCEPT LISTENER (EXACT EVENT HANDLER + WHITELIST)
 -- ==========================================================
 
 local LastRequestPara = nil
@@ -1058,15 +1251,15 @@ function StealAnEggTrade.OnGiftRequestReceived(senderUsername, senderUserId, ite
     end
     
     if Config.AutoAcceptGift then
-        if Config.OnlyAcceptTarget and Config.TargetPlayerId then
-            if sId ~= tonumber(Config.TargetPlayerId) then
-                if LastRequestPara then
-                    pcall(function()
-                        LastRequestPara:Set("Permintaan Masuk Terakhir", string.format("Item: %s\nDari: %s (ID: %s)\nStatus: Diabaikan (Bukan Target Whitelist) ❌", iName, sName, tostring(sId)))
-                    end)
-                end
-                return
+        -- Cek Whitelist jika filter target aktif
+        if not IsPlayerInWhitelist(sName, sId) then
+            if LastRequestPara then
+                pcall(function()
+                    LastRequestPara:Set("Permintaan Masuk Terakhir", string.format("Item: %s\nDari: %s (ID: %s)\nStatus: Diabaikan (Bukan Akun Whitelist) ❌", iName, sName, tostring(sId)))
+                end)
             end
+            print(string.format("[AutoAccept] Ditolak: Pengirim '%s' (ID: %s) tidak ada di Whitelist!", sName, tostring(sId)))
+            return
         end
         
         if Config.AcceptDelay and Config.AcceptDelay > 0 then
@@ -1138,7 +1331,7 @@ function StealAnEggTrade.StartAutoTradeLoop()
     isTradeLoopRunning = true
     task.spawn(function()
         while Config.AutoTradeLoop and getgenv().CurrentTradeScriptID == scriptId do
-            local targetId = Config.TargetPlayerId or ResolveTargetId()
+            local targetId, targetName = GetActiveWhitelistTarget()
             if targetId then
                 local tools = StealAnEggTrade.GetAllTools()
                 for _, tool in ipairs(tools) do
@@ -1172,7 +1365,7 @@ function StealAnEggTrade.StartFilteredTradeLoop()
     isFilterLoopRunning = true
     task.spawn(function()
         while Config.AutoTradeFilterLoop and getgenv().CurrentTradeScriptID == scriptId do
-            local targetId = Config.TargetPlayerId or ResolveTargetId()
+            local targetId, targetName = GetActiveWhitelistTarget()
             if targetId then
                 local tools = StealAnEggTrade.GetAllTools()
                 local matchedCount = 0
@@ -1276,16 +1469,59 @@ local Window = Library:CreateWindow({
 -- ---------------------------------------------------------
 local MainTab = Window:MakeTab("⚡")
 
--- Section 1: Target Player
-local TargetSec = MainTab:AddSection("Target Player Setup")
+-- Section 1: Target Player & Whitelist
+local TargetSec = MainTab:AddSection("Target Player & Whitelist Setup")
+
+local WhitelistPara = TargetSec:AddParagraph("Status Target Whitelist", "Memindai target whitelist...")
+
+task.spawn(function()
+    while getgenv().CurrentTradeScriptID == scriptId do
+        pcall(function()
+            local activeId, activeName = GetActiveWhitelistTarget()
+            local onlineTargets = {}
+            for _, usn in ipairs(Config.WhitelistUsernames) do
+                local p = FindPlayerByName(usn)
+                if p and p ~= LocalPlayer then
+                    table.insert(onlineTargets, string.format("🟢 %s (Online)", p.Name))
+                else
+                    table.insert(onlineTargets, string.format("⚪ %s (Offline)", usn))
+                end
+            end
+            
+            local desc = string.format("Daftar Whitelist (%d Akun):\n%s\n\nTarget Aktif Terpilih: %s",
+                #Config.WhitelistUsernames,
+                #onlineTargets > 0 and table.concat(onlineTargets, "\n") or "Belum ada whitelist",
+                activeName and (activeName .. " (ID: " .. tostring(activeId) .. ")") or "Tidak ada di server"
+            )
+            WhitelistPara:Set("Status Target Whitelist", desc)
+        end)
+        task.wait(2)
+    end
+end)
+
+TargetSec:AddInput({
+    Name = "✏️ Input Whitelist Usernames (Pisahkan Koma)",
+    Placeholder = table.concat(Config.WhitelistUsernames, ", "),
+    Tooltip = "Ketik satu atau beberapa username target/pengirim sekaligus (Cth: szeshuro, player2, player3)"
+}, function(text)
+    if text and text ~= "" then
+        StealAnEggTrade.SetWhitelist(text)
+        Library:Notify({
+            Title   = "Whitelist Diperbarui",
+            Content = string.format("%d Akun terdaftar di Whitelist", #Config.WhitelistUsernames),
+            Type    = "Success",
+            Duration = 3
+        })
+    end
+end)
 
 local playerList = GetPlayerList()
 local PlayerDropdown = TargetSec:AddDropdown({
-    Name = "Pilih Player di Server",
+    Name = "Pilih Player Manual di Server",
     Options = playerList,
     Default = playerList[1] or "",
     Flag = "TargetPlayerDropdown",
-    Tooltip = "Pilih target penerima gift dari daftar player aktif"
+    Tooltip = "Pilih target penerima gift langsung dari server saat ini"
 }, function(selected)
     local userId = GetUserIdFromSelection(selected)
     if userId then
@@ -1300,7 +1536,7 @@ local PlayerDropdown = TargetSec:AddDropdown({
 end)
 
 TargetSec:AddButton({
-    Name = "🔄 Refresh Daftar Player",
+    Name = "🔄 Refresh Daftar Player Server",
     Tooltip = "Memindai ulang player yang ada di dalam server"
 }, function()
     local newList = GetPlayerList()
@@ -1313,46 +1549,21 @@ TargetSec:AddButton({
     })
 end)
 
-TargetSec:AddInput({
-    Name = "✏️ Input Manual UserID / Username",
-    Placeholder = Config.TargetPlayerId and tostring(Config.TargetPlayerId) or (Config.TargetPlayerName ~= "" and Config.TargetPlayerName or "Masukkan UserID atau Username"),
-    Tooltip = "Ketik UserID angka atau Username target langsung"
-}, function(text)
-    if text and text ~= "" then
-        local ok, res = StealAnEggTrade.SetTarget(text)
-        if ok then
-            Library:Notify({
-                Title   = "Target Diset",
-                Content = "Target UserID: " .. tostring(res),
-                Type    = "Success",
-                Duration = 3
-            })
-        else
-            Library:Notify({
-                Title   = "Error",
-                Content = "Player '" .. text .. "' tidak ditemukan!",
-                Type    = "Error",
-                Duration = 3
-            })
-        end
-    end
-end)
-
 
 -- Section 2: Gifting Actions (Pengirim / Gifter)
 local ActionSec = MainTab:AddSection("Aksi Quick Trade / Gift (Pengirim)")
 
 ActionSec:AddButton({
     Name = "🎁 Gift Barang yang Sedang Dipegang (1x)",
-    Tooltip = "Memegang dan mengirim tool yang saat ini aktif di tangan"
+    Tooltip = "Memegang dan mengirim tool yang saat ini aktif di tangan ke target Whitelist"
 }, function()
-    local targetId = Config.TargetPlayerId or ResolveTargetId()
+    local targetId, targetName = GetActiveWhitelistTarget()
     if not targetId then
         Library:Notify({
             Title   = "Peringatan",
-            Content = "Pilih atau Masukkan Target Player terlebih dahulu!",
+            Content = "Target Whitelist belum ditemukan di dalam server!",
             Type    = "Warning",
-            Duration = 3
+            Duration = 3.5
         })
         return
     end
@@ -1368,9 +1579,9 @@ ActionSec:AddButton({
         TradeStats.LastItemName = itemName
         Library:Notify({
             Title   = "Gift Terkirim! 🎁",
-            Content = "Berhasil mengirim: " .. itemName,
+            Content = string.format("Berhasil mengirim '%s' ke %s", itemName, targetName or tostring(targetId)),
             Type    = "Success",
-            Duration = 3
+            Duration = 3.5
         })
     else
         TradeStats.FailCount = TradeStats.FailCount + 1
@@ -1385,15 +1596,15 @@ end)
 
 ActionSec:AddButton({
     Name = "📦 Gift Semua Tool di Backpack (1x Loop)",
-    Tooltip = "Memegang satu per satu lalu mengirim seluruh Tool yang ada di Backpack"
+    Tooltip = "Memegang satu per satu lalu mengirim seluruh Tool di Backpack ke target Whitelist"
 }, function()
-    local targetId = Config.TargetPlayerId or ResolveTargetId()
+    local targetId, targetName = GetActiveWhitelistTarget()
     if not targetId then
         Library:Notify({
             Title   = "Peringatan",
-            Content = "Pilih Target Player terlebih dahulu!",
+            Content = "Target Whitelist belum ditemukan di dalam server!",
             Type    = "Warning",
-            Duration = 3
+            Duration = 3.5
         })
         return
     end
@@ -1411,7 +1622,7 @@ ActionSec:AddButton({
     
     Library:Notify({
         Title   = "Memulai Gifting",
-        Content = "Mengirim " .. #tools .. " item ke target...",
+        Content = string.format("Mengirim %d item ke %s...", #tools, targetName or tostring(targetId)),
         Type    = "Info",
         Duration = 3
     })
@@ -1444,16 +1655,16 @@ ActionSec:AddButton({
 end)
 
 ActionSec:AddToggle({
-    Name = "⚡ Auto Loop Trade Semua Item Terus Menerus",
+    Name = "⚡ Auto Loop Trade Semua Item ke Whitelist",
     Default = Config.AutoTradeLoop,
     Flag = "AutoTradeLoopToggle",
-    Tooltip = "Terus memindai backpack & mengirim seluruh item otomatis ke target"
+    Tooltip = "Terus memindai backpack & mengirim seluruh item otomatis ke akun Whitelist"
 }, function(Value)
     StealAnEggTrade.SetAutoTrade(Value)
     if Value then
         Library:Notify({
             Title   = "Auto Trade Aktif",
-            Content = "Loop pengiriman aktif ke Target: " .. tostring(Config.TargetPlayerId or Config.TargetPlayerName or "Belum Diset"),
+            Content = "Loop pengiriman aktif ke Target Whitelist",
             Type    = "Success",
             Duration = 3
         })
@@ -1501,16 +1712,16 @@ ReceiveSec:AddToggle({
 end)
 
 ReceiveSec:AddToggle({
-    Name = "🔒 Hanya Terima Dari Target Player (Whitelist)",
+    Name = "🔒 Hanya Terima Dari Akun Whitelist (Whitelist Only)",
     Default = Config.OnlyAcceptTarget,
     Flag = "WhitelistTargetToggle",
-    Tooltip = "Jika aktif, hanya menerima gift dari UserID Target Player yang dipilih"
+    Tooltip = "Jika aktif, hanya menerima gift dari username yang ada di daftar Whitelist"
 }, function(Value)
     Config.OnlyAcceptTarget = Value
     if Value then
         Library:Notify({
-            Title   = "Whitelist Aktif",
-            Content = "Hanya menerima gift dari: " .. tostring(Config.TargetPlayerId or "Target Belum Diset"),
+            Title   = "Whitelist Only Aktif 🔒",
+            Content = "Hanya menerima gift dari akun di daftar Whitelist (" .. #Config.WhitelistUsernames .. " akun)",
             Type    = "Info",
             Duration = 3
         })
@@ -1587,8 +1798,7 @@ local InvDropdown = InvSec:AddDropdown({
     local tools = StealAnEggTrade.GetAllTools()
     for _, t in ipairs(tools) do
         local info = StealAnEggTrade.GetToolInfo(t)
-        local optStr = string.format("%s [%s] (%s) - %.1f kg%s", info.DisplayName, info.BaseMutation, info.Rarity, info.Weight, info.Favorite and " ⭐" or "")
-        if optStr == selected then
+        if info and (info.OptionString == selected or info.Name == selected or info.DisplayName == selected) then
             Config.SelectedInvTool = t
             break
         end
@@ -1626,12 +1836,12 @@ InvSec:AddButton({
 end)
 
 InvSec:AddButton({
-    Name = "🎁 Gift Tool Terpilih (1x)",
-    Tooltip = "Kirim tool yang dipilih di dropdown langsung ke Target Player"
+    Name = "🎁 Gift Tool Terpilih ke Whitelist (1x)",
+    Tooltip = "Kirim tool yang dipilih di dropdown langsung ke Target Whitelist"
 }, function()
-    local targetId = Config.TargetPlayerId or ResolveTargetId()
+    local targetId, targetName = GetActiveWhitelistTarget()
     if not targetId then
-        Library:Notify({Title = "Peringatan", Content = "Tentukan Target Player terlebih dahulu di Tab ⚡!", Type = "Warning", Duration = 3})
+        Library:Notify({Title = "Peringatan", Content = "Target Whitelist belum ditemukan di server!", Type = "Warning", Duration = 3})
         return
     end
     if not Config.SelectedInvTool or not Config.SelectedInvTool.Parent then
@@ -1645,7 +1855,7 @@ InvSec:AddButton({
         TradeStats.TotalSent = TradeStats.TotalSent + 1
         TradeStats.SuccessCount = TradeStats.SuccessCount + 1
         TradeStats.LastItemName = toolName
-        Library:Notify({Title = "Terkirim!", Content = "Berhasil mengirim: " .. toolName, Type = "Success", Duration = 3})
+        Library:Notify({Title = "Terkirim!", Content = string.format("Berhasil mengirim '%s' ke %s", toolName, targetName or tostring(targetId)), Type = "Success", Duration = 3})
         
         local scan = StealAnEggTrade.ScanInventory()
         InvDropdown:Refresh(scan.DropdownOptions)
@@ -1838,9 +2048,10 @@ task.spawn(function()
             
             local minWStr = Config.MinWeight > 0 and string.format("%.2f Juta (%s kg)", Config.MinWeight / 1000000, formatNumber(Config.MinWeight)) or "Bebas"
             local maxWStr = Config.MaxWeight > 0 and string.format("%.2f Juta (%s kg)", Config.MaxWeight / 1000000, formatNumber(Config.MaxWeight)) or "Bebas"
-            local targetDisplay = tostring(Config.TargetPlayerId or Config.TargetPlayerName or "Belum Diset")
+            local activeId, activeName = GetActiveWhitelistTarget()
+            local targetDisplay = activeName and string.format("%s (ID: %s)", activeName, tostring(activeId)) or "Belum Ada Target Whitelist di Server"
             
-            local statusDesc = string.format("Item Cocok: %d dari %d Tool\nTarget: %s\nItem: %s | Mutasi: %s\nRarity: %s\nMin Berat: %s | Max: %s",
+            local statusDesc = string.format("Item Cocok: %d dari %d Tool\nTarget Whitelist: %s\nItem: %s | Mutasi: %s\nRarity: %s\nMin Berat: %s | Max: %s",
                 matchCount,
                 #tools,
                 targetDisplay,
@@ -1857,8 +2068,8 @@ task.spawn(function()
 end)
 
 FilterActionSec:AddButton({
-    Name = "📦 Kirim Semua Item Sesuai Filter (1x Batch)",
-    Tooltip = "Mengirim semua item di backpack yang cocok dengan kriteria filter"
+    Name = "📦 Kirim Semua Item Sesuai Filter ke Whitelist (1x Batch)",
+    Tooltip = "Mengirim semua item di backpack yang cocok dengan kriteria filter ke target Whitelist"
 }, function()
     local ok, count = StealAnEggTrade.GiftFilteredBatch()
     if ok then
@@ -1869,10 +2080,10 @@ FilterActionSec:AddButton({
 end)
 
 FilterActionSec:AddToggle({
-    Name = "🔁 Auto Loop Trade Khusus Sesuai Filter",
+    Name = "🔁 Auto Loop Trade Khusus Sesuai Filter ke Whitelist",
     Default = Config.AutoTradeFilterLoop,
     Flag = "AutoTradeFilterLoopToggle",
-    Tooltip = "Otomatis dan terus menerus mengirim hanya item yang lolos kriteria filter"
+    Tooltip = "Otomatis dan terus menerus mengirim hanya item yang lolos kriteria filter ke akun Whitelist"
 }, function(Value)
     StealAnEggTrade.SetAutoTradeFilter(Value)
     if Value then
@@ -1946,7 +2157,6 @@ local ServerJobIdPara  = ServerInfoSec:AddParagraph("Job ID Server", tostring(ga
 local ServerUptimePara = ServerInfoSec:AddParagraph("Uptime Server Ini", formatUptime(workspace.DistributedGameTime))
 local ServerPlayerPara = ServerInfoSec:AddParagraph("Jumlah Player", string.format("%d / %d Players", #Players:GetPlayers(), Players.MaxPlayers))
 
--- Real-time updater informasi server & uptime
 task.spawn(function()
     while getgenv().CurrentTradeScriptID == scriptId do
         pcall(function()
@@ -1998,7 +2208,6 @@ end)
 
 local TeleportSec = ServerTab:AddSection("🚀 Pindah Server / Smart Server Hop")
 
--- ❄️ TOMBOL UTAMA: SMART DEEP HOP (SERVER SEPI DINGIN)
 TeleportSec:AddButton({
     Name = "❄️ Smart Hop (Cari Server Sepi Dingin / Deep Scan)",
     Tooltip = "Memindai hingga 500 server untuk mencari server 1-2 player di bagian ekor matchmaker (yang sepinya tahan lama)"
