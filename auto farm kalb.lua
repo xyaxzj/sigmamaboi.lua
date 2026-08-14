@@ -11,9 +11,9 @@ local lp = Players.LocalPlayer
 -- =============================================
 -- ⚙️ KONFIGURASI 
 -- =============================================
-_G.autoFarm = true              
+_G.autoFarm = false              
 _G.animDelay = 5              
-_G.autoRemovePlayer = false -- true: Hapus player lain (FPS boost ekstrem), false: Biarkan player lain tetap ada
+_G.autoRemovePlayer = true -- true: Hapus player lain (FPS boost ekstrem), false: Biarkan player lain tetap ada
 
 -- =============================================
 -- 🚀 SYSTEM ANTI-LAG & OPTIMISASI EKSTREM
