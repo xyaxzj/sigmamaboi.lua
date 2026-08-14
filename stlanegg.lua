@@ -1708,15 +1708,28 @@ function StealAnEggTrade.MatchesSellFilter(tool, sellConfig)
 end
 
 function StealAnEggTrade.SellItem(toolOrUid)
+    local tool = nil
     local uid = nil
     local toolName = "Item"
+    
     if typeof(toolOrUid) == "Instance" and toolOrUid:IsA("Tool") then
-        local info = StealAnEggTrade.GetToolInfo(toolOrUid)
+        tool = toolOrUid
+        local info = StealAnEggTrade.GetToolInfo(tool)
         uid = info and info.UID
-        toolName = info and info.DisplayName or toolOrUid.Name
+        toolName = info and info.DisplayName or tool.Name
     elseif type(toolOrUid) == "string" then
         uid = toolOrUid
         toolName = "UID " .. uid
+        -- Cari instance Tool yang memiliki UID ini
+        local tools = StealAnEggTrade.GetAllTools()
+        for _, t in ipairs(tools) do
+            local info = StealAnEggTrade.GetToolInfo(t)
+            if info and info.UID == uid then
+                tool = t
+                toolName = info.DisplayName or t.Name
+                break
+            end
+        end
     end
     
     if not uid or uid == "-" or uid == "" then
@@ -1728,6 +1741,13 @@ function StealAnEggTrade.SellItem(toolOrUid)
         return false, "Remote 'AssetInventory: SellAsset' tidak ditemukan di ReplicatedStorage.Network"
     end
     
+    -- 1. ✋ Pegang / Equip tool ke tangan karakter terlebih dahulu
+    if tool and tool.Parent then
+        local equipOk, equipMsg = StealAnEggTrade.EquipTool(tool)
+        task.wait(0.12)
+    end
+    
+    -- 2. 💰 Panggil Remote Sell saat sedang dipegang di tangan
     local ok, res = pcall(function()
         sellRemote:FireServer({
             [1] = tostring(uid)
@@ -1735,9 +1755,13 @@ function StealAnEggTrade.SellItem(toolOrUid)
     end)
     
     if ok then
+        -- 3. ⏳ Tunggu hingga tool terhapus / hilang dari karakter
+        if tool then
+            WaitForToolTransferred(tool, 3.5)
+        end
         TradeStats.SellCount = (TradeStats.SellCount or 0) + 1
         TradeStats.LastSoldName = toolName
-        print(string.format("[AutoSell] Berhasil menjual '%s' [UID: %s] 💰", toolName, tostring(uid)))
+        print(string.format("[AutoSell] Berhasil memegang & menjual '%s' [UID: %s] 💰", toolName, tostring(uid)))
         return true, "Berhasil dijual"
     else
         return false, tostring(res)
@@ -1747,12 +1771,10 @@ end
 function StealAnEggTrade.SellFilteredBatch()
     local tools = StealAnEggTrade.GetAllTools()
     local toSell = {}
-    local uids = {}
     for _, t in ipairs(tools) do
         local isMatch, info = StealAnEggTrade.MatchesSellFilter(t, Config)
         if isMatch and info and info.UID and info.UID ~= "-" then
             table.insert(toSell, t)
-            table.insert(uids, tostring(info.UID))
         end
     end
     
@@ -1760,23 +1782,10 @@ function StealAnEggTrade.SellFilteredBatch()
         return false, "Tidak ada item di tas yang cocok dengan kriteria Auto Sell saat ini!"
     end
     
-    local sellRemote = GetSellRemote()
-    if not sellRemote then
-        return false, "Remote Sell tidak ditemukan!"
-    end
-    
     task.spawn(function()
-        for _, info in ipairs(toSell) do
-            local t = info
-            local tInfo = StealAnEggTrade.GetToolInfo(t)
-            if tInfo and tInfo.UID and tInfo.UID ~= "-" then
-                pcall(function()
-                    sellRemote:FireServer({
-                        [1] = tostring(tInfo.UID)
-                    })
-                end)
-                TradeStats.SellCount = (TradeStats.SellCount or 0) + 1
-                TradeStats.LastSoldName = tInfo.DisplayName
+        for _, tool in ipairs(toSell) do
+            if tool and tool.Parent then
+                StealAnEggTrade.SellItem(tool)
                 task.wait(Config.AutoSellDelay or 0.2)
             end
         end
@@ -1803,12 +1812,12 @@ function StealAnEggTrade.StartAutoSellLoop()
             for _, t in ipairs(tools) do
                 if not Config.AutoSellLoop then break end
                 local isMatch, info = StealAnEggTrade.MatchesSellFilter(t, Config)
-                if isMatch and info and info.UID and info.UID ~= "-" then
-                    local ok, err = StealAnEggTrade.SellItem(t)
-                    task.wait(Config.AutoSellDelay or 0.5)
+                if isMatch and info and info.UID and info.UID ~= "-" and t.Parent then
+                    StealAnEggTrade.SellItem(t)
+                    task.wait(Config.AutoSellDelay or 0.25)
                 end
             end
-            task.wait(1.5)
+            task.wait(1.2)
         end
         isSellLoopRunning = false
     end)
