@@ -494,6 +494,33 @@ local function formatIncome(n)
     end
 end
 
+-- Helper Parsing String Input Income (Juta, M, B, T, K, Ribu)
+local function ParseIncomeInput(text)
+    if not text then return 0 end
+    local str = tostring(text):lower():gsub("%s+", ""):gsub(",", ".")
+    if str == "" or str == "0" or str == "bebas" or str == "none" then return 0 end
+    
+    if str:find("t") then
+        local num = tonumber(str:gsub("t", ""))
+        return (num or 0) * 1000000000000
+    elseif str:find("b") then
+        local num = tonumber(str:gsub("b", ""))
+        return (num or 0) * 1000000000
+    elseif str:find("m") or str:find("jt") or str:find("juta") then
+        local num = tonumber(str:gsub("m", ""):gsub("jt", ""):gsub("juta", ""))
+        return (num or 0) * 1000000
+    elseif str:find("k") or str:find("rb") or str:find("ribu") then
+        local num = tonumber(str:gsub("k", ""):gsub("rb", ""):gsub("ribu", ""))
+        return (num or 0) * 1000
+    else
+        local num = tonumber(str)
+        if num and num > 0 then
+            return num * 1000000 -- Asumsi angka biasa = Satuan Juta
+        end
+    end
+    return 0
+end
+
 -- Blacklist Tool yang dikecualikan dari scan / trade (Bat dan Trap)
 local IGNORED_TOOL_PATTERNS = { "bat", "trap" }
 
@@ -873,10 +900,12 @@ local INVENTORY_SORT_OPTIONS = {
 
 local currentInventorySort = INVENTORY_SORT_OPTIONS[1]
 local currentInventorySearch = ""
+local currentInventoryMinIncome = 0
 
-function StealAnEggTrade.ScanInventory(sortMethod, searchKeyword)
+function StealAnEggTrade.ScanInventory(sortMethod, searchKeyword, minIncome)
     sortMethod = sortMethod or currentInventorySort
     searchKeyword = (searchKeyword or currentInventorySearch or ""):lower():gsub("^%s+", ""):gsub("%s+$", "")
+    minIncome = minIncome ~= nil and tonumber(minIncome) or currentInventoryMinIncome or 0
     
     local tools = StealAnEggTrade.GetAllTools()
     local toolDataList = {}
@@ -930,6 +959,12 @@ function StealAnEggTrade.ScanInventory(sortMethod, searchKeyword)
                 table.insert(rarities, info.Rarity)
             end
             
+            -- Filter Pencarian & Min Income
+            local passesMinIncome = true
+            if minIncome > 0 and info.PerSecond < minIncome then
+                passesMinIncome = false
+            end
+            
             local matchesSearch = true
             if searchKeyword ~= "" then
                 local matchName = info.DisplayName:lower():find(searchKeyword, 1, true) ~= nil
@@ -939,7 +974,7 @@ function StealAnEggTrade.ScanInventory(sortMethod, searchKeyword)
                 matchesSearch = matchName or matchRarity or matchMut or matchRaw
             end
             
-            if matchesSearch then
+            if passesMinIncome and matchesSearch then
                 table.insert(toolDataList, info)
             end
         end
@@ -2113,13 +2148,42 @@ InvSec:AddInput({
     Tooltip = "Menyaring daftar tool secara instan berdasarkan kata kunci yang diketik"
 }, function(text)
     currentInventorySearch = text or ""
-    local scan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch)
+    local scan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch, currentInventoryMinIncome)
     if InvDropdown then
         InvDropdown:Refresh(scan.DropdownOptions)
     end
 end)
 
--- 2. Sort By Dropdown
+-- 2. Min Income Filter Input Bar for Inventory
+InvSec:AddInput({
+    Name = "💰 Filter Min Income di Backpack (Satuan: JUTA / detik)",
+    Placeholder = currentInventoryMinIncome > 0 and string.format("%.2fM/s", currentInventoryMinIncome / 1000000) or "Cth: 100 (= 100M/s) atau 2.8B, 0 = Tampilkan Semua",
+    Tooltip = "Menyaring daftar item di backpack hanya yang menghasilkan pasif income minimal tertentu"
+}, function(text)
+    local incomeVal = ParseIncomeInput(text)
+    currentInventoryMinIncome = incomeVal
+    local scan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch, currentInventoryMinIncome)
+    if InvDropdown then
+        InvDropdown:Refresh(scan.DropdownOptions)
+    end
+    if incomeVal > 0 then
+        Library:Notify({
+            Title   = "Filter Min Income Backpack",
+            Content = string.format("Menampilkan item >= +%s/s%s (%d item ditemukan)", formatNumber(incomeVal), formatIncome(incomeVal), scan.FilteredCount),
+            Type    = "Info",
+            Duration = 2.5
+        })
+    else
+        Library:Notify({
+            Title   = "Filter Min Income Backpack",
+            Content = "Menampilkan seluruh item di Backpack",
+            Type    = "Info",
+            Duration = 2
+        })
+    end
+end)
+
+-- 3. Sort By Dropdown
 InvSec:AddDropdown({
     Name = "🔀 Urutkan Berdasarkan (Sort By)",
     Options = INVENTORY_SORT_OPTIONS,
@@ -2128,7 +2192,7 @@ InvSec:AddDropdown({
     Tooltip = "Pilih kriteria pengurutan inventaris"
 }, function(selectedSort)
     currentInventorySort = selectedSort or INVENTORY_SORT_OPTIONS[1]
-    local scan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch)
+    local scan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch, currentInventoryMinIncome)
     if InvDropdown then
         InvDropdown:Refresh(scan.DropdownOptions)
     end
@@ -2140,7 +2204,7 @@ InvSec:AddDropdown({
     })
 end)
 
--- 3. Tool Selector Dropdown
+-- 4. Tool Selector Dropdown
 InvDropdown = InvSec:AddDropdown({
     Name = "📦 Pilih Tool dari Backpack",
     Options = initialScan.DropdownOptions,
@@ -2164,7 +2228,7 @@ InvDropdown = InvSec:AddDropdown({
     end
 end)
 
--- 4. Detail Tool Card Paragraph (No UID displayed)
+-- 5. Detail Tool Card Paragraph (No UID displayed)
 SelectedToolCardPara = InvSec:AddParagraph("🎴 Detail Tool Terpilih", "Pilih Tool dari dropdown di atas untuk melihat detail lengkap.")
 
 -- 5. Action Buttons
@@ -2208,7 +2272,7 @@ InvSec:AddButton({
         TradeStats.LastItemName = toolName
         Library:Notify({Title = "Terkirim! 🎁", Content = string.format("Berhasil mengirim '%s' ke %s", toolName, targetName or tostring(targetId)), Type = "Success", Duration = 3})
         
-        local scan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch)
+        local scan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch, currentInventoryMinIncome)
         InvDropdown:Refresh(scan.DropdownOptions)
         Config.SelectedInvTool = nil
         UpdateToolCard(nil)
@@ -2219,10 +2283,57 @@ InvSec:AddButton({
 end)
 
 InvSec:AddButton({
+    Name = "🎁 Gift Semua Item Hasil Filter Ini ke Whitelist (1x Batch)",
+    Tooltip = "Kirim seluruh item yang sedang tampil di dropdown (hasil filter cari/min income) ke Target Whitelist"
+}, function()
+    local targetId, targetName = GetActiveWhitelistTarget()
+    if not targetId then
+        Library:Notify({Title = "Peringatan", Content = "Target Whitelist belum ditemukan di server!", Type = "Warning", Duration = 3})
+        return
+    end
+    
+    local scan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch, currentInventoryMinIncome)
+    if not scan.FilteredTools or #scan.FilteredTools == 0 then
+        Library:Notify({Title = "Peringatan", Content = "Tidak ada item hasil filter untuk dikirim!", Type = "Warning", Duration = 3})
+        return
+    end
+    
+    Library:Notify({
+        Title = "Memulai Batch Gift",
+        Content = string.format("Mengirim %d item hasil filter ke %s...", #scan.FilteredTools, targetName or tostring(targetId)),
+        Type = "Info",
+        Duration = 3
+    })
+    
+    task.spawn(function()
+        for _, info in ipairs(scan.FilteredTools) do
+            local t = info.Instance
+            if t and t.Parent then
+                local tName = info.DisplayName or t.Name
+                local ok, err = StealAnEggTrade.SendGift(targetId, t)
+                if ok then
+                    TradeStats.TotalSent = TradeStats.TotalSent + 1
+                    TradeStats.SuccessCount = TradeStats.SuccessCount + 1
+                    TradeStats.LastItemName = tName
+                else
+                    TradeStats.FailCount = TradeStats.FailCount + 1
+                end
+                task.wait(Config.DelayBetweenGifts)
+            end
+        end
+        local refreshed = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch, currentInventoryMinIncome)
+        InvDropdown:Refresh(refreshed.DropdownOptions)
+        Config.SelectedInvTool = nil
+        UpdateToolCard(nil)
+        Library:Notify({Title = "Batch Selesai", Content = "Pengiriman item hasil filter selesai!", Type = "Success", Duration = 3.5})
+    end)
+end)
+
+InvSec:AddButton({
     Name = "🔄 Refresh / Scan Ulang Backpack",
     Tooltip = "Memperbarui daftar item, mutasi, rarity, dan statistik inventaris"
 }, function()
-    local scan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch)
+    local scan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch, currentInventoryMinIncome)
     InvDropdown:Refresh(scan.DropdownOptions)
     if Config.SelectedInvTool and Config.SelectedInvTool.Parent then
         local info = StealAnEggTrade.GetToolInfo(Config.SelectedInvTool)
@@ -2249,7 +2360,7 @@ local InvHeavyPara   = InvStatSec:AddParagraph("⚖️ Item Terberat", initialSc
 task.spawn(function()
     while getgenv().CurrentTradeScriptID == scriptId do
         pcall(function()
-            local scan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch)
+            local scan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch, currentInventoryMinIncome)
             InvCountPara:Set("Total Koleksi", string.format("%d Tool di Backpack • %d Favorit ⭐", scan.Count, scan.FavoriteCount))
             InvWeightPara:Set("Total Berat Seluruh Tas", string.format("%s kg (%.2f Juta kg)", formatNumber(scan.TotalWeight), scan.TotalWeight / 1000000))
             InvIncomePara:Set("Total Pasif Income", string.format("+%s / detik 💰%s", formatNumber(scan.TotalIncome), formatIncome(scan.TotalIncome)))
