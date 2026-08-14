@@ -44,7 +44,7 @@ local ACCOUNT_PROFILES = {
         FilterRarity        = "Divine, Eternal, Secret", -- 👈 Multi-Rarity Filter (Divine, Eternal, Secret) atau "All Rarities"
         MinWeightInMillions = 0,                -- Minimal berat (0 = Bebas / Kirim seluruh item Divine, Eternal, Secret)
         MaxWeightInMillions = 0,                -- Tanpa batas maksimal (0 = Bebas)
-        MinIncomeInMillions = 100,                -- 👈 Minimal Income / detik dalam Juta (Cth: 100 = 100 Juta/s, 0 = Bebas)
+        MinIncomeInMillions = 0,                -- 👈 Minimal Income / detik dalam Juta (Cth: 100 = 100 Juta/s, 0 = Bebas)
         MaxIncomeInMillions = 0,                -- Tanpa batas maksimal income (0 = Bebas)
         IgnoreFavorites     = false,            -- Jangan abaikan barang favorit
         OnlyFavorites       = false,            -- Jangan batasi hanya favorit
@@ -494,30 +494,69 @@ local function formatIncome(n)
     end
 end
 
--- Helper Parsing String Input Income (Juta, M, B, T, K, Ribu)
+-- Helper Parsing String Input Income (Juta, M, B, T, K, Ribu, /s, titik ribuan)
 local function ParseIncomeInput(text)
     if not text then return 0 end
-    local str = tostring(text):lower():gsub("%s+", ""):gsub(",", ".")
-    if str == "" or str == "0" or str == "bebas" or str == "none" then return 0 end
+    local str = tostring(text):lower():gsub("%s+", "")
+    -- Bersihkan akhiran /s, /detik, /sec
+    str = str:gsub("/s$", ""):gsub("/detik$", ""):gsub("/sec$", "")
     
+    if str == "" or str == "0" or str == "bebas" or str == "none" or str == "all" or str == "semua" then 
+        return 0 
+    end
+    
+    -- Format Triliun (T)
     if str:find("t") then
-        local num = tonumber(str:gsub("t", ""))
-        return (num or 0) * 1000000000000
-    elseif str:find("b") then
-        local num = tonumber(str:gsub("b", ""))
-        return (num or 0) * 1000000000
-    elseif str:find("m") or str:find("jt") or str:find("juta") then
-        local num = tonumber(str:gsub("m", ""):gsub("jt", ""):gsub("juta", ""))
-        return (num or 0) * 1000000
-    elseif str:find("k") or str:find("rb") or str:find("ribu") then
-        local num = tonumber(str:gsub("k", ""):gsub("rb", ""):gsub("ribu", ""))
-        return (num or 0) * 1000
-    else
-        local num = tonumber(str)
-        if num and num > 0 then
-            return num * 1000000 -- Asumsi angka biasa = Satuan Juta
+        local raw = str:gsub("triliun", ""):gsub("t", ""):gsub(",", ".")
+        local num = tonumber(raw)
+        return num and (num * 1e12) or 0
+    end
+    
+    -- Format Miliar / Billion (B)
+    if str:find("b") or str:find("mil") or str:find("miliar") or str:find("billion") then
+        local raw = str:gsub("billion", ""):gsub("miliar", ""):gsub("mil", ""):gsub("b", ""):gsub(",", ".")
+        local num = tonumber(raw)
+        return num and (num * 1e9) or 0
+    end
+    
+    -- Format Juta / Million (M / JT)
+    if str:find("m") or str:find("jt") or str:find("juta") or str:find("million") then
+        local raw = str:gsub("million", ""):gsub("juta", ""):gsub("jt", ""):gsub("m", ""):gsub(",", ".")
+        local num = tonumber(raw)
+        return num and (num * 1e6) or 0
+    end
+    
+    -- Format Ribu / Thousand (K / RB)
+    if str:find("k") or str:find("rb") or str:find("ribu") or str:find("thousand") then
+        local raw = str:gsub("thousand", ""):gsub("ribu", ""):gsub("rb", ""):gsub("k", ""):gsub(",", ".")
+        local num = tonumber(raw)
+        return num and (num * 1e3) or 0
+    end
+    
+    -- Cek jika user mengetik angka lengkap dengan pemisah ribuan (Cth: 100.000.000 atau 100,000,000)
+    local dotCount = 0
+    for _ in str:gmatch("%.") do dotCount = dotCount + 1 end
+    local commaCount = 0
+    for _ in str:gmatch(",") do commaCount = commaCount + 1 end
+    
+    if dotCount > 1 or commaCount > 1 or (dotCount == 1 and str:match("%.%d%d%d$")) or (commaCount == 1 and str:match(",%d%d%d$")) then
+        local cleanFull = str:gsub("[^%d]", "")
+        local fullNum = tonumber(cleanFull)
+        if fullNum and fullNum > 0 then
+            return fullNum
         end
     end
+    
+    -- Angka biasa: (Cth: 100 = 100 Juta, 2.5 = 2.5 Juta)
+    local normalNum = tonumber(str:gsub(",", "."))
+    if normalNum and normalNum > 0 then
+        if normalNum >= 1000000 then
+            return normalNum
+        else
+            return normalNum * 1e6
+        end
+    end
+    
     return 0
 end
 
@@ -806,8 +845,30 @@ function StealAnEggTrade.GetToolInfo(tool)
         or (cfg and cfg:GetAttribute("scale"))
         or 0
         
-    -- PerSecond / Income
-    local perSecond = cfg and (cfg:GetAttribute("perSecondDisplay") or cfg:GetAttribute("perSecond")) or 0
+    -- PerSecond / Income (Deep Attribute Check)
+    local perSecond = 0
+    if cfg then
+        perSecond = cfg:GetAttribute("perSecondDisplay") 
+            or cfg:GetAttribute("perSecond") 
+            or cfg:GetAttribute("PerSecond") 
+            or cfg:GetAttribute("Income") 
+            or cfg:GetAttribute("income")
+            or (cfg:FindFirstChild("perSecond") and cfg.perSecond.Value)
+            or (cfg:FindFirstChild("PerSecond") and cfg.PerSecond.Value)
+            or (cfg:FindFirstChild("Income") and cfg.Income.Value)
+            or 0
+    end
+    if not perSecond or perSecond == 0 then
+        perSecond = tool:GetAttribute("perSecondDisplay") 
+            or tool:GetAttribute("perSecond") 
+            or tool:GetAttribute("PerSecond") 
+            or tool:GetAttribute("Income") 
+            or tool:GetAttribute("income") 
+            or (tool:FindFirstChild("perSecond") and tool.perSecond.Value)
+            or (tool:FindFirstChild("PerSecond") and tool.PerSecond.Value)
+            or 0
+    end
+    perSecond = tonumber(perSecond) or 0
     
     -- Rarity (Cth: "Divine", "Eternal", "Secret", "Mythical")
     local rarity = StealAnEggTrade.GetToolRarity(tool)
@@ -1665,7 +1726,8 @@ function StealAnEggTrade.StartAutoTradeLoop()
                 for _, tool in ipairs(tools) do
                     if not Config.AutoTradeLoop then break end
                     
-                    if Config.IgnoreFavorites and tool:GetAttribute("Favorite") == true then
+                    -- Cek kesesuaian filter jika ada filter aktif
+                    if not StealAnEggTrade.MatchesFilter(tool, Config) then
                         continue
                     end
                     
@@ -1883,7 +1945,7 @@ local ActionSec = MainTab:AddSection("Aksi Quick Trade / Gift (Pengirim)")
 
 ActionSec:AddButton({
     Name = "🎁 Gift Barang yang Sedang Dipegang (1x)",
-    Tooltip = "Memegang dan mengirim tool yang saat ini aktif di tangan ke target Whitelist"
+    Tooltip = "Memegang dan mengirim item yang saat ini aktif di tangan ke target Whitelist"
 }, function()
     local targetId, targetName = GetActiveWhitelistTarget()
     if not targetId then
@@ -1898,7 +1960,7 @@ ActionSec:AddButton({
     
     local character = LocalPlayer.Character
     local heldTool = character and character:FindFirstChildOfClass("Tool")
-    local itemName = heldTool and heldTool.Name or "Tool Aktif"
+    local itemName = heldTool and heldTool.Name or "Item Aktif"
     
     local ok, err = StealAnEggTrade.SendGift(targetId, heldTool)
     if ok then
@@ -1923,8 +1985,8 @@ ActionSec:AddButton({
 end)
 
 ActionSec:AddButton({
-    Name = "📦 Gift Semua Tool di Backpack (1x Loop)",
-    Tooltip = "Memegang satu per satu lalu mengirim seluruh Tool di Backpack ke target Whitelist"
+    Name = "📦 Gift Semua Item Sesuai Filter ke Whitelist (1x Loop)",
+    Tooltip = "Memegang satu per satu lalu mengirim seluruh Item yang cocok dengan kriteria filter ke target Whitelist"
 }, function()
     local targetId, targetName = GetActiveWhitelistTarget()
     if not targetId then
@@ -1938,10 +2000,17 @@ ActionSec:AddButton({
     end
     
     local tools = StealAnEggTrade.GetAllTools()
-    if #tools == 0 then
+    local matched = {}
+    for _, t in ipairs(tools) do
+        if StealAnEggTrade.MatchesFilter(t, Config) then
+            table.insert(matched, t)
+        end
+    end
+    
+    if #matched == 0 then
         Library:Notify({
-            Title   = "Backpack Kosong",
-            Content = "Tidak ada Tool yang ditemukan di Backpack!",
+            Title   = "Tidak Ada Item Cocok",
+            Content = "Tidak ada Item yang cocok dengan filter saat ini!",
             Type    = "Warning",
             Duration = 3
         })
@@ -1950,17 +2019,14 @@ ActionSec:AddButton({
     
     Library:Notify({
         Title   = "Memulai Gifting",
-        Content = string.format("Mengirim %d item ke %s...", #tools, targetName or tostring(targetId)),
+        Content = string.format("Mengirim %d item sesuai filter ke %s...", #matched, targetName or tostring(targetId)),
         Type    = "Info",
         Duration = 3
     })
     
     task.spawn(function()
-        for _, tool in ipairs(tools) do
-            if Config.IgnoreFavorites and tool:GetAttribute("Favorite") == true then
-                continue
-            end
-            
+        for _, tool in ipairs(matched) do
+            if not tool.Parent then continue end
             local tName = tool.Name
             local ok, err = StealAnEggTrade.SendGift(targetId, tool)
             if ok then
@@ -1975,7 +2041,7 @@ ActionSec:AddButton({
         
         Library:Notify({
             Title   = "Selesai",
-            Content = "Proses Gift semua Tool telah selesai!",
+            Content = "Proses Gift semua Item sesuai filter telah selesai!",
             Type    = "Success",
             Duration = 4
         })
@@ -2117,7 +2183,7 @@ local SelectedToolCardPara = nil
 local function UpdateToolCard(info)
     if not SelectedToolCardPara then return end
     if not info then
-        SelectedToolCardPara:Set("🎴 Detail Tool Terpilih", "Pilih Tool dari dropdown untuk melihat detail lengkap.")
+        SelectedToolCardPara:Set("🎴 Detail Item Terpilih", "Pilih Item dari dropdown untuk melihat detail lengkap.")
         return
     end
     
@@ -2138,14 +2204,14 @@ local function UpdateToolCard(info)
         info.Favorite and "⭐ Favorit" or "⚪ Biasa",
         inChar and "✋ Di Tangan Karakter" or "🎒 Di Dalam Backpack"
     )
-    SelectedToolCardPara:Set("🎴 Detail Tool Terpilih", desc)
+    SelectedToolCardPara:Set("🎴 Detail Item Terpilih", desc)
 end
 
 -- 1. Live Search Input Bar
 InvSec:AddInput({
     Name = "🔍 Cari Item di Backpack (Live Search)",
     Placeholder = "Ketik nama, rarity, mutasi... (Cth: Unicorn, Divine, Rainbow)",
-    Tooltip = "Menyaring daftar tool secara instan berdasarkan kata kunci yang diketik"
+    Tooltip = "Menyaring daftar item secara instan berdasarkan kata kunci yang diketik"
 }, function(text)
     currentInventorySearch = text or ""
     local scan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch, currentInventoryMinIncome)
@@ -2157,10 +2223,11 @@ end)
 -- 2. Min Income Filter Input Bar for Inventory
 InvSec:AddInput({
     Name = "💰 Filter Min Income di Backpack (Satuan: JUTA / detik)",
-    Placeholder = currentInventoryMinIncome > 0 and string.format("%.2fM/s", currentInventoryMinIncome / 1000000) or "Cth: 100 (= 100M/s) atau 2.8B, 0 = Tampilkan Semua",
-    Tooltip = "Menyaring daftar item di backpack hanya yang menghasilkan pasif income minimal tertentu"
+    Placeholder = Config.MinIncome > 0 and string.format("%.2fM/s", Config.MinIncome / 1000000) or "Cth: 100 (= 100M/s) atau 2.8B, 0 = Tampilkan Semua",
+    Tooltip = "Menyaring daftar item di backpack hanya yang menghasilkan pasif income minimal tertentu (Juga menyinkronkan filter Auto Trade)"
 }, function(text)
     local incomeVal = ParseIncomeInput(text)
+    Config.MinIncome = incomeVal
     currentInventoryMinIncome = incomeVal
     local scan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch, currentInventoryMinIncome)
     if InvDropdown then
@@ -2168,15 +2235,15 @@ InvSec:AddInput({
     end
     if incomeVal > 0 then
         Library:Notify({
-            Title   = "Filter Min Income Backpack",
-            Content = string.format("Menampilkan item >= +%s/s%s (%d item ditemukan)", formatNumber(incomeVal), formatIncome(incomeVal), scan.FilteredCount),
-            Type    = "Info",
-            Duration = 2.5
+            Title   = "Filter Min Income Diset 💰",
+            Content = string.format("Menampilkan & Auto Trade hanya item >= +%s/s%s (%d item)", formatNumber(incomeVal), formatIncome(incomeVal), scan.FilteredCount),
+            Type    = "Success",
+            Duration = 3
         })
     else
         Library:Notify({
-            Title   = "Filter Min Income Backpack",
-            Content = "Menampilkan seluruh item di Backpack",
+            Title   = "Filter Min Income Diset 💰",
+            Content = "Bebas / Menampilkan seluruh item di Backpack",
             Type    = "Info",
             Duration = 2
         })
@@ -2206,11 +2273,11 @@ end)
 
 -- 4. Tool Selector Dropdown
 InvDropdown = InvSec:AddDropdown({
-    Name = "📦 Pilih Tool dari Backpack",
+    Name = "📦 Pilih Item dari Backpack",
     Options = initialScan.DropdownOptions,
     Default = initialScan.DropdownOptions[1] or "",
     Flag = "InvToolDropdown",
-    Tooltip = "Pilih salah satu tool yang ada di backpack untuk melihat detail & aksi"
+    Tooltip = "Pilih salah satu item yang ada di backpack untuk melihat detail & aksi"
 }, function(selected)
     if not selected or selected == "Backpack Kosong" or selected:find("Tidak ada item") then 
         Config.SelectedInvTool = nil
@@ -2228,13 +2295,13 @@ InvDropdown = InvSec:AddDropdown({
     end
 end)
 
--- 5. Detail Tool Card Paragraph (No UID displayed)
-SelectedToolCardPara = InvSec:AddParagraph("🎴 Detail Tool Terpilih", "Pilih Tool dari dropdown di atas untuk melihat detail lengkap.")
+-- 5. Detail Item Card Paragraph (No UID displayed)
+SelectedToolCardPara = InvSec:AddParagraph("🎴 Detail Item Terpilih", "Pilih Item dari dropdown di atas untuk melihat detail lengkap.")
 
 -- 5. Action Buttons
 InvSec:AddButton({
-    Name = "✋ Equip / Pegang Tool Terpilih",
-    Tooltip = "Memegang tool yang dipilih dari dropdown ke tangan karakter"
+    Name = "✋ Equip / Pegang Item Terpilih",
+    Tooltip = "Memegang item yang dipilih dari dropdown ke tangan karakter"
 }, function()
     if Config.SelectedInvTool and Config.SelectedInvTool.Parent then
         local ok, msg = StealAnEggTrade.EquipTool(Config.SelectedInvTool)
@@ -2246,13 +2313,13 @@ InvSec:AddButton({
             Library:Notify({Title = "Gagal Equip", Content = tostring(msg), Type = "Error", Duration = 3})
         end
     else
-        Library:Notify({Title = "Peringatan", Content = "Pilih Tool di dropdown terlebih dahulu!", Type = "Warning", Duration = 3})
+        Library:Notify({Title = "Peringatan", Content = "Pilih Item di dropdown terlebih dahulu!", Type = "Warning", Duration = 3})
     end
 end)
 
 InvSec:AddButton({
-    Name = "🎁 Gift Tool Terpilih ke Whitelist (1x)",
-    Tooltip = "Kirim tool yang dipilih di dropdown langsung ke Target Whitelist"
+    Name = "🎁 Gift Item Terpilih ke Whitelist (1x)",
+    Tooltip = "Kirim item yang dipilih di dropdown langsung ke Target Whitelist"
 }, function()
     local targetId, targetName = GetActiveWhitelistTarget()
     if not targetId then
@@ -2260,7 +2327,7 @@ InvSec:AddButton({
         return
     end
     if not Config.SelectedInvTool or not Config.SelectedInvTool.Parent then
-        Library:Notify({Title = "Peringatan", Content = "Pilih Tool di dropdown terlebih dahulu!", Type = "Warning", Duration = 3})
+        Library:Notify({Title = "Peringatan", Content = "Pilih Item di dropdown terlebih dahulu!", Type = "Warning", Duration = 3})
         return
     end
     
@@ -2343,7 +2410,7 @@ InvSec:AddButton({
     end
     Library:Notify({
         Title   = "Backpack Discan 🎒",
-        Content = string.format("Ditemukan %d Tool (Total: %s kg)", scan.Count, formatNumber(scan.TotalWeight)),
+        Content = string.format("Ditemukan %d Item (Total: %s kg)", scan.Count, formatNumber(scan.TotalWeight)),
         Type    = "Info",
         Duration = 2.5
     })
@@ -2361,7 +2428,7 @@ task.spawn(function()
     while getgenv().CurrentTradeScriptID == scriptId do
         pcall(function()
             local scan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch, currentInventoryMinIncome)
-            InvCountPara:Set("Total Koleksi", string.format("%d Tool di Backpack • %d Favorit ⭐", scan.Count, scan.FavoriteCount))
+            InvCountPara:Set("Total Koleksi", string.format("%d Item di Backpack • %d Favorit ⭐", scan.Count, scan.FavoriteCount))
             InvWeightPara:Set("Total Berat Seluruh Tas", string.format("%s kg (%.2f Juta kg)", formatNumber(scan.TotalWeight), scan.TotalWeight / 1000000))
             InvIncomePara:Set("Total Pasif Income", string.format("+%s / detik 💰%s", formatNumber(scan.TotalIncome), formatIncome(scan.TotalIncome)))
             InvBestPara:Set("👑 Item Tier Tertinggi", scan.BestPet and scan.BestPet.OptionString or "-")
@@ -2523,10 +2590,15 @@ FilterSec:AddInput({
 }, function(text)
     local incomeVal = ParseIncomeInput(text)
     Config.MinIncome = incomeVal
+    currentInventoryMinIncome = incomeVal
+    local scan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch, currentInventoryMinIncome)
+    if InvDropdown then
+        InvDropdown:Refresh(scan.DropdownOptions)
+    end
     if incomeVal > 0 then
         Library:Notify({
             Title   = "Min Income Diset 💰",
-            Content = string.format("Minimal: +%s / detik%s", formatNumber(incomeVal), formatIncome(incomeVal)),
+            Content = string.format("Minimal: +%s / detik%s (Auto Trade & Backpack tersinkron)", formatNumber(incomeVal), formatIncome(incomeVal)),
             Type    = "Success",
             Duration = 3
         })
@@ -2616,7 +2688,7 @@ task.spawn(function()
             local activeId, activeName = GetActiveWhitelistTarget()
             local targetDisplay = activeName and string.format("%s (ID: %s)", activeName, tostring(activeId)) or "Belum Ada Target Whitelist di Server"
             
-            local statusDesc = string.format("Item Cocok: %d dari %d Tool\nTarget Whitelist: %s\nItem: %s | Mutasi: %s\nRarity: %s\nMin Berat: %s | Max: %s\nMin Income: %s | Max: %s",
+            local statusDesc = string.format("Item Cocok: %d dari %d Item\nTarget Whitelist: %s\nItem: %s | Mutasi: %s\nRarity: %s\nMin Berat: %s | Max: %s\nMin Income: %s | Max: %s",
                 matchCount,
                 #tools,
                 targetDisplay,
