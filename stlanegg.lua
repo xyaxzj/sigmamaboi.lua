@@ -339,7 +339,8 @@ local Config = {
     AutoSellMaxIncome       = 0,
     AutoSellMaxWeight       = 0,
     AutoSellIgnoreFavorites = true,
-    AutoSellProtectGodTier  = true
+    AutoSellProtectGodTier  = true,
+    AutoSellProtectRainbow  = true
 }
 
 local TradeStats = {
@@ -1658,7 +1659,17 @@ function StealAnEggTrade.MatchesSellFilter(tool, sellConfig)
         return false
     end
     
-    -- 3. Proteksi Tier Dewa (Divine, Eternal, Secret, BrainrotGod, Prismatic)
+    -- 3. Proteksi Mutasi Rainbow (Jangan pernah jual Rainbow)
+    if sellConfig.AutoSellProtectRainbow ~= false then
+        local mLower = tostring(info.BaseMutation or ""):lower()
+        local nameLower = tostring(info.Name or ""):lower()
+        local dispLower = tostring(info.DisplayName or ""):lower()
+        if mLower:find("rainbow") or nameLower:find("rainbow") or dispLower:find("rainbow") then
+            return false
+        end
+    end
+    
+    -- 4. Proteksi Tier Dewa (Divine, Eternal, Secret, BrainrotGod, Prismatic)
     if sellConfig.AutoSellProtectGodTier then
         local rRank = info.RarityRank or GetRarityRank(info.Rarity)
         if rRank >= 65 then -- Tier Secret (65), Eternal (70), Divine (75), BrainrotGod (85), dll.
@@ -3072,6 +3083,15 @@ SellSec:AddToggle({
 end)
 
 SellSec:AddToggle({
+    Name = "🌈 Kunci Mutasi Rainbow (Jangan Jual Rainbow)",
+    Default = Config.AutoSellProtectRainbow,
+    Flag = "AutoSellProtectRainbowToggle",
+    Tooltip = "Proteksi mutlak: Item dengan mutasi Rainbow TIDAK AKAN PERNAH DIJUAL"
+}, function(val)
+    Config.AutoSellProtectRainbow = val
+end)
+
+SellSec:AddToggle({
     Name = "👑 Kunci Rarity Tier Dewa (Divine, Eternal, Secret Lock)",
     Default = Config.AutoSellProtectGodTier,
     Flag = "AutoSellProtectGodTierToggle",
@@ -3110,14 +3130,15 @@ task.spawn(function()
             local maxIncStr = Config.AutoSellMaxIncome > 0 and string.format("<= +%s/s%s", formatNumber(Config.AutoSellMaxIncome), formatIncome(Config.AutoSellMaxIncome)) or "Bebas"
             local maxWStr   = Config.AutoSellMaxWeight > 0 and string.format("<= %.2f Juta kg", Config.AutoSellMaxWeight / 1e6) or "Bebas"
             
-            local desc = string.format("Item Cocok Dijual: %d dari %d Item di Tas\nRarity Target: %s\nBatas Max Income: %s\nBatas Max Berat: %s\nProteksi Favorit: %s | Kunci Tier Dewa: %s\nTotal Item Terjual Sesi Ini: %d Item 💰",
+            local desc = string.format("Item Cocok Dijual: %d dari %d Item di Tas\nRarity Target: %s\nBatas Max Income: %s\nBatas Max Berat: %s\nProteksi: %s Favorit | %s Rainbow | %s Tier Dewa\nTotal Item Terjual Sesi Ini: %d Item 💰",
                 matchSellCount,
                 #tools,
                 tostring(Config.AutoSellRarities),
                 maxIncStr,
                 maxWStr,
-                Config.AutoSellIgnoreFavorites and "⭐ Aktif" or "❌ Nonaktif",
-                Config.AutoSellProtectGodTier and "👑 Terkunci Aman" or "❌ Bebas",
+                Config.AutoSellIgnoreFavorites and "⭐ Kunci" or "❌ Bebas",
+                Config.AutoSellProtectRainbow and "🌈 Kunci" or "❌ Bebas",
+                Config.AutoSellProtectGodTier and "👑 Kunci" or "❌ Bebas",
                 TradeStats.SellCount or 0
             )
             SellStatusPara:Set("Status Auto Sell", desc)
