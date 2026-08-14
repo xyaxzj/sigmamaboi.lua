@@ -44,7 +44,7 @@ local ACCOUNT_PROFILES = {
         FilterRarity        = "Divine, Eternal, Secret", -- 👈 Multi-Rarity Filter (Divine, Eternal, Secret) atau "All Rarities"
         MinWeightInMillions = 0,                -- Minimal berat (0 = Bebas / Kirim seluruh item Divine, Eternal, Secret)
         MaxWeightInMillions = 0,                -- Tanpa batas maksimal (0 = Bebas)
-        MinIncomeInMillions = 0,                -- 👈 Minimal Income / detik dalam Juta (Cth: 100 = 100 Juta/s, 0 = Bebas)
+        MinIncomeInMillions = 100,                -- 👈 Minimal Income / detik dalam Juta (Cth: 100 = 100 Juta/s, 0 = Bebas)
         MaxIncomeInMillions = 0,                -- Tanpa batas maksimal income (0 = Bebas)
         IgnoreFavorites     = false,            -- Jangan abaikan barang favorit
         OnlyFavorites       = false,            -- Jangan batasi hanya favorit
