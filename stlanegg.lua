@@ -44,6 +44,8 @@ local ACCOUNT_PROFILES = {
         FilterRarity        = "Divine, Eternal, Secret", -- 👈 Multi-Rarity Filter (Divine, Eternal, Secret) atau "All Rarities"
         MinWeightInMillions = 0,                -- Minimal berat (0 = Bebas / Kirim seluruh item Divine, Eternal, Secret)
         MaxWeightInMillions = 0,                -- Tanpa batas maksimal (0 = Bebas)
+        MinIncomeInMillions = 0,                -- 👈 Minimal Income / detik dalam Juta (Cth: 100 = 100 Juta/s, 0 = Bebas)
+        MaxIncomeInMillions = 0,                -- Tanpa batas maksimal income (0 = Bebas)
         IgnoreFavorites     = false,            -- Jangan abaikan barang favorit
         OnlyFavorites       = false,            -- Jangan batasi hanya favorit
         AutoAcceptGift      = false,            -- Matikan auto accept di akun pengirim
@@ -105,6 +107,8 @@ local SCRIPT_CONFIG = {
     FilterRarity        = activeProfile.FilterRarity or "Divine, Eternal, Secret",
     MinWeightInMillions = activeProfile.MinWeightInMillions or 0,
     MaxWeightInMillions = activeProfile.MaxWeightInMillions or 0,
+    MinIncomeInMillions = activeProfile.MinIncomeInMillions or 0,
+    MaxIncomeInMillions = activeProfile.MaxIncomeInMillions or 0,
     IgnoreFavorites     = activeProfile.IgnoreFavorites == true,
     OnlyFavorites       = activeProfile.OnlyFavorites == true,
     ProfileRole         = activeProfile.Role or "Normal"
@@ -321,6 +325,8 @@ local Config = {
     FilterRarity        = SCRIPT_CONFIG.FilterRarity or "Divine, Eternal, Secret",
     MinWeight           = (tonumber(SCRIPT_CONFIG.MinWeightInMillions) or 0) * 1000000,
     MaxWeight           = (tonumber(SCRIPT_CONFIG.MaxWeightInMillions) or 0) * 1000000,
+    MinIncome           = (tonumber(SCRIPT_CONFIG.MinIncomeInMillions) or 0) * 1000000,
+    MaxIncome           = (tonumber(SCRIPT_CONFIG.MaxIncomeInMillions) or 0) * 1000000,
     SelectedInvTool     = nil,
     ProfileRole         = SCRIPT_CONFIG.ProfileRole
 }
@@ -1083,6 +1089,18 @@ function StealAnEggTrade.MatchesFilter(tool, filterConfig)
         end
     end
     
+    if filterConfig.MinIncome and filterConfig.MinIncome > 0 then
+        if info.PerSecond < filterConfig.MinIncome then
+            return false
+        end
+    end
+    
+    if filterConfig.MaxIncome and filterConfig.MaxIncome > 0 then
+        if info.PerSecond > filterConfig.MaxIncome then
+            return false
+        end
+    end
+    
     return true, info
 end
 
@@ -1439,11 +1457,15 @@ function StealAnEggTrade.SetFilter(filterTbl)
     if filterTbl.MinWeight then Config.MinWeight = filterTbl.MinWeight end
     if filterTbl.MaxWeightMillions then Config.MaxWeight = filterTbl.MaxWeightMillions * 1000000 end
     if filterTbl.MaxWeight then Config.MaxWeight = filterTbl.MaxWeight end
+    if filterTbl.MinIncomeMillions then Config.MinIncome = filterTbl.MinIncomeMillions * 1000000 end
+    if filterTbl.MinIncome then Config.MinIncome = filterTbl.MinIncome end
+    if filterTbl.MaxIncomeMillions then Config.MaxIncome = filterTbl.MaxIncomeMillions * 1000000 end
+    if filterTbl.MaxIncome then Config.MaxIncome = filterTbl.MaxIncome end
     if filterTbl.IgnoreFavorites ~= nil then Config.IgnoreFavorites = filterTbl.IgnoreFavorites end
     if filterTbl.OnlyFavorites ~= nil then Config.OnlyFavorites = filterTbl.OnlyFavorites end
     if filterTbl.Whitelist then StealAnEggTrade.SetWhitelist(filterTbl.Whitelist) end
-    print(string.format("[StealAnEgg API] Filter Updated -> Item: %s | Mutasi: %s | Rarity: %s | Min: %.2f Juta kg", 
-        tostring(Config.FilterItem), tostring(Config.FilterMutation), tostring(Config.FilterRarity), Config.MinWeight / 1000000))
+    print(string.format("[StealAnEgg API] Filter Updated -> Item: %s | Mutasi: %s | Rarity: %s | Min W: %.2fM | Min Inc: %.2fM/s", 
+        tostring(Config.FilterItem), tostring(Config.FilterMutation), tostring(Config.FilterRarity), Config.MinWeight / 1000000, Config.MinIncome / 1000000))
     return true
 end
 
@@ -2357,6 +2379,80 @@ FilterSec:AddInput({
     end
 end)
 
+local function ParseIncomeInput(text)
+    if not text then return 0 end
+    local str = tostring(text):lower():gsub("%s+", ""):gsub(",", ".")
+    if str == "" or str == "0" or str == "bebas" or str == "none" then return 0 end
+    
+    if str:find("t") then
+        local num = tonumber(str:gsub("t", ""))
+        return (num or 0) * 1000000000000
+    elseif str:find("b") then
+        local num = tonumber(str:gsub("b", ""))
+        return (num or 0) * 1000000000
+    elseif str:find("m") or str:find("jt") or str:find("juta") then
+        local num = tonumber(str:gsub("m", ""):gsub("jt", ""):gsub("juta", ""))
+        return (num or 0) * 1000000
+    elseif str:find("k") or str:find("rb") or str:find("ribu") then
+        local num = tonumber(str:gsub("k", ""):gsub("rb", ""):gsub("ribu", ""))
+        return (num or 0) * 1000
+    else
+        local num = tonumber(str)
+        if num and num > 0 then
+            return num * 1000000 -- Asumsi angka biasa = Satuan Juta
+        end
+    end
+    return 0
+end
+
+FilterSec:AddInput({
+    Name = "💰 Minimum Income / Pasif (Satuan: JUTA / detik)",
+    Placeholder = Config.MinIncome > 0 and string.format("%.2f", Config.MinIncome / 1000000) or "Cth: 100 (= 100M/s) atau 2.8B, 0 = Bebas",
+    Tooltip = "Input angka minimal pasif income per detik (Cth: 100 = 100 Juta/s, 2.5B = 2.5 Miliar/s, 0 = Bebas)"
+}, function(text)
+    local incomeVal = ParseIncomeInput(text)
+    Config.MinIncome = incomeVal
+    if incomeVal > 0 then
+        Library:Notify({
+            Title   = "Min Income Diset 💰",
+            Content = string.format("Minimal: +%s / detik%s", formatNumber(incomeVal), formatIncome(incomeVal)),
+            Type    = "Success",
+            Duration = 3
+        })
+    else
+        Library:Notify({
+            Title   = "Min Income Diset 💰",
+            Content = "Bebas / Tanpa batas minimum income",
+            Type    = "Info",
+            Duration = 2.5
+        })
+    end
+end)
+
+FilterSec:AddInput({
+    Name = "💰 Maximum Income / Pasif (Satuan: JUTA / detik) [Opsional]",
+    Placeholder = Config.MaxIncome > 0 and string.format("%.2f", Config.MaxIncome / 1000000) or "Cth: 500 (= 500M/s), 0 = Bebas",
+    Tooltip = "Input batas maksimal pasif income per detik (0 = Tanpa batas maksimum)"
+}, function(text)
+    local incomeVal = ParseIncomeInput(text)
+    Config.MaxIncome = incomeVal
+    if incomeVal > 0 then
+        Library:Notify({
+            Title   = "Max Income Diset 💰",
+            Content = string.format("Maksimal: +%s / detik%s", formatNumber(incomeVal), formatIncome(incomeVal)),
+            Type    = "Success",
+            Duration = 3
+        })
+    else
+        Library:Notify({
+            Title   = "Max Income Diset 💰",
+            Content = "Bebas / Tanpa batas maksimum income",
+            Type    = "Info",
+            Duration = 2.5
+        })
+    end
+end)
+
 FilterSec:AddToggle({
     Name = "⭐ Abaikan Barang Favorit (Skip Favorite)",
     Default = Config.IgnoreFavorites,
@@ -2404,10 +2500,12 @@ task.spawn(function()
             
             local minWStr = Config.MinWeight > 0 and string.format("%.2f Juta (%s kg)", Config.MinWeight / 1000000, formatNumber(Config.MinWeight)) or "Bebas"
             local maxWStr = Config.MaxWeight > 0 and string.format("%.2f Juta (%s kg)", Config.MaxWeight / 1000000, formatNumber(Config.MaxWeight)) or "Bebas"
+            local minIncStr = Config.MinIncome > 0 and string.format("+%s/s%s", formatNumber(Config.MinIncome), formatIncome(Config.MinIncome)) or "Bebas"
+            local maxIncStr = Config.MaxIncome > 0 and string.format("+%s/s%s", formatNumber(Config.MaxIncome), formatIncome(Config.MaxIncome)) or "Bebas"
             local activeId, activeName = GetActiveWhitelistTarget()
             local targetDisplay = activeName and string.format("%s (ID: %s)", activeName, tostring(activeId)) or "Belum Ada Target Whitelist di Server"
             
-            local statusDesc = string.format("Item Cocok: %d dari %d Tool\nTarget Whitelist: %s\nItem: %s | Mutasi: %s\nRarity: %s\nMin Berat: %s | Max: %s",
+            local statusDesc = string.format("Item Cocok: %d dari %d Tool\nTarget Whitelist: %s\nItem: %s | Mutasi: %s\nRarity: %s\nMin Berat: %s | Max: %s\nMin Income: %s | Max: %s",
                 matchCount,
                 #tools,
                 targetDisplay,
@@ -2415,7 +2513,9 @@ task.spawn(function()
                 tostring(Config.FilterMutation),
                 tostring(Config.FilterRarity),
                 minWStr,
-                maxWStr
+                maxWStr,
+                minIncStr,
+                maxIncStr
             )
             FilterMatchPara:Set("Status Filter", statusDesc)
         end)
