@@ -39,7 +39,7 @@ local ACCOUNT_PROFILES = {
         DelayBetweenGifts   = 0.5,              -- Jeda antar gift (detik)
         FilterItem          = "All Items",      -- Filter jenis item
         FilterMutation      = "All Mutations",  -- Filter mutasi (Cth: "Golden", "Normal", "All Mutations")
-        FilterRarity        = "Divine, Eternal, Secret", -- 👈 Multi-Rarity Filter (Hanya kirim Divine, Eternal, Secret)
+        FilterRarity        = "Divine, Eternal, Secret", -- 👈 Multi-Rarity Filter (Divine, Eternal, Secret) atau "All Rarities"
         MinWeightInMillions = 0,                -- Minimal berat (0 = Bebas / Kirim seluruh item Divine, Eternal, Secret)
         MaxWeightInMillions = 0,                -- Tanpa batas maksimal (0 = Bebas)
         IgnoreFavorites     = false,            -- Jangan abaikan barang favorit
@@ -131,11 +131,21 @@ local function CopyToClipboard(text)
     return false
 end
 
+-- Helper Case-Insensitive Player Finder
+local function FindPlayerByName(nameStr)
+    if not nameStr or nameStr == "" then return nil end
+    local nameLower = nameStr:lower()
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p.Name:lower() == nameLower or p.DisplayName:lower() == nameLower then
+            return p
+        end
+    end
+    return nil
+end
+
 
 -- ==========================================================
 -- 💎 [RARITY SYSTEM & GAME DIRECTORY DATABASE LOADER]
--- Menggunakan game:GetService("ReplicatedStorage").Directory.Rarity
--- dan modul item di ReplicatedStorage.Directory.*
 -- ==========================================================
 local KNOWN_RARITIES = {
     "All Rarities",
@@ -250,7 +260,6 @@ local function LoadGameDirectoryRarities()
     end
 end
 
--- Eksekusi load awal
 LoadGameDirectoryRarities()
 
 
@@ -294,25 +303,32 @@ local LastGiftRequest = {
     Time = 0
 }
 
--- Otomatis resolve Target Username ke UserID jika diisi
-if Config.TargetPlayerName and Config.TargetPlayerName ~= "" and not Config.TargetPlayerId then
-    task.spawn(function()
-        pcall(function()
-            local found = Players:FindFirstChild(Config.TargetPlayerName)
-            if found then
-                Config.TargetPlayerId = found.UserId
-            else
-                local id = Players:GetUserIdFromNameAsync(Config.TargetPlayerName)
-                if id then
-                    Config.TargetPlayerId = id
-                end
-            end
-            if Config.TargetPlayerId then
-                print(string.format("[StealAnEgg] Auto-resolved Target '%s' -> UserID: %d", Config.TargetPlayerName, Config.TargetPlayerId))
-            end
-        end)
-    end)
+--- Resolves Target Player ID (Synchronous & Background)
+local function ResolveTargetId()
+    if Config.TargetPlayerId then return Config.TargetPlayerId end
+    if not Config.TargetPlayerName or Config.TargetPlayerName == "" then return nil end
+    
+    -- 1. Cek di server aktif
+    local found = FindPlayerByName(Config.TargetPlayerName)
+    if found then
+        Config.TargetPlayerId = found.UserId
+        print(string.format("[StealAnEgg] Target '%s' ditemukan di server -> UserID: %d", found.Name, found.UserId))
+        return found.UserId
+    end
+    
+    -- 2. Cek via Roblox API
+    local ok, id = pcall(function() return Players:GetUserIdFromNameAsync(Config.TargetPlayerName) end)
+    if ok and id then
+        Config.TargetPlayerId = id
+        print(string.format("[StealAnEgg] Target '%s' di-resolve via API -> UserID: %d", Config.TargetPlayerName, id))
+        return id
+    end
+    
+    return nil
 end
+
+-- Jalankan resolve awal
+task.spawn(ResolveTargetId)
 
 -- Cleanup handler
 getgenv().CancelStealAnEggTrade = function()
@@ -328,7 +344,6 @@ end
 
 local StealAnEggTrade = {}
 
---- Mencari RemoteFunction Gifting Send di ReplicatedStorage.Network
 function StealAnEggTrade.GetGiftingRemote()
     local network = ReplicatedStorage:FindFirstChild("Network")
     if network then
@@ -337,7 +352,6 @@ function StealAnEggTrade.GetGiftingRemote()
     return nil
 end
 
---- Mencari RemoteFunction Gifting Response (Accept/Decline) di ReplicatedStorage.Network
 function StealAnEggTrade.GetGiftingResponseRemote()
     local network = ReplicatedStorage:FindFirstChild("Network")
     if network then
@@ -346,7 +360,6 @@ function StealAnEggTrade.GetGiftingResponseRemote()
     return nil
 end
 
---- Mencari RemoteEvent Gifting Request (Incoming Request) di ReplicatedStorage.Network
 function StealAnEggTrade.GetGiftingRequestRemote()
     local network = ReplicatedStorage:FindFirstChild("Network")
     if network then
@@ -355,7 +368,6 @@ function StealAnEggTrade.GetGiftingRequestRemote()
     return nil
 end
 
---- Mendapatkan Rarity dari Tool secara akurat menggunakan ReplicatedStorage.Directory
 function StealAnEggTrade.GetToolRarity(tool)
     if not tool or not tool:IsA("Tool") then return "Normal" end
     
@@ -363,19 +375,16 @@ function StealAnEggTrade.GetToolRarity(tool)
         LoadGameDirectoryRarities()
     end
     
-    -- 1. Cek Attributes langsung pada Tool
     local attrRarity = tool:GetAttribute("Rarity") or tool:GetAttribute("Tier") or tool:GetAttribute("ItemRarity") or tool:GetAttribute("RarityName")
     if attrRarity and tostring(attrRarity) ~= "" then
         return tostring(attrRarity)
     end
     
-    -- 2. Cek Child Values
     local rVal = tool:FindFirstChild("Rarity") or tool:FindFirstChild("Tier")
     if rVal and rVal:IsA("ValueBase") and rVal.Value ~= "" then
         return tostring(rVal.Value)
     end
     
-    -- 3. Cek Database Modul Game (Directory.Rarity & Directory.*)
     local rawName = tool.Name
     local dispName = tostring(tool:GetAttribute("DisplayName") or ""):lower()
     local category = tostring(tool:GetAttribute("Category") or ""):lower()
@@ -399,7 +408,6 @@ function StealAnEggTrade.GetToolRarity(tool)
         return ItemRarityDatabase[rawName:lower()]
     end
     
-    -- 4. Fuzzy match dengan Known Rarities
     for _, r in ipairs(KNOWN_RARITIES) do
         if r ~= "All Rarities" and not r:find(",") then
             local rLow = r:lower()
@@ -412,7 +420,7 @@ function StealAnEggTrade.GetToolRarity(tool)
     return "Normal"
 end
 
---- Memegang / Equip Tool ke Character Player
+--- Memegang / Equip Tool ke Character Player dengan verifikasi & jeda replikasi
 function StealAnEggTrade.EquipTool(tool)
     if not tool or not tool:IsA("Tool") then 
         return false, "Objek yang diberikan bukan Tool" 
@@ -421,22 +429,41 @@ function StealAnEggTrade.EquipTool(tool)
     local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
     local humanoid = character:FindFirstChildOfClass("Humanoid")
     
+    -- Sudah dipegang
     if tool.Parent == character then
-        return true, "Tool sudah dipegang"
+        return true, "Tool sudah aktif di tangan"
     end
     
+    -- Lepas tool lain yang mungkin sedang dipegang
+    if humanoid then
+        humanoid:UnequipTools()
+        task.wait(0.08)
+    end
+    
+    -- Equip tool
     if humanoid and tool.Parent == LocalPlayer:FindFirstChild("Backpack") then
         humanoid:EquipTool(tool)
-        task.wait(0.25)
-        return tool.Parent == character, "Equipped via Humanoid"
     else
         tool.Parent = character
-        task.wait(0.25)
-        return tool.Parent == character, "Equipped via Parent"
+    end
+    
+    -- Tunggu sampai tool masuk ke character
+    local startT = tick()
+    while tool.Parent ~= character and (tick() - startT) < 1.0 do
+        task.wait(0.05)
+    end
+    
+    if tool.Parent == character then
+        -- Beri jeda agar server mencatat bahwa tool sedang dipegang
+        task.wait(0.2)
+        return true, "Tool berhasil dipegang"
+    else
+        tool.Parent = character
+        task.wait(0.2)
+        return tool.Parent == character, "Tool force-parented"
     end
 end
 
---- Mengambil informasi Attributes, Properties, dan Rarity dari Tool
 function StealAnEggTrade.GetToolInfo(tool)
     if not tool or not tool:IsA("Tool") then return nil end
     local name = tool.Name
@@ -463,7 +490,6 @@ function StealAnEggTrade.GetToolInfo(tool)
     }
 end
 
---- Mengambil semua Tool di Backpack & Character
 function StealAnEggTrade.GetAllTools()
     local tools = {}
     local backpack = LocalPlayer:FindFirstChild("Backpack")
@@ -488,7 +514,6 @@ function StealAnEggTrade.GetAllTools()
     return tools
 end
 
---- Memindai seluruh inventaris untuk statistik & pengelompokan (dengan Rarity)
 function StealAnEggTrade.ScanInventory()
     local tools = StealAnEggTrade.GetAllTools()
     local itemsByName = {}
@@ -520,19 +545,16 @@ function StealAnEggTrade.ScanInventory()
             itemsByName[groupKey].Count = itemsByName[groupKey].Count + 1
             table.insert(itemsByName[groupKey].Items, tool)
             
-            -- Track Mutations
             if info.BaseMutation and not mutationSet[info.BaseMutation] then
                 mutationSet[info.BaseMutation] = true
                 table.insert(mutations, info.BaseMutation)
             end
             
-            -- Track Rarities
             if info.Rarity and not raritySet[info.Rarity] then
                 raritySet[info.Rarity] = true
                 table.insert(rarities, info.Rarity)
             end
             
-            -- Format Dropdown lengkap dengan Rarity
             local optStr = string.format("%s [%s] (%s) - %.1f kg%s", info.DisplayName, info.BaseMutation, info.Rarity, info.Weight, info.Favorite and " ⭐" or "")
             table.insert(dropdownOptions, optStr)
         end
@@ -601,7 +623,6 @@ function StealAnEggTrade.MatchesFilter(tool, filterConfig)
     local info = StealAnEggTrade.GetToolInfo(tool)
     if not info then return false end
     
-    -- Filter Favorite
     if filterConfig.IgnoreFavorites and info.Favorite then
         return false
     end
@@ -609,7 +630,6 @@ function StealAnEggTrade.MatchesFilter(tool, filterConfig)
         return false
     end
     
-    -- Filter Nama Item / Category
     if filterConfig.FilterItem and filterConfig.FilterItem ~= "All Items" and filterConfig.FilterItem ~= "" then
         local targetName = filterConfig.FilterItem:lower()
         local matchesName = info.Name:lower():find(targetName, 1, true) ~= nil
@@ -620,26 +640,22 @@ function StealAnEggTrade.MatchesFilter(tool, filterConfig)
         end
     end
     
-    -- Filter Mutation
     if filterConfig.FilterMutation and filterConfig.FilterMutation ~= "All Mutations" and filterConfig.FilterMutation ~= "All" then
         if info.BaseMutation:lower() ~= filterConfig.FilterMutation:lower() then
             return false
         end
     end
     
-    -- Filter Rarity (Mendukung "Divine, Eternal, Secret")
     if not CheckRarityMatch(info.Rarity, filterConfig.FilterRarity) then
         return false
     end
     
-    -- Filter Minimum Weight (kg)
     if filterConfig.MinWeight and filterConfig.MinWeight > 0 then
         if info.Weight < filterConfig.MinWeight then
             return false
         end
     end
     
-    -- Filter Maximum Weight (kg)
     if filterConfig.MaxWeight and filterConfig.MaxWeight > 0 then
         if info.Weight > filterConfig.MaxWeight then
             return false
@@ -649,11 +665,11 @@ function StealAnEggTrade.MatchesFilter(tool, filterConfig)
     return true, info
 end
 
---- Mengirim Gift Tool ke Player Target
+--- Mengirim Gift Tool ke Player Target (Dilengkapi Dual Invoker & Error Resolver)
 function StealAnEggTrade.SendGift(targetPlayerId, tool)
-    targetPlayerId = targetPlayerId or Config.TargetPlayerId
-    if not targetPlayerId then
-        return false, "Target Player ID (UserId) belum ditentukan!"
+    local numericId = tonumber(targetPlayerId) or Config.TargetPlayerId or ResolveTargetId()
+    if not numericId then
+        return false, "Target Player belum ditentukan atau belum berada di server!"
     end
     
     if not tool then
@@ -663,35 +679,61 @@ function StealAnEggTrade.SendGift(targetPlayerId, tool)
         end
     end
     
-    if not tool or not tool:IsA("Tool") then
-        return false, "Tidak ada Tool yang dipegang / ditemukan!"
+    if not tool or not tool:IsA("Tool") or not tool.Parent then
+        return false, "Tidak ada Tool yang valid untuk dikirim!"
     end
     
+    local toolName = tool.Name
+    
+    -- 1. Pegang barangnya terlebih dahulu
     local equipped, equipMsg = StealAnEggTrade.EquipTool(tool)
     if not equipped then
         return false, "Gagal memegang Tool: " .. tostring(equipMsg)
     end
     
-    task.wait(0.15)
-    
+    -- 2. Dapatkan RemoteFunction Gifting
     local giftingRemote = StealAnEggTrade.GetGiftingRemote()
     if not giftingRemote then
         return false, "Remote 'Gifting: Send Request' tidak ditemukan di ReplicatedStorage.Network"
     end
     
-    local numericId = tonumber(targetPlayerId) or targetPlayerId
+    -- 3. Cek apakah target ada di server saat ini
+    local targetPlayerObj = Players:GetPlayerByUserId(numericId)
+    if not targetPlayerObj and Config.TargetPlayerName and Config.TargetPlayerName ~= "" then
+        targetPlayerObj = FindPlayerByName(Config.TargetPlayerName)
+    end
+    
+    print(string.format("[SendGift] Mencoba mengirim '%s' ke UserID: %s (Target In Server: %s)", 
+        toolName, tostring(numericId), targetPlayerObj and targetPlayerObj.Name or "TIDAK ADA DI SERVER"))
+    
+    -- 4. InvokeServer (Coba Numeric ID & Player Object)
     local success, result = pcall(function()
         return giftingRemote:InvokeServer(numericId)
     end)
     
-    if success then
+    if (not success or result == false) and targetPlayerObj then
+        local s2, r2 = pcall(function()
+            return giftingRemote:InvokeServer(targetPlayerObj)
+        end)
+        if s2 and r2 ~= false then
+            success = s2
+            result = r2
+        end
+    end
+    
+    print(string.format("[SendGift Hasil] Sukses: %s | Result: %s", tostring(success), tostring(result)))
+    
+    if success and result ~= false then
         return true, result
     else
-        return false, tostring(result)
+        local errMsg = tostring(result or "Server menolak pengiriman gift")
+        if not targetPlayerObj then
+            errMsg = errMsg .. " (Pastikan target berada di server yang sama!)"
+        end
+        return false, errMsg
     end
 end
 
---- Menerima (Accept) Permintaan Gift yang Masuk
 function StealAnEggTrade.AcceptGift(senderUserId, requestUid)
     local responseRemote = StealAnEggTrade.GetGiftingResponseRemote()
     if not responseRemote then
@@ -708,7 +750,6 @@ function StealAnEggTrade.AcceptGift(senderUserId, requestUid)
     return success, result
 end
 
---- Menolak (Decline) Permintaan Gift yang Masuk
 function StealAnEggTrade.DeclineGift(senderUserId, requestUid)
     local responseRemote = StealAnEggTrade.GetGiftingResponseRemote()
     if not responseRemote then
@@ -725,7 +766,6 @@ function StealAnEggTrade.DeclineGift(senderUserId, requestUid)
     return success, result
 end
 
---- Fungsi Teleportasi Server & Helper
 function StealAnEggTrade.GetJobId()
     return tostring(game.JobId)
 end
@@ -793,7 +833,7 @@ function StealAnEggTrade.SetTarget(targetUserIdOrUsername)
         print("[StealAnEgg API] Target UserId diset ke:", num)
         return true, num
     elseif type(targetUserIdOrUsername) == "string" and targetUserIdOrUsername ~= "" then
-        local foundPlayer = Players:FindFirstChild(targetUserIdOrUsername)
+        local foundPlayer = FindPlayerByName(targetUserIdOrUsername)
         if foundPlayer then
             Config.TargetPlayerId = foundPlayer.UserId
             print(string.format("[StealAnEgg API] Target Player '%s' -> UserID: %d", targetUserIdOrUsername, foundPlayer.UserId))
@@ -848,9 +888,10 @@ function StealAnEggTrade.SetFilter(filterTbl)
 end
 
 function StealAnEggTrade.GiftFilteredBatch()
-    if not Config.TargetPlayerId then
-        warn("[StealAnEgg API] Target Player belum diset!")
-        return false, "Target Player belum diset"
+    local targetId = Config.TargetPlayerId or ResolveTargetId()
+    if not targetId then
+        warn("[StealAnEgg API] Target Player belum diset / belum berada di server!")
+        return false, "Target Player belum diset / belum berada di server"
     end
     local tools = StealAnEggTrade.GetAllTools()
     local matched = {}
@@ -859,11 +900,16 @@ function StealAnEggTrade.GiftFilteredBatch()
             table.insert(matched, t)
         end
     end
+    
+    if #matched == 0 then
+        return false, "Tidak ada item di backpack yang cocok dengan filter saat ini!"
+    end
+    
     task.spawn(function()
         for _, tool in ipairs(matched) do
             if not tool.Parent then continue end
             local tName = tool.Name
-            local ok, err = StealAnEggTrade.SendGift(Config.TargetPlayerId, tool)
+            local ok, err = StealAnEggTrade.SendGift(targetId, tool)
             if ok then
                 TradeStats.TotalSent = TradeStats.TotalSent + 1
                 TradeStats.SuccessCount = TradeStats.SuccessCount + 1
@@ -885,14 +931,12 @@ function StealAnEggTrade.GetConfig()
     return Config
 end
 
--- Export global
 _G.StealAnEggTrade = StealAnEggTrade
 getgenv().StealAnEggTrade = StealAnEggTrade
 
 
 -- ==========================================================
 -- [SECTION 3] AUTO ACCEPT LISTENER (EXACT EVENT HANDLER)
--- Signature: Gifting: Request -> OnClientEvent(username, userId, itemName, requestUID)
 -- ==========================================================
 
 local LastRequestPara = nil
@@ -967,7 +1011,6 @@ function StealAnEggTrade.OnGiftRequestReceived(senderUsername, senderUserId, ite
     end
 end
 
--- Listener pada ReplicatedStorage.Network["Gifting: Request"]
 task.spawn(function()
     local network = ReplicatedStorage:WaitForChild("Network", 10)
     if not network then return end
@@ -999,7 +1042,8 @@ function StealAnEggTrade.StartAutoTradeLoop()
     isTradeLoopRunning = true
     task.spawn(function()
         while Config.AutoTradeLoop and getgenv().CurrentTradeScriptID == scriptId do
-            if Config.TargetPlayerId then
+            local targetId = Config.TargetPlayerId or ResolveTargetId()
+            if targetId then
                 local tools = StealAnEggTrade.GetAllTools()
                 for _, tool in ipairs(tools) do
                     if not Config.AutoTradeLoop then break end
@@ -1009,7 +1053,7 @@ function StealAnEggTrade.StartAutoTradeLoop()
                     end
                     
                     local tName = tool.Name
-                    local ok, err = StealAnEggTrade.SendGift(Config.TargetPlayerId, tool)
+                    local ok, err = StealAnEggTrade.SendGift(targetId, tool)
                     if ok then
                         TradeStats.TotalSent = TradeStats.TotalSent + 1
                         TradeStats.SuccessCount = TradeStats.SuccessCount + 1
@@ -1020,7 +1064,7 @@ function StealAnEggTrade.StartAutoTradeLoop()
                     task.wait(Config.DelayBetweenGifts)
                 end
             end
-            task.wait(0.5)
+            task.wait(1.0)
         end
         isTradeLoopRunning = false
     end)
@@ -1032,32 +1076,35 @@ function StealAnEggTrade.StartFilteredTradeLoop()
     isFilterLoopRunning = true
     task.spawn(function()
         while Config.AutoTradeFilterLoop and getgenv().CurrentTradeScriptID == scriptId do
-            if Config.TargetPlayerId then
+            local targetId = Config.TargetPlayerId or ResolveTargetId()
+            if targetId then
                 local tools = StealAnEggTrade.GetAllTools()
+                local matchedCount = 0
                 for _, tool in ipairs(tools) do
                     if not Config.AutoTradeFilterLoop then break end
                     
                     if StealAnEggTrade.MatchesFilter(tool, Config) then
+                        matchedCount = matchedCount + 1
                         local tName = tool.Name
-                        local ok, err = StealAnEggTrade.SendGift(Config.TargetPlayerId, tool)
+                        local ok, err = StealAnEggTrade.SendGift(targetId, tool)
                         if ok then
                             TradeStats.TotalSent = TradeStats.TotalSent + 1
                             TradeStats.SuccessCount = TradeStats.SuccessCount + 1
                             TradeStats.LastItemName = tName
                         else
                             TradeStats.FailCount = TradeStats.FailCount + 1
+                            print(string.format("[AutoTradeFilter Gagal] %s -> Error: %s", tName, tostring(err)))
                         end
                         task.wait(Config.DelayBetweenGifts)
                     end
                 end
             end
-            task.wait(0.5)
+            task.wait(1.0)
         end
         isFilterLoopRunning = false
     end)
 end
 
--- Jalankan loop otomatis jika diaktifkan di Profile
 if Config.AutoTradeLoop then
     StealAnEggTrade.StartAutoTradeLoop()
 end
@@ -1087,7 +1134,6 @@ if not Library then
     error("Gagal memuat Sigma UI Library! Pastikan executor Anda terhubung ke internet.")
 end
 
--- Helper Player List
 local function GetPlayerList()
     local playerNames = {}
     for _, p in ipairs(Players:GetPlayers()) do
@@ -1108,7 +1154,7 @@ local function GetUserIdFromSelection(selectionStr)
         return tonumber(idStr)
     end
     local nameOnly = selectionStr:split(" ")[1]
-    local foundPlayer = Players:FindFirstChild(nameOnly)
+    local foundPlayer = FindPlayerByName(nameOnly)
     if foundPlayer then
         return foundPlayer.UserId
     end
@@ -1204,7 +1250,8 @@ ActionSec:AddButton({
     Name = "🎁 Gift Barang yang Sedang Dipegang (1x)",
     Tooltip = "Memegang dan mengirim tool yang saat ini aktif di tangan"
 }, function()
-    if not Config.TargetPlayerId then
+    local targetId = Config.TargetPlayerId or ResolveTargetId()
+    if not targetId then
         Library:Notify({
             Title   = "Peringatan",
             Content = "Pilih atau Masukkan Target Player terlebih dahulu!",
@@ -1216,15 +1263,15 @@ ActionSec:AddButton({
     
     local character = LocalPlayer.Character
     local heldTool = character and character:FindFirstChildOfClass("Tool")
-    local itemName = heldTool and heldTool.Name or "Unknown Tool"
+    local itemName = heldTool and heldTool.Name or "Tool Aktif"
     
-    local ok, err = StealAnEggTrade.SendGift(Config.TargetPlayerId, heldTool)
+    local ok, err = StealAnEggTrade.SendGift(targetId, heldTool)
     if ok then
         TradeStats.TotalSent = TradeStats.TotalSent + 1
         TradeStats.SuccessCount = TradeStats.SuccessCount + 1
         TradeStats.LastItemName = itemName
         Library:Notify({
-            Title   = "Gift Terkirim!",
+            Title   = "Gift Terkirim! 🎁",
             Content = "Berhasil mengirim: " .. itemName,
             Type    = "Success",
             Duration = 3
@@ -1244,7 +1291,8 @@ ActionSec:AddButton({
     Name = "📦 Gift Semua Tool di Backpack (1x Loop)",
     Tooltip = "Memegang satu per satu lalu mengirim seluruh Tool yang ada di Backpack"
 }, function()
-    if not Config.TargetPlayerId then
+    local targetId = Config.TargetPlayerId or ResolveTargetId()
+    if not targetId then
         Library:Notify({
             Title   = "Peringatan",
             Content = "Pilih Target Player terlebih dahulu!",
@@ -1279,7 +1327,7 @@ ActionSec:AddButton({
             end
             
             local tName = tool.Name
-            local ok, err = StealAnEggTrade.SendGift(Config.TargetPlayerId, tool)
+            local ok, err = StealAnEggTrade.SendGift(targetId, tool)
             if ok then
                 TradeStats.TotalSent = TradeStats.TotalSent + 1
                 TradeStats.SuccessCount = TradeStats.SuccessCount + 1
@@ -1309,7 +1357,7 @@ ActionSec:AddToggle({
     if Value then
         Library:Notify({
             Title   = "Auto Trade Aktif",
-            Content = "Loop pengiriman aktif ke Target: " .. tostring(Config.TargetPlayerId or "Belum Diset"),
+            Content = "Loop pengiriman aktif ke Target: " .. tostring(Config.TargetPlayerId or Config.TargetPlayerName or "Belum Diset"),
             Type    = "Success",
             Duration = 3
         })
@@ -1485,7 +1533,8 @@ InvSec:AddButton({
     Name = "🎁 Gift Tool Terpilih (1x)",
     Tooltip = "Kirim tool yang dipilih di dropdown langsung ke Target Player"
 }, function()
-    if not Config.TargetPlayerId then
+    local targetId = Config.TargetPlayerId or ResolveTargetId()
+    if not targetId then
         Library:Notify({Title = "Peringatan", Content = "Tentukan Target Player terlebih dahulu di Tab ⚡!", Type = "Warning", Duration = 3})
         return
     end
@@ -1495,7 +1544,7 @@ InvSec:AddButton({
     end
     
     local toolName = Config.SelectedInvTool.Name
-    local ok, err = StealAnEggTrade.SendGift(Config.TargetPlayerId, Config.SelectedInvTool)
+    local ok, err = StealAnEggTrade.SendGift(targetId, Config.SelectedInvTool)
     if ok then
         TradeStats.TotalSent = TradeStats.TotalSent + 1
         TradeStats.SuccessCount = TradeStats.SuccessCount + 1
@@ -1554,7 +1603,6 @@ local MutationDropdown = FilterSec:AddDropdown({
     Config.FilterMutation = selected or "All Mutations"
 end)
 
--- Dropdown Filter Rarity (Termasuk opsi "Divine, Eternal, Secret")
 local RarityDropdown = FilterSec:AddDropdown({
     Name = "Filter Berdasarkan Rarity",
     Options = initialScan.Rarities,
@@ -1565,10 +1613,9 @@ local RarityDropdown = FilterSec:AddDropdown({
     Config.FilterRarity = selected or "All Rarities"
 end)
 
--- Input Custom Multi-Rarity
 FilterSec:AddInput({
     Name = "✏️ Custom Multi-Rarity Filter (Pisahkan Koma)",
-    Placeholder = Config.FilterRarity or "Cth: Divine, Eternal, Secret",
+    Placeholder = Config.FilterRarity or "Cth: Divine, Eternal, Secret, Mythical",
     Tooltip = "Ketik beberapa rarity sekaligus yang dipisahkan koma (Cth: Divine, Eternal, Secret)"
 }, function(text)
     if text and text ~= "" then
@@ -1695,11 +1742,12 @@ task.spawn(function()
             
             local minWStr = Config.MinWeight > 0 and string.format("%.2f Juta (%s kg)", Config.MinWeight / 1000000, formatNumber(Config.MinWeight)) or "Bebas"
             local maxWStr = Config.MaxWeight > 0 and string.format("%.2f Juta (%s kg)", Config.MaxWeight / 1000000, formatNumber(Config.MaxWeight)) or "Bebas"
+            local targetDisplay = tostring(Config.TargetPlayerId or Config.TargetPlayerName or "Belum Diset")
             
             local statusDesc = string.format("Item Cocok: %d dari %d Tool\nTarget: %s\nItem: %s | Mutasi: %s\nRarity: %s\nMin Berat: %s | Max: %s",
                 matchCount,
                 #tools,
-                tostring(Config.TargetPlayerId or "Belum Diset"),
+                targetDisplay,
                 tostring(Config.FilterItem),
                 tostring(Config.FilterMutation),
                 tostring(Config.FilterRarity),
@@ -1778,7 +1826,6 @@ StatsSec:AddButton({
     })
 end)
 
--- Background thread updater untuk Tab Stats
 task.spawn(function()
     while getgenv().CurrentTradeScriptID == scriptId do
         pcall(function()
@@ -1802,7 +1849,6 @@ local ServerInfoSec = ServerTab:AddSection("Informasi Server Saat Ini")
 local ServerJobIdPara = ServerInfoSec:AddParagraph("Job ID Server", tostring(game.JobId))
 local ServerPlayerPara = ServerInfoSec:AddParagraph("Jumlah Player", string.format("%d / %d Players", #Players:GetPlayers(), Players.MaxPlayers))
 
--- Real-time updater informasi server
 task.spawn(function()
     while getgenv().CurrentTradeScriptID == scriptId do
         pcall(function()
