@@ -2,7 +2,7 @@
 -- STEAL AN EGG - AUTO TRADE & GIFTING SYSTEM (SIGMA UI V4)
 -- Game: Steal an Egg (Roblox)
 -- Framework: Sigma UI Library - V4 Ultimate Edition
--- Features: Auto Gifting, Backpack Scanner, Filtered Auto Trade
+-- Features: Auto Gifting, Backpack Scanner, Filtered Trade, Auto Accept
 -- ==========================================================
 
 -- =========================================================
@@ -45,11 +45,20 @@ end
 
 local StealAnEggTrade = {}
 
---- Mencari RemoteFunction Gifting di ReplicatedStorage.Network
+--- Mencari RemoteFunction Gifting Send di ReplicatedStorage.Network
 function StealAnEggTrade.GetGiftingRemote()
     local network = ReplicatedStorage:FindFirstChild("Network")
     if network then
         return network:FindFirstChild("Gifting: Send Request")
+    end
+    return nil
+end
+
+--- Mencari RemoteFunction Gifting Response (Accept/Decline) di ReplicatedStorage.Network
+function StealAnEggTrade.GetGiftingResponseRemote()
+    local network = ReplicatedStorage:FindFirstChild("Network")
+    if network then
+        return network:FindFirstChild("Gifting: Response")
     end
     return nil
 end
@@ -290,6 +299,43 @@ function StealAnEggTrade.SendGift(targetPlayerId, tool)
     end
 end
 
+--- Menerima (Accept) Permintaan Gift yang Masuk
+-- @param senderUserId UserID player pengirim gift
+-- @param requestUid UID dari gift request yang diterima
+-- @return boolean (success), any (result/error)
+function StealAnEggTrade.AcceptGift(senderUserId, requestUid)
+    local responseRemote = StealAnEggTrade.GetGiftingResponseRemote()
+    if not responseRemote then
+        return false, "Remote 'Gifting: Response' tidak ditemukan di ReplicatedStorage.Network"
+    end
+    
+    local numericId = tonumber(senderUserId) or senderUserId
+    local uidStr = tostring(requestUid)
+    
+    local success, result = pcall(function()
+        return responseRemote:InvokeServer(numericId, uidStr, true)
+    end)
+    
+    return success, result
+end
+
+--- Menolak (Decline) Permintaan Gift yang Masuk
+function StealAnEggTrade.DeclineGift(senderUserId, requestUid)
+    local responseRemote = StealAnEggTrade.GetGiftingResponseRemote()
+    if not responseRemote then
+        return false, "Remote 'Gifting: Response' tidak ditemukan"
+    end
+    
+    local numericId = tonumber(senderUserId) or senderUserId
+    local uidStr = tostring(requestUid)
+    
+    local success, result = pcall(function()
+        return responseRemote:InvokeServer(numericId, uidStr, false)
+    end)
+    
+    return success, result
+end
+
 -- Export global
 _G.StealAnEggTrade = StealAnEggTrade
 getgenv().StealAnEggTrade = StealAnEggTrade
@@ -321,6 +367,9 @@ local Config = {
     TargetPlayerId = nil,
     AutoTradeLoop = false,
     AutoTradeFilterLoop = false,
+    AutoAcceptGift = false,
+    OnlyAcceptTarget = false,
+    AcceptDelay = 0.1,
     IgnoreFavorites = true,
     OnlyFavorites = false,
     DelayBetweenGifts = 0.5,
@@ -336,6 +385,7 @@ local TradeStats = {
     TotalSent = 0,
     SuccessCount = 0,
     FailCount = 0,
+    AcceptedCount = 0,
     LastItemName = "-"
 }
 
@@ -343,6 +393,7 @@ local TradeStats = {
 getgenv().CancelStealAnEggTrade = function()
     Config.AutoTradeLoop = false
     Config.AutoTradeFilterLoop = false
+    Config.AutoAcceptGift = false
 end
 
 -- Helper Player List
@@ -375,7 +426,151 @@ end
 
 
 -- ==========================================================
--- [SECTION 3] MEMBUAT WINDOW & KOMPONEN SIGMA UI
+-- [SECTION 3] AUTO ACCEPT LISTENER & BACKEND HANDLER
+-- ==========================================================
+
+--- Parser untuk mendeteksi sender UserId & request UID dari argumen remote
+local function HandleIncomingGiftPayload(remoteName, ...)
+    local args = {...}
+    local sId, reqUid
+    
+    -- Pola 1: args = { senderUserId, requestUid, ... }
+    if type(args[1]) == "number" and type(args[2]) == "string" then
+        sId = args[1]
+        reqUid = args[2]
+    -- Pola 2: args[1] adalah tabel { [1] = userId, [2] = uid } atau { Sender = ..., UID = ... }
+    elseif type(args[1]) == "table" then
+        local tbl = args[1]
+        sId = tbl.Sender or tbl.SenderId or tbl.UserId or tbl.From or tbl[1]
+        reqUid = tbl.UID or tbl.Uid or tbl.RequestUID or tbl.Id or tbl[2]
+    -- Pola 3: Pencarian nilai number & hash string dalam varargs
+    else
+        for _, arg in ipairs(args) do
+            if type(arg) == "number" and tostring(arg):len() >= 5 and not sId then
+                sId = arg
+            elseif type(arg) == "string" and arg:len() >= 16 and not reqUid then
+                reqUid = arg
+            end
+        end
+    end
+    
+    if sId and reqUid then
+        -- Cek Whitelist Target jika aktif
+        if Config.OnlyAcceptTarget and Config.TargetPlayerId then
+            if tonumber(sId) ~= tonumber(Config.TargetPlayerId) then
+                return
+            end
+        end
+        
+        task.wait(Config.AcceptDelay or 0.1)
+        
+        local ok, err = StealAnEggTrade.AcceptGift(sId, reqUid)
+        if ok then
+            TradeStats.AcceptedCount = TradeStats.AcceptedCount + 1
+            Library:Notify({
+                Title   = "Gift Diterima! 📥",
+                Content = "Berhasil auto accept gift dari UserID: " .. tostring(sId),
+                Type    = "Success",
+                Duration = 3
+            })
+        end
+    end
+end
+
+-- Listener pada Folder ReplicatedStorage.Network
+task.spawn(function()
+    local network = ReplicatedStorage:WaitForChild("Network", 10)
+    if not network then return end
+    
+    for _, remote in ipairs(network:GetChildren()) do
+        if remote:IsA("RemoteEvent") then
+            remote.OnClientEvent:Connect(function(...)
+                if Config.AutoAcceptGift then
+                    pcall(HandleIncomingGiftPayload, remote.Name, ...)
+                end
+            end)
+        elseif remote:IsA("RemoteFunction") and remote.Name ~= "Gifting: Send Request" and remote.Name ~= "Gifting: Response" then
+            pcall(function()
+                local originalCallback = remote.OnClientInvoke
+                remote.OnClientInvoke = function(...)
+                    local args = {...}
+                    if Config.AutoAcceptGift then
+                        task.spawn(function()
+                            pcall(HandleIncomingGiftPayload, remote.Name, table.unpack(args))
+                        end)
+                    end
+                    if originalCallback then
+                        return originalCallback(...)
+                    end
+                    return true
+                end
+            end)
+        end
+    end
+    
+    network.ChildAdded:Connect(function(child)
+        if child:IsA("RemoteEvent") then
+            child.OnClientEvent:Connect(function(...)
+                if Config.AutoAcceptGift then
+                    pcall(HandleIncomingGiftPayload, child.Name, ...)
+                end
+            end)
+        end
+    end)
+end)
+
+-- Listener GUI Dialog Prompt Scanner di PlayerGui
+task.spawn(function()
+    local playerGui = LocalPlayer:WaitForChild("PlayerGui", 10)
+    if not playerGui then return end
+    
+    local function checkAndClickAcceptButton(descendant)
+        if not Config.AutoAcceptGift then return end
+        if descendant:IsA("TextButton") or descendant:IsA("ImageButton") then
+            local btnName = descendant.Name:lower()
+            local btnText = (descendant:IsA("TextButton") and descendant.Text:lower()) or ""
+            
+            local isAccept = btnName:find("accept") or btnName:find("terima") or btnName:find("confirm") 
+                          or btnText:find("accept") or btnText:find("terima") or btnText:find("yes")
+            
+            if isAccept then
+                local p = descendant.Parent
+                local pName = p and p.Name:lower() or ""
+                local gpName = p and p.Parent and p.Parent.Name:lower() or ""
+                
+                if pName:find("gift") or gpName:find("gift") or pName:find("trade") or gpName:find("trade") or pName:find("prompt") then
+                    task.wait(Config.AcceptDelay or 0.1)
+                    pcall(function()
+                        if firesignal then
+                            firesignal(descendant.MouseButton1Click)
+                        elseif getconnections then
+                            for _, c in ipairs(getconnections(descendant.MouseButton1Click)) do
+                                c:Fire()
+                            end
+                        end
+                    end)
+                end
+            end
+        end
+    end
+    
+    playerGui.DescendantAdded:Connect(checkAndClickAcceptButton)
+    
+    while getgenv().CurrentTradeScriptID == scriptId do
+        if Config.AutoAcceptGift then
+            pcall(function()
+                for _, child in ipairs(playerGui:GetDescendants()) do
+                    checkAndClickAcceptButton(child)
+                end
+            end)
+        end
+        task.wait(0.5)
+    end
+end)
+
+
+-- ==========================================================
+-- [SECTION 4] MEMBUAT WINDOW & KOMPONEN SIGMA UI
 -- ==========================================================
 
 local Window = Library:CreateWindow({
@@ -388,7 +583,7 @@ local Window = Library:CreateWindow({
 })
 
 -- ---------------------------------------------------------
--- TAB 1: ⚡ AUTO TRADE (MAIN TAB)
+-- TAB 1: ⚡ AUTO TRADE & RECEIVER (MAIN TAB)
 -- ---------------------------------------------------------
 local MainTab = Window:MakeTab("⚡")
 
@@ -469,8 +664,8 @@ TargetSec:AddInput({
 end)
 
 
--- Section 2: Gifting Actions
-local ActionSec = MainTab:AddSection("Aksi Quick Trade / Gift")
+-- Section 2: Gifting Actions (Pengirim / Gifter)
+local ActionSec = MainTab:AddSection("Aksi Quick Trade / Gift (Pengirim)")
 
 ActionSec:AddButton({
     Name = "🎁 Gift Barang yang Sedang Dipegang (1x)",
@@ -624,8 +819,69 @@ ActionSec:AddToggle({
 end)
 
 
+-- Section 3: 📥 AUTO ACCEPT GIFT (PENERIMA / RECEIVER)
+local ReceiveSec = MainTab:AddSection("📥 Auto Accept Gift (Penerima)")
+
+local ReceiveStatusPara = ReceiveSec:AddParagraph("Status Auto Accept", "Auto Accept: Nonaktif (OFF)")
+
+ReceiveSec:AddToggle({
+    Name = "⚡ Auto Accept Semua Permintaan Gift Otomatis",
+    Default = false,
+    Flag = "AutoAcceptToggle",
+    Tooltip = "Otomatis menerima gift request dari player lain tanpa perlu klik manual"
+}, function(Value)
+    Config.AutoAcceptGift = Value
+    if Value then
+        ReceiveStatusPara:Set("Status Auto Accept", "Status: AKTIF (Menerima Otomatis) 🟢")
+        Library:Notify({
+            Title   = "Auto Accept Aktif",
+            Content = "Setiap gift yang masuk akan diterima otomatis!",
+            Type    = "Success",
+            Duration = 3
+        })
+    else
+        ReceiveStatusPara:Set("Status Auto Accept", "Status: NONAKTIF (OFF) 🔴")
+        Library:Notify({
+            Title   = "Auto Accept Nonaktif",
+            Content = "Auto accept gift telah dimatikan.",
+            Type    = "Info",
+            Duration = 2.5
+        })
+    end
+end)
+
+ReceiveSec:AddToggle({
+    Name = "🔒 Hanya Terima Dari Target Player (Whitelist)",
+    Default = false,
+    Flag = "WhitelistTargetToggle",
+    Tooltip = "Jika aktif, hanya menerima gift dari UserID Target Player yang dipilih"
+}, function(Value)
+    Config.OnlyAcceptTarget = Value
+    if Value then
+        Library:Notify({
+            Title   = "Whitelist Aktif",
+            Content = "Hanya menerima gift dari: " .. tostring(Config.TargetPlayerId or "Target Belum Diset"),
+            Type    = "Info",
+            Duration = 3
+        })
+    end
+end)
+
+ReceiveSec:AddSlider({
+    Name = "⏱️ Jeda Auto Accept (Detik)",
+    Min = 0,
+    Max = 2.0,
+    Default = 0.1,
+    Step = 0.1,
+    Flag = "AcceptDelaySlider",
+    Tooltip = "Waktu tunggu sebelum merespon accept gift"
+}, function(val)
+    Config.AcceptDelay = val
+end)
+
+
 -- ---------------------------------------------------------
--- TAB 2: 🎒 BACKPACK & INVENTORY SCANNER (NEW TAB)
+-- TAB 2: 🎒 BACKPACK & INVENTORY SCANNER
 -- ---------------------------------------------------------
 local InvTab = Window:MakeTab("🎒")
 local InvSec = InvTab:AddSection("Live Inventory / Backpack")
@@ -735,7 +991,7 @@ end)
 
 
 -- ---------------------------------------------------------
--- TAB 3: 🎯 AUTO TRADE BY FILTER (NEW TAB)
+-- TAB 3: 🎯 AUTO TRADE BY FILTER
 -- ---------------------------------------------------------
 local FilterTab = Window:MakeTab("🎯")
 local FilterSec = FilterTab:AddSection("Kriteria Filter Auto Trade")
@@ -993,6 +1249,7 @@ local StatsTab = Window:MakeTab("📊")
 local StatsSec = StatsTab:AddSection("Statistik Transaksi Gifting")
 
 local TotalSentPara = StatsSec:AddParagraph("Total Terkirim", "0 Item")
+local TotalAcceptedPara = StatsSec:AddParagraph("Total Diterima (Accept)", "0 Item Diterima 📥")
 local SuccessPara   = StatsSec:AddParagraph("Status Sukses", "0 Sukses")
 local FailPara      = StatsSec:AddParagraph("Status Gagal", "0 Gagal")
 local LastItemPara  = StatsSec:AddParagraph("Item Terakhir", "-")
@@ -1004,6 +1261,7 @@ StatsSec:AddButton({
     TradeStats.TotalSent = 0
     TradeStats.SuccessCount = 0
     TradeStats.FailCount = 0
+    TradeStats.AcceptedCount = 0
     TradeStats.LastItemName = "-"
     Library:Notify({
         Title   = "Stats Reset",
@@ -1017,7 +1275,8 @@ end)
 task.spawn(function()
     while getgenv().CurrentTradeScriptID == scriptId do
         pcall(function()
-            TotalSentPara:Set("Total Terkirim", tostring(TradeStats.TotalSent) .. " Item")
+            TotalSentPara:Set("Total Terkirim", tostring(TradeStats.TotalSent) .. " Item Terkirim")
+            TotalAcceptedPara:Set("Total Diterima (Accept)", tostring(TradeStats.AcceptedCount) .. " Gift Diterima 📥")
             SuccessPara:Set("Status Sukses", tostring(TradeStats.SuccessCount) .. " Transaksi Sukses")
             FailPara:Set("Status Gagal", tostring(TradeStats.FailCount) .. " Gagal")
             LastItemPara:Set("Item Terakhir", tostring(TradeStats.LastItemName))
@@ -1028,7 +1287,7 @@ end)
 
 Library:Notify({
     Title   = "Sigma Hub Loaded!",
-    Content = "Steal An Egg Auto Trade siap digunakan.",
+    Content = "Steal An Egg Auto Trade & Accept siap digunakan.",
     Type    = "Success",
     Duration = 3.5
 })
