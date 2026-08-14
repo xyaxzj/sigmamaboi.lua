@@ -448,47 +448,117 @@ end
 
 local StealAnEggTrade = {}
 
-function StealAnEggTrade.GetGiftingRemote()
-    local network = ReplicatedStorage:FindFirstChild("Network")
-    if network then
-        return network:FindFirstChild("Gifting: Send Request")
+-- ⚡ Caching Remotes untuk Eksekusi Cepat 0ms
+local CachedRemotes = {
+    Network = nil,
+    GiftingSend = nil,
+    GiftingResponse = nil,
+    GiftingRequest = nil,
+    SellAsset = nil
+}
+
+local function GetNetworkFolder()
+    if CachedRemotes.Network and CachedRemotes.Network.Parent then
+        return CachedRemotes.Network
     end
-    return nil
+    CachedRemotes.Network = ReplicatedStorage:FindFirstChild("Network") or ReplicatedStorage:WaitForChild("Network", 5)
+    return CachedRemotes.Network
+end
+
+function StealAnEggTrade.GetGiftingRemote()
+    if CachedRemotes.GiftingSend and CachedRemotes.GiftingSend.Parent then return CachedRemotes.GiftingSend end
+    local net = GetNetworkFolder()
+    CachedRemotes.GiftingSend = net and net:FindFirstChild("Gifting: Send Request")
+    return CachedRemotes.GiftingSend
 end
 
 function StealAnEggTrade.GetGiftingResponseRemote()
-    local network = ReplicatedStorage:FindFirstChild("Network")
-    if network then
-        return network:FindFirstChild("Gifting: Response")
-    end
-    return nil
+    if CachedRemotes.GiftingResponse and CachedRemotes.GiftingResponse.Parent then return CachedRemotes.GiftingResponse end
+    local net = GetNetworkFolder()
+    CachedRemotes.GiftingResponse = net and net:FindFirstChild("Gifting: Response")
+    return CachedRemotes.GiftingResponse
 end
 
 function StealAnEggTrade.GetGiftingRequestRemote()
-    local network = ReplicatedStorage:FindFirstChild("Network")
-    if network then
-        return network:FindFirstChild("Gifting: Request")
-    end
-    return nil
+    if CachedRemotes.GiftingRequest and CachedRemotes.GiftingRequest.Parent then return CachedRemotes.GiftingRequest end
+    local net = GetNetworkFolder()
+    CachedRemotes.GiftingRequest = net and net:FindFirstChild("Gifting: Request")
+    return CachedRemotes.GiftingRequest
 end
 
--- Helper Ekstraksi Berat dari Nama Tool jika attribute tidak ada
+local function GetSellRemote()
+    if CachedRemotes.SellAsset and CachedRemotes.SellAsset.Parent then return CachedRemotes.SellAsset end
+    local net = GetNetworkFolder()
+    CachedRemotes.SellAsset = net and (net:FindFirstChild("AssetInventory: SellAsset") or net:WaitForChild("AssetInventory: SellAsset", 3))
+    return CachedRemotes.SellAsset
+end
+
+-- Helper Ekstraksi & Parsing Berat (kg) dari Nama Item atau String Atribut
 local function ExtractWeightFromName(toolName)
     if not toolName then return 0 end
-    local wStr = toolName:match("%(([%d%.,]+)%s*[kK][gG]%)") or toolName:match("%(([%d%.,]+)%)")
-    if wStr then
-        if wStr:find(",") and wStr:find("%.") then
-            wStr = wStr:gsub(",", "")
-        elseif wStr:find(",") and not wStr:find("%.") then
-            if wStr:match(",%d%d%d$") or wStr:match(",%d%d%d,") then
-                wStr = wStr:gsub(",", "")
-            else
-                wStr = wStr:gsub(",", ".")
-            end
-        end
-        return tonumber(wStr) or 0
+    local str = tostring(toolName)
+    
+    -- 1. Pola pencocokan: (100k kg), [2.5M kg], 100k kg, (1,050 kg), [500k], (1.2M), dll.
+    local wStr = str:match("%(([%d%.,%a]+)%s*[kK][gG]%)") 
+        or str:match("%[([%d%.,%a]+)%s*[kK][gG]%]")
+        or str:match("([%d%.,%a]+)%s*[kK][gG]")
+        or str:match("%(([%d%.,%a]+)%)")
+        or str:match("%[([%d%.,%a]+)%]")
+        
+    if not wStr then
+        wStr = str
     end
-    return 0
+    
+    local raw = wStr:lower():gsub("%s+", ""):gsub("kg$", "")
+    if raw == "" then return 0 end
+    
+    -- Cek suffix Triliun (T)
+    if raw:find("t") then
+        local num = tonumber((raw:gsub("triliun", ""):gsub("t", ""):gsub(",", ".")))
+        return num and (num * 1e12) or 0
+    end
+    -- Cek suffix Miliar / Billion (B)
+    if raw:find("b") or raw:find("miliar") or raw:find("billion") then
+        local num = tonumber((raw:gsub("billion", ""):gsub("miliar", ""):gsub("b", ""):gsub(",", ".")))
+        return num and (num * 1e9) or 0
+    end
+    -- Cek suffix Juta / Million (M / JT)
+    if raw:find("m") or raw:find("juta") or raw:find("jt") or raw:find("million") then
+        local num = tonumber((raw:gsub("million", ""):gsub("juta", ""):gsub("jt", ""):gsub("m", ""):gsub(",", ".")))
+        return num and (num * 1e6) or 0
+    end
+    -- Cek suffix Ribu / Thousand (K / RB)
+    if raw:find("k") or raw:find("ribu") or raw:find("rb") or raw:find("thousand") then
+        local num = tonumber((raw:gsub("thousand", ""):gsub("ribu", ""):gsub("rb", ""):gsub("k", ""):gsub(",", ".")))
+        return num and (num * 1e3) or 0
+    end
+    
+    -- Angka murni dengan koma/titik ribuan (Cth: 1,070.25 atau 1.070,25 atau 250000)
+    if raw:find(",") and raw:find("%.") then
+        raw = raw:gsub(",", "")
+    elseif raw:find(",") and not raw:find("%.") then
+        if raw:match(",%d%d%d$") or raw:match(",%d%d%d,") then
+            raw = raw:gsub(",", "")
+        else
+            raw = raw:gsub(",", ".")
+        end
+    end
+    
+    local finalNum = tonumber(raw)
+    return finalNum or 0
+end
+
+local function ParseWeightValue(val, itemName)
+    if type(val) == "number" and val > 0 then
+        return val
+    end
+    if type(val) == "string" and val ~= "" then
+        local extracted = ExtractWeightFromName(val)
+        if extracted and extracted > 0 then
+            return extracted
+        end
+    end
+    return ExtractWeightFromName(itemName) or 0
 end
 
 -- Helper Format PerSecond / Income
@@ -781,14 +851,14 @@ end
 
 function StealAnEggTrade.EquipTool(tool)
     if not tool or not tool:IsA("Tool") then 
-        return false, "Objek yang diberikan bukan Tool" 
+        return false, "Objek yang diberikan bukan Item yang valid" 
     end
     
     local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
     local humanoid = character:FindFirstChildOfClass("Humanoid")
     
     if tool.Parent == character then
-        return true, "Tool sudah aktif di tangan"
+        return true, "Item sudah aktif di tangan"
     end
     
     if humanoid then
@@ -809,18 +879,26 @@ function StealAnEggTrade.EquipTool(tool)
     
     if tool.Parent == character then
         task.wait(0.2)
-        return true, "Tool berhasil dipegang"
+        return true, "Item berhasil dipegang"
     else
         tool.Parent = character
         task.wait(0.2)
-        return tool.Parent == character, "Tool force-parented"
+        return tool.Parent == character, "Item force-parented"
     end
 end
 
+-- ⚡ Cache Objek Tool Info (Weak Table untuk Mencegah Memory Leak & Re-evaluasi Berulang)
+local ToolInfoCache = setmetatable({}, { __mode = "k" })
+
 function StealAnEggTrade.GetToolInfo(tool)
     if not tool or not tool:IsA("Tool") or IsIgnoredTool(tool) then return nil end
-    local name = tool.Name
     
+    local cached = ToolInfoCache[tool]
+    if cached and cached.Instance == tool and tool.Parent ~= nil then
+        return cached
+    end
+    
+    local name = tool.Name
     local cfg = tool:FindFirstChild("Configuration") or tool:FindFirstChild("Config") or tool:FindFirstChild("Settings")
     
     -- Display Name (Cth: "Unicorn", "El Maja")
@@ -852,12 +930,16 @@ function StealAnEggTrade.GetToolInfo(tool)
         end
     end
     
-    -- Weight (Cth: 1070.25 kg, 250481 kg)
-    local weight = tool:GetAttribute("Weight")
-        or (cfg and (cfg:GetAttribute("weight") or cfg:GetAttribute("Weight")))
-        or ExtractWeightFromName(name)
-        or (cfg and cfg:GetAttribute("scale"))
-        or 0
+    -- Weight (Cth: 1070.25 kg, 250481 kg, 100k kg, 2.5M kg)
+    local rawWeight = tool:GetAttribute("Weight")
+        or tool:GetAttribute("weight")
+        or tool:GetAttribute("EggWeight")
+        or tool:GetAttribute("PetWeight")
+        or (cfg and (cfg:GetAttribute("weight") or cfg:GetAttribute("Weight") or cfg:GetAttribute("baseWeight") or cfg:GetAttribute("BaseWeight")))
+        or (tool:FindFirstChild("Weight") and tool.Weight.Value)
+        or (cfg and cfg:FindFirstChild("Weight") and cfg.Weight.Value)
+        
+    local weight = ParseWeightValue(rawWeight, name)
         
     -- PerSecond / Income (Deep Attribute Check)
     local perSecond = 0
@@ -925,7 +1007,7 @@ function StealAnEggTrade.GetToolInfo(tool)
         optStr = optStr .. " ⭐"
     end
     
-    return {
+    local info = {
         Instance = tool,
         Name = name,
         DisplayName = tostring(dispName),
@@ -944,6 +1026,9 @@ function StealAnEggTrade.GetToolInfo(tool)
         ColorSeed = colorSeed,
         OptionString = optStr
     }
+    
+    ToolInfoCache[tool] = info
+    return info
 end
 
 function StealAnEggTrade.GetAllTools()
@@ -1015,10 +1100,17 @@ function StealAnEggTrade.ScanInventory(sortMethod, searchKeyword, minIncome)
                 favoriteCount = favoriteCount + 1
             end
             
+            -- 1. Item Value Tertinggi (Income / PerSecond Paling Gede)
+            if not bestValuePet or info.PerSecond > bestValuePet.PerSecond or (info.PerSecond == bestValuePet.PerSecond and info.RarityRank > bestValuePet.RarityRank) or (info.PerSecond == bestValuePet.PerSecond and info.RarityRank == bestValuePet.RarityRank and info.Weight > bestValuePet.Weight) then
+                bestValuePet = info
+            end
+            
+            -- 2. Item Tier Tertinggi (Berdasarkan Rarity Rank)
             if not bestPet or info.RarityRank > bestPet.RarityRank or (info.RarityRank == bestPet.RarityRank and info.PerSecond > bestPet.PerSecond) then
                 bestPet = info
             end
             
+            -- 3. Item Terberat
             if not heaviestPet or info.Weight > heaviestPet.Weight then
                 heaviestPet = info
             end
@@ -1128,40 +1220,47 @@ function StealAnEggTrade.ScanInventory(sortMethod, searchKeyword, minIncome)
         TotalWeight = totalWeight,
         TotalIncome = totalIncome,
         FavoriteCount = favoriteCount,
-        BestPet = bestPet,
+        BestValuePet = bestValuePet or bestPet,
+        BestPet = bestValuePet or bestPet,
+        BestTierPet = bestPet,
         HeaviestPet = heaviestPet,
         DropdownOptions = dropdownOptions
     }
 end
 
-local function CheckRarityMatch(itemRarity, filterRarity)
+-- ⚡ Fast O(1) Set-Based Multi-Rarity Matching Cache
+local RaritySetCache = {}
+local function GetRaritySet(filterRarity)
     if not filterRarity or filterRarity == "All Rarities" or filterRarity == "All" or filterRarity == "" then
-        return true
+        return nil
     end
     
-    local iRarityClean = tostring(itemRarity):lower():gsub("%s+", "")
+    local key = type(filterRarity) == "table" and table.concat(filterRarity, ",") or tostring(filterRarity)
+    if RaritySetCache[key] then
+        return RaritySetCache[key]
+    end
     
+    local set = {}
     if type(filterRarity) == "table" then
         for _, r in ipairs(filterRarity) do
-            if tostring(r):lower():gsub("%s+", "") == iRarityClean then
-                return true
-            end
+            local clean = tostring(r):lower():gsub("%s+", "")
+            if clean ~= "" then set[clean] = true end
         end
-        return false
-    end
-    
-    local filterStr = tostring(filterRarity):lower()
-    if filterStr:find(",") then
-        for part in string.gmatch(filterStr, "[^,]+") do
-            local cleanPart = part:gsub("%s+", "")
-            if cleanPart == iRarityClean then
-                return true
-            end
+    else
+        for part in string.gmatch(tostring(filterRarity):lower(), "[^,]+") do
+            local clean = part:gsub("%s+", "")
+            if clean ~= "" then set[clean] = true end
         end
-        return false
     end
-    
-    return filterStr:gsub("%s+", "") == iRarityClean
+    RaritySetCache[key] = set
+    return set
+end
+
+local function CheckRarityMatch(itemRarity, filterRarity)
+    local set = GetRaritySet(filterRarity)
+    if not set then return true end
+    local iClean = tostring(itemRarity or ""):lower():gsub("%s+", "")
+    return set[iClean] == true
 end
 
 function StealAnEggTrade.MatchesFilter(tool, filterConfig)
@@ -2406,12 +2505,12 @@ local InvSec = InvTab:AddSection("🎒 Penjelajah & Manajemen Inventaris")
 
 local initialScan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch)
 local InvDropdown = nil
-local SelectedToolCardPara = nil
+local SelectedItemCardPara = nil
 
-local function UpdateToolCard(info)
-    if not SelectedToolCardPara then return end
+local function UpdateItemCard(info)
+    if not SelectedItemCardPara then return end
     if not info then
-        SelectedToolCardPara:Set("🎴 Detail Item Terpilih", "Pilih Item dari dropdown untuk melihat detail lengkap.")
+        SelectedItemCardPara:Set("🎴 Detail Item Terpilih", "Pilih Item dari dropdown untuk melihat detail lengkap.")
         return
     end
     
@@ -2432,8 +2531,10 @@ local function UpdateToolCard(info)
         info.Favorite and "⭐ Favorit" or "⚪ Biasa",
         inChar and "✋ Di Tangan Karakter" or "🎒 Di Dalam Backpack"
     )
-    SelectedToolCardPara:Set("🎴 Detail Item Terpilih", desc)
+    SelectedItemCardPara:Set("🎴 Detail Item Terpilih", desc)
 end
+local UpdateToolCard = UpdateItemCard
+local SelectedToolCardPara = SelectedItemCardPara
 
 -- 1. Live Search Input Bar
 InvSec:AddInput({
@@ -2499,17 +2600,18 @@ InvSec:AddDropdown({
     })
 end)
 
--- 4. Tool Selector Dropdown
+-- 4. Item Selector Dropdown
 InvDropdown = InvSec:AddDropdown({
     Name = "📦 Pilih Item dari Backpack",
     Options = initialScan.DropdownOptions,
     Default = initialScan.DropdownOptions[1] or "",
-    Flag = "InvToolDropdown",
+    Flag = "InvItemDropdown",
     Tooltip = "Pilih salah satu item yang ada di backpack untuk melihat detail & aksi"
 }, function(selected)
     if not selected or selected == "Backpack Kosong" or selected:find("Tidak ada item") then 
         Config.SelectedInvTool = nil
-        UpdateToolCard(nil)
+        Config.SelectedItem = nil
+        UpdateItemCard(nil)
         return 
     end
     local tools = StealAnEggTrade.GetAllTools()
@@ -2517,26 +2619,29 @@ InvDropdown = InvSec:AddDropdown({
         local info = StealAnEggTrade.GetToolInfo(t)
         if info and (info.OptionString == selected or info.Name == selected or info.DisplayName == selected) then
             Config.SelectedInvTool = t
-            UpdateToolCard(info)
+            Config.SelectedItem = t
+            UpdateItemCard(info)
             break
         end
     end
 end)
 
 -- 5. Detail Item Card Paragraph (No UID displayed)
-SelectedToolCardPara = InvSec:AddParagraph("🎴 Detail Item Terpilih", "Pilih Item dari dropdown di atas untuk melihat detail lengkap.")
+SelectedItemCardPara = InvSec:AddParagraph("🎴 Detail Item Terpilih", "Pilih Item dari dropdown di atas untuk melihat detail lengkap.")
+SelectedToolCardPara = SelectedItemCardPara
 
--- 5. Action Buttons
+-- 6. Action Buttons
 InvSec:AddButton({
     Name = "✋ Equip / Pegang Item Terpilih",
     Tooltip = "Memegang item yang dipilih dari dropdown ke tangan karakter"
 }, function()
-    if Config.SelectedInvTool and Config.SelectedInvTool.Parent then
-        local ok, msg = StealAnEggTrade.EquipTool(Config.SelectedInvTool)
+    local selItem = Config.SelectedItem or Config.SelectedInvTool
+    if selItem and selItem.Parent then
+        local ok, msg = StealAnEggTrade.EquipTool(selItem)
         if ok then
-            Library:Notify({Title = "Equipped", Content = "Berhasil memegang: " .. Config.SelectedInvTool.Name, Type = "Success", Duration = 2.5})
-            local info = StealAnEggTrade.GetToolInfo(Config.SelectedInvTool)
-            UpdateToolCard(info)
+            Library:Notify({Title = "Equipped", Content = "Berhasil memegang: " .. selItem.Name, Type = "Success", Duration = 2.5})
+            local info = StealAnEggTrade.GetToolInfo(selItem)
+            UpdateItemCard(info)
         else
             Library:Notify({Title = "Gagal Equip", Content = tostring(msg), Type = "Error", Duration = 3})
         end
@@ -2554,13 +2659,14 @@ InvSec:AddButton({
         Library:Notify({Title = "Peringatan", Content = "Target Whitelist belum ditemukan di server!", Type = "Warning", Duration = 3})
         return
     end
-    if not Config.SelectedInvTool or not Config.SelectedInvTool.Parent then
+    local selItem = Config.SelectedItem or Config.SelectedInvTool
+    if not selItem or not selItem.Parent then
         Library:Notify({Title = "Peringatan", Content = "Pilih Item di dropdown terlebih dahulu!", Type = "Warning", Duration = 3})
         return
     end
     
-    local toolName = Config.SelectedInvTool.Name
-    local ok, err = StealAnEggTrade.SendGift(targetId, Config.SelectedInvTool)
+    local toolName = selItem.Name
+    local ok, err = StealAnEggTrade.SendGift(targetId, selItem)
     if ok then
         TradeStats.TotalSent = TradeStats.TotalSent + 1
         TradeStats.SuccessCount = TradeStats.SuccessCount + 1
@@ -2570,7 +2676,8 @@ InvSec:AddButton({
         local scan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch, currentInventoryMinIncome)
         InvDropdown:Refresh(scan.DropdownOptions)
         Config.SelectedInvTool = nil
-        UpdateToolCard(nil)
+        Config.SelectedItem = nil
+        UpdateItemCard(nil)
     else
         TradeStats.FailCount = TradeStats.FailCount + 1
         Library:Notify({Title = "Gagal Gift", Content = "Error: " .. tostring(err), Type = "Error", Duration = 4})
@@ -2619,7 +2726,8 @@ InvSec:AddButton({
         local refreshed = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch, currentInventoryMinIncome)
         InvDropdown:Refresh(refreshed.DropdownOptions)
         Config.SelectedInvTool = nil
-        UpdateToolCard(nil)
+        Config.SelectedItem = nil
+        UpdateItemCard(nil)
         Library:Notify({Title = "Batch Selesai", Content = "Pengiriman item hasil filter selesai!", Type = "Success", Duration = 3.5})
     end)
 end)
@@ -2630,11 +2738,12 @@ InvSec:AddButton({
 }, function()
     local scan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch, currentInventoryMinIncome)
     InvDropdown:Refresh(scan.DropdownOptions)
-    if Config.SelectedInvTool and Config.SelectedInvTool.Parent then
-        local info = StealAnEggTrade.GetToolInfo(Config.SelectedInvTool)
-        UpdateToolCard(info)
+    local selItem = Config.SelectedItem or Config.SelectedInvTool
+    if selItem and selItem.Parent then
+        local info = StealAnEggTrade.GetToolInfo(selItem)
+        UpdateItemCard(info)
     else
-        UpdateToolCard(nil)
+        UpdateItemCard(nil)
     end
     Library:Notify({
         Title   = "Backpack Discan 🎒",
@@ -2649,22 +2758,8 @@ local InvStatSec = InvTab:AddSection("📊 Ringkasan & Total Dashboard Backpack"
 local InvCountPara   = InvStatSec:AddParagraph("Total Koleksi", tostring(initialScan.Count) .. " Items")
 local InvWeightPara  = InvStatSec:AddParagraph("Total Berat Seluruh Tas", string.format("%s kg", formatNumber(initialScan.TotalWeight)))
 local InvIncomePara  = InvStatSec:AddParagraph("Total Pasif Income", string.format("+%s / detik 💰", formatNumber(initialScan.TotalIncome)))
-local InvBestPara    = InvStatSec:AddParagraph("👑 Item Tier Tertinggi", initialScan.BestPet and initialScan.BestPet.OptionString or "-")
+local InvBestPara    = InvStatSec:AddParagraph("👑 Item Value Tertinggi", initialScan.BestValuePet and initialScan.BestValuePet.OptionString or "-")
 local InvHeavyPara   = InvStatSec:AddParagraph("⚖️ Item Terberat", initialScan.HeaviestPet and string.format("%s (%s kg)", initialScan.HeaviestPet.DisplayName, formatNumber(initialScan.HeaviestPet.Weight)) or "-")
-
-task.spawn(function()
-    while getgenv().CurrentTradeScriptID == scriptId do
-        pcall(function()
-            local scan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch, currentInventoryMinIncome)
-            InvCountPara:Set("Total Koleksi", string.format("%d Item di Backpack • %d Favorit ⭐", scan.Count, scan.FavoriteCount))
-            InvWeightPara:Set("Total Berat Seluruh Tas", string.format("%s kg (%.2f Juta kg)", formatNumber(scan.TotalWeight), scan.TotalWeight / 1000000))
-            InvIncomePara:Set("Total Pasif Income", string.format("+%s / detik 💰%s", formatNumber(scan.TotalIncome), formatIncome(scan.TotalIncome)))
-            InvBestPara:Set("👑 Item Tier Tertinggi", scan.BestPet and scan.BestPet.OptionString or "-")
-            InvHeavyPara:Set("⚖️ Item Terberat", scan.HeaviestPet and string.format("%s [%s] (%s kg)", scan.HeaviestPet.DisplayName, scan.HeaviestPet.BaseMutation, formatNumber(scan.HeaviestPet.Weight)) or "-")
-        end)
-        task.wait(2.5)
-    end
-end)
 
 
 -- ---------------------------------------------------------
@@ -2785,32 +2880,6 @@ FilterSec:AddInput({
     end
 end)
 
-local function ParseIncomeInput(text)
-    if not text then return 0 end
-    local str = tostring(text):lower():gsub("%s+", ""):gsub(",", ".")
-    if str == "" or str == "0" or str == "bebas" or str == "none" then return 0 end
-    
-    if str:find("t") then
-        local num = tonumber(str:gsub("t", ""))
-        return (num or 0) * 1000000000000
-    elseif str:find("b") then
-        local num = tonumber(str:gsub("b", ""))
-        return (num or 0) * 1000000000
-    elseif str:find("m") or str:find("jt") or str:find("juta") then
-        local num = tonumber(str:gsub("m", ""):gsub("jt", ""):gsub("juta", ""))
-        return (num or 0) * 1000000
-    elseif str:find("k") or str:find("rb") or str:find("ribu") then
-        local num = tonumber(str:gsub("k", ""):gsub("rb", ""):gsub("ribu", ""))
-        return (num or 0) * 1000
-    else
-        local num = tonumber(str)
-        if num and num > 0 then
-            return num * 1000000 -- Asumsi angka biasa = Satuan Juta
-        end
-    end
-    return 0
-end
-
 FilterSec:AddInput({
     Name = "💰 Minimum Income / Pasif (Satuan: JUTA / detik)",
     Placeholder = Config.MinIncome > 0 and string.format("%.2f", Config.MinIncome / 1000000) or "Cth: 100 (= 100M/s) atau 2.8B, 0 = Bebas",
@@ -2897,42 +2966,6 @@ end)
 local FilterActionSec = FilterTab:AddSection("⚡ Eksekusi Auto Trade By Filter")
 
 local FilterMatchPara = FilterActionSec:AddParagraph("Status Pencocokan", "Memindai kecocokan filter...")
-
-task.spawn(function()
-    while getgenv().CurrentTradeScriptID == scriptId do
-        pcall(function()
-            local tools = StealAnEggTrade.GetAllTools()
-            local matchCount = 0
-            for _, t in ipairs(tools) do
-                if StealAnEggTrade.MatchesFilter(t, Config) then
-                    matchCount = matchCount + 1
-                end
-            end
-            
-            local minWStr = Config.MinWeight > 0 and string.format("%.2f Juta (%s kg)", Config.MinWeight / 1000000, formatNumber(Config.MinWeight)) or "Bebas"
-            local maxWStr = Config.MaxWeight > 0 and string.format("%.2f Juta (%s kg)", Config.MaxWeight / 1000000, formatNumber(Config.MaxWeight)) or "Bebas"
-            local minIncStr = Config.MinIncome > 0 and string.format("+%s/s%s", formatNumber(Config.MinIncome), formatIncome(Config.MinIncome)) or "Bebas"
-            local maxIncStr = Config.MaxIncome > 0 and string.format("+%s/s%s", formatNumber(Config.MaxIncome), formatIncome(Config.MaxIncome)) or "Bebas"
-            local activeId, activeName = GetActiveWhitelistTarget()
-            local targetDisplay = activeName and string.format("%s (ID: %s)", activeName, tostring(activeId)) or "Belum Ada Target Whitelist di Server"
-            
-            local statusDesc = string.format("Item Cocok: %d dari %d Item\nTarget Whitelist: %s\nItem: %s | Mutasi: %s\nRarity: %s\nMin Berat: %s | Max: %s\nMin Income: %s | Max: %s",
-                matchCount,
-                #tools,
-                targetDisplay,
-                tostring(Config.FilterItem),
-                tostring(Config.FilterMutation),
-                tostring(Config.FilterRarity),
-                minWStr,
-                maxWStr,
-                minIncStr,
-                maxIncStr
-            )
-            FilterMatchPara:Set("Status Filter", statusDesc)
-        end)
-        task.wait(1.5)
-    end
-end)
 
 FilterActionSec:AddButton({
     Name = "📦 Kirim Semua Item Sesuai Filter ke Whitelist (1x Batch)",
@@ -3116,37 +3149,6 @@ local SellActionSec = SellTab:AddSection("⚡ Aksi & Background Loop Auto Sell")
 
 local SellStatusPara = SellActionSec:AddParagraph("Status Auto Sell", "Memindai item yang cocok untuk dijual...")
 
-task.spawn(function()
-    while getgenv().CurrentTradeScriptID == scriptId do
-        pcall(function()
-            local tools = StealAnEggTrade.GetAllTools()
-            local matchSellCount = 0
-            for _, t in ipairs(tools) do
-                if StealAnEggTrade.MatchesSellFilter(t, Config) then
-                    matchSellCount = matchSellCount + 1
-                end
-            end
-            
-            local maxIncStr = Config.AutoSellMaxIncome > 0 and string.format("<= +%s/s%s", formatNumber(Config.AutoSellMaxIncome), formatIncome(Config.AutoSellMaxIncome)) or "Bebas"
-            local maxWStr   = Config.AutoSellMaxWeight > 0 and string.format("<= %.2f Juta kg", Config.AutoSellMaxWeight / 1e6) or "Bebas"
-            
-            local desc = string.format("Item Cocok Dijual: %d dari %d Item di Tas\nRarity Target: %s\nBatas Max Income: %s\nBatas Max Berat: %s\nProteksi: %s Favorit | %s Rainbow | %s Tier Dewa\nTotal Item Terjual Sesi Ini: %d Item 💰",
-                matchSellCount,
-                #tools,
-                tostring(Config.AutoSellRarities),
-                maxIncStr,
-                maxWStr,
-                Config.AutoSellIgnoreFavorites and "⭐ Kunci" or "❌ Bebas",
-                Config.AutoSellProtectRainbow and "🌈 Kunci" or "❌ Bebas",
-                Config.AutoSellProtectGodTier and "👑 Kunci" or "❌ Bebas",
-                TradeStats.SellCount or 0
-            )
-            SellStatusPara:Set("Status Auto Sell", desc)
-        end)
-        task.wait(1.5)
-    end
-end)
-
 SellActionSec:AddToggle({
     Name = "🔁 Aktifkan Auto Sell Otomatis (Background Loop)",
     Default = Config.AutoSellLoop,
@@ -3261,24 +3263,9 @@ StatsSec:AddButton({
     })
 end)
 
-task.spawn(function()
-    while getgenv().CurrentTradeScriptID == scriptId do
-        pcall(function()
-            TotalSentPara:Set("Total Terkirim", tostring(TradeStats.TotalSent) .. " Item Terkirim")
-            TotalAcceptedPara:Set("Total Diterima (Accept)", tostring(TradeStats.AcceptedCount) .. " Gift Diterima 📥")
-            TotalSoldPara:Set("Total Item Terjual", tostring(TradeStats.SellCount or 0) .. " Item Terjual 💰")
-            SuccessPara:Set("Status Sukses Gift", tostring(TradeStats.SuccessCount) .. " Transaksi Sukses")
-            FailPara:Set("Status Gagal Gift", tostring(TradeStats.FailCount) .. " Gagal")
-            LastItemPara:Set("Item Terakhir Digift", tostring(TradeStats.LastItemName))
-            LastSoldPara:Set("Item Terakhir Dijual", tostring(TradeStats.LastSoldName or "-"))
-        end)
-        task.wait(1)
-    end
-end)
-
 
 -- ---------------------------------------------------------
--- TAB 5: 🌐 SERVER UTILITIES (JOB ID, UPTIME & SMART DEEP HOP)
+-- TAB 6: 🌐 SERVER UTILITIES (JOB ID, UPTIME & SMART DEEP HOP)
 -- ---------------------------------------------------------
 local ServerTab = Window:MakeTab("🌐")
 local ServerInfoSec = ServerTab:AddSection("Informasi Server Saat Ini")
@@ -3286,17 +3273,6 @@ local ServerInfoSec = ServerTab:AddSection("Informasi Server Saat Ini")
 local ServerJobIdPara  = ServerInfoSec:AddParagraph("Job ID Server", tostring(game.JobId))
 local ServerUptimePara = ServerInfoSec:AddParagraph("Uptime Server Ini", formatUptime(workspace.DistributedGameTime))
 local ServerPlayerPara = ServerInfoSec:AddParagraph("Jumlah Player", string.format("%d / %d Players", #Players:GetPlayers(), Players.MaxPlayers))
-
-task.spawn(function()
-    while getgenv().CurrentTradeScriptID == scriptId do
-        pcall(function()
-            ServerJobIdPara:Set("Job ID Server", tostring(game.JobId))
-            ServerUptimePara:Set("Uptime Server Ini", formatUptime(workspace.DistributedGameTime))
-            ServerPlayerPara:Set("Jumlah Player", string.format("%d / %d Players di Server", #Players:GetPlayers(), Players.MaxPlayers))
-        end)
-        task.wait(1)
-    end
-end)
 
 ServerInfoSec:AddButton({
     Name = "📋 Salin Job ID Server (Copy Job ID)",
@@ -3417,6 +3393,106 @@ ManualTpSec:AddButton({
             Type    = "Error",
             Duration = 4
         })
+    end
+end)
+
+
+-- ==========================================================
+-- ⚡ [OPTIMALISASI ULTRA] SINGLE UNIFIED BACKGROUND STATE TICKER
+-- Menggabungkan seluruh pembaruan status UI (Tab 2, 3, 4, 5, 6)
+-- ke dalam 1 thread efisien dengan interval 2.0 detik.
+-- ==========================================================
+task.spawn(function()
+    while getgenv().CurrentTradeScriptID == scriptId do
+        pcall(function()
+            local scan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch, currentInventoryMinIncome)
+            local tools = scan.Tools or StealAnEggTrade.GetAllTools()
+            
+            -- 1. Tab 🎒: Ringkasan Backpack
+            if InvCountPara and InvWeightPara and InvIncomePara and InvBestPara and InvHeavyPara then
+                InvCountPara:Set("Total Koleksi", string.format("%d Item di Backpack • %d Favorit ⭐", scan.Count, scan.FavoriteCount))
+                InvWeightPara:Set("Total Berat Seluruh Tas", string.format("%s kg (%.2f Juta kg)", formatNumber(scan.TotalWeight), scan.TotalWeight / 1000000))
+                InvIncomePara:Set("Total Pasif Income", string.format("+%s / detik 💰%s", formatNumber(scan.TotalIncome), formatIncome(scan.TotalIncome)))
+                InvBestPara:Set("👑 Item Value Tertinggi", (scan.BestValuePet or scan.BestPet) and (scan.BestValuePet or scan.BestPet).OptionString or "-")
+                InvHeavyPara:Set("⚖️ Item Terberat", scan.HeaviestPet and string.format("%s [%s] (%s kg)", scan.HeaviestPet.DisplayName, scan.HeaviestPet.BaseMutation, formatNumber(scan.HeaviestPet.Weight)) or "-")
+            end
+            
+            -- 2. Tab 🎯: Hitung Item Cocok Trade Filter
+            if FilterMatchPara then
+                local tradeMatchCount = 0
+                for _, t in ipairs(tools) do
+                    if StealAnEggTrade.MatchesFilter(t, Config) then
+                        tradeMatchCount = tradeMatchCount + 1
+                    end
+                end
+                
+                local minWStr = Config.MinWeight > 0 and string.format("%.2f Juta (%s kg)", Config.MinWeight / 1000000, formatNumber(Config.MinWeight)) or "Bebas"
+                local maxWStr = Config.MaxWeight > 0 and string.format("%.2f Juta (%s kg)", Config.MaxWeight / 1000000, formatNumber(Config.MaxWeight)) or "Bebas"
+                local minIncStr = Config.MinIncome > 0 and string.format("+%s/s%s", formatNumber(Config.MinIncome), formatIncome(Config.MinIncome)) or "Bebas"
+                local maxIncStr = Config.MaxIncome > 0 and string.format("+%s/s%s", formatNumber(Config.MaxIncome), formatIncome(Config.MaxIncome)) or "Bebas"
+                local activeId, activeName = GetActiveWhitelistTarget()
+                local targetDisplay = activeName and string.format("%s (ID: %s)", activeName, tostring(activeId)) or "Belum Ada Target Whitelist di Server"
+                
+                local statusDesc = string.format("Item Cocok: %d dari %d Item\nTarget Whitelist: %s\nItem: %s | Mutasi: %s\nRarity: %s\nMin Berat: %s | Max: %s\nMin Income: %s | Max: %s",
+                    tradeMatchCount,
+                    #tools,
+                    targetDisplay,
+                    tostring(Config.FilterItem),
+                    tostring(Config.FilterMutation),
+                    tostring(Config.FilterRarity),
+                    minWStr,
+                    maxWStr,
+                    minIncStr,
+                    maxIncStr
+                )
+                FilterMatchPara:Set("Status Filter", statusDesc)
+            end
+            
+            -- 3. Tab 💰: Hitung Item Cocok Auto Sell
+            if SellStatusPara then
+                local sellMatchCount = 0
+                for _, t in ipairs(tools) do
+                    if StealAnEggTrade.MatchesSellFilter(t, Config) then
+                        sellMatchCount = sellMatchCount + 1
+                    end
+                end
+                
+                local maxSellIncStr = Config.AutoSellMaxIncome > 0 and string.format("<= +%s/s%s", formatNumber(Config.AutoSellMaxIncome), formatIncome(Config.AutoSellMaxIncome)) or "Bebas"
+                local maxSellWStr   = Config.AutoSellMaxWeight > 0 and string.format("<= %.2f Juta kg", Config.AutoSellMaxWeight / 1e6) or "Bebas"
+                
+                local sellDesc = string.format("Item Cocok Dijual: %d dari %d Item di Tas\nRarity Target: %s\nBatas Max Income: %s\nBatas Max Berat: %s\nProteksi: %s Favorit | %s Rainbow | %s Tier Dewa\nTotal Item Terjual Sesi Ini: %d Item 💰",
+                    sellMatchCount,
+                    #tools,
+                    tostring(Config.AutoSellRarities),
+                    maxSellIncStr,
+                    maxSellWStr,
+                    Config.AutoSellIgnoreFavorites and "⭐ Kunci" or "❌ Bebas",
+                    Config.AutoSellProtectRainbow and "🌈 Kunci" or "❌ Bebas",
+                    Config.AutoSellProtectGodTier and "👑 Kunci" or "❌ Bebas",
+                    TradeStats.SellCount or 0
+                )
+                SellStatusPara:Set("Status Auto Sell", sellDesc)
+            end
+            
+            -- 4. Tab 📊: Statistik Gifting & Auto Sell
+            if TotalSentPara and TotalAcceptedPara and TotalSoldPara and SuccessPara and FailPara and LastItemPara and LastSoldPara then
+                TotalSentPara:Set("Total Terkirim", tostring(TradeStats.TotalSent) .. " Item Terkirim")
+                TotalAcceptedPara:Set("Total Diterima (Accept)", tostring(TradeStats.AcceptedCount) .. " Gift Diterima 📥")
+                TotalSoldPara:Set("Total Item Terjual", tostring(TradeStats.SellCount or 0) .. " Item Terjual 💰")
+                SuccessPara:Set("Status Sukses Gift", tostring(TradeStats.SuccessCount) .. " Transaksi Sukses")
+                FailPara:Set("Status Gagal Gift", tostring(TradeStats.FailCount) .. " Gagal")
+                LastItemPara:Set("Item Terakhir Digift", tostring(TradeStats.LastItemName))
+                LastSoldPara:Set("Item Terakhir Dijual", tostring(TradeStats.LastSoldName or "-"))
+            end
+            
+            -- 5. Tab 🌐: Server Info & Uptime
+            if ServerJobIdPara and ServerUptimePara and ServerPlayerPara then
+                ServerJobIdPara:Set("Job ID Server", tostring(game.JobId))
+                ServerUptimePara:Set("Uptime Server Ini", formatUptime(workspace.DistributedGameTime))
+                ServerPlayerPara:Set("Jumlah Player", string.format("%d / %d Players di Server", #Players:GetPlayers(), Players.MaxPlayers))
+            end
+        end)
+        task.wait(2.0)
     end
 end)
 
