@@ -8,9 +8,9 @@
 -- ⚙️ PENGATURAN / KONFIGURASI (BISA DIUBAH SESUAI KEBUTUHAN)
 ---------------------------------------------------------
 local CONFIG = {
-    FPS_CAP             = _G.fpsCap or 240,              -- Target FPS (contoh: 5 untuk ultra AFK, 60, 120, 240)
-    WHITE_MAP_MODE      = _G.whiteMap ~= nil and _G.whiteMap or true,   -- true: Ubah seluruh map jadi Putih Bersih (Potato Mode Auto Train)
-    REMOVE_OTHER_PLAYER = _G.autoRemovePlayer or false, -- true: Hapus player lain dari client (FPS Boost Ekstrem Auto Farm Kalb)
+    FPS_CAP             = 240,              -- Target FPS (contoh: 5 untuk ultra AFK, 60, 120, 240)
+    WHITE_MAP_MODE      = true,   -- true: Ubah seluruh map jadi Putih Bersih (Potato Mode Auto Train)
+    REMOVE_OTHER_PLAYER = true, -- true: Hapus player lain dari client (FPS Boost Ekstrem Auto Farm Kalb)
     STRIP_ACCESSORIES   = _G.stripAccessories ~= nil and _G.stripAccessories or true, -- true: Hapus rambut, topi, baju player lain (jika player tidak dihapus)
     DISABLE_3D_RENDER   = _G.disable3dRender or false,  -- true: Matikan 3D Rendering layar (GPU Saver Magic Loot)
     OPTIMIZE_TERRAIN    = true,                         -- true: Matikan efek ombak air & dekorasi rumput
