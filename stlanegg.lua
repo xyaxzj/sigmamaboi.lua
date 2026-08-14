@@ -36,7 +36,7 @@ local ACCOUNT_PROFILES = {
         DelayBetweenGifts   = 0.5,              -- Jeda antar gift (detik)
         FilterItem          = "All Items",      -- Filter jenis item
         FilterMutation      = "All Mutations",  -- Filter mutasi (Cth: "Golden", "Normal", "All Mutations")
-        FilterRarity        = "All Rarities",   -- Filter Rarity (Cth: "Secret", "Divine", "Mythical", "Legendary", "BrainrotGod", "All Rarities")
+        FilterRarity        = "All Rarities",   -- Filter Rarity (Cth: "Eternal", "Divine", "Secret", "Mythical", "Legendary", "BrainrotGod", "All Rarities")
         MinWeightInMillions = 1,                -- Minimal 1.000.000 kg (1 Juta kg)
         MaxWeightInMillions = 0,                -- Tanpa batas maksimal (0 = Bebas)
         IgnoreFavorites     = false,            -- Jangan abaikan barang favorit
@@ -115,7 +115,9 @@ end
 
 
 -- ==========================================================
--- 💎 [RARITY SYSTEM & GAME DIRECTORY DATABASE]
+-- 💎 [RARITY SYSTEM & GAME DIRECTORY DATABASE LOADER]
+-- Menggunakan game:GetService("ReplicatedStorage").Directory.Rarity
+-- dan modul item di ReplicatedStorage.Directory.*
 -- ==========================================================
 local KNOWN_RARITIES = {
     "All Rarities",
@@ -126,36 +128,113 @@ local KNOWN_RARITIES = {
     "Limited", "Admin"
 }
 
+local RarityTableToName = {}
 local ItemRarityDatabase = {}
+local isRarityLoaded = false
 
--- Auto load dan require module directory dari ReplicatedStorage.Library jika ada
-pcall(function()
-    local lib = ReplicatedStorage:FindFirstChild("Library") or ReplicatedStorage:FindFirstChild("Shared")
-    if lib then
-        for _, desc in ipairs(lib:GetDescendants()) do
-            if desc:IsA("ModuleScript") then
-                local dName = desc.Name:lower()
-                if dName:find("item") or dName:find("pet") or dName:find("egg") or dName:find("rarit") or dName:find("asset") then
-                    local ok, mod = pcall(require, desc)
-                    if ok and type(mod) == "table" then
-                        for k, v in pairs(mod) do
-                            if type(v) == "table" then
-                                local r = v.Rarity or v.Tier or v.RarityName or v.rarity
-                                if r then
-                                    local rStr = tostring(r)
-                                    ItemRarityDatabase[tostring(k):lower()] = rStr
-                                    if v.Name then ItemRarityDatabase[tostring(v.Name):lower()] = rStr end
-                                    if v.DisplayName then ItemRarityDatabase[tostring(v.DisplayName):lower()] = rStr end
-                                    if v.Category then ItemRarityDatabase[tostring(v.Category):lower()] = rStr end
-                                end
-                            end
+local function LoadGameDirectoryRarities()
+    if isRarityLoaded then return end
+    
+    -- 1. Load Rarity Module (ReplicatedStorage.Directory.Rarity)
+    pcall(function()
+        local dir = ReplicatedStorage:FindFirstChild("Directory")
+        local rarityMod = dir and (dir:FindFirstChild("Rarity") or dir:FindFirstChild("Rarities"))
+        if not rarityMod then
+            for _, desc in ipairs(ReplicatedStorage:GetDescendants()) do
+                if desc:IsA("ModuleScript") and (desc.Name == "Rarity" or desc.Name == "Rarities") then
+                    rarityMod = desc
+                    break
+                end
+            end
+        end
+        
+        if rarityMod then
+            local ok, rarityModuleData = pcall(require, rarityMod)
+            if ok and type(rarityModuleData) == "table" then
+                local raritiesTbl = rarityModuleData.Rarities or rarityModuleData
+                if type(raritiesTbl) == "table" then
+                    for rarityName, rarityObj in pairs(raritiesTbl) do
+                        local rNameStr = tostring(rarityName)
+                        if type(rarityObj) == "table" then
+                            RarityTableToName[rarityObj] = rNameStr
+                            if rarityObj.Name then RarityTableToName[rarityObj] = tostring(rarityObj.Name) end
+                            if rarityObj.DisplayName then RarityTableToName[rarityObj] = tostring(rarityObj.DisplayName) end
+                        end
+                        
+                        local exists = false
+                        for _, existing in ipairs(KNOWN_RARITIES) do
+                            if existing:lower() == rNameStr:lower() then exists = true; break end
+                        end
+                        if not exists then
+                            table.insert(KNOWN_RARITIES, rNameStr)
                         end
                     end
                 end
             end
         end
+    end)
+
+    -- 2. Scan seluruh Modul Item di ReplicatedStorage.Directory
+    local itemCount = 0
+    pcall(function()
+        local dir = ReplicatedStorage:FindFirstChild("Directory") or ReplicatedStorage:FindFirstChild("Library")
+        if dir then
+            for _, desc in ipairs(dir:GetDescendants()) do
+                if desc:IsA("ModuleScript") and desc.Name ~= "Rarity" and desc.Name ~= "Rarities" and desc.Name ~= "Pipeline" and desc.Name ~= "Interface" and desc.Name ~= "Constants" then
+                    local ok, itemConfig = pcall(require, desc)
+                    if ok and type(itemConfig) == "table" then
+                        local rStr = nil
+                        
+                        -- Jika Rarity berupa string langsung
+                        if type(itemConfig.Rarity) == "string" then
+                            rStr = itemConfig.Rarity
+                        -- Jika Rarity berupa table require(Directory.Rarity).Rarities.*
+                        elseif type(itemConfig.Rarity) == "table" then
+                            rStr = RarityTableToName[itemConfig.Rarity] 
+                                or itemConfig.Rarity.Name 
+                                or itemConfig.Rarity.DisplayName
+                                or itemConfig.Rarity.Rarity
+                            
+                            if not rStr then
+                                for obj, name in pairs(RarityTableToName) do
+                                    if obj == itemConfig.Rarity then
+                                        rStr = name
+                                        break
+                                    end
+                                end
+                            end
+                        end
+                        
+                        if rStr then
+                            local rStrClean = tostring(rStr)
+                            local modName = desc.Name:lower()
+                            ItemRarityDatabase[modName] = rStrClean
+                            
+                            if itemConfig.DisplayName then
+                                ItemRarityDatabase[tostring(itemConfig.DisplayName):lower()] = rStrClean
+                            end
+                            if itemConfig.Name then
+                                ItemRarityDatabase[tostring(itemConfig.Name):lower()] = rStrClean
+                            end
+                            if itemConfig.Category then
+                                ItemRarityDatabase[tostring(itemConfig.Category):lower()] = rStrClean
+                            end
+                            itemCount = itemCount + 1
+                        end
+                    end
+                end
+            end
+        end
+    end)
+    
+    if itemCount > 0 then
+        isRarityLoaded = true
+        print(string.format("[StealAnEgg] Berhasil me-load %d Definisi Item Rarity dari ReplicatedStorage.Directory!", itemCount))
     end
-end)
+end
+
+-- Eksekusi load awal
+LoadGameDirectoryRarities()
 
 
 -- ==========================================================
@@ -259,11 +338,16 @@ function StealAnEggTrade.GetGiftingRequestRemote()
     return nil
 end
 
---- Mendapatkan Rarity dari Tool secara otomatis
+--- Mendapatkan Rarity dari Tool secara akurat menggunakan ReplicatedStorage.Directory
 function StealAnEggTrade.GetToolRarity(tool)
     if not tool or not tool:IsA("Tool") then return "Normal" end
     
-    -- 1. Cek Attributes pada Tool
+    -- Pastikan directory rarity termuat
+    if not isRarityLoaded then
+        LoadGameDirectoryRarities()
+    end
+    
+    -- 1. Cek Attributes langsung pada Tool
     local attrRarity = tool:GetAttribute("Rarity") or tool:GetAttribute("Tier") or tool:GetAttribute("ItemRarity") or tool:GetAttribute("RarityName")
     if attrRarity and tostring(attrRarity) ~= "" then
         return tostring(attrRarity)
@@ -275,20 +359,36 @@ function StealAnEggTrade.GetToolRarity(tool)
         return tostring(rVal.Value)
     end
     
-    -- 3. Cek Database modul game
-    local name = tool.Name:lower()
-    local dispName = (tool:GetAttribute("DisplayName") or ""):lower()
-    local category = (tool:GetAttribute("Category") or ""):lower()
+    -- 3. Cek Database Modul Game (Directory.Rarity & Directory.*)
+    local rawName = tool.Name
+    local dispName = tostring(tool:GetAttribute("DisplayName") or ""):lower()
+    local category = tostring(tool:GetAttribute("Category") or ""):lower()
     
-    if ItemRarityDatabase[dispName] then return ItemRarityDatabase[dispName] end
-    if ItemRarityDatabase[name] then return ItemRarityDatabase[name] end
-    if ItemRarityDatabase[category] then return ItemRarityDatabase[category] end
+    -- Bersihkan nama dari format "(xxxx kg)" dan mutation prefix
+    local cleanName = rawName:gsub("%s*%b()", ""):gsub("^%s+", ""):gsub("%s+$", ""):lower()
+    local baseName = cleanName:gsub("golden%s+", ""):gsub("rainbow%s+", ""):gsub("shiny%s+", ""):gsub("dark%s+", ""):gsub("void%s+", ""):gsub("diamond%s+", "")
     
-    -- 4. Pola pencocokan kata kunci pada nama tool
+    if dispName ~= "" and ItemRarityDatabase[dispName] then
+        return ItemRarityDatabase[dispName]
+    end
+    if category ~= "" and ItemRarityDatabase[category] then
+        return ItemRarityDatabase[category]
+    end
+    if ItemRarityDatabase[cleanName] then
+        return ItemRarityDatabase[cleanName]
+    end
+    if ItemRarityDatabase[baseName] then
+        return ItemRarityDatabase[baseName]
+    end
+    if ItemRarityDatabase[rawName:lower()] then
+        return ItemRarityDatabase[rawName:lower()]
+    end
+    
+    -- 4. Fuzzy match dengan Known Rarities
     for _, r in ipairs(KNOWN_RARITIES) do
         if r ~= "All Rarities" then
             local rLow = r:lower()
-            if name:find(rLow, 1, true) or dispName:find(rLow, 1, true) then
+            if rawName:lower():find(rLow, 1, true) or dispName:find(rLow, 1, true) then
                 return r
             end
         end
@@ -1359,7 +1459,7 @@ local RarityDropdown = FilterSec:AddDropdown({
     Options = initialScan.Rarities,
     Default = Config.FilterRarity or "All Rarities",
     Flag = "FilterRarityDropdown",
-    Tooltip = "Pilih tingkat rarity (cth: Secret, Divine, Mythical, Legendary, BrainrotGod, etc.)"
+    Tooltip = "Pilih tingkat rarity (cth: Eternal, Divine, Secret, Mythical, Legendary, BrainrotGod, etc.)"
 }, function(selected)
     Config.FilterRarity = selected or "All Rarities"
 end)
