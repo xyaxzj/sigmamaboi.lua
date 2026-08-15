@@ -330,6 +330,14 @@ local Config = {
     SelectedInvTool     = nil,
     ProfileRole         = SCRIPT_CONFIG.ProfileRole,
     
+    -- Auto Equip Active Asset Configuration
+    AutoEquipAsset          = false,
+    AutoEquipMode           = "💰 Highest Income (Best Value)",
+    AutoEquipDelay          = 0.3,
+    AutoEquipInterval       = 2.0,
+    LastEquippedAssetUID    = nil,
+    LastEquippedAssetName   = nil,
+    
     -- Auto Sell Configuration
     AutoSellLoop            = false,
     AutoSellDelay           = 0.5,
@@ -350,7 +358,9 @@ local TradeStats = {
     AcceptedCount = 0,
     LastItemName = "-",
     SellCount = 0,
-    LastSoldName = "-"
+    LastSoldName = "-",
+    EquipCount = 0,
+    LastEquippedName = "-"
 }
 
 local LastGiftRequest = {
@@ -454,7 +464,8 @@ local CachedRemotes = {
     GiftingSend = nil,
     GiftingResponse = nil,
     GiftingRequest = nil,
-    SellAsset = nil
+    SellAsset = nil,
+    ActiveAssetsEquip = nil
 }
 
 local function GetNetworkFolder()
@@ -491,6 +502,13 @@ local function GetSellRemote()
     local net = GetNetworkFolder()
     CachedRemotes.SellAsset = net and (net:FindFirstChild("AssetInventory: SellAsset") or net:WaitForChild("AssetInventory: SellAsset", 3))
     return CachedRemotes.SellAsset
+end
+
+function StealAnEggTrade.GetActiveAssetsEquipRemote()
+    if CachedRemotes.ActiveAssetsEquip and CachedRemotes.ActiveAssetsEquip.Parent then return CachedRemotes.ActiveAssetsEquip end
+    local net = GetNetworkFolder()
+    CachedRemotes.ActiveAssetsEquip = net and (net:FindFirstChild("ActiveAssets: RequestEquip") or net:WaitForChild("ActiveAssets: RequestEquip", 3))
+    return CachedRemotes.ActiveAssetsEquip
 end
 
 -- Helper Ekstraksi & Parsing Berat (kg) dari Nama Item atau String Atribut
@@ -1998,6 +2016,140 @@ function StealAnEggTrade.StartAutoSellLoop()
     end)
 end
 
+-- ==========================================================
+-- ⚔️ AUTO EQUIP ACTIVE ASSET SYSTEM & REMOTE INTEGRATION
+-- ==========================================================
+
+function StealAnEggTrade.EquipActiveAsset(toolOrUid)
+    local tool = nil
+    local uid = nil
+    local toolName = "Asset"
+    
+    if typeof(toolOrUid) == "Instance" and toolOrUid:IsA("Tool") then
+        tool = toolOrUid
+        local info = StealAnEggTrade.GetToolInfo(tool)
+        uid = info and info.UID
+        toolName = info and info.DisplayName or tool.Name
+        if not uid or uid == "-" or uid == "" then
+            uid = tool:GetAttribute("UID") or tool:GetAttribute("UUID") or tool:GetAttribute("uid") or tool:GetAttribute("AssetId")
+            local cfg = tool:FindFirstChild("Configuration") or tool:FindFirstChild("Config")
+            if not uid and cfg then
+                uid = cfg:GetAttribute("UID") or cfg:GetAttribute("UUID") or cfg:GetAttribute("uid")
+            end
+        end
+    elseif type(toolOrUid) == "string" then
+        uid = toolOrUid
+        toolName = "UID " .. uid
+        local tools = StealAnEggTrade.GetAllTools()
+        for _, t in ipairs(tools) do
+            local info = StealAnEggTrade.GetToolInfo(t)
+            if info and info.UID == uid then
+                tool = t
+                toolName = info.DisplayName or t.Name
+                break
+            end
+        end
+    end
+    
+    if not uid or uid == "-" or uid == "" then
+        return false, "UID item tidak valid / tidak ditemukan"
+    end
+    
+    local remote = StealAnEggTrade.GetActiveAssetsEquipRemote()
+    if not remote then
+        return false, "Remote 'ActiveAssets: RequestEquip' tidak ditemukan di ReplicatedStorage.Network"
+    end
+    
+    -- 1. ✋ Pegang item ke tangan karakter terlebih dahulu (Equip Tool)
+    if tool and tool.Parent then
+        local equipOk, equipMsg = StealAnEggTrade.EquipTool(tool)
+        if not equipOk then
+            return false, "Gagal memegang item: " .. tostring(equipMsg)
+        end
+        task.wait(0.12)
+    end
+    
+    -- 2. ⚡ Panggil RemoteFunction ActiveAssets: RequestEquip
+    local ok, res = pcall(function()
+        return remote:InvokeServer(tostring(uid))
+    end)
+    
+    if ok then
+        Config.LastEquippedAssetUID = tostring(uid)
+        Config.LastEquippedAssetName = toolName
+        TradeStats.EquipCount = (TradeStats.EquipCount or 0) + 1
+        TradeStats.LastEquippedName = toolName
+        print(string.format("[AutoEquipAsset] Berhasil memegang & meng-equip Active Asset: '%s' [UID: %s] ⚔️", toolName, tostring(uid)))
+        return true, res
+    else
+        return false, tostring(res)
+    end
+end
+
+function StealAnEggTrade.SetAutoEquip(state)
+    Config.AutoEquipAsset = (state == true)
+    print("[StealAnEgg API] AutoEquipAsset set to:", Config.AutoEquipAsset)
+    if Config.AutoEquipAsset then
+        StealAnEggTrade.StartAutoEquipLoop()
+    end
+end
+
+local isEquipLoopRunning = false
+function StealAnEggTrade.StartAutoEquipLoop()
+    if isEquipLoopRunning then return end
+    isEquipLoopRunning = true
+    task.spawn(function()
+        while Config.AutoEquipAsset and getgenv().CurrentTradeScriptID == scriptId do
+            pcall(function()
+                local scan = StealAnEggTrade.ScanInventory()
+                local tools = scan.Tools or StealAnEggTrade.GetAllTools()
+                local mode = Config.AutoEquipMode or "💰 Highest Income (Best Value)"
+                
+                if mode == "💰 Highest Income (Best Value)" then
+                    local best = scan.BestValuePet or scan.BestPet
+                    if best and best.Instance and best.UID and best.UID ~= "-" and best.UID ~= Config.LastEquippedAssetUID and best.Instance.Parent then
+                        StealAnEggTrade.EquipActiveAsset(best.Instance)
+                    end
+                elseif mode == "⚖️ Heaviest Weight" then
+                    local heavy = scan.HeaviestPet
+                    if heavy and heavy.Instance and heavy.UID and heavy.UID ~= "-" and heavy.UID ~= Config.LastEquippedAssetUID and heavy.Instance.Parent then
+                        StealAnEggTrade.EquipActiveAsset(heavy.Instance)
+                    end
+                elseif mode == "👑 Highest Rarity Tier" then
+                    local bestTier = scan.BestTierPet or scan.BestPet
+                    if bestTier and bestTier.Instance and bestTier.UID and bestTier.UID ~= "-" and bestTier.UID ~= Config.LastEquippedAssetUID and bestTier.Instance.Parent then
+                        StealAnEggTrade.EquipActiveAsset(bestTier.Instance)
+                    end
+                elseif mode == "🎯 Match Auto Trade Filter" then
+                    for _, t in ipairs(tools) do
+                        if not Config.AutoEquipAsset then break end
+                        if StealAnEggTrade.MatchesFilter(t, Config) then
+                            local info = StealAnEggTrade.GetToolInfo(t)
+                            if info and info.UID and info.UID ~= "-" and info.UID ~= Config.LastEquippedAssetUID and t.Parent then
+                                StealAnEggTrade.EquipActiveAsset(t)
+                                break
+                            end
+                        end
+                    end
+                elseif mode == "📦 Equip All Matching Filter (Batch)" then
+                    for _, t in ipairs(tools) do
+                        if not Config.AutoEquipAsset then break end
+                        if StealAnEggTrade.MatchesFilter(t, Config) then
+                            local info = StealAnEggTrade.GetToolInfo(t)
+                            if info and info.UID and info.UID ~= "-" and t.Parent then
+                                StealAnEggTrade.EquipActiveAsset(t)
+                                task.wait(Config.AutoEquipDelay or 0.3)
+                            end
+                        end
+                    end
+                end
+            end)
+            task.wait(Config.AutoEquipInterval or 2.5)
+        end
+        isEquipLoopRunning = false
+    end)
+end
+
 _G.StealAnEggTrade = StealAnEggTrade
 getgenv().StealAnEggTrade = StealAnEggTrade
 
@@ -2569,9 +2721,41 @@ local InvTab = Window:MakeTab("🎒")
 
 local initialScan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch)
 
--- Helper: Build the full item list text from scan results
-local function BuildItemListText(scan)
-    local filtered = scan.FilteredTools
+-- Pagination state (5 items per page ensures clean display without Sigma UI paragraph clipping)
+local ITEMS_PER_PAGE = 5
+local currentInvPage = 1
+local lastFilteredTools = initialScan.FilteredTools or {}
+
+-- Helper: Format a single item line
+local function FormatItemLine(index, info)
+    local rBadge = GetRarityBadge(info.Rarity)
+    local mBadge = GetMutationBadge(info.BaseMutation)
+    local incStr = formatIncome(info.PerSecond)
+    local wStr = formatNumber(info.Weight)
+    local inChar = info.Instance and info.Instance.Parent == LocalPlayer.Character
+    
+    local mutPart = (info.BaseMutation ~= "Normal" and info.BaseMutation ~= "") and string.format(" [%s]", mBadge) or ""
+    local favPart = info.Favorite and " ⭐" or ""
+    local locPart = inChar and " ✋" or ""
+    
+    return string.format("#%d. [%s] %s%s • ⚖️ %s kg • 💰 +%s/s%s%s%s",
+        index,
+        rBadge,
+        tostring(info.DisplayName),
+        mutPart,
+        wStr,
+        formatNumber(info.PerSecond),
+        incStr ~= "" and (" " .. incStr) or "",
+        favPart,
+        locPart
+    )
+end
+
+-- Helper: Build paginated item list text
+local function BuildItemListText(scan, page)
+    local filtered = scan and scan.FilteredTools or lastFilteredTools
+    lastFilteredTools = filtered
+    
     if not filtered or #filtered == 0 then
         if currentInventoryMinIncome > 0 then
             return string.format("No items match the current filter (Min Income: +%s/s).", formatNumber(currentInventoryMinIncome))
@@ -2579,33 +2763,38 @@ local function BuildItemListText(scan)
         return "Your backpack is empty."
     end
     
+    local totalItems = #filtered
+    local totalPages = math.ceil(totalItems / ITEMS_PER_PAGE)
+    page = math.clamp(page or currentInvPage, 1, totalPages)
+    currentInvPage = page
+    
+    local startIdx = (page - 1) * ITEMS_PER_PAGE + 1
+    local endIdx = math.min(page * ITEMS_PER_PAGE, totalItems)
+    
     local lines = {}
-    for i, info in ipairs(filtered) do
-        local rBadge = GetRarityBadge(info.Rarity)
-        local mBadge = GetMutationBadge(info.BaseMutation)
-        local incStr = formatIncome(info.PerSecond)
-        local wStr = formatNumber(info.Weight)
-        local inChar = info.Instance and info.Instance.Parent == LocalPlayer.Character
-        
-        local mutPart = (info.BaseMutation ~= "Normal" and info.BaseMutation ~= "") and string.format(" [%s]", mBadge) or ""
-        local favPart = info.Favorite and " ⭐" or ""
-        local locPart = inChar and " ✋" or ""
-        
-        local line = string.format("#%d. [%s] %s%s • ⚖️ %s kg • 💰 +%s/s%s%s%s",
-            i,
-            rBadge,
-            tostring(info.DisplayName),
-            mutPart,
-            wStr,
-            formatNumber(info.PerSecond),
-            incStr ~= "" and (" " .. incStr) or "",
-            favPart,
-            locPart
-        )
-        table.insert(lines, line)
+    table.insert(lines, string.format("── Page %d / %d  (%d items total) ──", page, totalPages, totalItems))
+    table.insert(lines, "")
+    
+    for i = startIdx, endIdx do
+        local info = filtered[i]
+        if info then
+            table.insert(lines, FormatItemLine(i, info))
+        end
+    end
+    
+    if totalPages > 1 then
+        table.insert(lines, "")
+        table.insert(lines, string.format("Showing #%d–#%d of %d items", startIdx, endIdx, totalItems))
     end
     
     return table.concat(lines, "\n")
+end
+
+-- Helper: Update the item list paragraph
+local function RefreshItemList(scan, page)
+    if InvItemListPara then
+        InvItemListPara:Set("📋 Item List", BuildItemListText(scan, page))
+    end
 end
 
 -- ─── Section 1: Filters & Sorting ─────────────────────
@@ -2619,10 +2808,9 @@ InvFilterSec:AddDropdown({
     Tooltip = "Choose how to sort items in the backpack"
 }, function(selectedSort)
     currentInventorySort = selectedSort or INVENTORY_SORT_OPTIONS[1]
+    currentInvPage = 1
     local scan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch, currentInventoryMinIncome)
-    if InvItemListPara then
-        InvItemListPara:Set("📋 Item List", BuildItemListText(scan))
-    end
+    RefreshItemList(scan, 1)
 end)
 
 InvFilterSec:AddInput({
@@ -2633,16 +2821,50 @@ InvFilterSec:AddInput({
     local incomeVal = ParseIncomeInput(text)
     Config.MinIncome = incomeVal
     currentInventoryMinIncome = incomeVal
+    currentInvPage = 1
     local scan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch, currentInventoryMinIncome)
-    if InvItemListPara then
-        InvItemListPara:Set("📋 Item List", BuildItemListText(scan))
+    RefreshItemList(scan, 1)
+end)
+
+-- ─── Section 2: Item List (Paginated) ──────────────────
+local InvListSec = InvTab:AddSection("📋 Item List")
+
+local InvItemListPara = InvListSec:AddParagraph("📋 Item List", BuildItemListText(initialScan, 1))
+
+InvListSec:AddButton({
+    Name = "⬅️ Previous Page",
+    Tooltip = "Go to the previous page of items"
+}, function()
+    if currentInvPage > 1 then
+        currentInvPage = currentInvPage - 1
+        RefreshItemList(nil, currentInvPage)
     end
 end)
 
--- ─── Section 2: Item List ──────────────────────────────
-local InvListSec = InvTab:AddSection("📋 Item List")
+InvListSec:AddButton({
+    Name = "➡️ Next Page",
+    Tooltip = "Go to the next page of items"
+}, function()
+    local totalPages = math.max(1, math.ceil(#lastFilteredTools / ITEMS_PER_PAGE))
+    if currentInvPage < totalPages then
+        currentInvPage = currentInvPage + 1
+        RefreshItemList(nil, currentInvPage)
+    end
+end)
 
-local InvItemListPara = InvListSec:AddParagraph("📋 Item List", BuildItemListText(initialScan))
+InvListSec:AddButton({
+    Name = "🔄 Refresh Backpack",
+    Tooltip = "Rescan inventory and update the item list"
+}, function()
+    local scan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch, currentInventoryMinIncome)
+    RefreshItemList(scan, currentInvPage)
+    Library:Notify({
+        Title   = "Backpack Refreshed 🎒",
+        Content = string.format("Found %d Items (%d match filter)", scan.Count, scan.FilteredCount),
+        Type    = "Info",
+        Duration = 2.5
+    })
+end)
 
 -- ─── Section 3: Backpack Summary ───────────────────────
 local InvStatSec = InvTab:AddSection("📊 Backpack Summary")
@@ -2652,6 +2874,129 @@ local InvWeightPara  = InvStatSec:AddParagraph("Total Weight", string.format("%s
 local InvIncomePara  = InvStatSec:AddParagraph("Total Passive Income", string.format("+%s/s 💰", formatNumber(initialScan.TotalIncome)))
 local InvBestPara    = InvStatSec:AddParagraph("👑 Highest Value Item", (initialScan.BestValuePet or initialScan.BestPet) and (initialScan.BestValuePet or initialScan.BestPet).OptionString or "-")
 local InvHeavyPara   = InvStatSec:AddParagraph("⚖️ Heaviest Item", initialScan.HeaviestPet and string.format("%s (%s kg)", initialScan.HeaviestPet.DisplayName, formatNumber(initialScan.HeaviestPet.Weight)) or "-")
+
+-- ─── Section 4: ⚔️ Auto Equip Active Asset ────────────────
+local InvEquipSec = InvTab:AddSection("⚔️ Auto Equip Active Asset")
+
+local EquipStatusPara = nil
+
+local EQUIP_FILTER_MODES = {
+    "💰 Highest Income (Best Value)",
+    "⚖️ Heaviest Weight",
+    "👑 Highest Rarity Tier",
+    "🎯 Match Auto Trade Filter",
+    "📦 Equip All Matching Filter (Batch)"
+}
+
+InvEquipSec:AddToggle({
+    Name = "⚡ Enable Auto Equip Active Asset",
+    Default = Config.AutoEquipAsset or false,
+    Tooltip = "Automatically equip the best asset according to selected filtering mode (Equips to hand first, then invokes ActiveAssets: RequestEquip)"
+}, function(state)
+    StealAnEggTrade.SetAutoEquip(state)
+    Library:Notify({
+        Title   = state and "Auto Equip Started ⚔️" or "Auto Equip Stopped ⏹️",
+        Content = state and ("Mode: " .. tostring(Config.AutoEquipMode)) or "Auto equip loop is now disabled.",
+        Type    = state and "Success" or "Info",
+        Duration = 2.5
+    })
+end)
+
+InvEquipSec:AddDropdown({
+    Name = "🎯 Equip Filtering Mode",
+    Options = EQUIP_FILTER_MODES,
+    Default = Config.AutoEquipMode or EQUIP_FILTER_MODES[1],
+    Flag = "AutoEquipModeDropdown",
+    Tooltip = "Choose which asset filtering mode to prioritize for Auto Equip"
+}, function(selectedMode)
+    Config.AutoEquipMode = selectedMode or EQUIP_FILTER_MODES[1]
+    Library:Notify({
+        Title   = "Equip Mode Updated 🎯",
+        Content = "Mode: " .. tostring(Config.AutoEquipMode),
+        Type    = "Info",
+        Duration = 2
+    })
+end)
+
+InvEquipSec:AddButton({
+    Name = "⚡ Equip Best Asset Now (1x)",
+    Tooltip = "Instantly find and equip the best asset right now based on active Equip Filtering Mode"
+}, function()
+    local scan = StealAnEggTrade.ScanInventory()
+    local mode = Config.AutoEquipMode or "💰 Highest Income (Best Value)"
+    local targetTool = nil
+    
+    if mode == "💰 Highest Income (Best Value)" then
+        local best = scan.BestValuePet or scan.BestPet
+        targetTool = best and best.Instance
+    elseif mode == "⚖️ Heaviest Weight" then
+        local heavy = scan.HeaviestPet
+        targetTool = heavy and heavy.Instance
+    elseif mode == "👑 Highest Rarity Tier" then
+        local bestTier = scan.BestTierPet or scan.BestPet
+        targetTool = bestTier and bestTier.Instance
+    else
+        -- Match Filter
+        local tools = scan.Tools or StealAnEggTrade.GetAllTools()
+        for _, t in ipairs(tools) do
+            if StealAnEggTrade.MatchesFilter(t, Config) then
+                targetTool = t
+                break
+            end
+        end
+    end
+    
+    if targetTool then
+        local ok, msg = StealAnEggTrade.EquipActiveAsset(targetTool)
+        if ok then
+            Library:Notify({
+                Title   = "Equipped Active Asset! ⚔️",
+                Content = "Successfully equipped: " .. (Config.LastEquippedAssetName or targetTool.Name),
+                Type    = "Success",
+                Duration = 3
+            })
+        else
+            Library:Notify({
+                Title   = "Failed to Equip ❌",
+                Content = tostring(msg),
+                Type    = "Error",
+                Duration = 3.5
+            })
+        end
+    else
+        Library:Notify({
+            Title   = "No Matching Asset ⚠️",
+            Content = "Could not find any suitable asset to equip.",
+            Type    = "Warning",
+            Duration = 2.5
+        })
+    end
+end)
+
+InvEquipSec:AddButton({
+    Name = "📦 Equip All Filtered Assets (Batch)",
+    Tooltip = "Equip all items that match the Auto Trade filter criteria one by one"
+}, function()
+    local tools = StealAnEggTrade.GetAllTools()
+    local count = 0
+    task.spawn(function()
+        for _, t in ipairs(tools) do
+            if StealAnEggTrade.MatchesFilter(t, Config) then
+                local ok, _ = StealAnEggTrade.EquipActiveAsset(t)
+                if ok then count = count + 1 end
+                task.wait(Config.AutoEquipDelay or 0.3)
+            end
+        end
+        Library:Notify({
+            Title   = "Batch Equip Completed 📦",
+            Content = string.format("Equipped %d assets to plot/character!", count),
+            Type    = "Success",
+            Duration = 3.5
+        })
+    end)
+end)
+
+EquipStatusPara = InvEquipSec:AddParagraph("Status Auto Equip", "Mode: " .. tostring(Config.AutoEquipMode) .. "\nLast Equipped: -")
 
 
 
@@ -2780,9 +3125,8 @@ FilterSec:AddInput({
     Config.MinIncome = incomeVal
     currentInventoryMinIncome = incomeVal
     local scan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch, currentInventoryMinIncome)
-    if InvItemListPara then
-        InvItemListPara:Set("📋 Item List", BuildItemListText(scan))
-    end
+    currentInvPage = 1
+    RefreshItemList(scan, 1)
     if incomeVal > 0 then
         Library:Notify({
             Title   = "Min Income Diset 💰",
@@ -3130,10 +3474,12 @@ local StatsSec = StatsTab:AddSection("Statistik Transaksi Gifting & Auto Sell")
 local TotalSentPara     = StatsSec:AddParagraph("Total Terkirim", "0 Item")
 local TotalAcceptedPara = StatsSec:AddParagraph("Total Diterima (Accept)", "0 Item Diterima 📥")
 local TotalSoldPara     = StatsSec:AddParagraph("Total Item Terjual", "0 Item Terjual 💰")
+local TotalEquippedPara = StatsSec:AddParagraph("Total Asset Di-Equip", "0 Asset Di-Equip ⚔️")
 local SuccessPara       = StatsSec:AddParagraph("Status Sukses Gift", "0 Sukses")
 local FailPara          = StatsSec:AddParagraph("Status Gagal Gift", "0 Gagal")
 local LastItemPara      = StatsSec:AddParagraph("Item Terakhir Digift", "-")
 local LastSoldPara      = StatsSec:AddParagraph("Item Terakhir Dijual", "-")
+local LastEquippedPara  = StatsSec:AddParagraph("Asset Terakhir Di-Equip", "-")
 
 StatsSec:AddButton({
     Name = "🔄 Reset Statistik",
@@ -3144,11 +3490,13 @@ StatsSec:AddButton({
     TradeStats.FailCount = 0
     TradeStats.AcceptedCount = 0
     TradeStats.SellCount = 0
+    TradeStats.EquipCount = 0
     TradeStats.LastItemName = "-"
     TradeStats.LastSoldName = "-"
+    TradeStats.LastEquippedName = "-"
     Library:Notify({
         Title   = "Stats Reset",
-        Content = "Statistik transaksi & penjualan berhasil di-reset!",
+        Content = "Statistik transaksi, penjualan & equip berhasil di-reset!",
         Type    = "Info",
         Duration = 2
     })
@@ -3301,7 +3649,7 @@ task.spawn(function()
             
             -- 1. Tab 🎒: Item List & Backpack Summary (English)
             if InvItemListPara then
-                InvItemListPara:Set("📋 Item List", BuildItemListText(scan))
+                InvItemListPara:Set("📋 Item List", BuildItemListText(scan, currentInvPage))
             end
             if InvCountPara and InvWeightPara and InvIncomePara and InvBestPara and InvHeavyPara then
                 InvCountPara:Set("Total Items", string.format("%d Items • %d Favorites ⭐", scan.Count, scan.FavoriteCount))
@@ -3309,6 +3657,15 @@ task.spawn(function()
                 InvIncomePara:Set("Total Passive Income", string.format("+%s/s 💰%s", formatNumber(scan.TotalIncome), formatIncome(scan.TotalIncome)))
                 InvBestPara:Set("👑 Highest Value Item", (scan.BestValuePet or scan.BestPet) and (scan.BestValuePet or scan.BestPet).OptionString or "-")
                 InvHeavyPara:Set("⚖️ Heaviest Item", scan.HeaviestPet and string.format("%s [%s] (%s kg)", scan.HeaviestPet.DisplayName, scan.HeaviestPet.BaseMutation, formatNumber(scan.HeaviestPet.Weight)) or "-")
+            end
+            if EquipStatusPara then
+                local statusDesc = string.format("Status: %s\nMode: %s\nLast Equipped: %s\nTotal Equipped Sesi Ini: %d Asset ⚔️",
+                    Config.AutoEquipAsset and "🟢 Active (Looping)" or "⚪ Disabled",
+                    tostring(Config.AutoEquipMode),
+                    Config.LastEquippedAssetName and string.format("%s [UID: %s]", Config.LastEquippedAssetName, tostring(Config.LastEquippedAssetUID or "-")) or "-",
+                    TradeStats.EquipCount or 0
+                )
+                EquipStatusPara:Set("Status Auto Equip", statusDesc)
             end
             
             -- 2. Tab 🎯: Hitung Item Cocok Trade Filter
@@ -3368,15 +3725,21 @@ task.spawn(function()
                 SellStatusPara:Set("Status Auto Sell", sellDesc)
             end
             
-            -- 4. Tab 📊: Statistik Gifting & Auto Sell
+            -- 4. Tab 📊: Statistik Gifting, Auto Sell & Equip
             if TotalSentPara and TotalAcceptedPara and TotalSoldPara and SuccessPara and FailPara and LastItemPara and LastSoldPara then
                 TotalSentPara:Set("Total Terkirim", tostring(TradeStats.TotalSent) .. " Item Terkirim")
                 TotalAcceptedPara:Set("Total Diterima (Accept)", tostring(TradeStats.AcceptedCount) .. " Gift Diterima 📥")
                 TotalSoldPara:Set("Total Item Terjual", tostring(TradeStats.SellCount or 0) .. " Item Terjual 💰")
+                if TotalEquippedPara then
+                    TotalEquippedPara:Set("Total Asset Di-Equip", tostring(TradeStats.EquipCount or 0) .. " Asset Di-Equip ⚔️")
+                end
                 SuccessPara:Set("Status Sukses Gift", tostring(TradeStats.SuccessCount) .. " Transaksi Sukses")
                 FailPara:Set("Status Gagal Gift", tostring(TradeStats.FailCount) .. " Gagal")
                 LastItemPara:Set("Item Terakhir Digift", tostring(TradeStats.LastItemName))
                 LastSoldPara:Set("Item Terakhir Dijual", tostring(TradeStats.LastSoldName or "-"))
+                if LastEquippedPara then
+                    LastEquippedPara:Set("Asset Terakhir Di-Equip", tostring(TradeStats.LastEquippedName or "-"))
+                end
             end
             
             -- 5. Tab 🌐: Server Info & Uptime
