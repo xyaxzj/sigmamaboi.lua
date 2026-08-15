@@ -322,8 +322,38 @@ local function HandleKickMinigame(timeoutSec)
         local isPerfect = false
         local tapPos = movingBar.AbsolutePosition + (movingBar.AbsoluteSize / 2)
         
-        if isVertical then
-            -- [ TRACKING VERTIKAL (SUMBU Y) ]
+        -- [ DETEKSI 1: WARNA BACKGROUND HIJAU (113, 239, 107) ]
+        local color = movingBar.BackgroundColor3
+        if color then
+            local r, g, b = color.R, color.G, color.B
+            -- Warna (113, 239, 107) -> G ~= 0.93, R ~= 0.44, B ~= 0.42
+            if g >= 0.8 and g > (r * 1.3) and g > (b * 1.3) then
+                isPerfect = true
+            end
+        end
+
+        -- [ DETEKSI 2: TEKS LABEL 'Message' ATAU 'Charging' (Perfect / MAX) ]
+        if not isPerfect then
+            local msgLabel = movingBar:FindFirstChild("Message") or minigameGui:FindFirstChild("Message", true)
+            local chgLabel = movingBar:FindFirstChild("Charging") or minigameGui:FindFirstChild("Charging", true)
+            local txt = ((msgLabel and msgLabel.Text) or "") .. " " .. ((chgLabel and chgLabel.Text) or "")
+            local txtLower = txt:lower()
+            if txtLower:find("perfect") or txtLower:find("max") or txtLower:find("100") then
+                isPerfect = true
+            end
+        end
+
+        -- [ DETEKSI 3: TINGGI BAR ABSOLUTE SIZE Y (Mencapai Puncak 130+ px) ]
+        if not isPerfect and movingBar.AbsoluteSize then
+            if movingBar.AbsoluteSize.Y >= 125 then
+                isPerfect = true
+            elseif parentFrame and (movingBar.AbsoluteSize.Y / parentFrame.AbsoluteSize.Y) >= 0.88 then
+                isPerfect = true
+            end
+        end
+
+        -- [ DETEKSI 4: POSISI KOORDINAT Y / TARGET ZONE ]
+        if not isPerfect then
             local barCenterY = movingBar.AbsolutePosition.Y + (movingBar.AbsoluteSize.Y / 2)
             local parentTopY = parentFrame and parentFrame.AbsolutePosition.Y or 0
             local parentHeight = parentFrame and parentFrame.AbsoluteSize.Y or 200
@@ -335,28 +365,20 @@ local function HandleKickMinigame(timeoutSec)
                     isPerfect = true
                 end
             else
-                -- Target puncak atas bar (Top 15% dari bar / mendekati rounded cap)
                 local distFromTop = barCenterY - parentTopY
                 if distFromTop <= math.max(25, parentHeight * 0.15) then
                     isPerfect = true
                 end
             end
-        else
-            -- [ TRACKING HORIZONTAL (SUMBU X) ]
-            local barCenterX = movingBar.AbsolutePosition.X + (movingBar.AbsoluteSize.X / 2)
-            local targetCenterX = targetZone and (targetZone.AbsolutePosition.X + (targetZone.AbsoluteSize.X / 2)) or (parentFrame and (parentFrame.AbsolutePosition.X + parentFrame.AbsoluteSize.X / 2) or 0)
-            local tolerance = targetZone and math.max(16, targetZone.AbsoluteSize.X / 2) or (parentFrame and parentFrame.AbsoluteSize.X * 0.1 or 20)
-            if math.abs(barCenterX - targetCenterX) <= tolerance then
-                isPerfect = true
-            end
         end
         
-        -- Jika mencapai posisi Perfect, langsung tap seketika!
+        -- Eksekusi Tap Seketika saat Kondisi Perfect Terpenuhi
         if isPerfect then
             hitDone = true
             if connection then connection:Disconnect() end
             
-            LogDiag("MINIGAME", "🎯 PERFECT TIMING REACHED! Mengirim Tap to Kick...")
+            local colorInfo = string.format("R:%.2f G:%.2f B:%.2f", color.R, color.G, color.B)
+            LogDiag("MINIGAME", string.format("🎯 PERFECT HIT TERCAPAI! [Color: %s | SizeY: %.1f] ➔ Mengirim Tap...", colorInfo, movingBar.AbsoluteSize.Y))
             TapScreen(tapPos)
         end
     end)
