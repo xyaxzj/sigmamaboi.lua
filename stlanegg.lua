@@ -331,7 +331,7 @@ local Config = {
     ProfileRole         = SCRIPT_CONFIG.ProfileRole,
     
     -- Price Rate Configuration (Harga Jual Estimasi per 100M/s)
-    PriceRatePer100M        = 1000,             -- Rate default: 1000 (1k) per 100M/s income
+    PriceRatePer100M        = 0,                -- 0 / Kosong = Sembunyikan harga (Hanya muncul jika diisi user)
     
     -- Manual Item Trade Configuration (Multi-Select Support)
     SelectedTradeItems      = {},               -- List opsi teks item yang dipilih
@@ -693,8 +693,8 @@ end
 -- Helper Hitung & Format Estimasi Harga Jual (100M/s = 1k, pembulatan ke bawah per kelipatan 100M)
 local function CalculateItemPrice(income, customRate)
     income = tonumber(income) or 0
-    local rate = tonumber(customRate) or (Config and tonumber(Config.PriceRatePer100M)) or 1000
-    if income < 100000000 or rate <= 0 then
+    local rate = customRate ~= nil and tonumber(customRate) or (Config and tonumber(Config.PriceRatePer100M)) or 0
+    if not rate or rate <= 0 or income < 100000000 then
         return 0, ""
     end
     
@@ -3446,23 +3446,47 @@ InvFilterSec:AddInput({
 end)
 
 InvFilterSec:AddInput({
-    Name = "🏷️ Custom Price Rate (per 100M/s Income)",
-    Placeholder = string.format("Default: %s (= 1k per 100M/s). e.g. 1000, 1.5k, 2000", formatNumber(Config.PriceRatePer100M or 1000)),
-    Tooltip = "Atur harga jual estimasi manual per kelipatan 100M/s income pasif. Contoh: 1000 = 1k, 1500 = 1.5k, 2000 = 2k"
+    Name = "🏷️ Custom Price Rate (per 100M/s Income) [Opsional]",
+    Placeholder = "Kosong = Tanpa Tampilan Harga (Cth isi: 1000, 1.5k, 2000)",
+    Tooltip = "Atur harga jual estimasi per 100M/s income pasif. Jika kolom ini dikosongkan (empty), maka tampilan harga jual TIDAK AKAN MUNCUL sama sekali."
 }, function(text)
+    if not text or text == "" or text == "0" or text == "none" or text == "off" or text == "bebas" then
+        Config.PriceRatePer100M = 0
+        local scan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch, currentInventoryMinIncome)
+        RefreshItemList(scan, currentInvPage)
+        Library:Notify({
+            Title   = "Tampilan Harga Nonaktif 🏷️",
+            Content = "Kolom kosong: Tampilan harga disembunyikan.",
+            Type    = "Info",
+            Duration = 2.5
+        })
+        return
+    end
+    
     local rateVal = ParseIncomeInput(text)
     if rateVal <= 0 then
-        rateVal = tonumber(text:gsub("[^%d]", "")) or 1000
+        rateVal = tonumber(text:gsub("[^%d]", "")) or 0
     end
-    Config.PriceRatePer100M = math.max(1, rateVal)
+    
+    Config.PriceRatePer100M = rateVal
     local scan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch, currentInventoryMinIncome)
     RefreshItemList(scan, currentInvPage)
-    Library:Notify({
-        Title   = "Harga Jual Diperbarui 🏷️",
-        Content = string.format("Rate diset: %s per 100M/s income", formatNumber(Config.PriceRatePer100M)),
-        Type    = "Success",
-        Duration = 2.5
-    })
+    
+    if rateVal > 0 then
+        Library:Notify({
+            Title   = "Harga Jual Diperbarui 🏷️",
+            Content = string.format("Rate diset: %s per 100M/s income", formatNumber(Config.PriceRatePer100M)),
+            Type    = "Success",
+            Duration = 2.5
+        })
+    else
+        Library:Notify({
+            Title   = "Tampilan Harga Nonaktif 🏷️",
+            Content = "Kolom kosong: Tampilan harga disembunyikan.",
+            Type    = "Info",
+            Duration = 2.5
+        })
+    end
 end)
 
 -- ─── Section 2: Item List (Paginated) ──────────────────
@@ -3509,6 +3533,9 @@ end)
 local InvStatSec = InvTab:AddSection("📊 Backpack Summary")
 
 local function FormatPriceDisplay(totalPrice)
+    if not Config.PriceRatePer100M or Config.PriceRatePer100M <= 0 then
+        return "Nonaktif (Kolom Harga Kosong)"
+    end
     if not totalPrice or totalPrice <= 0 then return "0" end
     if totalPrice >= 1e6 then
         return string.format('<font color="#FFD700"><b>%.2fM</b></font> (Rp %s)', totalPrice / 1e6, formatNumber(totalPrice))
@@ -3522,7 +3549,7 @@ end
 local InvCountPara   = InvStatSec:AddParagraph("Total Items", string.format("%d Items", initialScan.Count))
 local InvWeightPara  = InvStatSec:AddParagraph("Total Weight", string.format("%s kg", formatNumber(initialScan.TotalWeight)))
 local InvIncomePara  = InvStatSec:AddParagraph("Total Passive Income", string.format("%s 💰", formatIncome(initialScan.TotalIncome)))
-local InvPricePara   = InvStatSec:AddParagraph("Total Estimated Value", string.format("🏷️ %s (Rate: %s / 100M)", FormatPriceDisplay(initialScan.TotalPrice or 0), formatNumber(Config.PriceRatePer100M)))
+local InvPricePara   = InvStatSec:AddParagraph("Total Estimated Value", (Config.PriceRatePer100M and Config.PriceRatePer100M > 0) and string.format("🏷️ %s (Rate: %s / 100M)", FormatPriceDisplay(initialScan.TotalPrice or 0), formatNumber(Config.PriceRatePer100M)) or "Nonaktif (Kolom Harga Kosong)")
 local InvBestPara    = InvStatSec:AddParagraph("👑 Highest Value Item", (initialScan.BestValuePet or initialScan.BestPet) and (initialScan.BestValuePet or initialScan.BestPet).OptionString or "-")
 local InvHeavyPara   = InvStatSec:AddParagraph("⚖️ Heaviest Item", initialScan.HeaviestPet and string.format("%s (%s kg)", initialScan.HeaviestPet.DisplayName, formatNumber(initialScan.HeaviestPet.Weight)) or "-")
 
@@ -4603,7 +4630,11 @@ task.spawn(function()
                 InvCountPara:Set("Total Items", string.format("%d Items • %d Favorites ⭐", scan.Count, scan.FavoriteCount))
                 InvWeightPara:Set("Total Weight", string.format("%s kg (%.2fM kg)", formatNumber(scan.TotalWeight), scan.TotalWeight / 1000000))
                 InvIncomePara:Set("Total Passive Income", string.format("%s 💰", formatIncome(scan.TotalIncome)))
-                InvPricePara:Set("Total Estimated Value", string.format("🏷️ %s (Rate: %s / 100M)", FormatPriceDisplay(scan.TotalPrice or 0), formatNumber(Config.PriceRatePer100M)))
+                if Config.PriceRatePer100M and Config.PriceRatePer100M > 0 then
+                    InvPricePara:Set("Total Estimated Value", string.format("🏷️ %s (Rate: %s / 100M)", FormatPriceDisplay(scan.TotalPrice or 0), formatNumber(Config.PriceRatePer100M)))
+                else
+                    InvPricePara:Set("Total Estimated Value", "Nonaktif (Kolom Harga Kosong)")
+                end
                 InvBestPara:Set("👑 Highest Value Item", (scan.BestValuePet or scan.BestPet) and (scan.BestValuePet or scan.BestPet).OptionString or "-")
                 InvHeavyPara:Set("⚖️ Heaviest Item", scan.HeaviestPet and string.format("%s [%s] (%s kg)", scan.HeaviestPet.DisplayName, scan.HeaviestPet.BaseMutation, formatNumber(scan.HeaviestPet.Weight)) or "-")
             end
