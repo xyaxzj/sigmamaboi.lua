@@ -33,6 +33,7 @@ local CONFIG = {
     REMOVE_OTHER_PLAYER = _G.autoRemovePlayer ~= nil and _G.autoRemovePlayer or true, -- true: Hapus player lain dari client (FPS Boost Ekstrem)
     REMOVE_PLOTS_FOLDER = _G.removePlots ~= nil and _G.removePlots or true,           -- true: Hapus folder Plot player lain & folder Data
     PRESERVE_MY_PLOT    = true,                         -- true: JANGAN hapus plot kita (Smart Detection via BillboardGui/Name/Icon)
+    HIDE_CLIENT_ASSETS  = _G.hideClientAssets ~= nil and _G.hideClientAssets or true, -- true: Sembunyikan model di ClientRenderedAssets (Invisible tanpa dihapus)
     STRIP_ACCESSORIES   = _G.stripAccessories ~= nil and _G.stripAccessories or true, -- true: Hapus rambut, topi, baju player lain (jika player tidak dihapus)
     DISABLE_3D_RENDER   = _G.disable3dRender or false,  -- true: Matikan 3D Rendering layar (GPU Saver Magic Loot)
     OPTIMIZE_TERRAIN    = true,                         -- true: Matikan efek ombak air & dekorasi rumput
@@ -46,6 +47,7 @@ local CONFIG = {
 _G.autoRemovePlayer = CONFIG.REMOVE_OTHER_PLAYER
 _G.removePlayer = CONFIG.REMOVE_OTHER_PLAYER
 _G.removePlayers = CONFIG.REMOVE_OTHER_PLAYER
+_G.hideClientAssets = CONFIG.HIDE_CLIENT_ASSETS
 
 -- 1. SET FPS CAP
 pcall(function()
@@ -62,6 +64,33 @@ if CONFIG.DISABLE_3D_RENDER then
 end
 
 local cleanedCount = 0
+local invisibleAssetsCount = 0
+
+---------------------------------------------------------
+-- 👻 HELPER INVISIBLE MODEL (ANTI-LAG TANPA HAPUS OBJEK)
+---------------------------------------------------------
+local function makeModelInvisible(obj)
+    if not obj then return end
+    pcall(function()
+        if obj:IsA("BasePart") then
+            obj.Transparency = 1
+            pcall(function() obj.LocalTransparencyModifier = 1 end)
+            obj.CastShadow = false
+            invisibleAssetsCount = invisibleAssetsCount + 1
+        elseif obj:IsA("Decal") or obj:IsA("Texture") then
+            obj.Transparency = 1
+        elseif obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Beam") or 
+               obj:IsA("Fire") or obj:IsA("Smoke") or obj:IsA("Sparkles") or 
+               obj:IsA("Highlight") or obj:IsA("SurfaceAppearance") then
+            pcall(function() obj.Enabled = false end)
+            pcall(function() obj.Transparency = 1 end)
+        elseif obj:IsA("Light") then -- PointLight, SurfaceLight, SpotLight
+            obj.Enabled = false
+        elseif obj:IsA("BillboardGui") or obj:IsA("SurfaceGui") then
+            obj.Enabled = false
+        end
+    end)
+end
 
 ---------------------------------------------------------
 -- 🛡️ ANTI-AFK SYSTEM (BUILT-IN)
@@ -150,6 +179,13 @@ end
 ---------------------------------------------------------
 local function optimizeObject(v)
     if not v or not v.Parent then return end
+    
+    -- Jika objek berada di dalam ClientRenderedAssets dan HIDE_CLIENT_ASSETS aktif, pastikan tetap invisible
+    if CONFIG.HIDE_CLIENT_ASSETS and (v.Name == "ClientRenderedAssets" or (v.Parent and v.Parent.Name == "ClientRenderedAssets") or v:FindFirstAncestor("ClientRenderedAssets")) then
+        makeModelInvisible(v)
+        return
+    end
+
     pcall(function()
         if v:IsA("BasePart") then
             v.Material = Enum.Material.SmoothPlastic
@@ -254,7 +290,43 @@ end
 hapusPlotsDanData()
 
 ---------------------------------------------------------
--- 4. TERRAIN & WATER OPTIMIZATION
+-- 4. INVISIBLE CLIENT RENDERED ASSETS (ITEM MODEL HIDER)
+---------------------------------------------------------
+local function sembunyikanClientAssets()
+    if not CONFIG.HIDE_CLIENT_ASSETS then return end
+    
+    local function processFolder(folder)
+        if not folder then return end
+        for _, descendant in ipairs(folder:GetDescendants()) do
+            makeModelInvisible(descendant)
+        end
+        folder.DescendantAdded:Connect(function(descendant)
+            task.defer(function()
+                makeModelInvisible(descendant)
+            end)
+        end)
+    end
+
+    -- 1. Scan folder ClientRenderedAssets di workspace
+    for _, child in ipairs(workspace:GetChildren()) do
+        if child.Name == "ClientRenderedAssets" or child.Name:find("ClientRendered") then
+            processFolder(child)
+            print("👻 [Anti-Lag] Menyembunyikan (Invisible) Model di: " .. child.Name)
+        end
+    end
+
+    -- 2. Scan jika berada di sub-folder
+    local deepFolder = workspace:FindFirstChild("ClientRenderedAssets", true)
+    if deepFolder and deepFolder.Parent ~= workspace then
+        processFolder(deepFolder)
+        print("👻 [Anti-Lag] Menyembunyikan (Invisible) Model di: " .. deepFolder:GetFullName())
+    end
+end
+
+sembunyikanClientAssets()
+
+---------------------------------------------------------
+-- 5. TERRAIN & WATER OPTIMIZATION
 ---------------------------------------------------------
 if CONFIG.OPTIMIZE_TERRAIN then
     pcall(function()
@@ -272,7 +344,7 @@ if CONFIG.OPTIMIZE_TERRAIN then
 end
 
 ---------------------------------------------------------
--- 5. ENGINE RENDERING QUALITY
+-- 6. ENGINE RENDERING QUALITY
 ---------------------------------------------------------
 pcall(function()
     settings().Rendering.QualityLevel = 1
@@ -283,7 +355,7 @@ pcall(function()
 end)
 
 ---------------------------------------------------------
--- 6. PEMBANTAIAN PLAYER / REMOVE PLAYER LAIN (METODE LENGKAP & REKURSIF)
+-- 7. PEMBANTAIAN PLAYER / REMOVE PLAYER LAIN (METODE LENGKAP & REKURSIF)
 ---------------------------------------------------------
 local function musnahkanPlayer(player)
     if player ~= lp and player.Name ~= lpName then
@@ -371,12 +443,20 @@ elseif CONFIG.STRIP_ACCESSORIES then
 end
 
 ---------------------------------------------------------
--- 7. REALTIME LISTENERS (AUTO CLEAN REALTIME & EVENT BARU)
+-- 8. REALTIME LISTENERS (AUTO CLEAN REALTIME & EVENT BARU)
 ---------------------------------------------------------
 if CONFIG.ENABLE_REALTIME_OPT then
-    -- Listener 1: Deteksi objek / model / humanoid / plot baru yang dimuat di workspace
+    -- Listener 1: Deteksi objek / model / humanoid / plot / client assets baru yang dimuat di workspace
     workspace.DescendantAdded:Connect(function(descendant)
         task.defer(function()
+            -- Deteksi dan buat Invisible item di ClientRenderedAssets
+            if CONFIG.HIDE_CLIENT_ASSETS then
+                if descendant.Name == "ClientRenderedAssets" or (descendant.Parent and descendant.Parent.Name == "ClientRenderedAssets") or descendant:FindFirstAncestor("ClientRenderedAssets") then
+                    makeModelInvisible(descendant)
+                    return
+                end
+            end
+
             -- Deteksi Plot baru
             if CONFIG.REMOVE_PLOTS_FOLDER and descendant:IsA("Model") and descendant.Parent and descendant.Parent.Name == "Plots" then
                 task.wait(0.3) -- Beri waktu agar BillboardGui termuat
@@ -450,7 +530,7 @@ pcall(function()
     if StarterGui then
         StarterGui:SetCore("SendNotification", {
             Title = "🚀 Ultimate FPS Boost",
-            Text = string.format("Aktif! (%d Objek, Plot & Player Dimusnahkan)", cleanedCount),
+            Text = string.format("Aktif! (%d Objek, Plot & Player Dibersihkan)", cleanedCount),
             Duration = 5
         })
     end
@@ -463,4 +543,5 @@ print(string.format("🎯 FPS Cap                 : %d", CONFIG.FPS_CAP))
 print(string.format("🥔 White Potato Mode       : %s", tostring(CONFIG.WHITE_MAP_MODE)))
 print(string.format("💀 Hapus Player Lain       : %s", tostring(CONFIG.REMOVE_OTHER_PLAYER)))
 print(string.format("🏡 Smart Plot Protection   : %s", tostring(CONFIG.PRESERVE_MY_PLOT)))
+print(string.format("👻 Invisible Client Assets  : %s", tostring(CONFIG.HIDE_CLIENT_ASSETS)))
 print("══════════════════════════════════════════════════")
