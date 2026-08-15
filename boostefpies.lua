@@ -33,7 +33,7 @@ local CONFIG = {
     REMOVE_OTHER_PLAYER = _G.autoRemovePlayer ~= nil and _G.autoRemovePlayer or true, -- true: Hapus player lain dari client (FPS Boost Ekstrem)
     REMOVE_PLOTS_FOLDER = _G.removePlots ~= nil and _G.removePlots or true,           -- true: Hapus folder Plot player lain & folder Data
     PRESERVE_MY_PLOT    = true,                         -- true: JANGAN hapus plot kita (Smart Detection via BillboardGui/Name/Icon)
-    HIDE_CLIENT_ASSETS  = _G.hideClientAssets ~= nil and _G.hideClientAssets or true, -- true: Sembunyikan model di ClientRenderedAssets (Invisible tanpa dihapus)
+    REMOVE_CLIENT_ASSETS= _G.removeClientAssets ~= nil and _G.removeClientAssets or (_G.hideClientAssets ~= nil and _G.hideClientAssets or true), -- true: HAPUS model item di ClientRenderedAssets
     HIDE_INCOME_CASH    = _G.hideIncomeCash ~= nil and _G.hideIncomeCash or true,     -- true: Musnahkan SyncedIncomeCashAttachment & SyncedIncomeCash di Terrain
     STRIP_ACCESSORIES   = _G.stripAccessories ~= nil and _G.stripAccessories or true, -- true: Hapus rambut, topi, baju player lain (jika player tidak dihapus)
     DISABLE_3D_RENDER   = _G.disable3dRender or false,  -- true: Matikan 3D Rendering layar (GPU Saver Magic Loot)
@@ -48,7 +48,8 @@ local CONFIG = {
 _G.autoRemovePlayer = CONFIG.REMOVE_OTHER_PLAYER
 _G.removePlayer = CONFIG.REMOVE_OTHER_PLAYER
 _G.removePlayers = CONFIG.REMOVE_OTHER_PLAYER
-_G.hideClientAssets = CONFIG.HIDE_CLIENT_ASSETS
+_G.removeClientAssets = CONFIG.REMOVE_CLIENT_ASSETS
+_G.hideClientAssets = CONFIG.REMOVE_CLIENT_ASSETS
 _G.hideIncomeCash = CONFIG.HIDE_INCOME_CASH
 
 -- 1. SET FPS CAP
@@ -228,9 +229,12 @@ end
 local function optimizeObject(v)
     if not v or not v.Parent then return end
     
-    -- Jika objek berada di dalam ClientRenderedAssets dan HIDE_CLIENT_ASSETS aktif, pastikan tetap invisible
-    if CONFIG.HIDE_CLIENT_ASSETS and (v.Name == "ClientRenderedAssets" or (v.Parent and v.Parent.Name == "ClientRenderedAssets") or v:FindFirstAncestor("ClientRenderedAssets")) then
-        makeModelInvisible(v)
+    -- Jika objek berada di dalam ClientRenderedAssets dan REMOVE_CLIENT_ASSETS aktif, langsung musnahkan
+    if CONFIG.REMOVE_CLIENT_ASSETS and (v.Name == "ClientRenderedAssets" or (v.Parent and v.Parent.Name == "ClientRenderedAssets") or v:FindFirstAncestor("ClientRenderedAssets")) then
+        pcall(function() 
+            v:Destroy() 
+            cleanedCount = cleanedCount + 1
+        end)
         return
     end
 
@@ -338,19 +342,25 @@ end
 hapusPlotsDanData()
 
 ---------------------------------------------------------
--- 4. INVISIBLE CLIENT RENDERED ASSETS (ITEM MODEL HIDER)
+-- 4. HAPUS MODEL ITEM DI CLIENTRENDEREDASSETS (DIRECT PURGE)
 ---------------------------------------------------------
-local function sembunyikanClientAssets()
-    if not CONFIG.HIDE_CLIENT_ASSETS then return end
+local function hapusClientAssets()
+    if not CONFIG.REMOVE_CLIENT_ASSETS then return end
     
     local function processFolder(folder)
         if not folder then return end
-        for _, descendant in ipairs(folder:GetDescendants()) do
-            makeModelInvisible(descendant)
+        for _, child in ipairs(folder:GetChildren()) do
+            pcall(function()
+                child:Destroy()
+                cleanedCount = cleanedCount + 1
+            end)
         end
-        folder.DescendantAdded:Connect(function(descendant)
+        folder.ChildAdded:Connect(function(child)
             task.defer(function()
-                makeModelInvisible(descendant)
+                pcall(function()
+                    child:Destroy()
+                    cleanedCount = cleanedCount + 1
+                end)
             end)
         end)
     end
@@ -359,7 +369,7 @@ local function sembunyikanClientAssets()
     for _, child in ipairs(workspace:GetChildren()) do
         if child.Name == "ClientRenderedAssets" or child.Name:find("ClientRendered") then
             processFolder(child)
-            print("👻 [Anti-Lag] Menyembunyikan (Invisible) Model di: " .. child.Name)
+            print("🗑️ [Anti-Lag] Menghapus Model Item di: " .. child.Name)
         end
     end
 
@@ -367,11 +377,11 @@ local function sembunyikanClientAssets()
     local deepFolder = workspace:FindFirstChild("ClientRenderedAssets", true)
     if deepFolder and deepFolder.Parent ~= workspace then
         processFolder(deepFolder)
-        print("👻 [Anti-Lag] Menyembunyikan (Invisible) Model di: " .. deepFolder:GetFullName())
+        print("🗑️ [Anti-Lag] Menghapus Model Item di sub-folder: " .. deepFolder:GetFullName())
     end
 end
 
-sembunyikanClientAssets()
+hapusClientAssets()
 
 ---------------------------------------------------------
 -- 5. TERRAIN & WATER OPTIMIZATION (TERMASUK INCOME CASH CLEANER)
@@ -513,10 +523,13 @@ if CONFIG.ENABLE_REALTIME_OPT then
     -- Listener 1: Deteksi objek / model / humanoid / plot / client assets baru yang dimuat di workspace
     workspace.DescendantAdded:Connect(function(descendant)
         task.defer(function()
-            -- Deteksi dan buat Invisible item di ClientRenderedAssets
-            if CONFIG.HIDE_CLIENT_ASSETS then
-                if descendant.Name == "ClientRenderedAssets" or (descendant.Parent and descendant.Parent.Name == "ClientRenderedAssets") or descendant:FindFirstAncestor("ClientRenderedAssets") then
-                    makeModelInvisible(descendant)
+            -- Deteksi dan langsung musnahkan model/objek di ClientRenderedAssets
+            if CONFIG.REMOVE_CLIENT_ASSETS then
+                if (descendant.Parent and descendant.Parent.Name == "ClientRenderedAssets") or descendant:FindFirstAncestor("ClientRenderedAssets") then
+                    pcall(function() 
+                        descendant:Destroy() 
+                        cleanedCount = cleanedCount + 1
+                    end)
                     return
                 end
             end
@@ -616,6 +629,6 @@ print(string.format("🎯 FPS Cap                 : %d", CONFIG.FPS_CAP))
 print(string.format("🥔 White Potato Mode       : %s", tostring(CONFIG.WHITE_MAP_MODE)))
 print(string.format("💀 Hapus Player Lain       : %s", tostring(CONFIG.REMOVE_OTHER_PLAYER)))
 print(string.format("🏡 Smart Plot Protection   : %s", tostring(CONFIG.PRESERVE_MY_PLOT)))
-print(string.format("👻 Invisible Client Assets  : %s", tostring(CONFIG.HIDE_CLIENT_ASSETS)))
+print(string.format("🗑️ Hapus Client Item Assets : %s", tostring(CONFIG.REMOVE_CLIENT_ASSETS)))
 print(string.format("💵 Auto Clean Income Cash   : %s", tostring(CONFIG.HIDE_INCOME_CASH)))
 print("══════════════════════════════════════════════════")
