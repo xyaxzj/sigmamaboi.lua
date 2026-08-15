@@ -191,16 +191,56 @@ local function TriggerGuiClick(btn)
     pcall(function()
         local absPos = btn.AbsolutePosition
         local absSize = btn.AbsoluteSize
-        local center = absPos + (absSize / 2)
-        VirtualUser:Button1Down(Vector2.new(center.X, center.Y))
+-- Helper simulasi tap/klik layar penuh untuk minigame "Tap to Kick!"
+local function TapScreen(targetPoint)
+    local vSize = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(800, 600)
+    local x = targetPoint and targetPoint.X or (vSize.X / 2)
+    local y = targetPoint and targetPoint.Y or (vSize.Y / 2)
+
+    -- 1. VirtualInputManager Mouse Click (PC / Emulator)
+    pcall(function()
+        local vim = game:GetService("VirtualInputManager")
+        vim:SendMouseButtonEvent(x, y, 0, true, game, 1)
         task.wait(0.01)
-        VirtualUser:Button1Up(Vector2.new(center.X, center.Y))
+        vim:SendMouseButtonEvent(x, y, 0, false, game, 1)
+    end)
+
+    -- 2. VirtualInputManager Touch Event (Mobile / Touch Device)
+    pcall(function()
+        local vim = game:GetService("VirtualInputManager")
+        vim:SendTouchEvent(0, 0, x, y)
+        task.wait(0.01)
+        vim:SendTouchEvent(0, 2, x, y)
+    end)
+
+    -- 3. VirtualUser Click
+    pcall(function()
+        VirtualUser:Button1Down(Vector2.new(x, y))
+        task.wait(0.01)
+        VirtualUser:Button1Up(Vector2.new(x, y))
+    end)
+
+    -- 4. Firesignal ke seluruh elemen interaktif di KickMinigame
+    pcall(function()
+        local km = playerGui:FindFirstChild("KickMinigame")
+        if km then
+            for _, descendant in ipairs(km:GetDescendants()) do
+                if descendant:IsA("GuiButton") and not descendant.Name:lower():find("cancel") then
+                    if firesignal then
+                        firesignal(descendant.MouseButton1Down)
+                        firesignal(descendant.MouseButton1Click)
+                        firesignal(descendant.Activated)
+                        firesignal(descendant.MouseButton1Up)
+                    end
+                end
+            end
+        end
     end)
 end
 
--- Helper Auto Perfect Timing Bar Minigame
+-- Helper Auto Perfect Timing Bar Minigame (Mendukung Bar Vertikal Y-Axis & Horizontal X-Axis)
 local function HandleKickMinigame(timeoutSec)
-    local deadline = os.clock() + (timeoutSec or 3.5)
+    local deadline = os.clock() + (timeoutSec or 4.0)
     local minigameGui = nil
     
     -- 1. Tunggu KickMinigame aktif di PlayerGui
@@ -209,28 +249,31 @@ local function HandleKickMinigame(timeoutSec)
         if minigameGui and (minigameGui.Enabled or minigameGui:FindFirstChildWhichIsA("Frame", true)) then
             break
         end
-        task.wait(0.05)
+        task.wait(0.03)
     end
     
     if not minigameGui then
-        LogDiag("MINIGAME", "KickMinigame GUI tidak muncul, menggunakan invoke fallback.")
+        LogDiag("MINIGAME", "KickMinigame GUI tidak muncul.")
         return false
     end
     
-    -- 2. Cari MovingBar dan Target/Green Zone
+    -- 2. Cari MovingBar
     local movingBar = minigameGui:FindFirstChild("MovingBar", true)
     if not movingBar then
         LogDiag("MINIGAME", "MovingBar tidak ditemukan di KickMinigame.")
         return false
     end
     
-    local targetZone = nil
     local parentFrame = movingBar.Parent
+    local isVertical = parentFrame and (parentFrame.AbsoluteSize.Y > parentFrame.AbsoluteSize.X) or true
+    
+    -- Cari elemen target / perfect zone jika ada
+    local targetZone = nil
     if parentFrame then
         for _, child in ipairs(parentFrame:GetChildren()) do
             if child:IsA("GuiObject") and child ~= movingBar then
                 local n = child.Name:lower()
-                if n:find("target") or n:find("perfect") or n:find("green") or n:find("zone") or n:find("area") or n:find("goal") then
+                if n:find("target") or n:find("perfect") or n:find("green") or n:find("zone") or n:find("area") or n:find("goal") or n:find("top") then
                     targetZone = child
                     break
                 end
@@ -238,12 +281,11 @@ local function HandleKickMinigame(timeoutSec)
         end
     end
     
-    LogDiag("MINIGAME", string.format("Tracking MovingBar aktif (Target: %s)...", targetZone and targetZone.Name or "Tengah Frame"))
+    LogDiag("MINIGAME", string.format("Tracking Bar %s (Target: %s)...", isVertical and "VERTIKAL ↕️" or "HORIZONTAL ↔️", targetZone and targetZone.Name or "Puncak/Tengah Bar"))
     
     -- 3. RenderStepped Tracking untuk Perfect Hit
     local hitDone = false
     local connection = nil
-    local kickBtn = FindKickButton()
     
     connection = RunService.RenderStepped:Connect(function()
         if hitDone or os.clock() >= deadline or not movingBar.Parent or not minigameGui.Enabled then
@@ -251,42 +293,51 @@ local function HandleKickMinigame(timeoutSec)
             return
         end
         
-        local barCenter = movingBar.AbsolutePosition.X + (movingBar.AbsoluteSize.X / 2)
-        local targetCenter = 0
-        local tolerance = 15 -- pixel toleransi
+        local isPerfect = false
+        local tapPos = movingBar.AbsolutePosition + (movingBar.AbsoluteSize / 2)
         
-        if targetZone then
-            targetCenter = targetZone.AbsolutePosition.X + (targetZone.AbsoluteSize.X / 2)
-            tolerance = math.max(15, targetZone.AbsoluteSize.X / 2)
-        elseif parentFrame and parentFrame:IsA("GuiObject") then
-            targetCenter = parentFrame.AbsolutePosition.X + (parentFrame.AbsoluteSize.X / 2)
-            tolerance = math.max(15, parentFrame.AbsoluteSize.X * 0.1)
+        if isVertical then
+            -- [ TRACKING VERTIKAL (SUMBU Y) ]
+            local barCenterY = movingBar.AbsolutePosition.Y + (movingBar.AbsoluteSize.Y / 2)
+            local parentTopY = parentFrame and parentFrame.AbsolutePosition.Y or 0
+            local parentHeight = parentFrame and parentFrame.AbsoluteSize.Y or 200
+            
+            if targetZone then
+                local targetCenterY = targetZone.AbsolutePosition.Y + (targetZone.AbsoluteSize.Y / 2)
+                local tolerance = math.max(16, targetZone.AbsoluteSize.Y / 2)
+                if math.abs(barCenterY - targetCenterY) <= tolerance then
+                    isPerfect = true
+                end
+            else
+                -- Target puncak atas bar (Top 15% dari bar / mendekati rounded cap)
+                local distFromTop = barCenterY - parentTopY
+                if distFromTop <= math.max(25, parentHeight * 0.15) then
+                    isPerfect = true
+                end
+            end
+        else
+            -- [ TRACKING HORIZONTAL (SUMBU X) ]
+            local barCenterX = movingBar.AbsolutePosition.X + (movingBar.AbsoluteSize.X / 2)
+            local targetCenterX = targetZone and (targetZone.AbsolutePosition.X + (targetZone.AbsoluteSize.X / 2)) or (parentFrame and (parentFrame.AbsolutePosition.X + parentFrame.AbsoluteSize.X / 2) or 0)
+            local tolerance = targetZone and math.max(16, targetZone.AbsoluteSize.X / 2) or (parentFrame and parentFrame.AbsoluteSize.X * 0.1 or 20)
+            if math.abs(barCenterX - targetCenterX) <= tolerance then
+                isPerfect = true
+            end
         end
         
-        -- Cek apakah MovingBar sudah berada tepat di area Perfect
-        if math.abs(barCenter - targetCenter) <= tolerance then
+        -- Jika mencapai posisi Perfect, langsung tap seketika!
+        if isPerfect then
             hitDone = true
             if connection then connection:Disconnect() end
             
-            LogDiag("MINIGAME", string.format("🎯 PERFECT HIT! (Delta: %.1f px)", math.abs(barCenter - targetCenter)))
-            
-            -- Klik KickButton atau tap area minigame untuk mengunci Perfect Kick
-            if kickBtn then
-                TriggerGuiClick(kickBtn)
-            end
-            
-            pcall(function()
-                local center = movingBar.AbsolutePosition + (movingBar.AbsoluteSize / 2)
-                VirtualUser:Button1Down(Vector2.new(center.X, center.Y))
-                task.wait(0.01)
-                VirtualUser:Button1Up(Vector2.new(center.X, center.Y))
-            end)
+            LogDiag("MINIGAME", "🎯 PERFECT TIMING REACHED! Mengirim Tap to Kick...")
+            TapScreen(tapPos)
         end
     end)
     
     -- Tunggu sampai hit selesai atau minigame tertutup
     while not hitDone and os.clock() < deadline and minigameGui.Enabled do
-        task.wait(0.02)
+        task.wait(0.01)
     end
     if connection then pcall(function() connection:Disconnect() end) end
     
