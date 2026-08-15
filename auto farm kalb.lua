@@ -137,9 +137,16 @@ local function LogDiag(category, msg)
 end
 
 -- =============================================
--- 📡 CARI REMOTE
+-- 📡 INTEGRASI NETWORK MODULE RESMI GAME
 -- =============================================
 local networkFolder = ReplicatedStorage:WaitForChild("Shared", 10):WaitForChild("Packages", 10):WaitForChild("Network", 10)
+local Network = nil
+pcall(function()
+    if networkFolder and networkFolder:IsA("ModuleScript") then
+        Network = require(networkFolder)
+    end
+end)
+
 local ref_KickEvent = networkFolder and (networkFolder:FindFirstChild("ref_KickEvent") or networkFolder:WaitForChild("ref_KickEvent", 5))
 local rev_KickEvent = networkFolder and networkFolder:FindFirstChild("rev_KickEvent")
 
@@ -154,6 +161,11 @@ if not ref_KickEvent and not rev_KickEvent then
         end
     end
 end
+
+LogDiag("INIT", string.format("Network Status -> Module: %s | ref_KickEvent: %s", 
+    Network and "TERHUBUNG (require) ✅" or "MANUAL ⚠️",
+    ref_KickEvent and ref_KickEvent:GetFullName() or "TIDAK DITEMUKAN ❌"
+))
 
 -- =============================================
 -- 🎯 UI KICK CONTROLLER & PERFECT TIMING TRACKER
@@ -412,9 +424,18 @@ local function executeKick()
             timestamp = tick()
         end
         
-        LogDiag("KICK", string.format("2. Mengirim ref_KickEvent:InvokeServer(1, 1, %.6f)...", timestamp))
+        LogDiag("KICK", string.format("2. Mengirim Kick Request(1, 1, %.6f)...", timestamp))
         
-        if ref_KickEvent then
+        if Network and Network.InvokeServer then
+            local success, result = pcall(function()
+                return Network.InvokeServer("KickEvent", 1, 1, timestamp)
+            end)
+            if success then
+                LogDiag("KICK", string.format("✅ Network.InvokeServer SUKSES: %s", tostring(result)))
+            else
+                LogDiag("KICK", string.format("❌ Network.InvokeServer ERROR: %s", tostring(result)))
+            end
+        elseif ref_KickEvent then
             local success, result = pcall(function()
                 return ref_KickEvent:InvokeServer(1, 1, timestamp)
             end)
