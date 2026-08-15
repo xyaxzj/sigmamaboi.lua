@@ -191,6 +191,13 @@ local function TriggerGuiClick(btn)
     pcall(function()
         local absPos = btn.AbsolutePosition
         local absSize = btn.AbsoluteSize
+        local center = absPos + (absSize / 2)
+        VirtualUser:Button1Down(Vector2.new(center.X, center.Y))
+        task.wait(0.01)
+        VirtualUser:Button1Up(Vector2.new(center.X, center.Y))
+    end)
+end
+
 -- Helper simulasi tap/klik layar penuh untuk minigame "Tap to Kick!"
 local function TapScreen(targetPoint)
     local vSize = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(800, 600)
@@ -256,6 +263,25 @@ local function HandleKickMinigame(timeoutSec)
         LogDiag("MINIGAME", "KickMinigame GUI tidak muncul.")
         return false
     end
+
+    -- Dump struktur UI KickMinigame ke F9 Console untuk melihat nama frame target secara akurat
+    pcall(function()
+        LogDiag("GUI DUMP", "========== [ STRUKTUR KICKMINIGAME ] ==========")
+        for _, desc in ipairs(minigameGui:GetDescendants()) do
+            if desc:IsA("GuiObject") then
+                LogDiag("GUI DUMP", string.format("├ %s [%s] | Pos:(%.0f, %.0f) | Size:(%.0f, %.0f) | Vis:%s",
+                    desc.Name,
+                    desc.ClassName,
+                    desc.AbsolutePosition.X,
+                    desc.AbsolutePosition.Y,
+                    desc.AbsoluteSize.X,
+                    desc.AbsoluteSize.Y,
+                    tostring(desc.Visible)
+                ))
+            end
+        end
+        LogDiag("GUI DUMP", "===============================================")
+    end)
     
     -- 2. Cari MovingBar
     local movingBar = minigameGui:FindFirstChild("MovingBar", true)
