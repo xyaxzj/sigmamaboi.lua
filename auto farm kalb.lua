@@ -133,14 +133,18 @@ end)
 -- =============================================
 -- 📡 CARI REMOTE
 -- =============================================
+local kickRemote = nil
+local ref_KickEvent = nil
 local networkFolder = ReplicatedStorage:WaitForChild("Shared", 10):WaitForChild("Packages", 10):WaitForChild("Network", 10)
-local kickRemote = networkFolder and networkFolder:FindFirstChild("rev_KickEvent")
-local ref_KickEvent = networkFolder and networkFolder:FindFirstChild("ref_KickEvent")
+if networkFolder then
+    kickRemote = networkFolder:FindFirstChild("rev_KickEvent")
+    ref_KickEvent = networkFolder:FindFirstChild("ref_KickEvent") or networkFolder:WaitForChild("ref_KickEvent", 5)
+end
 
-if not kickRemote or not ref_KickEvent then
+if not ref_KickEvent then
     for _, r in pairs(ReplicatedStorage:GetDescendants()) do
         if r.Name == "ref_KickEvent" and r:IsA("RemoteFunction") then
-            ref_KickEvent = r
+            ref_KickEvent = r; break
         elseif r.Name == "rev_KickEvent" and r:IsA("RemoteEvent") then
             kickRemote = r
         end
@@ -204,29 +208,24 @@ if rev_PlayMessage then
     end)
 end
 
--- Helper Trigger Kick (Mendukung ref_KickEvent & rev_KickEvent)
-local function triggerKick()
+-- Helper Kick Eksekusi
+local function doKick()
     local timestamp = nil
-    pcall(function()
-        timestamp = workspace:GetServerTimeNow()
-    end)
+    pcall(function() timestamp = workspace:GetServerTimeNow() end)
     if not timestamp or type(timestamp) ~= "number" or timestamp <= 0 then
         timestamp = tick()
     end
 
     task.spawn(function()
         if ref_KickEvent then
-            pcall(function()
-                ref_KickEvent:InvokeServer(1, 1, timestamp)
+            local s, res = pcall(function()
+                return ref_KickEvent:InvokeServer(1, 1, timestamp)
             end)
+            if s and res == true then
+                phase2Fired = true
+            end
         elseif kickRemote then
-            pcall(function()
-                if kickRemote:IsA("RemoteFunction") then
-                    kickRemote:InvokeServer(1, 1, timestamp)
-                else
-                    kickRemote:FireServer(1, 1, timestamp)
-                end
-            end)
+            kickRemote:FireServer(1, 1)
         end
     end)
 end
@@ -306,7 +305,7 @@ task.spawn(function()
                     phase2Fired = false
                     collectedFired = false
                     kickEndedFired = false
-                    triggerKick()
+                    doKick()
                     _G.targetAction = "WaitingForPhase2"
                 end
             end
@@ -342,7 +341,7 @@ task.spawn(function()
                 
                 -- Langsung lakukan kick kembali tanpa delay
                 phase2Fired = false
-                triggerKick()
+                doKick()
                 _G.targetAction = "WaitingForPhase2"
             elseif _G.stateTimer > 5 then
                 _G.targetAction = "Idle"
