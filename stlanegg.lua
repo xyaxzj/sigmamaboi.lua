@@ -333,11 +333,10 @@ local Config = {
     -- Price Rate Configuration (Harga Jual Estimasi per 100M/s)
     PriceRatePer100M        = 1000,             -- Rate default: 1000 (1k) per 100M/s income
     
-    -- Manual Item Trade Configuration (Pilihan Item Manual untuk Di-Trade)
-    SelectedTradeItemOption = "Pilih Semua Item (All Items)",
-    SelectedTradeTool       = nil,
-    SelectedTradeToolUID    = nil,
-    AutoTradeSelectedOnly   = false,
+    -- Manual Item Trade Configuration (Multi-Select Support)
+    SelectedTradeItems      = {},               -- List opsi teks item yang dipilih
+    SelectedTradeUIDs       = {},               -- Set UID item yang dipilih {[uid] = true}
+    SelectedTradeItemTypes  = {},               -- Set jenis nama item yang dipilih {[name] = true}
     
     -- Auto Equip Active Asset Configuration
     AutoEquipAsset          = false,
@@ -1493,14 +1492,28 @@ function StealAnEggTrade.MatchesFilter(tool, filterConfig)
         return false
     end
     
-    -- Filter Spesifik Item Berdasarkan UID yang Dipilih di Dropdown
-    if filterConfig.SelectedTradeToolUID and filterConfig.SelectedTradeToolUID ~= "" and filterConfig.SelectedTradeToolUID ~= "All" then
-        if info.UID ~= filterConfig.SelectedTradeToolUID then
+    -- 1. Filter Multi-Select Item Spesifik (Berdasarkan UID yang Dicentang di Dropdown)
+    if filterConfig.SelectedTradeUIDs and next(filterConfig.SelectedTradeUIDs) ~= nil then
+        if not filterConfig.SelectedTradeUIDs[info.UID] then
             return false
         end
     end
     
-    if filterConfig.FilterItem and filterConfig.FilterItem ~= "All Items" and filterConfig.FilterItem ~= "" then
+    -- 2. Filter Multi-Select Jenis/Nama Item
+    if filterConfig.SelectedTradeItemTypes and next(filterConfig.SelectedTradeItemTypes) ~= nil then
+        local dispLower = info.DisplayName:lower()
+        local nameLower = info.Name:lower()
+        local matchedType = false
+        for tName, _ in pairs(filterConfig.SelectedTradeItemTypes) do
+            if tName == "All Items" or dispLower:find(tName:lower(), 1, true) or nameLower:find(tName:lower(), 1, true) then
+                matchedType = true
+                break
+            end
+        end
+        if not matchedType then
+            return false
+        end
+    elseif filterConfig.FilterItem and filterConfig.FilterItem ~= "All Items" and filterConfig.FilterItem ~= "" then
         local targetName = filterConfig.FilterItem:lower()
         local matchesName = info.Name:lower():find(targetName, 1, true) ~= nil
         local matchesDisp = info.DisplayName:lower():find(targetName, 1, true) ~= nil
@@ -2727,64 +2740,74 @@ end)
 -- Section 2: Gifting Actions (Pengirim / Gifter)
 local ActionSec = MainTab:AddSection("Aksi Quick & Manual Trade / Gift (Pengirim)")
 
-local manualTradeOptions = {"Pilih Semua Item (All Items)"}
+local manualTradeOptions = {}
 for _, opt in ipairs(initialScan.DropdownOptions) do
     if opt ~= "Backpack Kosong" and not opt:find("Tidak ada item") then
         table.insert(manualTradeOptions, opt)
     end
 end
 
+local manualTypeOptions = {}
+for _, name in ipairs(initialScan.UniqueNames) do
+    if name ~= "All Items" then
+        table.insert(manualTypeOptions, name)
+    end
+end
+
 local ManualTradeDropdown = nil
 local ManualTradeTypeDropdown = nil
 
-ManualTradeDropdown = ActionSec:AddDropdown({
-    Name = "🎒 Pilih Item Spesifik dari Tas untuk Di-Trade",
+ManualTradeDropdown = ActionSec:AddMultiDropdown({
+    Name = "🎒 Pilih Item dari Tas untuk Di-Trade (Multi-Select ☑️)",
     Options = manualTradeOptions,
-    Default = manualTradeOptions[1] or "Pilih Semua Item (All Items)",
-    Flag = "ManualTradeDropdown",
-    Tooltip = "Pilih item spesifik tertentu di tas yang ingin di-trade atau 'Pilih Semua Item'"
-}, function(selected)
-    Config.SelectedTradeItemOption = selected or "Pilih Semua Item (All Items)"
-    if not selected or selected == "Pilih Semua Item (All Items)" or selected == "" then
-        Config.SelectedTradeTool = nil
-        Config.SelectedTradeToolUID = nil
-    else
-        local tools = StealAnEggTrade.GetAllTools()
-        local foundTool, foundInfo = nil, nil
+    Default = {},
+    Flag = "ManualTradeMultiDropdown",
+    Tooltip = "Centang satu atau beberapa item spesifik sekaligus di tas yang ingin di-trade"
+}, function(selectedList)
+    Config.SelectedTradeItems = selectedList or {}
+    local selectedUIDs = {}
+    local tools = StealAnEggTrade.GetAllTools()
+    
+    for _, selectedOpt in ipairs(Config.SelectedTradeItems) do
         for _, t in ipairs(tools) do
             local info = StealAnEggTrade.GetToolInfo(t)
-            if info and (info.OptionString == selected or selected:find(info.DisplayName, 1, true)) then
-                foundTool = t
-                foundInfo = info
-                break
+            if info and (info.OptionString == selectedOpt or selectedOpt:find(info.DisplayName, 1, true)) then
+                if info.UID and info.UID ~= "-" then
+                    selectedUIDs[info.UID] = true
+                end
             end
         end
-        Config.SelectedTradeTool = foundTool
-        Config.SelectedTradeToolUID = foundInfo and foundInfo.UID or nil
-        if foundInfo then
-            Library:Notify({
-                Title   = "Item Dipilih 🎒",
-                Content = string.format("%s [%s] (UID: %s)", foundInfo.DisplayName, foundInfo.Rarity, tostring(foundInfo.UID:sub(1, 8)) .. "..."),
-                Type    = "Info",
-                Duration = 2.5
-            })
-        end
+    end
+    
+    Config.SelectedTradeUIDs = selectedUIDs
+    
+    if #selectedList > 0 then
+        Library:Notify({
+            Title   = "Item Dipilih 🎒",
+            Content = string.format("%d Item dicentang untuk Trade", #selectedList),
+            Type    = "Info",
+            Duration = 2
+        })
     end
 end)
 
-ManualTradeTypeDropdown = ActionSec:AddDropdown({
-    Name = "📦 Filter Berdasarkan Jenis/Nama Item",
-    Options = initialScan.UniqueNames,
-    Default = Config.FilterItem or "All Items",
-    Flag = "MainFilterItemDropdown",
-    Tooltip = "Pilih jenis item tertentu (cth: Unicorn, El Maja) yang ingin di-trade otomatis"
-}, function(selected)
-    Config.FilterItem = selected or "All Items"
+ManualTradeTypeDropdown = ActionSec:AddMultiDropdown({
+    Name = "📦 Filter Jenis/Nama Item (Multi-Select ☑️)",
+    Options = manualTypeOptions,
+    Default = {},
+    Flag = "MainFilterItemMultiDropdown",
+    Tooltip = "Centang beberapa jenis nama item tertentu (cth: Unicorn, El Maja, Mosasaurus) yang ingin di-trade"
+}, function(selectedTypes)
+    local typeSet = {}
+    for _, tName in ipairs(selectedTypes or {}) do
+        typeSet[tName] = true
+    end
+    Config.SelectedTradeItemTypes = typeSet
 end)
 
 ActionSec:AddButton({
-    Name = "🎁 Gift Item Terpilih Ini ke Whitelist (1x)",
-    Tooltip = "Memegang dan mengirim item yang dipilih pada dropdown di atas langsung ke target Whitelist"
+    Name = "🎁 Gift Semua Item Terpilih Ini ke Whitelist (1x Batch)",
+    Tooltip = "Mengirim seluruh item yang dicentang di dropdown atas satu per satu ke target Whitelist"
 }, function()
     local targetId, targetName = GetActiveWhitelistTarget()
     if not targetId then
@@ -2797,56 +2820,92 @@ ActionSec:AddButton({
         return
     end
     
-    local toolToSend = Config.SelectedTradeTool
-    if not toolToSend or not toolToSend.Parent then
+    local toSend = {}
+    local tools = StealAnEggTrade.GetAllTools()
+    
+    -- 1. Kumpulkan tool yang cocok dengan multi-select UID
+    if Config.SelectedTradeUIDs and next(Config.SelectedTradeUIDs) ~= nil then
+        for _, t in ipairs(tools) do
+            local info = StealAnEggTrade.GetToolInfo(t)
+            if info and Config.SelectedTradeUIDs[info.UID] then
+                table.insert(toSend, t)
+            end
+        end
+    -- 2. Kumpulkan tool yang cocok dengan multi-select types
+    elseif Config.SelectedTradeItemTypes and next(Config.SelectedTradeItemTypes) ~= nil then
+        for _, t in ipairs(tools) do
+            local info = StealAnEggTrade.GetToolInfo(t)
+            if info and (Config.SelectedTradeItemTypes[info.DisplayName] or Config.SelectedTradeItemTypes[info.Category]) then
+                table.insert(toSend, t)
+            end
+        end
+    -- 3. Fallback: item di tangan
+    else
         local character = LocalPlayer.Character
-        toolToSend = character and character:FindFirstChildOfClass("Tool")
+        local heldTool = character and character:FindFirstChildOfClass("Tool")
+        if heldTool and not IsIgnoredTool(heldTool) then
+            table.insert(toSend, heldTool)
+        end
     end
     
-    if not toolToSend then
+    if #toSend == 0 then
         Library:Notify({
             Title   = "Peringatan",
-            Content = "Pilih item di dropdown terlebih dahulu atau pegang item di tangan!",
+            Content = "Centang item di dropdown terlebih dahulu atau pegang item di tangan!",
             Type    = "Warning",
             Duration = 3.5
         })
         return
     end
     
-    local info = StealAnEggTrade.GetToolInfo(toolToSend)
-    local itemName = info and info.DisplayName or toolToSend.Name
+    Library:Notify({
+        Title   = "Memulai Gifting 🎁",
+        Content = string.format("Mengirim %d item terpilih ke %s...", #toSend, targetName or tostring(targetId)),
+        Type    = "Info",
+        Duration = 3
+    })
     
-    local ok, err = StealAnEggTrade.SendGift(targetId, toolToSend)
-    if ok then
-        TradeStats.TotalSent = TradeStats.TotalSent + 1
-        TradeStats.SuccessCount = TradeStats.SuccessCount + 1
-        TradeStats.LastItemName = itemName
+    task.spawn(function()
+        local count = 0
+        for _, tool in ipairs(toSend) do
+            if not tool.Parent then continue end
+            local info = StealAnEggTrade.GetToolInfo(tool)
+            local itemName = info and info.DisplayName or tool.Name
+            local ok, err = StealAnEggTrade.SendGift(targetId, tool)
+            if ok then
+                count = count + 1
+                TradeStats.TotalSent = TradeStats.TotalSent + 1
+                TradeStats.SuccessCount = TradeStats.SuccessCount + 1
+                TradeStats.LastItemName = itemName
+            else
+                TradeStats.FailCount = TradeStats.FailCount + 1
+            end
+            task.wait(Config.DelayBetweenGifts or 0.5)
+        end
+        
         Library:Notify({
-            Title   = "Gift Terkirim! 🎁",
-            Content = string.format("Berhasil mengirim '%s' ke %s", itemName, targetName or tostring(targetId)),
+            Title   = "Selesai! 🎁",
+            Content = string.format("Berhasil mengirim %d dari %d item terpilih!", count, #toSend),
             Type    = "Success",
-            Duration = 3.5
+            Duration = 4
         })
+        
         task.defer(function()
             local scan = StealAnEggTrade.ScanInventory()
-            local opts = {"Pilih Semua Item (All Items)"}
+            local opts = {}
             for _, o in ipairs(scan.DropdownOptions) do
                 if o ~= "Backpack Kosong" and not o:find("Tidak ada item") then
                     table.insert(opts, o)
                 end
             end
+            local types = {}
+            for _, n in ipairs(scan.UniqueNames) do
+                if n ~= "All Items" then table.insert(types, n) end
+            end
             if ManualTradeDropdown then ManualTradeDropdown:Refresh(opts) end
-            if ManualTradeTypeDropdown then ManualTradeTypeDropdown:Refresh(scan.UniqueNames) end
+            if ManualTradeTypeDropdown then ManualTradeTypeDropdown:Refresh(types) end
         end)
-    else
-        TradeStats.FailCount = TradeStats.FailCount + 1
-        Library:Notify({
-            Title   = "Gagal Gift",
-            Content = "Error: " .. tostring(err),
-            Type    = "Error",
-            Duration = 4
-        })
-    end
+    end)
 end)
 
 ActionSec:AddButton({
@@ -2854,14 +2913,18 @@ ActionSec:AddButton({
     Tooltip = "Memperbarui daftar item di dropdown dari tas saat ini"
 }, function()
     local scan = StealAnEggTrade.ScanInventory()
-    local opts = {"Pilih Semua Item (All Items)"}
+    local opts = {}
     for _, o in ipairs(scan.DropdownOptions) do
         if o ~= "Backpack Kosong" and not o:find("Tidak ada item") then
             table.insert(opts, o)
         end
     end
+    local types = {}
+    for _, n in ipairs(scan.UniqueNames) do
+        if n ~= "All Items" then table.insert(types, n) end
+    end
     if ManualTradeDropdown then ManualTradeDropdown:Refresh(opts) end
-    if ManualTradeTypeDropdown then ManualTradeTypeDropdown:Refresh(scan.UniqueNames) end
+    if ManualTradeTypeDropdown then ManualTradeTypeDropdown:Refresh(types) end
     Library:Notify({
         Title   = "Daftar Item Diperbarui 🔄",
         Content = string.format("%d Item terdeteksi di tas", scan.Count),
