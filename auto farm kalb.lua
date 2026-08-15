@@ -155,42 +155,44 @@ if not ref_KickEvent and not rev_KickEvent then
     end
 end
 
--- Helper Eksekusi Kick Baru: InvokeServer(1 [Perfect], 1 [Max Power], timestamp [ServerTime/tick])
+-- Helper Eksekusi Kick Baru (Non-Blocking via task.spawn)
 local function executeKick()
     local timestamp = nil
     pcall(function()
         timestamp = workspace:GetServerTimeNow()
     end)
-    if not timestamp or timestamp == 0 then
+    if not timestamp or type(timestamp) ~= "number" or timestamp <= 0 then
         timestamp = tick()
     end
 
-    -- 1. Prioritas RemoteFunction ref_KickEvent (Mekanik Baru)
-    if ref_KickEvent then
-        local success, result = pcall(function()
-            return ref_KickEvent:InvokeServer(1, 1, timestamp)
-        end)
-        if success then return true, result end
-    end
-
-    -- 2. Fallback ke rev_KickEvent
-    if rev_KickEvent then
-        pcall(function()
-            if rev_KickEvent:IsA("RemoteFunction") then
-                rev_KickEvent:InvokeServer(1, 1, timestamp)
-            else
-                rev_KickEvent:FireServer(1, 1, timestamp)
+    task.spawn(function()
+        -- 1. Prioritas RemoteFunction ref_KickEvent:InvokeServer(1, 1, timestamp)
+        if ref_KickEvent then
+            local success, result = pcall(function()
+                return ref_KickEvent:InvokeServer(1, 1, timestamp)
+            end)
+            if success then
+                -- Kick sukses terpanggil
+                return
             end
-        end)
-        return true
-    end
-    
-    return false, "Remote Kick tidak ditemukan"
+        end
+
+        -- 2. Fallback ke rev_KickEvent
+        if rev_KickEvent then
+            pcall(function()
+                if rev_KickEvent:IsA("RemoteFunction") then
+                    rev_KickEvent:InvokeServer(1, 1, timestamp)
+                else
+                    rev_KickEvent:FireServer(1, 1, timestamp)
+                end
+            end)
+        end
+    end)
 end
 
-local rev_kickPhase2 = networkFolder and networkFolder:WaitForChild("rev_kickPhase2", 15)
-local rev_Collected = networkFolder and networkFolder:WaitForChild("rev_Collected", 15)
-local rev_KickEventEnded = networkFolder and networkFolder:WaitForChild("rev_KickEventEnded", 15)
+local rev_kickPhase2 = networkFolder and networkFolder:WaitForChild("rev_kickPhase2", 5)
+local rev_Collected = networkFolder and networkFolder:WaitForChild("rev_Collected", 5)
+local rev_KickEventEnded = networkFolder and networkFolder:WaitForChild("rev_KickEventEnded", 5)
 
 -- =============================================
 -- 📡 DAFTAR EVENT LISTENER
@@ -290,16 +292,15 @@ task.spawn(function()
 
         -- [ FASE 2: NUNGGU PHASE 2 ]
         elseif _G.targetAction == "WaitingForPhase2" then
-            if phase2Fired then
+            -- Maju jika event phase2 fired, atau timeout 1.5 detik jika event sudah tidak dikirim server
+            if phase2Fired or _G.stateTimer >= 1.5 then
                 phase2Fired = false
                 _G.targetAction = "PlayingAnim"
-            elseif _G.stateTimer > 5 then
-                _G.targetAction = "Idle"
             end
 
         -- [ FASE 3: NUNGGU ANIMASI GACHA (5 DETIK) ]
         elseif _G.targetAction == "PlayingAnim" then
-            if _G.stateTimer >= _G.animDelay then
+            if _G.stateTimer >= (_G.animDelay or 5) then
                 _G.targetAction = "WalkToSafeZone"
             end
 
@@ -308,11 +309,16 @@ task.spawn(function()
             hum:MoveTo(safeZone)
             if distToSafeZone < 8 then
                 _G.targetAction = "WaitingForCollected"
+            elseif _G.stateTimer >= 3.5 then
+                -- Failsafe teleport jika jalan kaki terhalang
+                hrp.CFrame = safeZoneCFrame
+                _G.targetAction = "WaitingForCollected"
             end
 
         -- [ FASE 5: NUNGGU COLLECTED ATAU KICKENDED (LANGSUNG KICK KEMBALI) ]
         elseif _G.targetAction == "WaitingForCollected" then
-            if collectedFired or kickEndedFired then
+            -- Lanjut kick jika collected/kickEnded fired atau timeout 2.0s
+            if collectedFired or kickEndedFired or _G.stateTimer >= 2.0 then
                 collectedFired = false
                 kickEndedFired = false
                 _G.mutationCount = _G.mutationCount + 1
@@ -321,8 +327,6 @@ task.spawn(function()
                 phase2Fired = false
                 executeKick()
                 _G.targetAction = "WaitingForPhase2"
-            elseif _G.stateTimer > 5 then
-                _G.targetAction = "Idle"
             end
         end
     end
