@@ -333,6 +333,12 @@ local Config = {
     -- Price Rate Configuration (Harga Jual Estimasi per 100M/s)
     PriceRatePer100M        = 1000,             -- Rate default: 1000 (1k) per 100M/s income
     
+    -- Manual Item Trade Configuration (Pilihan Item Manual untuk Di-Trade)
+    SelectedTradeItemOption = "Pilih Semua Item (All Items)",
+    SelectedTradeTool       = nil,
+    SelectedTradeToolUID    = nil,
+    AutoTradeSelectedOnly   = false,
+    
     -- Auto Equip Active Asset Configuration
     AutoEquipAsset          = false,
     AutoEquipMode           = "💰 Highest Income (Best Value)",
@@ -1485,6 +1491,13 @@ function StealAnEggTrade.MatchesFilter(tool, filterConfig)
     end
     if filterConfig.OnlyFavorites and not info.Favorite then
         return false
+    end
+    
+    -- Filter Spesifik Item Berdasarkan UID yang Dipilih di Dropdown
+    if filterConfig.SelectedTradeToolUID and filterConfig.SelectedTradeToolUID ~= "" and filterConfig.SelectedTradeToolUID ~= "All" then
+        if info.UID ~= filterConfig.SelectedTradeToolUID then
+            return false
+        end
     end
     
     if filterConfig.FilterItem and filterConfig.FilterItem ~= "All Items" and filterConfig.FilterItem ~= "" then
@@ -2709,10 +2722,153 @@ end)
 
 
 -- Section 2: Gifting Actions (Pengirim / Gifter)
-local ActionSec = MainTab:AddSection("Aksi Quick Trade / Gift (Pengirim)")
+local ActionSec = MainTab:AddSection("Aksi Quick & Manual Trade / Gift (Pengirim)")
+
+local manualTradeOptions = {"Pilih Semua Item (All Items)"}
+for _, opt in ipairs(initialScan.DropdownOptions) do
+    if opt ~= "Backpack Kosong" and not opt:find("Tidak ada item") then
+        table.insert(manualTradeOptions, opt)
+    end
+end
+
+local ManualTradeDropdown = nil
+local ManualTradeTypeDropdown = nil
+
+ManualTradeDropdown = ActionSec:AddDropdown({
+    Name = "🎒 Pilih Item Spesifik dari Tas untuk Di-Trade",
+    Options = manualTradeOptions,
+    Default = manualTradeOptions[1] or "Pilih Semua Item (All Items)",
+    Flag = "ManualTradeDropdown",
+    Tooltip = "Pilih item spesifik tertentu di tas yang ingin di-trade atau 'Pilih Semua Item'"
+}, function(selected)
+    Config.SelectedTradeItemOption = selected or "Pilih Semua Item (All Items)"
+    if not selected or selected == "Pilih Semua Item (All Items)" or selected == "" then
+        Config.SelectedTradeTool = nil
+        Config.SelectedTradeToolUID = nil
+    else
+        local tools = StealAnEggTrade.GetAllTools()
+        local foundTool, foundInfo = nil, nil
+        for _, t in ipairs(tools) do
+            local info = StealAnEggTrade.GetToolInfo(t)
+            if info and (info.OptionString == selected or selected:find(info.DisplayName, 1, true)) then
+                foundTool = t
+                foundInfo = info
+                break
+            end
+        end
+        Config.SelectedTradeTool = foundTool
+        Config.SelectedTradeToolUID = foundInfo and foundInfo.UID or nil
+        if foundInfo then
+            Library:Notify({
+                Title   = "Item Dipilih 🎒",
+                Content = string.format("%s [%s] (UID: %s)", foundInfo.DisplayName, foundInfo.Rarity, tostring(foundInfo.UID:sub(1, 8)) .. "..."),
+                Type    = "Info",
+                Duration = 2.5
+            })
+        end
+    end
+end)
+
+ManualTradeTypeDropdown = ActionSec:AddDropdown({
+    Name = "📦 Filter Berdasarkan Jenis/Nama Item",
+    Options = initialScan.UniqueNames,
+    Default = Config.FilterItem or "All Items",
+    Flag = "MainFilterItemDropdown",
+    Tooltip = "Pilih jenis item tertentu (cth: Unicorn, El Maja) yang ingin di-trade otomatis"
+}, function(selected)
+    Config.FilterItem = selected or "All Items"
+end)
 
 ActionSec:AddButton({
-    Name = "🎁 Gift Barang yang Sedang Dipegang (1x)",
+    Name = "🎁 Gift Item Terpilih Ini ke Whitelist (1x)",
+    Tooltip = "Memegang dan mengirim item yang dipilih pada dropdown di atas langsung ke target Whitelist"
+}, function()
+    local targetId, targetName = GetActiveWhitelistTarget()
+    if not targetId then
+        Library:Notify({
+            Title   = "Peringatan",
+            Content = "Target Whitelist belum ditemukan di dalam server!",
+            Type    = "Warning",
+            Duration = 3.5
+        })
+        return
+    end
+    
+    local toolToSend = Config.SelectedTradeTool
+    if not toolToSend or not toolToSend.Parent then
+        local character = LocalPlayer.Character
+        toolToSend = character and character:FindFirstChildOfClass("Tool")
+    end
+    
+    if not toolToSend then
+        Library:Notify({
+            Title   = "Peringatan",
+            Content = "Pilih item di dropdown terlebih dahulu atau pegang item di tangan!",
+            Type    = "Warning",
+            Duration = 3.5
+        })
+        return
+    end
+    
+    local info = StealAnEggTrade.GetToolInfo(toolToSend)
+    local itemName = info and info.DisplayName or toolToSend.Name
+    
+    local ok, err = StealAnEggTrade.SendGift(targetId, toolToSend)
+    if ok then
+        TradeStats.TotalSent = TradeStats.TotalSent + 1
+        TradeStats.SuccessCount = TradeStats.SuccessCount + 1
+        TradeStats.LastItemName = itemName
+        Library:Notify({
+            Title   = "Gift Terkirim! 🎁",
+            Content = string.format("Berhasil mengirim '%s' ke %s", itemName, targetName or tostring(targetId)),
+            Type    = "Success",
+            Duration = 3.5
+        })
+        task.defer(function()
+            local scan = StealAnEggTrade.ScanInventory()
+            local opts = {"Pilih Semua Item (All Items)"}
+            for _, o in ipairs(scan.DropdownOptions) do
+                if o ~= "Backpack Kosong" and not o:find("Tidak ada item") then
+                    table.insert(opts, o)
+                end
+            end
+            if ManualTradeDropdown then ManualTradeDropdown:Refresh(opts) end
+            if ManualTradeTypeDropdown then ManualTradeTypeDropdown:Refresh(scan.UniqueNames) end
+        end)
+    else
+        TradeStats.FailCount = TradeStats.FailCount + 1
+        Library:Notify({
+            Title   = "Gagal Gift",
+            Content = "Error: " .. tostring(err),
+            Type    = "Error",
+            Duration = 4
+        })
+    end
+end)
+
+ActionSec:AddButton({
+    Name = "🔄 Refresh Pilihan Item dari Tas",
+    Tooltip = "Memperbarui daftar item di dropdown dari tas saat ini"
+}, function()
+    local scan = StealAnEggTrade.ScanInventory()
+    local opts = {"Pilih Semua Item (All Items)"}
+    for _, o in ipairs(scan.DropdownOptions) do
+        if o ~= "Backpack Kosong" and not o:find("Tidak ada item") then
+            table.insert(opts, o)
+        end
+    end
+    if ManualTradeDropdown then ManualTradeDropdown:Refresh(opts) end
+    if ManualTradeTypeDropdown then ManualTradeTypeDropdown:Refresh(scan.UniqueNames) end
+    Library:Notify({
+        Title   = "Daftar Item Diperbarui 🔄",
+        Content = string.format("%d Item terdeteksi di tas", scan.Count),
+        Type    = "Info",
+        Duration = 2.5
+    })
+end)
+
+ActionSec:AddButton({
+    Name = "🎁 Gift Barang yang Sedang Dipegang di Tangan (1x)",
     Tooltip = "Memegang dan mengirim item yang saat ini aktif di tangan ke target Whitelist"
 }, function()
     local targetId, targetName = GetActiveWhitelistTarget()
@@ -2817,7 +2973,31 @@ ActionSec:AddButton({
 end)
 
 ActionSec:AddToggle({
-    Name = "⚡ Auto Loop Trade Semua Item ke Whitelist",
+    Name = "⚡ Auto Loop Trade Item Sesuai Filter ke Whitelist",
+    Default = Config.AutoTradeFilterLoop,
+    Flag = "AutoTradeFilterLoopToggle",
+    Tooltip = "Terus memindai backpack & mengirim item otomatis yang cocok dengan filter/pilihan ke Whitelist"
+}, function(Value)
+    StealAnEggTrade.SetAutoTradeFilter(Value)
+    if Value then
+        Library:Notify({
+            Title   = "Auto Trade Filter Aktif",
+            Content = "Loop pengiriman aktif sesuai filter / pilihan item ke Target Whitelist",
+            Type    = "Success",
+            Duration = 3
+        })
+    else
+        Library:Notify({
+            Title   = "Auto Trade Filter Dimatikan",
+            Content = "Loop pengiriman filter dinonaktifkan.",
+            Type    = "Info",
+            Duration = 2.5
+        })
+    end
+end)
+
+ActionSec:AddToggle({
+    Name = "⚡ Auto Loop Trade Semua Item ke Whitelist (Tanpa Filter)",
     Default = Config.AutoTradeLoop,
     Flag = "AutoTradeLoopToggle",
     Tooltip = "Terus memindai backpack & mengirim seluruh item otomatis ke akun Whitelist"
@@ -2825,8 +3005,8 @@ ActionSec:AddToggle({
     StealAnEggTrade.SetAutoTrade(Value)
     if Value then
         Library:Notify({
-            Title   = "Auto Trade Aktif",
-            Content = "Loop pengiriman aktif ke Target Whitelist",
+            Title   = "Auto Trade Semua Aktif",
+            Content = "Loop pengiriman semua item aktif ke Target Whitelist",
             Type    = "Success",
             Duration = 3
         })
