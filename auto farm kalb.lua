@@ -392,23 +392,18 @@ local function HandleKickMinigame(timeoutSec)
     return hitDone
 end
 
--- Helper Eksekusi Kick Lengkap (UI Trigger + Perfect Timing + Remote Fallback)
+-- Helper Eksekusi Kick: Klik KickButton di HUD lalu Langsung Invoke ref_KickEvent
 local function executeKick()
     task.spawn(function()
         local kickBtn = FindKickButton()
         if kickBtn then
-            LogDiag("KICK", "Menekan KickButton di HUD...")
+            LogDiag("KICK", "1. Menekan KickButton di HUD...")
             TriggerGuiClick(kickBtn)
-            
-            -- Tunggu dan lock Perfect Timing di MovingBar
-            local perfectOk = HandleKickMinigame(3.5)
-            if perfectOk then
-                LogDiag("KICK", "✅ Perfect Kick Minigame berhasil diselesaikan!")
-                return
-            end
+            task.wait(0.15) -- Jeda singkat agar client mengangkat balok / inisialisasi state kick
+        else
+            LogDiag("KICK", "KickButton tidak ditemukan di HUD, langsung invoke...")
         end
         
-        -- Fallback jika UI tidak membuka minigame
         local timestamp = nil
         pcall(function()
             timestamp = workspace:GetServerTimeNow()
@@ -417,10 +412,17 @@ local function executeKick()
             timestamp = tick()
         end
         
+        LogDiag("KICK", string.format("2. Mengirim ref_KickEvent:InvokeServer(1, 1, %.6f)...", timestamp))
+        
         if ref_KickEvent then
-            pcall(function()
-                ref_KickEvent:InvokeServer(1, 1, timestamp)
+            local success, result = pcall(function()
+                return ref_KickEvent:InvokeServer(1, 1, timestamp)
             end)
+            if success then
+                LogDiag("KICK", string.format("✅ ref_KickEvent SUKSES: %s", tostring(result)))
+            else
+                LogDiag("KICK", string.format("❌ ref_KickEvent ERROR: %s", tostring(result)))
+            end
         elseif rev_KickEvent then
             pcall(function()
                 if rev_KickEvent:IsA("RemoteFunction") then
