@@ -59,6 +59,21 @@ local savedCoordsDropdown
 local selectedSavedCoord = ""
 local coordInputName = "Location 1"
 
+-- Helper Clipboard (Multi-Executor)
+local function copyToClipboard(text)
+    if setclipboard then
+        setclipboard(text)
+        return true
+    elseif toclipboard then
+        toclipboard(text)
+        return true
+    elseif syn and syn.write_clipboard then
+        syn.write_clipboard(text)
+        return true
+    end
+    return false
+end
+
 -- ===========================================================================
 --  MOVEMENT & CHEATS ENFORCEMENT LOOP
 -- ===========================================================================
@@ -1263,13 +1278,63 @@ local TabDash = Window:MakeTab("🏠")
 local SecInfo = TabDash:AddSection("Information")
 SecInfo:AddParagraph("Welcome", "Sigma Universal Exploit Client loaded successfully.\nEnjoy powerful movement hacks, coordinate saving, and ESP visual enhancements!")
 
-local SecUtility = TabDash:AddSection("Server Utility")
+local SecUtility = TabDash:AddSection("Server Utility & Sharing")
+
+SecUtility:AddParagraph("Server Info", string.format("Place ID: %d\nJob ID: %s\nPlayers: %d / %d", game.PlaceId, tostring(game.JobId), #Players:GetPlayers(), Players.MaxPlayers))
+
+SecUtility:AddButton("🔗 Salin Link Server (Deep Link Share)", function()
+    local shareLink = string.format("https://www.roblox.com/games/start?placeId=%d&gameInstanceId=%s", game.PlaceId, tostring(game.JobId))
+    local ok = copyToClipboard(shareLink)
+    if ok then
+        Library:Notify({
+            Title   = "Link Server Disalin! 🔗",
+            Content = "Link direct join server berhasil disalin ke clipboard:\n" .. shareLink,
+            Type    = "Success",
+            Duration = 4
+        })
+    else
+        Library:Notify({
+            Title   = "Link Server",
+            Content = shareLink,
+            Type    = "Info",
+            Duration = 4
+        })
+    end
+end)
+
+SecUtility:AddButton("📋 Salin Job ID Server", function()
+    local ok = copyToClipboard(tostring(game.JobId))
+    if ok then
+        Library:Notify({
+            Title   = "Job ID Disalin! 📋",
+            Content = "Job ID berhasil disalin ke clipboard:\n" .. tostring(game.JobId),
+            Type    = "Success",
+            Duration = 3.5
+        })
+    end
+end)
+
+SecUtility:AddButton("📜 Salin Script Auto Join (Luau Code)", function()
+    local joinCode = string.format('game:GetService("TeleportService"):TeleportToPlaceInstance(%d, "%s", game:GetService("Players").LocalPlayer)', game.PlaceId, tostring(game.JobId))
+    local ok = copyToClipboard(joinCode)
+    if ok then
+        Library:Notify({
+            Title   = "Script Join Disalin! 📜",
+            Content = "Script teleport join berhasil disalin ke clipboard!",
+            Type    = "Success",
+            Duration = 3.5
+        })
+    end
+end)
+
 SecUtility:AddToggle({Name = "💤 Anti-AFK Active", Default = false}, function(state)
     toggleAntiAfk(state)
 end)
+
 SecUtility:AddButton("🔁 Rejoin Server", function()
     game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
 end)
+
 SecUtility:AddButton("🚀 Server Hop", function()
     local HttpService = game:GetService("HttpService")
     local TeleportService = game:GetService("TeleportService")
