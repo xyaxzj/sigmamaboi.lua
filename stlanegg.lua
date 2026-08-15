@@ -330,6 +330,9 @@ local Config = {
     SelectedInvTool     = nil,
     ProfileRole         = SCRIPT_CONFIG.ProfileRole,
     
+    -- Price Rate Configuration (Harga Jual Estimasi per 100M/s)
+    PriceRatePer100M        = 1000,             -- Rate default: 1000 (1k) per 100M/s income
+    
     -- Auto Equip Active Asset Configuration
     AutoEquipAsset          = false,
     AutoEquipMode           = "💰 Highest Income (Best Value)",
@@ -680,6 +683,40 @@ local function formatIncome(n)
     else
         return string.format("+%d/s", math.floor(n))
     end
+end
+
+-- Helper Hitung & Format Estimasi Harga Jual (100M/s = 1k, pembulatan ke bawah per kelipatan 100M)
+local function CalculateItemPrice(income, customRate)
+    income = tonumber(income) or 0
+    local rate = tonumber(customRate) or (Config and tonumber(Config.PriceRatePer100M)) or 1000
+    if income < 100000000 or rate <= 0 then
+        return 0, ""
+    end
+    
+    -- Kelipatan 100 Juta (100M/s). Contoh: 290M -> 2 unit (bulatkan ke 2k)
+    local units = math.floor(income / 100000000)
+    local totalPrice = units * rate
+    
+    local priceStr = ""
+    if totalPrice >= 1e6 then
+        local mVal = totalPrice / 1e6
+        if mVal == math.floor(mVal) then
+            priceStr = string.format("%dM", math.floor(mVal))
+        else
+            priceStr = string.format("%.2fM", mVal)
+        end
+    elseif totalPrice >= 1e3 then
+        local kVal = totalPrice / 1e3
+        if kVal == math.floor(kVal) then
+            priceStr = string.format("%dk", math.floor(kVal))
+        else
+            priceStr = string.format("%.1fk", kVal)
+        end
+    else
+        priceStr = tostring(math.floor(totalPrice))
+    end
+    
+    return totalPrice, priceStr
 end
 
 -- Helper Parsing String Input Berat (kg, k, M, B, T, titik ribuan)
@@ -1257,6 +1294,7 @@ function StealAnEggTrade.ScanInventory(sortMethod, searchKeyword, minIncome)
     local raritySet = { ["Divine, Eternal, Secret"] = true }
     local totalWeight = 0
     local totalIncome = 0
+    local totalPrice = 0
     local favoriteCount = 0
     local bestPet = nil
     local heaviestPet = nil
@@ -1266,6 +1304,8 @@ function StealAnEggTrade.ScanInventory(sortMethod, searchKeyword, minIncome)
         if info then
             totalWeight = totalWeight + info.Weight
             totalIncome = totalIncome + info.PerSecond
+            local itemPrice, _ = CalculateItemPrice(info.PerSecond, Config.PriceRatePer100M)
+            totalPrice = totalPrice + (itemPrice or 0)
             if info.Favorite then
                 favoriteCount = favoriteCount + 1
             end
@@ -1389,6 +1429,7 @@ function StealAnEggTrade.ScanInventory(sortMethod, searchKeyword, minIncome)
         Rarities = rarities,
         TotalWeight = totalWeight,
         TotalIncome = totalIncome,
+        TotalPrice = totalPrice,
         FavoriteCount = favoriteCount,
         BestValuePet = bestValuePet or bestPet,
         BestPet = bestValuePet or bestPet,
@@ -2557,11 +2598,29 @@ end
 local Window = Library:CreateWindow({
     Name       = string.format("Sigma Hub | Steal An Egg (%s)", Config.ProfileRole or currentUsername),
     Footer     = 'discord.gg/sigma | v4.0',
-    LogoText   = '🥚',
-    ConfigName = 'SigmaHub_StealAnEgg',
-    ToggleKey  = Enum.KeyCode.RightShift,
-    Watermark  = false,
+    Icon       = 10734898124,
+    ToggleKey  = Enum.KeyCode.RightControl,
+    Theme      = "Dark"
 })
+
+-- ⚡ Pastikan RichText aktif di seluruh TextLabel Sigma UI agar warna & bold tag bekerja optimal
+task.spawn(function()
+    local function enableRichText(obj)
+        if obj and (obj:IsA("TextLabel") or obj:IsA("TextButton")) then
+            pcall(function() obj.RichText = true end)
+        end
+    end
+    
+    local coreGui = (gethui and gethui()) or (game:GetService("CoreGui"):FindFirstChild("RobloxGui")) or game:GetService("CoreGui") or LocalPlayer:FindFirstChild("PlayerGui")
+    if coreGui then
+        for _, desc in ipairs(coreGui:GetDescendants()) do
+            enableRichText(desc)
+        end
+        coreGui.DescendantAdded:Connect(function(desc)
+            task.defer(function() enableRichText(desc) end)
+        end)
+    end
+end)
 
 -- ---------------------------------------------------------
 -- TAB 1: ⚡ AUTO TRADE & RECEIVER (MAIN TAB)
@@ -2891,7 +2950,7 @@ local ITEMS_PER_PAGE = 10
 local currentInvPage = 1
 local lastFilteredTools = initialScan.FilteredTools or {}
 
--- Helper: Format a single item line (Ringkas dengan format K/M/B/T)
+-- Helper: Format a single item line (Ringkas dengan format K/M/B/T & Harga Jual Estimasi)
 local function FormatItemLine(index, info)
     local rBadge = GetRarityBadge(info.Rarity)
     local mBadge = GetMutationBadge(info.BaseMutation)
@@ -2904,13 +2963,21 @@ local function FormatItemLine(index, info)
     local locPart = inChar and " ✋" or ""
     local incPart = (incStr and incStr ~= "") and (" • 💰 " .. incStr) or ""
     
-    return string.format("#%d. [%s] %s%s • ⚖️ %s kg%s%s%s",
+    -- Hitung harga jual estimasi (Cth: 100M/s = 1k, 290M/s = 2k) dengan warna emas & BOLD
+    local _, priceStr = CalculateItemPrice(info.PerSecond, Config.PriceRatePer100M)
+    local pricePart = ""
+    if priceStr and priceStr ~= "" then
+        pricePart = string.format(' • <font color="#FFD700"><b>🏷️ %s</b></font>', priceStr)
+    end
+    
+    return string.format("#%d. [%s] %s%s • ⚖️ %s kg%s%s%s%s",
         index,
         rBadge,
         tostring(info.DisplayName),
         mutPart,
         wStr,
         incPart,
+        pricePart,
         favPart,
         locPart
     )
@@ -2991,6 +3058,26 @@ InvFilterSec:AddInput({
     RefreshItemList(scan, 1)
 end)
 
+InvFilterSec:AddInput({
+    Name = "🏷️ Custom Price Rate (per 100M/s Income)",
+    Placeholder = string.format("Default: %s (= 1k per 100M/s). e.g. 1000, 1.5k, 2000", formatNumber(Config.PriceRatePer100M or 1000)),
+    Tooltip = "Atur harga jual estimasi manual per kelipatan 100M/s income pasif. Contoh: 1000 = 1k, 1500 = 1.5k, 2000 = 2k"
+}, function(text)
+    local rateVal = ParseIncomeInput(text)
+    if rateVal <= 0 then
+        rateVal = tonumber(text:gsub("[^%d]", "")) or 1000
+    end
+    Config.PriceRatePer100M = math.max(1, rateVal)
+    local scan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch, currentInventoryMinIncome)
+    RefreshItemList(scan, currentInvPage)
+    Library:Notify({
+        Title   = "Harga Jual Diperbarui 🏷️",
+        Content = string.format("Rate diset: %s per 100M/s income", formatNumber(Config.PriceRatePer100M)),
+        Type    = "Success",
+        Duration = 2.5
+    })
+end)
+
 -- ─── Section 2: Item List (Paginated) ──────────────────
 local InvListSec = InvTab:AddSection("📋 Item List")
 
@@ -3034,9 +3121,21 @@ end)
 -- ─── Section 3: Backpack Summary ───────────────────────
 local InvStatSec = InvTab:AddSection("📊 Backpack Summary")
 
+local function FormatPriceDisplay(totalPrice)
+    if not totalPrice or totalPrice <= 0 then return "0" end
+    if totalPrice >= 1e6 then
+        return string.format('<font color="#FFD700"><b>%.2fM</b></font> (Rp %s)', totalPrice / 1e6, formatNumber(totalPrice))
+    elseif totalPrice >= 1e3 then
+        return string.format('<font color="#FFD700"><b>%dk</b></font> (Rp %s)', math.floor(totalPrice / 1e3), formatNumber(totalPrice))
+    else
+        return string.format('<font color="#FFD700"><b>%d</b></font> (Rp %s)', math.floor(totalPrice), formatNumber(totalPrice))
+    end
+end
+
 local InvCountPara   = InvStatSec:AddParagraph("Total Items", string.format("%d Items", initialScan.Count))
 local InvWeightPara  = InvStatSec:AddParagraph("Total Weight", string.format("%s kg", formatNumber(initialScan.TotalWeight)))
 local InvIncomePara  = InvStatSec:AddParagraph("Total Passive Income", string.format("%s 💰", formatIncome(initialScan.TotalIncome)))
+local InvPricePara   = InvStatSec:AddParagraph("Total Estimated Value", string.format("🏷️ %s (Rate: %s / 100M)", FormatPriceDisplay(initialScan.TotalPrice or 0), formatNumber(Config.PriceRatePer100M)))
 local InvBestPara    = InvStatSec:AddParagraph("👑 Highest Value Item", (initialScan.BestValuePet or initialScan.BestPet) and (initialScan.BestValuePet or initialScan.BestPet).OptionString or "-")
 local InvHeavyPara   = InvStatSec:AddParagraph("⚖️ Heaviest Item", initialScan.HeaviestPet and string.format("%s (%s kg)", initialScan.HeaviestPet.DisplayName, formatNumber(initialScan.HeaviestPet.Weight)) or "-")
 
@@ -3891,10 +3990,11 @@ task.spawn(function()
             if InvItemListPara then
                 InvItemListPara:Set("📋 Item List", BuildItemListText(scan, currentInvPage))
             end
-            if InvCountPara and InvWeightPara and InvIncomePara and InvBestPara and InvHeavyPara then
+            if InvCountPara and InvWeightPara and InvIncomePara and InvPricePara and InvBestPara and InvHeavyPara then
                 InvCountPara:Set("Total Items", string.format("%d Items • %d Favorites ⭐", scan.Count, scan.FavoriteCount))
                 InvWeightPara:Set("Total Weight", string.format("%s kg (%.2fM kg)", formatNumber(scan.TotalWeight), scan.TotalWeight / 1000000))
                 InvIncomePara:Set("Total Passive Income", string.format("%s 💰", formatIncome(scan.TotalIncome)))
+                InvPricePara:Set("Total Estimated Value", string.format("🏷️ %s (Rate: %s / 100M)", FormatPriceDisplay(scan.TotalPrice or 0), formatNumber(Config.PriceRatePer100M)))
                 InvBestPara:Set("👑 Highest Value Item", (scan.BestValuePet or scan.BestPet) and (scan.BestValuePet or scan.BestPet).OptionString or "-")
                 InvHeavyPara:Set("⚖️ Heaviest Item", scan.HeaviestPet and string.format("%s [%s] (%s kg)", scan.HeaviestPet.DisplayName, scan.HeaviestPet.BaseMutation, formatNumber(scan.HeaviestPet.Weight)) or "-")
             end
