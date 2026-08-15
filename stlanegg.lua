@@ -2886,31 +2886,31 @@ local InvTab = Window:MakeTab("🎒")
 
 local initialScan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch)
 
--- Pagination state (5 items per page ensures clean display without Sigma UI paragraph clipping)
-local ITEMS_PER_PAGE = 5
+-- Pagination state (10 items per page with compact single-line formatting)
+local ITEMS_PER_PAGE = 10
 local currentInvPage = 1
 local lastFilteredTools = initialScan.FilteredTools or {}
 
--- Helper: Format a single item line
+-- Helper: Format a single item line (Ringkas dengan format K/M/B/T)
 local function FormatItemLine(index, info)
     local rBadge = GetRarityBadge(info.Rarity)
     local mBadge = GetMutationBadge(info.BaseMutation)
-    local incStr = formatIncome(info.PerSecond)
+    local incStr = formatIncome(info.PerSecond) -- Cth: "+3.17B/s"
     local wStr = formatNumber(info.Weight)
     local inChar = info.Instance and info.Instance.Parent == LocalPlayer.Character
     
     local mutPart = (info.BaseMutation ~= "Normal" and info.BaseMutation ~= "") and string.format(" [%s]", mBadge) or ""
     local favPart = info.Favorite and " ⭐" or ""
     local locPart = inChar and " ✋" or ""
+    local incPart = (incStr and incStr ~= "") and (" • 💰 " .. incStr) or ""
     
-    return string.format("#%d. [%s] %s%s • ⚖️ %s kg • 💰 +%s/s%s%s%s",
+    return string.format("#%d. [%s] %s%s • ⚖️ %s kg%s%s%s",
         index,
         rBadge,
         tostring(info.DisplayName),
         mutPart,
         wStr,
-        formatNumber(info.PerSecond),
-        incStr ~= "" and (" " .. incStr) or "",
+        incPart,
         favPart,
         locPart
     )
@@ -3036,7 +3036,7 @@ local InvStatSec = InvTab:AddSection("📊 Backpack Summary")
 
 local InvCountPara   = InvStatSec:AddParagraph("Total Items", string.format("%d Items", initialScan.Count))
 local InvWeightPara  = InvStatSec:AddParagraph("Total Weight", string.format("%s kg", formatNumber(initialScan.TotalWeight)))
-local InvIncomePara  = InvStatSec:AddParagraph("Total Passive Income", string.format("+%s/s 💰", formatNumber(initialScan.TotalIncome)))
+local InvIncomePara  = InvStatSec:AddParagraph("Total Passive Income", string.format("%s 💰", formatIncome(initialScan.TotalIncome)))
 local InvBestPara    = InvStatSec:AddParagraph("👑 Highest Value Item", (initialScan.BestValuePet or initialScan.BestPet) and (initialScan.BestValuePet or initialScan.BestPet).OptionString or "-")
 local InvHeavyPara   = InvStatSec:AddParagraph("⚖️ Heaviest Item", initialScan.HeaviestPet and string.format("%s (%s kg)", initialScan.HeaviestPet.DisplayName, formatNumber(initialScan.HeaviestPet.Weight)) or "-")
 
@@ -3894,7 +3894,7 @@ task.spawn(function()
             if InvCountPara and InvWeightPara and InvIncomePara and InvBestPara and InvHeavyPara then
                 InvCountPara:Set("Total Items", string.format("%d Items • %d Favorites ⭐", scan.Count, scan.FavoriteCount))
                 InvWeightPara:Set("Total Weight", string.format("%s kg (%.2fM kg)", formatNumber(scan.TotalWeight), scan.TotalWeight / 1000000))
-                InvIncomePara:Set("Total Passive Income", string.format("+%s/s 💰%s", formatNumber(scan.TotalIncome), formatIncome(scan.TotalIncome)))
+                InvIncomePara:Set("Total Passive Income", string.format("%s 💰", formatIncome(scan.TotalIncome)))
                 InvBestPara:Set("👑 Highest Value Item", (scan.BestValuePet or scan.BestPet) and (scan.BestValuePet or scan.BestPet).OptionString or "-")
                 InvHeavyPara:Set("⚖️ Heaviest Item", scan.HeaviestPet and string.format("%s [%s] (%s kg)", scan.HeaviestPet.DisplayName, scan.HeaviestPet.BaseMutation, formatNumber(scan.HeaviestPet.Weight)) or "-")
             end
