@@ -1327,6 +1327,55 @@ SecUtility:AddButton("📜 Salin Script Auto Join (Luau Code)", function()
     end
 end)
 
+SecUtility:AddButton("🔍 Inspect & Salin Struktur GUI (PlayerGui Dump)", function()
+    local pg = LocalPlayer:FindFirstChild("PlayerGui")
+    if not pg then
+        Library:Notify({Title = "Error", Content = "PlayerGui tidak ditemukan!", Type = "Error", Duration = 2.5})
+        return
+    end
+
+    local lines = {
+        "================================================================",
+        "SIGMA HUB | PLAYERGUI HIERARCHY DUMP & INSPECTOR",
+        string.format("Waktu : %s | User: %s", os.date and os.date("%X") or "Live", LocalPlayer.Name),
+        "================================================================"
+    }
+
+    for _, gui in ipairs(pg:GetChildren()) do
+        if gui:IsA("ScreenGui") and gui.Name ~= "SigmaUI" then
+            table.insert(lines, string.format("\n📁 ScreenGui: [%s] (Enabled: %s)", gui.Name, tostring(gui.Enabled)))
+            for _, desc in ipairs(gui:GetDescendants()) do
+                if desc:IsA("GuiObject") then
+                    local line = string.format("  ├ %s [%s] | Pos:(%.0f, %.0f) | Size:(%.0f, %.0f) | Vis:%s%s",
+                        desc.Name,
+                        desc.ClassName,
+                        desc.AbsolutePosition.X,
+                        desc.AbsolutePosition.Y,
+                        desc.AbsoluteSize.X,
+                        desc.AbsoluteSize.Y,
+                        tostring(desc.Visible),
+                        desc:IsA("TextLabel") and (" | Text: '" .. tostring(desc.Text) .. "'") or ""
+                    )
+                    table.insert(lines, line)
+                end
+            end
+        end
+    end
+    table.insert(lines, "\n================================================================")
+
+    local fullReport = table.concat(lines, "\n")
+    print(fullReport)
+    local ok = copyToClipboard(fullReport)
+    if ok then
+        Library:Notify({
+            Title   = "Struktur GUI Disalin! 📋",
+            Content = "Data struktur hierarki PlayerGui berhasil dicetak ke F9 dan disalin ke clipboard!",
+            Type    = "Success",
+            Duration = 4
+        })
+    end
+end)
+
 SecUtility:AddToggle({Name = "💤 Anti-AFK Active", Default = false}, function(state)
     toggleAntiAfk(state)
 end)
