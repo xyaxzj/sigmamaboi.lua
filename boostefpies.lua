@@ -67,27 +67,73 @@ local cleanedCount = 0
 local invisibleAssetsCount = 0
 
 ---------------------------------------------------------
--- 👻 HELPER INVISIBLE MODEL (ANTI-LAG TANPA HAPUS OBJEK)
+-- 👻 HELPER INVISIBLE MODEL & GUI (ANTI-LAG TANPA HAPUS OBJEK)
 ---------------------------------------------------------
+local function makeSingleObjectInvisible(v)
+    if not v then return end
+    pcall(function()
+        -- 1. 3D Parts, Mesh & Unions
+        if v:IsA("BasePart") then
+            v.Transparency = 1
+            pcall(function() v.LocalTransparencyModifier = 1 end)
+            v.CastShadow = false
+            if v:IsA("MeshPart") then
+                v.TextureID = ""
+            end
+            invisibleAssetsCount = invisibleAssetsCount + 1
+        elseif v:IsA("SpecialMesh") then
+            v.TextureId = ""
+            
+        -- 2. Decals, Textures & SurfaceAppearance
+        elseif v:IsA("Decal") or v:IsA("Texture") then
+            v.Transparency = 1
+        elseif v:IsA("SurfaceAppearance") then
+            pcall(function() v:Destroy() end)
+            
+        -- 3. BillboardGui, SurfaceGui & 3D ScreenGuis
+        elseif v:IsA("BillboardGui") or v:IsA("SurfaceGui") or v:IsA("ScreenGui") then
+            v.Enabled = false
+            pcall(function() v.MaxDistance = 0 end)
+            pcall(function() v.AlwaysOnTop = false end)
+            
+        -- 4. Elemen GUI di dalam Model (Frame, TextLabel, ImageLabel, Button, dll)
+        elseif v:IsA("GuiObject") then
+            v.Visible = false
+            v.BackgroundTransparency = 1
+            if v:IsA("TextLabel") or v:IsA("TextButton") then
+                v.TextTransparency = 1
+            elseif v:IsA("ImageLabel") or v:IsA("ImageButton") then
+                v.ImageTransparency = 1
+            end
+        elseif v:IsA("UIStroke") then
+            v.Enabled = false
+            pcall(function() v.Transparency = 1 end)
+            
+        -- 5. Partikel, Efek Visual, Trail & Highlight
+        elseif v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Beam") or 
+               v:IsA("Fire") or v:IsA("Smoke") or v:IsA("Sparkles") or 
+               v:IsA("Highlight") or v:IsA("SelectionBox") or v:IsA("SelectionSphere") or 
+               v:IsA("BoxHandleAdornment") or v:IsA("CylinderHandleAdornment") or v:IsA("SphereHandleAdornment") then
+            pcall(function() v.Enabled = false end)
+            pcall(function() v.Visible = false end)
+            pcall(function() v.Transparency = 1 end)
+            
+        -- 6. Sumber Cahaya (PointLight, SurfaceLight, SpotLight)
+        elseif v:IsA("Light") then
+            v.Enabled = false
+            v.Brightness = 0
+        end
+    end)
+end
+
 local function makeModelInvisible(obj)
     if not obj then return end
+    -- 1. Sembunyikan objek itu sendiri
+    makeSingleObjectInvisible(obj)
+    -- 2. Sembunyikan seluruh isi di dalam Model secara rekursif (Gui, Text, Image, Part, Mesh, Partikel, dll)
     pcall(function()
-        if obj:IsA("BasePart") then
-            obj.Transparency = 1
-            pcall(function() obj.LocalTransparencyModifier = 1 end)
-            obj.CastShadow = false
-            invisibleAssetsCount = invisibleAssetsCount + 1
-        elseif obj:IsA("Decal") or obj:IsA("Texture") then
-            obj.Transparency = 1
-        elseif obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Beam") or 
-               obj:IsA("Fire") or obj:IsA("Smoke") or obj:IsA("Sparkles") or 
-               obj:IsA("Highlight") or obj:IsA("SurfaceAppearance") then
-            pcall(function() obj.Enabled = false end)
-            pcall(function() obj.Transparency = 1 end)
-        elseif obj:IsA("Light") then -- PointLight, SurfaceLight, SpotLight
-            obj.Enabled = false
-        elseif obj:IsA("BillboardGui") or obj:IsA("SurfaceGui") then
-            obj.Enabled = false
+        for _, descendant in ipairs(obj:GetDescendants()) do
+            makeSingleObjectInvisible(descendant)
         end
     end)
 end
