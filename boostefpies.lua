@@ -34,6 +34,7 @@ local CONFIG = {
     REMOVE_PLOTS_FOLDER = _G.removePlots ~= nil and _G.removePlots or true,           -- true: Hapus folder Plot player lain & folder Data
     PRESERVE_MY_PLOT    = true,                         -- true: JANGAN hapus plot kita (Smart Detection via BillboardGui/Name/Icon)
     HIDE_CLIENT_ASSETS  = _G.hideClientAssets ~= nil and _G.hideClientAssets or true, -- true: Sembunyikan model di ClientRenderedAssets (Invisible tanpa dihapus)
+    HIDE_INCOME_CASH    = _G.hideIncomeCash ~= nil and _G.hideIncomeCash or true,     -- true: Musnahkan SyncedIncomeCashAttachment & SyncedIncomeCash di Terrain
     STRIP_ACCESSORIES   = _G.stripAccessories ~= nil and _G.stripAccessories or true, -- true: Hapus rambut, topi, baju player lain (jika player tidak dihapus)
     DISABLE_3D_RENDER   = _G.disable3dRender or false,  -- true: Matikan 3D Rendering layar (GPU Saver Magic Loot)
     OPTIMIZE_TERRAIN    = true,                         -- true: Matikan efek ombak air & dekorasi rumput
@@ -48,6 +49,7 @@ _G.autoRemovePlayer = CONFIG.REMOVE_OTHER_PLAYER
 _G.removePlayer = CONFIG.REMOVE_OTHER_PLAYER
 _G.removePlayers = CONFIG.REMOVE_OTHER_PLAYER
 _G.hideClientAssets = CONFIG.HIDE_CLIENT_ASSETS
+_G.hideIncomeCash = CONFIG.HIDE_INCOME_CASH
 
 -- 1. SET FPS CAP
 pcall(function()
@@ -372,19 +374,35 @@ end
 sembunyikanClientAssets()
 
 ---------------------------------------------------------
--- 5. TERRAIN & WATER OPTIMIZATION
+-- 5. TERRAIN & WATER OPTIMIZATION (TERMASUK INCOME CASH CLEANER)
 ---------------------------------------------------------
-if CONFIG.OPTIMIZE_TERRAIN then
+if CONFIG.OPTIMIZE_TERRAIN or CONFIG.HIDE_INCOME_CASH then
     pcall(function()
         local terrain = workspace:FindFirstChildOfClass("Terrain")
         if terrain then
-            terrain.WaterWaveSize = 0
-            terrain.WaterWaveSpeed = 0
-            terrain.WaterReflectance = 0
-            terrain.WaterTransparency = 0
-            pcall(function()
-                sethiddenproperty(terrain, "Decoration", false)
-            end)
+            if CONFIG.OPTIMIZE_TERRAIN then
+                terrain.WaterWaveSize = 0
+                terrain.WaterWaveSpeed = 0
+                terrain.WaterReflectance = 0
+                terrain.WaterTransparency = 0
+                pcall(function()
+                    sethiddenproperty(terrain, "Decoration", false)
+                end)
+            end
+
+            -- Bersihkan SyncedIncomeCashAttachment & SyncedIncomeCash yang ada di Terrain
+            if CONFIG.HIDE_INCOME_CASH then
+                for _, obj in ipairs(terrain:GetDescendants()) do
+                    if obj.Name:find("SyncedIncomeCash") then
+                        pcall(function()
+                            if obj:IsA("BillboardGui") then obj.Enabled = false end
+                            obj:Destroy()
+                            cleanedCount = cleanedCount + 1
+                        end)
+                    end
+                end
+                print("💵 [Anti-Lag] Membersihkan SyncedIncomeCashAttachment & GUI di Terrain")
+            end
         end
     end)
 end
@@ -503,6 +521,15 @@ if CONFIG.ENABLE_REALTIME_OPT then
                 end
             end
 
+            -- Deteksi dan musnahkan SyncedIncomeCashAttachment & SyncedIncomeCash (Floating Cash di Terrain/Workspace)
+            if CONFIG.HIDE_INCOME_CASH and (descendant.Name:find("SyncedIncomeCash") or (descendant.Parent and descendant.Parent.Name:find("SyncedIncomeCash"))) then
+                pcall(function()
+                    if descendant:IsA("BillboardGui") then descendant.Enabled = false end
+                    descendant:Destroy()
+                end)
+                return
+            end
+
             -- Deteksi Plot baru
             if CONFIG.REMOVE_PLOTS_FOLDER and descendant:IsA("Model") and descendant.Parent and descendant.Parent.Name == "Plots" then
                 task.wait(0.3) -- Beri waktu agar BillboardGui termuat
@@ -590,4 +617,5 @@ print(string.format("🥔 White Potato Mode       : %s", tostring(CONFIG.WHITE_M
 print(string.format("💀 Hapus Player Lain       : %s", tostring(CONFIG.REMOVE_OTHER_PLAYER)))
 print(string.format("🏡 Smart Plot Protection   : %s", tostring(CONFIG.PRESERVE_MY_PLOT)))
 print(string.format("👻 Invisible Client Assets  : %s", tostring(CONFIG.HIDE_CLIENT_ASSETS)))
+print(string.format("💵 Auto Clean Income Cash   : %s", tostring(CONFIG.HIDE_INCOME_CASH)))
 print("══════════════════════════════════════════════════")
