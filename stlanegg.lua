@@ -842,6 +842,142 @@ local function ParseIncomeInput(text)
     return 0
 end
 
+-- ═══════════════════════════════════════════════════════════════════════════
+-- 📜 LIVE SCREEN LOG & TRADE HISTORY DATA STRUCTURE
+-- ═══════════════════════════════════════════════════════════════════════════
+local TradeHistoryList = {}
+local MAX_TRADE_LOG_ENTRIES = 100
+local currentLogFilter = "Semua Log (All)"
+local LOGS_PER_PAGE = 5
+local currentLogPage = 1
+
+local LiveLogStats = {
+    TotalSent = 0,
+    TotalSentIncome = 0,
+    TotalSentWeight = 0,
+    TotalSentPrice = 0,
+    TotalReceived = 0,
+    TotalSold = 0,
+    TotalEquipped = 0,
+    TotalFail = 0
+}
+
+function StealAnEggTrade.AddTradeLog(actionType, itemInfo, targetOrSenderName, extraDetail)
+    local now = os.date and os.date("%X")
+    if not now or now == "" then
+        local t = os.time and os.time() or tick()
+        local h = math.floor((t % 86400) / 3600)
+        local m = math.floor((t % 3600) / 60)
+        local s = math.floor(t % 60)
+        now = string.format("%02d:%02d:%02d", h, m, s)
+    end
+    
+    local entry = {
+        Timestamp   = now,
+        Action      = actionType or "SENT",
+        Target      = targetOrSenderName or "Unknown",
+        ItemName    = (type(itemInfo) == "table" and itemInfo.Name) or (type(itemInfo) == "string" and itemInfo) or "Unknown Item",
+        DisplayName = (type(itemInfo) == "table" and itemInfo.DisplayName) or (type(itemInfo) == "string" and itemInfo) or "Unknown Item",
+        Rarity      = (type(itemInfo) == "table" and itemInfo.Rarity) or "Normal",
+        Mutation    = (type(itemInfo) == "table" and itemInfo.BaseMutation) or "Normal",
+        Weight      = (type(itemInfo) == "table" and tonumber(itemInfo.Weight)) or 0,
+        Income      = (type(itemInfo) == "table" and tonumber(itemInfo.PerSecond)) or 0,
+        Price       = (type(itemInfo) == "table" and tonumber(itemInfo.Price)) or 0,
+        UID         = (type(itemInfo) == "table" and itemInfo.UID) or "-",
+        Detail      = extraDetail or ""
+    }
+    
+    if entry.Price <= 0 and entry.Income > 0 and CalculateItemPrice then
+        entry.Price = CalculateItemPrice(entry.Income, Config.PriceRatePer100M or 1000)
+    end
+    
+    if actionType == "SENT" then
+        LiveLogStats.TotalSent = LiveLogStats.TotalSent + 1
+        LiveLogStats.TotalSentIncome = LiveLogStats.TotalSentIncome + entry.Income
+        LiveLogStats.TotalSentWeight = LiveLogStats.TotalSentWeight + entry.Weight
+        LiveLogStats.TotalSentPrice = LiveLogStats.TotalSentPrice + entry.Price
+        TradeStats.TotalSent = LiveLogStats.TotalSent
+        TradeStats.SuccessCount = TradeStats.SuccessCount + 1
+        TradeStats.LastItemName = entry.DisplayName
+    elseif actionType == "RECEIVED" then
+        LiveLogStats.TotalReceived = LiveLogStats.TotalReceived + 1
+        TradeStats.AcceptedCount = LiveLogStats.TotalReceived
+        TradeStats.LastItemName = entry.DisplayName
+    elseif actionType == "SOLD" then
+        LiveLogStats.TotalSold = LiveLogStats.TotalSold + 1
+        TradeStats.SellCount = LiveLogStats.TotalSold
+        TradeStats.LastSoldName = entry.DisplayName
+    elseif actionType == "EQUIPPED" then
+        LiveLogStats.TotalEquipped = LiveLogStats.TotalEquipped + 1
+        TradeStats.EquipCount = LiveLogStats.TotalEquipped
+        TradeStats.LastEquippedName = entry.DisplayName
+    elseif actionType == "FAIL" then
+        LiveLogStats.TotalFail = LiveLogStats.TotalFail + 1
+        TradeStats.FailCount = TradeStats.FailCount + 1
+    end
+    
+    table.insert(TradeHistoryList, 1, entry)
+    if #TradeHistoryList > MAX_TRADE_LOG_ENTRIES then
+        table.remove(TradeHistoryList, #TradeHistoryList)
+    end
+    
+    if StealAnEggTrade.RefreshLogScreen then
+        task.defer(StealAnEggTrade.RefreshLogScreen)
+    end
+    
+    return entry
+end
+
+local function FormatLogEntryRichText(entry)
+    local actionBadge = ""
+    if entry.Action == "SENT" then
+        actionBadge = '<font color="#00FF88"><b>[📤 SENT]</b></font>'
+    elseif entry.Action == "RECEIVED" then
+        actionBadge = '<font color="#00E5FF"><b>[📥 RECEIVED]</b></font>'
+    elseif entry.Action == "SOLD" then
+        actionBadge = '<font color="#FFAA00"><b>[💰 SOLD]</b></font>'
+    elseif entry.Action == "EQUIPPED" then
+        actionBadge = '<font color="#BF55EC"><b>[⚔️ EQUIP]</b></font>'
+    else
+        actionBadge = '<font color="#FF4444"><b>[❌ FAIL]</b></font>'
+    end
+    
+    local rBadge = GetRarityBadge(entry.Rarity)
+    local mBadge = GetMutationBadge(entry.Mutation)
+    local incStr = entry.Income > 0 and formatIncome(entry.Income) or "-"
+    local wStr = entry.Weight > 0 and (formatNumber(entry.Weight) .. " kg") or "-"
+    local priceStr = entry.Price > 0 and formatNumber(entry.Price) or "-"
+    local targetLabel = (entry.Action == "RECEIVED" and "Dari: @" or "Ke: @") .. tostring(entry.Target)
+    
+    local lines = {}
+    table.insert(lines, string.format("<b>[%s]</b> %s ➔ <b>%s</b>", entry.Timestamp, actionBadge, targetLabel))
+    table.insert(lines, string.format("%s <b>%s</b> %s", rBadge, entry.DisplayName, mBadge))
+    
+    local metrics = {}
+    if entry.Weight > 0 then
+        table.insert(metrics, string.format("<font color=\"#00E5FF\">⚖️ %s</font>", wStr))
+    end
+    if entry.Income > 0 then
+        table.insert(metrics, string.format("<font color=\"#00FF88\"><b>💰 %s</b></font>", incStr))
+    end
+    if entry.Price > 0 then
+        table.insert(metrics, string.format("<font color=\"#FFD700\"><b>🏷️ %s</b></font>", priceStr))
+    end
+    
+    if #metrics > 0 then
+        table.insert(lines, "├ " .. table.concat(metrics, "  •  "))
+    end
+    
+    if entry.UID and entry.UID ~= "-" and entry.UID ~= "" then
+        local shortUid = entry.UID:sub(1, 8) .. "..."
+        table.insert(lines, string.format("└ <font color=\"#888888\">🆔 %s</font>", shortUid))
+    else
+        table.insert(lines, "└ <font color=\"#00FF88\">Status: Sukses Diproses</font>")
+    end
+    
+    return table.concat(lines, "\n")
+end
+
 -- Blacklist Tool yang dikecualikan dari scan / trade (Bat dan Trap)
 local IGNORED_TOOL_PATTERNS = { "bat", "trap" }
 
@@ -1651,9 +1787,11 @@ function StealAnEggTrade.SendGift(targetPlayerId, tool)
         
         if transferred then
             print(string.format("[SendGift Sukses] '%s' BERHASIL HILANG & DITERIMA TARGET ✅", toolName))
+            StealAnEggTrade.AddTradeLog("SENT", toolInfo, targetPlayerObj and targetPlayerObj.Name or targetName or tostring(numericId))
             return true, "Tool berhasil dipindahtangankan"
         else
             print(string.format("[SendGift Peringatan] Timeout 6s: '%s' masih ada di inventaris!", toolName))
+            StealAnEggTrade.AddTradeLog("FAIL", toolInfo, targetPlayerObj and targetPlayerObj.Name or targetName or tostring(numericId), "Timeout 6s")
             return false, "Timeout: Tool belum diterima oleh penerima"
         end
     else
@@ -2108,6 +2246,8 @@ function StealAnEggTrade.SellItem(toolOrUid)
         end
         TradeStats.SellCount = (TradeStats.SellCount or 0) + 1
         TradeStats.LastSoldName = toolName
+        local sInfo = tool and StealAnEggTrade.GetToolInfo(tool) or {DisplayName = toolName, Name = toolName, UID = tostring(uid)}
+        StealAnEggTrade.AddTradeLog("SOLD", sInfo, "System Shop")
         print(string.format("[AutoSell] Berhasil memegang & menjual '%s' [UID: %s] 💰", toolName, tostring(uid)))
         return true, "Berhasil dijual"
     else
@@ -2431,6 +2571,7 @@ function StealAnEggTrade.OnGiftRequestReceived(senderUsername, senderUserId, ite
         local ok, result = StealAnEggTrade.AcceptGift(sId, reqUid)
         if ok then
             TradeStats.AcceptedCount = TradeStats.AcceptedCount + 1
+            StealAnEggTrade.AddTradeLog("RECEIVED", {DisplayName = iName, Name = iName, Rarity = "Normal"}, sName)
             if LastRequestPara then
                 pcall(function()
                     LastRequestPara:Set("Permintaan Masuk Terakhir", string.format("Item: %s\nDari: %s (ID: %s)\nStatus: BERHASIL DITERIMA ✅", iName, sName, tostring(sId)))
@@ -4051,25 +4192,188 @@ end)
 
 
 -- ---------------------------------------------------------
--- TAB 5: 📊 STATS & LOGS
+-- TAB 5: 📺 LIVE SCREEN LOG & TRADE HISTORY STREAM
 -- ---------------------------------------------------------
-local StatsTab = Window:MakeTab("📊")
-local StatsSec = StatsTab:AddSection("Statistik Transaksi Gifting & Auto Sell")
+local StatsTab = Window:MakeTab("📺")
 
-local TotalSentPara     = StatsSec:AddParagraph("Total Terkirim", "0 Item")
-local TotalAcceptedPara = StatsSec:AddParagraph("Total Diterima (Accept)", "0 Item Diterima 📥")
-local TotalSoldPara     = StatsSec:AddParagraph("Total Item Terjual", "0 Item Terjual 💰")
-local TotalEquippedPara = StatsSec:AddParagraph("Total Asset Di-Equip", "0 Asset Di-Equip ⚔️")
-local SuccessPara       = StatsSec:AddParagraph("Status Sukses Gift", "0 Sukses")
-local FailPara          = StatsSec:AddParagraph("Status Gagal Gift", "0 Gagal")
-local LastItemPara      = StatsSec:AddParagraph("Item Terakhir Digift", "-")
-local LastSoldPara      = StatsSec:AddParagraph("Item Terakhir Dijual", "-")
-local LastEquippedPara  = StatsSec:AddParagraph("Asset Terakhir Di-Equip", "-")
+-- Section 1: 📊 Real-Time Trade & Value Summary
+local LiveSummarySec = StatsTab:AddSection("📊 Ringkasan Nilai & Transaksi Real-Time")
+local LiveSummaryPara = LiveSummarySec:AddParagraph("📊 Ringkasan Nilai & Transaksi", "Memuat data aktivitas transaksi...")
 
-StatsSec:AddButton({
-    Name = "🔄 Reset Statistik",
-    Tooltip = "Mengatur ulang hitungan statistik ke 0"
+-- Section 2: 📺 Live Transaction Feed & History Screen
+local LiveLogSec = StatsTab:AddSection("📺 Live Screen Log & History Feed")
+
+local function GetFilteredLogs()
+    if currentLogFilter == "All" or currentLogFilter == "Semua Log (All)" or currentLogFilter == "All Logs" then
+        return TradeHistoryList
+    end
+    local res = {}
+    for _, item in ipairs(TradeHistoryList) do
+        if currentLogFilter:find("Terkirim") or currentLogFilter:find("Sent") then
+            if item.Action == "SENT" then table.insert(res, item) end
+        elseif currentLogFilter:find("Diterima") or currentLogFilter:find("Received") then
+            if item.Action == "RECEIVED" then table.insert(res, item) end
+        elseif currentLogFilter:find("Terjual") or currentLogFilter:find("Sold") then
+            if item.Action == "SOLD" then table.insert(res, item) end
+        elseif currentLogFilter:find("Equip") then
+            if item.Action == "EQUIPPED" then table.insert(res, item) end
+        end
+    end
+    return res
+end
+
+local LogFilterDropdown = LiveLogSec:AddDropdown({
+    Name = "Filter Kategori Log",
+    Options = {"Semua Log (All)", "📤 Terkirim (Sent Only)", "📥 Diterima (Received Only)", "💰 Terjual (Sold Only)", "⚔️ Di-Equip (Equip Only)"},
+    Default = "Semua Log (All)",
+    Flag = "LogCategoryDropdown",
+    Tooltip = "Pilih jenis event transaksi yang ingin ditampilkan pada layar log"
+}, function(selected)
+    currentLogFilter = selected or "Semua Log (All)"
+    currentLogPage = 1
+    if StealAnEggTrade.RefreshLogScreen then
+        StealAnEggTrade.RefreshLogScreen()
+    end
+end)
+
+local LogPageIndicatorPara = LiveLogSec:AddParagraph("Navigasi Log", "Halaman 1 dari 1 (Total 0 Riwayat)")
+
+-- 5 Pre-allocated slot paragraphs for transaction cards
+local LogSlotParagraphs = {}
+for i = 1, LOGS_PER_PAGE do
+    local slotPara = LiveLogSec:AddParagraph(string.format("Transaction Card #%d", i), "Belum ada riwayat transaksi.")
+    table.insert(LogSlotParagraphs, slotPara)
+end
+
+LiveLogSec:AddButton({
+    Name = "◀️ Halaman Sebelumnya (Prev Page)",
+    Tooltip = "Melihat riwayat transaksi di halaman sebelumnya"
 }, function()
+    local filtered = GetFilteredLogs()
+    local totalPages = math.max(1, math.ceil(#filtered / LOGS_PER_PAGE))
+    if currentLogPage > 1 then
+        currentLogPage = currentLogPage - 1
+        if StealAnEggTrade.RefreshLogScreen then StealAnEggTrade.RefreshLogScreen() end
+    else
+        Library:Notify({
+            Title   = "Navigasi Log",
+            Content = "Sudah berada di halaman pertama.",
+            Type    = "Info",
+            Duration = 2
+        })
+    end
+end)
+
+LiveLogSec:AddButton({
+    Name = "▶️ Halaman Selanjutnya (Next Page)",
+    Tooltip = "Melihat riwayat transaksi di halaman berikutnya"
+}, function()
+    local filtered = GetFilteredLogs()
+    local totalPages = math.max(1, math.ceil(#filtered / LOGS_PER_PAGE))
+    if currentLogPage < totalPages then
+        currentLogPage = currentLogPage + 1
+        if StealAnEggTrade.RefreshLogScreen then StealAnEggTrade.RefreshLogScreen() end
+    else
+        Library:Notify({
+            Title   = "Navigasi Log",
+            Content = "Sudah berada di halaman terakhir.",
+            Type    = "Info",
+            Duration = 2
+        })
+    end
+end)
+
+
+-- Section 3: 🛠️ Log Utilities & Export
+local LogUtilSec = StatsTab:AddSection("🛠️ Log Utilities & Export")
+
+LogUtilSec:AddButton({
+    Name = "📋 Salin Seluruh History Log ke Clipboard (Export Text)",
+    Tooltip = "Menyalin seluruh catatan riwayat transaksi ke clipboard untuk dibagikan ke Discord / Notepad"
+}, function()
+    if #TradeHistoryList == 0 then
+        Library:Notify({
+            Title   = "Log Kosong",
+            Content = "Belum ada riwayat transaksi yang tercatat.",
+            Type    = "Warning",
+            Duration = 2.5
+        })
+        return
+    end
+    
+    local exportLines = {
+        "================================================================",
+        "SIGMA HUB | STEAL AN EGG - LIVE SCREEN TRADE HISTORY LOG",
+        string.format("Waktu Export : %s", os.date and os.date("%Y-%m-%d %X") or "Live"),
+        string.format("Total Sent   : %d Items (Income: +%s | Harga: 🏷️ %s | Berat: ⚖️ %s)",
+            LiveLogStats.TotalSent,
+            formatIncome(LiveLogStats.TotalSentIncome),
+            formatNumber(LiveLogStats.TotalSentPrice),
+            formatNumber(LiveLogStats.TotalSentWeight) .. " kg"
+        ),
+        string.format("Total Received: %d Items | Sold: %d Items | Equipped: %d Assets",
+            LiveLogStats.TotalReceived,
+            LiveLogStats.TotalSold,
+            LiveLogStats.TotalEquipped
+        ),
+        "================================================================"
+    }
+    
+    for idx, entry in ipairs(TradeHistoryList) do
+        local line = string.format("[%s] [%s] Target: %s | %s [%s] (%s) | Berat: %s kg | Income: +%s | Harga: %s | UID: %s",
+            entry.Timestamp,
+            entry.Action,
+            entry.Target,
+            entry.DisplayName,
+            entry.Rarity,
+            entry.Mutation,
+            formatNumber(entry.Weight),
+            formatIncome(entry.Income),
+            formatNumber(entry.Price),
+            entry.UID
+        )
+        table.insert(exportLines, line)
+    end
+    table.insert(exportLines, "================================================================")
+    
+    local fullText = table.concat(exportLines, "\n")
+    local ok = CopyToClipboard(fullText)
+    if ok then
+        Library:Notify({
+            Title   = "Log Disalin! 📋",
+            Content = string.format("Berhasil menyalin %d catatan transaksi ke clipboard!", #TradeHistoryList),
+            Type    = "Success",
+            Duration = 3.5
+        })
+    end
+end)
+
+LogUtilSec:AddButton({
+    Name = "🔄 Refresh Layar Log",
+    Tooltip = "Memperbarui tampilan layar log transaksi secara instan"
+}, function()
+    if StealAnEggTrade.RefreshLogScreen then StealAnEggTrade.RefreshLogScreen() end
+    Library:Notify({
+        Title   = "Layar Log Diperbarui 🔄",
+        Content = string.format("%d Total Riwayat Transaksi", #TradeHistoryList),
+        Type    = "Info",
+        Duration = 2
+    })
+end)
+
+LogUtilSec:AddButton({
+    Name = "🗑️ Bersihkan / Reset Riwayat Log",
+    Tooltip = "Menghapus seluruh riwayat transaksi dan mereset statistik ke 0"
+}, function()
+    table.clear(TradeHistoryList)
+    LiveLogStats.TotalSent = 0
+    LiveLogStats.TotalSentIncome = 0
+    LiveLogStats.TotalSentWeight = 0
+    LiveLogStats.TotalSentPrice = 0
+    LiveLogStats.TotalReceived = 0
+    LiveLogStats.TotalSold = 0
+    LiveLogStats.TotalEquipped = 0
+    LiveLogStats.TotalFail = 0
     TradeStats.TotalSent = 0
     TradeStats.SuccessCount = 0
     TradeStats.FailCount = 0
@@ -4079,12 +4383,71 @@ StatsSec:AddButton({
     TradeStats.LastItemName = "-"
     TradeStats.LastSoldName = "-"
     TradeStats.LastEquippedName = "-"
+    currentLogPage = 1
+    if StealAnEggTrade.RefreshLogScreen then StealAnEggTrade.RefreshLogScreen() end
     Library:Notify({
-        Title   = "Stats Reset",
-        Content = "Statistik transaksi, penjualan & equip berhasil di-reset!",
-        Type    = "Info",
-        Duration = 2
+        Title   = "Log Dibersihkan 🗑️",
+        Content = "Seluruh riwayat transaksi & statistik berhasil di-reset!",
+        Type    = "Success",
+        Duration = 2.5
     })
+end)
+
+function StealAnEggTrade.RefreshLogScreen()
+    pcall(function()
+        local filtered = GetFilteredLogs()
+        local totalItems = #filtered
+        local totalPages = math.max(1, math.ceil(totalItems / LOGS_PER_PAGE))
+        if currentLogPage > totalPages then currentLogPage = totalPages end
+        if currentLogPage < 1 then currentLogPage = 1 end
+        
+        -- Update Summary paragraph
+        if LiveSummaryPara then
+            local sumText = string.format(
+                "<font color=\"#00FF88\"><b>📤 %d Terkirim</b></font> (💰 %s | 🏷️ %s | ⚖️ %s)\n" ..
+                "<font color=\"#00E5FF\"><b>📥 %d Diterima</b></font>  •  <font color=\"#FFAA00\"><b>💰 %d Terjual</b></font>  •  <font color=\"#BF55EC\"><b>⚔️ %d Di-Equip</b></font>\n" ..
+                "Aktivitas Terakhir: <b>%s</b>",
+                LiveLogStats.TotalSent,
+                formatIncome(LiveLogStats.TotalSentIncome),
+                formatNumber(LiveLogStats.TotalSentPrice),
+                formatNumber(LiveLogStats.TotalSentWeight) .. " kg",
+                LiveLogStats.TotalReceived,
+                LiveLogStats.TotalSold,
+                LiveLogStats.TotalEquipped,
+                TradeStats.LastItemName ~= "-" and (TradeStats.LastItemName .. " (Sukses)") or "Belum ada transaksi"
+            )
+            LiveSummaryPara:Set("📊 Ringkasan Nilai & Transaksi", sumText)
+        end
+        
+        -- Update Page Indicator
+        if LogPageIndicatorPara then
+            LogPageIndicatorPara:Set("Navigasi Log", string.format("Halaman %d dari %d (Total %d Riwayat)", currentLogPage, totalPages, totalItems))
+        end
+        
+        -- Render 5 log cards
+        local startIdx = (currentLogPage - 1) * LOGS_PER_PAGE + 1
+        for slot = 1, LOGS_PER_PAGE do
+            local itemIdx = startIdx + slot - 1
+            local entry = filtered[itemIdx]
+            local p = LogSlotParagraphs[slot]
+            if p then
+                if entry then
+                    local title = string.format("#%d [%s] %s ➔ @%s", itemIdx, entry.Timestamp, entry.Action, entry.Target)
+                    local desc = FormatLogEntryRichText(entry)
+                    p:Set(title, desc)
+                else
+                    p:Set(string.format("Transaction Slot #%d", itemIdx), "<font color=\"#666666\">[Kosong - Menunggu Aktivitas Trade Selanjutnya]</font>")
+                end
+            end
+        end
+    end)
+end
+
+-- Inisialisasi awal layar log
+task.defer(function()
+    if StealAnEggTrade.RefreshLogScreen then
+        StealAnEggTrade.RefreshLogScreen()
+    end
 end)
 
 
@@ -4315,21 +4678,9 @@ task.spawn(function()
                 SellStatusPara:Set("Status Auto Sell", sellDesc)
             end
             
-            -- 4. Tab 📊: Statistik Gifting, Auto Sell & Equip
-            if TotalSentPara and TotalAcceptedPara and TotalSoldPara and SuccessPara and FailPara and LastItemPara and LastSoldPara then
-                TotalSentPara:Set("Total Terkirim", tostring(TradeStats.TotalSent) .. " Item Terkirim")
-                TotalAcceptedPara:Set("Total Diterima (Accept)", tostring(TradeStats.AcceptedCount) .. " Gift Diterima 📥")
-                TotalSoldPara:Set("Total Item Terjual", tostring(TradeStats.SellCount or 0) .. " Item Terjual 💰")
-                if TotalEquippedPara then
-                    TotalEquippedPara:Set("Total Asset Di-Equip", tostring(TradeStats.EquipCount or 0) .. " Asset Di-Equip ⚔️")
-                end
-                SuccessPara:Set("Status Sukses Gift", tostring(TradeStats.SuccessCount) .. " Transaksi Sukses")
-                FailPara:Set("Status Gagal Gift", tostring(TradeStats.FailCount) .. " Gagal")
-                LastItemPara:Set("Item Terakhir Digift", tostring(TradeStats.LastItemName))
-                LastSoldPara:Set("Item Terakhir Dijual", tostring(TradeStats.LastSoldName or "-"))
-                if LastEquippedPara then
-                    LastEquippedPara:Set("Asset Terakhir Di-Equip", tostring(TradeStats.LastEquippedName or "-"))
-                end
+            -- 4. Tab 📺: Live Screen Log & Summary Refresh
+            if StealAnEggTrade.RefreshLogScreen then
+                StealAnEggTrade.RefreshLogScreen()
             end
             
             -- 5. Tab 🌐: Server Info & Uptime
