@@ -139,25 +139,58 @@ end)
 -- =============================================
 -- 📡 CARI REMOTE
 -- =============================================
-local kickRemote = nil
 local networkFolder = ReplicatedStorage:WaitForChild("Shared", 10):WaitForChild("Packages", 10):WaitForChild("Network", 10)
-if networkFolder then
-    kickRemote = networkFolder:FindFirstChild("rev_KickEvent")
-end
+local ref_KickEvent = networkFolder and (networkFolder:FindFirstChild("ref_KickEvent") or networkFolder:WaitForChild("ref_KickEvent", 5))
+local rev_KickEvent = networkFolder and networkFolder:FindFirstChild("rev_KickEvent")
 
-if not kickRemote then
+if not ref_KickEvent and not rev_KickEvent then
     for _, r in pairs(ReplicatedStorage:GetDescendants()) do
-        if r:IsA("RemoteEvent") and string.find(r.Name, "rev_KickEvent") and not string.find(r.Name, "Ended") then
-            kickRemote = r; break
+        if r.Name == "ref_KickEvent" and r:IsA("RemoteFunction") then
+            ref_KickEvent = r
+            break
+        elseif r.Name == "rev_KickEvent" and r:IsA("RemoteEvent") then
+            rev_KickEvent = r
+            break
         end
     end
+end
+
+-- Helper Eksekusi Kick Baru: InvokeServer(1 [Perfect], 1 [Max Power], timestamp [ServerTime/tick])
+local function executeKick()
+    local timestamp = nil
+    pcall(function()
+        timestamp = workspace:GetServerTimeNow()
+    end)
+    if not timestamp or timestamp == 0 then
+        timestamp = tick()
+    end
+
+    -- 1. Prioritas RemoteFunction ref_KickEvent (Mekanik Baru)
+    if ref_KickEvent then
+        local success, result = pcall(function()
+            return ref_KickEvent:InvokeServer(1, 1, timestamp)
+        end)
+        if success then return true, result end
+    end
+
+    -- 2. Fallback ke rev_KickEvent
+    if rev_KickEvent then
+        pcall(function()
+            if rev_KickEvent:IsA("RemoteFunction") then
+                rev_KickEvent:InvokeServer(1, 1, timestamp)
+            else
+                rev_KickEvent:FireServer(1, 1, timestamp)
+            end
+        end)
+        return true
+    end
+    
+    return false, "Remote Kick tidak ditemukan"
 end
 
 local rev_kickPhase2 = networkFolder and networkFolder:WaitForChild("rev_kickPhase2", 15)
 local rev_Collected = networkFolder and networkFolder:WaitForChild("rev_Collected", 15)
 local rev_KickEventEnded = networkFolder and networkFolder:WaitForChild("rev_KickEventEnded", 15)
-local rev_AddedWeather = networkFolder and networkFolder:WaitForChild("rev_AddedWeather", 15)
-local rev_PlayMessage = networkFolder and networkFolder:WaitForChild("rev_PlayMessage", 15)
 
 -- =============================================
 -- 📡 DAFTAR EVENT LISTENER
@@ -165,8 +198,6 @@ local rev_PlayMessage = networkFolder and networkFolder:WaitForChild("rev_PlayMe
 local phase2Fired = false
 local collectedFired = false
 local kickEndedFired = false
-local weatherEventPending = false
-local luckBuffObtained = false
 
 if rev_kickPhase2 then
     rev_kickPhase2.OnClientEvent:Connect(function(...)
@@ -183,22 +214,6 @@ end
 if rev_KickEventEnded then
     rev_KickEventEnded.OnClientEvent:Connect(function(...)
         kickEndedFired = true
-    end)
-end
-
-if rev_AddedWeather then
-    rev_AddedWeather.OnClientEvent:Connect(function(weatherType, ...)
-        if weatherType == "LuckMachine" then
-            weatherEventPending = true
-        end
-    end)
-end
-
-if rev_PlayMessage then
-    rev_PlayMessage.OnClientEvent:Connect(function(msg, msgType)
-        if tostring(msg) == "Luck has been increased to x8" then
-            luckBuffObtained = true
-        end
     end)
 end
 
@@ -235,29 +250,20 @@ task.spawn(function()
         -- ==========================================
         -- 🚨 PENGATUR WAKTU OTOMATIS & FAILSAFE 25s
         -- ==========================================
-        if _G.targetAction ~= _G.lastAction then
-            _G.globalStuckTimer = 0
+        if _G.lastAction ~= _G.targetAction then
+            _G.globalStuckTimer = 0 
             _G.stateTimer = 0 
             _G.lastAction = _G.targetAction
         else
             _G.globalStuckTimer = _G.globalStuckTimer + 0.05
             _G.stateTimer = _G.stateTimer + 0.05 
             
-            -- Failsafe 25 detik dinonaktifkan saat sedang berada di Luck Machine agar tidak mati prematur
-            if _G.globalStuckTimer >= 25 and _G.targetAction ~= "LuckMachineTraining" and _G.targetAction ~= "LuckMachineTeleport" then
+            -- Failsafe 25 detik agar tidak stuck selamanya
+            if _G.globalStuckTimer >= 25 then
                 _G.globalStuckTimer = 0
                 _G.targetAction = "WaitingRespawn"
                 hum.Health = 0 
                 continue
-            end
-        end
-
-        -- [ INTERUPSI EVENT CUACA (PAUSE AUTO FARM KECUALI SEDANG PULANG KE SAFE ZONE) ]
-        if weatherEventPending then
-            if _G.targetAction ~= "WalkToSafeZone" then
-                weatherEventPending = false
-                luckBuffObtained = false
-                _G.targetAction = "LuckMachineTeleport"
             end
         end
 
@@ -277,9 +283,7 @@ task.spawn(function()
                     phase2Fired = false
                     collectedFired = false
                     kickEndedFired = false
-                    if kickRemote then 
-                        kickRemote:FireServer(1, 1) 
-                    end
+                    executeKick()
                     _G.targetAction = "WaitingForPhase2"
                 end
             end
@@ -315,81 +319,10 @@ task.spawn(function()
                 
                 -- Langsung lakukan kick kembali tanpa delay
                 phase2Fired = false
-                if kickRemote then 
-                    kickRemote:FireServer(1, 1) 
-                end
+                executeKick()
                 _G.targetAction = "WaitingForPhase2"
             elseif _G.stateTimer > 5 then
                 _G.targetAction = "Idle"
-            end
-
-        -- [ FASE EX-1: TELEPORT KE LUCK MACHINE ]
-        elseif _G.targetAction == "LuckMachineTeleport" then
-            local targetPart = nil
-            pcall(function()
-                local debris = workspace:FindFirstChild("Debris")
-                local luckMachine = debris and debris:FindFirstChild("LuckMachine")
-                local standingPlatforms = luckMachine and luckMachine:FindFirstChild("StandingPlatforms")
-                if standingPlatforms then
-                    targetPart = standingPlatforms:FindFirstChild("1") 
-                        or standingPlatforms:FindFirstChild("2") 
-                        or standingPlatforms:FindFirstChild("3")
-                end
-            end)
-            
-            if targetPart then
-                hrp.CFrame = targetPart.CFrame + Vector3.new(0, 3, 0)
-                task.wait(0.5)
-                _G.targetAction = "LuckMachineTraining"
-            else
-                if _G.stateTimer >= 3 then
-                    _G.targetAction = "Idle"
-                end
-            end
-
-        -- [ FASE EX-2: AUTO USE BARBELL DI LUCK MACHINE SAMPAI DAPAT LUCK BUFF ]
-        elseif _G.targetAction == "LuckMachineTraining" then
-            local targetPart = nil
-            pcall(function()
-                local debris = workspace:FindFirstChild("Debris")
-                local luckMachine = debris and debris:FindFirstChild("LuckMachine")
-                local standingPlatforms = luckMachine and luckMachine:FindFirstChild("StandingPlatforms")
-                if standingPlatforms then
-                    targetPart = standingPlatforms:FindFirstChild("1") 
-                        or standingPlatforms:FindFirstChild("2") 
-                        or standingPlatforms:FindFirstChild("3")
-                end
-            end)
-            
-            if targetPart and (hrp.Position - targetPart.Position).Magnitude > 8 then
-                hrp.CFrame = targetPart.CFrame + Vector3.new(0, 3, 0)
-            end
-            
-            -- Mekanik memegang & memakai Barbell
-            local currentTool = char:FindFirstChildOfClass("Tool")
-            if currentTool and string.match(currentTool.Name, "Barbell$") then
-                currentTool:Activate()
-            else
-                local backpack = lp:FindFirstChild("Backpack")
-                if backpack then
-                    for _, tool in ipairs(backpack:GetChildren()) do
-                        if tool:IsA("Tool") and string.match(tool.Name, "Barbell$") then
-                            hum:EquipTool(tool)
-                            task.wait(0.1)
-                            tool:Activate()
-                            break
-                        end
-                    end
-                end
-            end
-            
-            -- Jika buff keberuntungan sudah tercapai atau failsafe 240 detik terpenuhi
-            if luckBuffObtained or _G.stateTimer >= 240 then
-                pcall(function()
-                    hum:UnequipTools()
-                end)
-                luckBuffObtained = false
-                _G.targetAction = "Idle" -- Restart auto farm (Idle akan teleport balik ke safe zone)
             end
         end
     end
