@@ -333,8 +333,15 @@ local Config = {
     -- Auto Equip Active Asset Configuration
     AutoEquipAsset          = false,
     AutoEquipMode           = "💰 Highest Income (Best Value)",
-    AutoEquipDelay          = 0.3,
-    AutoEquipInterval       = 2.0,
+    AutoEquipMaxAmount      = 5,                -- Jumlah asset teratas yang di-equip
+    AutoEquipItem           = "All Items",      -- Filter jenis item
+    AutoEquipRarities       = "All Rarities",   -- Filter rarity item
+    AutoEquipMutation       = "All Mutations",  -- Filter mutasi item
+    AutoEquipMinIncome      = 0,                -- Minimal pasif income
+    AutoEquipMinWeight      = 0,                -- Minimal berat (kg)
+    AutoEquipOnlyFavorites  = false,            -- Hanya equip item favorit
+    AutoEquipDelay          = 0.35,             -- Jeda antar equip (detik)
+    AutoEquipInterval       = 3.0,              -- Interval loop auto equip
     LastEquippedAssetUID    = nil,
     LastEquippedAssetName   = nil,
     
@@ -2086,6 +2093,124 @@ function StealAnEggTrade.EquipActiveAsset(toolOrUid)
     end
 end
 
+function StealAnEggTrade.MatchesEquipFilter(tool, equipConfig)
+    equipConfig = equipConfig or Config
+    if not tool or not tool:IsA("Tool") or IsIgnoredTool(tool) then return false end
+    local info = StealAnEggTrade.GetToolInfo(tool)
+    if not info then return false end
+    
+    -- 1. Validasi UID
+    if not info.UID or info.UID == "-" or info.UID == "" then
+        return false
+    end
+    
+    -- 2. Filter Favorit
+    if equipConfig.AutoEquipOnlyFavorites and not info.Favorite then
+        return false
+    end
+    
+    -- 3. Filter Nama Jenis Item
+    if equipConfig.AutoEquipItem and equipConfig.AutoEquipItem ~= "All Items" and equipConfig.AutoEquipItem ~= "" then
+        local targetName = equipConfig.AutoEquipItem:lower()
+        local matchesName = info.Name:lower():find(targetName, 1, true) ~= nil
+        local matchesDisp = info.DisplayName:lower():find(targetName, 1, true) ~= nil
+        if not matchesName and not matchesDisp then
+            return false
+        end
+    end
+    
+    -- 4. Filter Mutasi
+    if equipConfig.AutoEquipMutation and equipConfig.AutoEquipMutation ~= "All Mutations" and equipConfig.AutoEquipMutation ~= "All" and equipConfig.AutoEquipMutation ~= "" then
+        if info.BaseMutation:lower() ~= equipConfig.AutoEquipMutation:lower() then
+            return false
+        end
+    end
+    
+    -- 5. Filter Rarity
+    if equipConfig.AutoEquipRarities and equipConfig.AutoEquipRarities ~= "All Rarities" and equipConfig.AutoEquipRarities ~= "All" and equipConfig.AutoEquipRarities ~= "" then
+        if not CheckRarityMatch(info.Rarity, equipConfig.AutoEquipRarities) then
+            return false
+        end
+    end
+    
+    -- 6. Filter Min Income
+    if equipConfig.AutoEquipMinIncome and equipConfig.AutoEquipMinIncome > 0 then
+        if info.PerSecond < equipConfig.AutoEquipMinIncome then
+            return false
+        end
+    end
+    
+    -- 7. Filter Min Weight
+    if equipConfig.AutoEquipMinWeight and equipConfig.AutoEquipMinWeight > 0 then
+        if info.Weight < equipConfig.AutoEquipMinWeight then
+            return false
+        end
+    end
+    
+    return true, info
+end
+
+function StealAnEggTrade.GetEquipCandidates()
+    local tools = StealAnEggTrade.GetAllTools()
+    local mode = Config.AutoEquipMode or "💰 Highest Income (Best Value)"
+    local candidates = {}
+    
+    for _, t in ipairs(tools) do
+        local isMatch, info = false, nil
+        if mode == "🎯 Custom Filter (Rarity / Mutasi / Item)" then
+            isMatch, info = StealAnEggTrade.MatchesEquipFilter(t, Config)
+        else
+            info = StealAnEggTrade.GetToolInfo(t)
+            isMatch = (info and info.UID and info.UID ~= "-")
+            if Config.AutoEquipOnlyFavorites and info and not info.Favorite then
+                isMatch = false
+            end
+        end
+        
+        if isMatch and info then
+            table.insert(candidates, { Tool = t, Info = info })
+        end
+    end
+    
+    -- Urutkan kandidat berdasarkan mode prioritas
+    table.sort(candidates, function(a, b)
+        if mode == "⚖️ Heaviest Weight" then
+            if a.Info.Weight ~= b.Info.Weight then return a.Info.Weight > b.Info.Weight end
+            return a.Info.PerSecond > b.Info.PerSecond
+        elseif mode == "👑 Highest Rarity Tier" then
+            if a.Info.RarityRank ~= b.Info.RarityRank then return a.Info.RarityRank > b.Info.RarityRank end
+            return a.Info.PerSecond > b.Info.PerSecond
+        else -- "💰 Highest Income (Best Value)" atau "🎯 Custom Filter"
+            if a.Info.PerSecond ~= b.Info.PerSecond then return a.Info.PerSecond > b.Info.PerSecond end
+            if a.Info.RarityRank ~= b.Info.RarityRank then return a.Info.RarityRank > b.Info.RarityRank end
+            return a.Info.Weight > b.Info.Weight
+        end
+    end)
+    
+    return candidates
+end
+
+function StealAnEggTrade.EquipTopAssets(limit)
+    limit = math.max(1, tonumber(limit) or tonumber(Config.AutoEquipMaxAmount) or 5)
+    local candidates = StealAnEggTrade.GetEquipCandidates()
+    local count = 0
+    local toEquip = {}
+    
+    for i = 1, math.min(limit, #candidates) do
+        table.insert(toEquip, candidates[i].Tool)
+    end
+    
+    for _, tool in ipairs(toEquip) do
+        if tool and tool.Parent then
+            local ok, _ = StealAnEggTrade.EquipActiveAsset(tool)
+            if ok then count = count + 1 end
+            task.wait(Config.AutoEquipDelay or 0.35)
+        end
+    end
+    
+    return count, #candidates
+end
+
 function StealAnEggTrade.SetAutoEquip(state)
     Config.AutoEquipAsset = (state == true)
     print("[StealAnEgg API] AutoEquipAsset set to:", Config.AutoEquipAsset)
@@ -2101,50 +2226,10 @@ function StealAnEggTrade.StartAutoEquipLoop()
     task.spawn(function()
         while Config.AutoEquipAsset and getgenv().CurrentTradeScriptID == scriptId do
             pcall(function()
-                local scan = StealAnEggTrade.ScanInventory()
-                local tools = scan.Tools or StealAnEggTrade.GetAllTools()
-                local mode = Config.AutoEquipMode or "💰 Highest Income (Best Value)"
-                
-                if mode == "💰 Highest Income (Best Value)" then
-                    local best = scan.BestValuePet or scan.BestPet
-                    if best and best.Instance and best.UID and best.UID ~= "-" and best.UID ~= Config.LastEquippedAssetUID and best.Instance.Parent then
-                        StealAnEggTrade.EquipActiveAsset(best.Instance)
-                    end
-                elseif mode == "⚖️ Heaviest Weight" then
-                    local heavy = scan.HeaviestPet
-                    if heavy and heavy.Instance and heavy.UID and heavy.UID ~= "-" and heavy.UID ~= Config.LastEquippedAssetUID and heavy.Instance.Parent then
-                        StealAnEggTrade.EquipActiveAsset(heavy.Instance)
-                    end
-                elseif mode == "👑 Highest Rarity Tier" then
-                    local bestTier = scan.BestTierPet or scan.BestPet
-                    if bestTier and bestTier.Instance and bestTier.UID and bestTier.UID ~= "-" and bestTier.UID ~= Config.LastEquippedAssetUID and bestTier.Instance.Parent then
-                        StealAnEggTrade.EquipActiveAsset(bestTier.Instance)
-                    end
-                elseif mode == "🎯 Match Auto Trade Filter" then
-                    for _, t in ipairs(tools) do
-                        if not Config.AutoEquipAsset then break end
-                        if StealAnEggTrade.MatchesFilter(t, Config) then
-                            local info = StealAnEggTrade.GetToolInfo(t)
-                            if info and info.UID and info.UID ~= "-" and info.UID ~= Config.LastEquippedAssetUID and t.Parent then
-                                StealAnEggTrade.EquipActiveAsset(t)
-                                break
-                            end
-                        end
-                    end
-                elseif mode == "📦 Equip All Matching Filter (Batch)" then
-                    for _, t in ipairs(tools) do
-                        if not Config.AutoEquipAsset then break end
-                        if StealAnEggTrade.MatchesFilter(t, Config) then
-                            local info = StealAnEggTrade.GetToolInfo(t)
-                            if info and info.UID and info.UID ~= "-" and t.Parent then
-                                StealAnEggTrade.EquipActiveAsset(t)
-                                task.wait(Config.AutoEquipDelay or 0.3)
-                            end
-                        end
-                    end
-                end
+                local maxAmount = math.max(1, tonumber(Config.AutoEquipMaxAmount) or 5)
+                StealAnEggTrade.EquipTopAssets(maxAmount)
             end)
-            task.wait(Config.AutoEquipInterval or 2.5)
+            task.wait(Config.AutoEquipInterval or 3.0)
         end
         isEquipLoopRunning = false
     end)
@@ -2879,24 +2964,26 @@ local InvHeavyPara   = InvStatSec:AddParagraph("⚖️ Heaviest Item", initialSc
 local InvEquipSec = InvTab:AddSection("⚔️ Auto Equip Active Asset")
 
 local EquipStatusPara = nil
+local EquipItemDropdown = nil
+local EquipRarityDropdown = nil
+local EquipMutationDropdown = nil
 
 local EQUIP_FILTER_MODES = {
     "💰 Highest Income (Best Value)",
     "⚖️ Heaviest Weight",
     "👑 Highest Rarity Tier",
-    "🎯 Match Auto Trade Filter",
-    "📦 Equip All Matching Filter (Batch)"
+    "🎯 Custom Filter (Rarity / Mutasi / Item)"
 }
 
 InvEquipSec:AddToggle({
     Name = "⚡ Enable Auto Equip Active Asset",
     Default = Config.AutoEquipAsset or false,
-    Tooltip = "Automatically equip the best asset according to selected filtering mode (Equips to hand first, then invokes ActiveAssets: RequestEquip)"
+    Tooltip = "Automatically equip the best assets according to selected filtering mode & amount limit"
 }, function(state)
     StealAnEggTrade.SetAutoEquip(state)
     Library:Notify({
         Title   = state and "Auto Equip Started ⚔️" or "Auto Equip Stopped ⏹️",
-        Content = state and ("Mode: " .. tostring(Config.AutoEquipMode)) or "Auto equip loop is now disabled.",
+        Content = state and string.format("Mode: %s (Limit: %d assets)", tostring(Config.AutoEquipMode), Config.AutoEquipMaxAmount or 5) or "Auto equip loop is now disabled.",
         Type    = state and "Success" or "Info",
         Duration = 2.5
     })
@@ -2907,7 +2994,7 @@ InvEquipSec:AddDropdown({
     Options = EQUIP_FILTER_MODES,
     Default = Config.AutoEquipMode or EQUIP_FILTER_MODES[1],
     Flag = "AutoEquipModeDropdown",
-    Tooltip = "Choose which asset filtering mode to prioritize for Auto Equip"
+    Tooltip = "Choose which asset filtering criteria / priority to use for equipping"
 }, function(selectedMode)
     Config.AutoEquipMode = selectedMode or EQUIP_FILTER_MODES[1]
     Library:Notify({
@@ -2918,82 +3005,155 @@ InvEquipSec:AddDropdown({
     })
 end)
 
-InvEquipSec:AddButton({
-    Name = "⚡ Equip Best Asset Now (1x)",
-    Tooltip = "Instantly find and equip the best asset right now based on active Equip Filtering Mode"
-}, function()
-    local scan = StealAnEggTrade.ScanInventory()
-    local mode = Config.AutoEquipMode or "💰 Highest Income (Best Value)"
-    local targetTool = nil
-    
-    if mode == "💰 Highest Income (Best Value)" then
-        local best = scan.BestValuePet or scan.BestPet
-        targetTool = best and best.Instance
-    elseif mode == "⚖️ Heaviest Weight" then
-        local heavy = scan.HeaviestPet
-        targetTool = heavy and heavy.Instance
-    elseif mode == "👑 Highest Rarity Tier" then
-        local bestTier = scan.BestTierPet or scan.BestPet
-        targetTool = bestTier and bestTier.Instance
-    else
-        -- Match Filter
-        local tools = scan.Tools or StealAnEggTrade.GetAllTools()
-        for _, t in ipairs(tools) do
-            if StealAnEggTrade.MatchesFilter(t, Config) then
-                targetTool = t
-                break
-            end
-        end
-    end
-    
-    if targetTool then
-        local ok, msg = StealAnEggTrade.EquipActiveAsset(targetTool)
-        if ok then
-            Library:Notify({
-                Title   = "Equipped Active Asset! ⚔️",
-                Content = "Successfully equipped: " .. (Config.LastEquippedAssetName or targetTool.Name),
-                Type    = "Success",
-                Duration = 3
-            })
-        else
-            Library:Notify({
-                Title   = "Failed to Equip ❌",
-                Content = tostring(msg),
-                Type    = "Error",
-                Duration = 3.5
-            })
-        end
-    else
+InvEquipSec:AddSlider({
+    Name = "🔢 Jumlah Asset yang Di-Equip (Limit)",
+    Min = 1,
+    Max = 25,
+    Default = Config.AutoEquipMaxAmount or 5,
+    Step = 1,
+    Flag = "AutoEquipMaxAmountSlider",
+    Tooltip = "Berapa banyak asset teratas yang ingin di-equip ke plot/karakter"
+}, function(val)
+    Config.AutoEquipMaxAmount = tonumber(val) or 5
+end)
+
+EquipItemDropdown = InvEquipSec:AddDropdown({
+    Name = "📦 Filter Berdasarkan Jenis Item",
+    Options = initialScan.UniqueNames,
+    Default = Config.AutoEquipItem or "All Items",
+    Flag = "AutoEquipItemDropdown",
+    Tooltip = "Pilih jenis item tertentu yang ingin di-equip atau 'All Items'"
+}, function(selected)
+    Config.AutoEquipItem = selected or "All Items"
+end)
+
+EquipRarityDropdown = InvEquipSec:AddDropdown({
+    Name = "👑 Filter Berdasarkan Rarity",
+    Options = initialScan.Rarities,
+    Default = Config.AutoEquipRarities or "All Rarities",
+    Flag = "AutoEquipRarityDropdown",
+    Tooltip = "Pilih rarity item yang ingin di-equip atau 'All Rarities'"
+}, function(selected)
+    Config.AutoEquipRarities = selected or "All Rarities"
+end)
+
+EquipMutationDropdown = InvEquipSec:AddDropdown({
+    Name = "✨ Filter Berdasarkan Mutasi",
+    Options = initialScan.Mutations,
+    Default = Config.AutoEquipMutation or "All Mutations",
+    Flag = "AutoEquipMutationDropdown",
+    Tooltip = "Pilih mutasi item yang ingin di-equip atau 'All Mutations'"
+}, function(selected)
+    Config.AutoEquipMutation = selected or "All Mutations"
+end)
+
+InvEquipSec:AddInput({
+    Name = "✏️ Custom Multi-Rarity Filter (Pisahkan Koma)",
+    Placeholder = Config.AutoEquipRarities or "Cth: Divine, Eternal, Secret",
+    Tooltip = "Ketik beberapa rarity yang diizinkan untuk di-equip (Cth: Divine, Eternal, Secret)"
+}, function(text)
+    if text and text ~= "" then
+        Config.AutoEquipRarities = text
         Library:Notify({
-            Title   = "No Matching Asset ⚠️",
-            Content = "Could not find any suitable asset to equip.",
-            Type    = "Warning",
+            Title   = "Equip Rarity Diset 👑",
+            Content = "Rarity Filter: " .. text,
+            Type    = "Success",
             Duration = 2.5
         })
     end
 end)
 
-InvEquipSec:AddButton({
-    Name = "📦 Equip All Filtered Assets (Batch)",
-    Tooltip = "Equip all items that match the Auto Trade filter criteria one by one"
-}, function()
-    local tools = StealAnEggTrade.GetAllTools()
-    local count = 0
-    task.spawn(function()
-        for _, t in ipairs(tools) do
-            if StealAnEggTrade.MatchesFilter(t, Config) then
-                local ok, _ = StealAnEggTrade.EquipActiveAsset(t)
-                if ok then count = count + 1 end
-                task.wait(Config.AutoEquipDelay or 0.3)
-            end
-        end
+InvEquipSec:AddInput({
+    Name = "💰 Minimum Income / Pasif (Satuan: JUTA/s)",
+    Placeholder = Config.AutoEquipMinIncome > 0 and string.format("%.2fM/s", Config.AutoEquipMinIncome / 1000000) or "Cth: 100 (= 100M/s) atau 2.8B, 0 = Bebas",
+    Tooltip = "Hanya equip item yang menghasilkan pasif income minimal tertentu"
+}, function(text)
+    local inc = ParseIncomeInput(text)
+    Config.AutoEquipMinIncome = inc
+    if inc > 0 then
         Library:Notify({
-            Title   = "Batch Equip Completed 📦",
-            Content = string.format("Equipped %d assets to plot/character!", count),
+            Title   = "Min Income Equip Diset 💰",
+            Content = string.format("Minimal: +%s/s%s", formatNumber(inc), formatIncome(inc)),
+            Type    = "Success",
+            Duration = 2.5
+        })
+    end
+end)
+
+InvEquipSec:AddInput({
+    Name = "⚖️ Minimum Berat (Satuan: kg atau M/K)",
+    Placeholder = Config.AutoEquipMinWeight > 0 and string.format("%s kg", formatNumber(Config.AutoEquipMinWeight)) or "Cth: 200k, 1M (= 1 Juta kg), 0 = Bebas",
+    Tooltip = "Hanya equip item dengan berat minimal tertentu"
+}, function(text)
+    local w = ParseWeightInput(text)
+    Config.AutoEquipMinWeight = w
+    if w > 0 then
+        Library:Notify({
+            Title   = "Min Berat Equip Diset ⚖️",
+            Content = string.format("Minimal: %s kg", formatNumber(w)),
+            Type    = "Success",
+            Duration = 2.5
+        })
+    end
+end)
+
+InvEquipSec:AddToggle({
+    Name = "⭐ Hanya Equip Item Favorit (Only Favorites)",
+    Default = Config.AutoEquipOnlyFavorites or false,
+    Tooltip = "Hanya meng-equip item yang ditandai bintang (Favorite)"
+}, function(state)
+    Config.AutoEquipOnlyFavorites = state
+end)
+
+InvEquipSec:AddSlider({
+    Name = "⏱️ Jeda Antar Equip (Detik)",
+    Min = 0.1,
+    Max = 2.0,
+    Default = Config.AutoEquipDelay or 0.35,
+    Step = 0.05,
+    Flag = "AutoEquipDelaySlider",
+    Tooltip = "Waktu jeda saat meng-equip banyak item secara berurutan"
+}, function(val)
+    Config.AutoEquipDelay = tonumber(val) or 0.35
+end)
+
+InvEquipSec:AddButton({
+    Name = "⚡ Equip Top Filtered Assets Now (1x Batch)",
+    Tooltip = "Instantly equip top matching assets right now based on active filters and amount limit"
+}, function()
+    local limit = math.max(1, tonumber(Config.AutoEquipMaxAmount) or 5)
+    Library:Notify({
+        Title   = "Memulai Equip Asset ⚔️",
+        Content = string.format("Memindai dan meng-equip hingga %d asset teratas...", limit),
+        Type    = "Info",
+        Duration = 2.5
+    })
+    
+    task.spawn(function()
+        local equippedCount, totalCandidates = StealAnEggTrade.EquipTopAssets(limit)
+        Library:Notify({
+            Title   = "Equip Selesai! ⚔️",
+            Content = string.format("Berhasil meng-equip %d dari %d asset yang cocok!", equippedCount, totalCandidates),
             Type    = "Success",
             Duration = 3.5
         })
     end)
+end)
+
+InvEquipSec:AddButton({
+    Name = "🔄 Refresh Opsi Dropdown dari Backpack",
+    Tooltip = "Memperbarui daftar nama item, mutasi, dan rarity di dropdown dari inventaris tas"
+}, function()
+    local scan = StealAnEggTrade.ScanInventory()
+    if EquipItemDropdown then EquipItemDropdown:Refresh(scan.UniqueNames) end
+    if EquipRarityDropdown then EquipRarityDropdown:Refresh(scan.Rarities) end
+    if EquipMutationDropdown then EquipMutationDropdown:Refresh(scan.Mutations) end
+    Library:Notify({
+        Title   = "Dropdown Diperbarui 🔄",
+        Content = string.format("%d Jenis Item, %d Mutasi, %d Rarity terdeteksi di tas", #scan.UniqueNames - 1, #scan.Mutations - 1, #scan.Rarities - 1),
+        Type    = "Info",
+        Duration = 2.5
+    })
 end)
 
 EquipStatusPara = InvEquipSec:AddParagraph("Status Auto Equip", "Mode: " .. tostring(Config.AutoEquipMode) .. "\nLast Equipped: -")
@@ -3659,9 +3819,13 @@ task.spawn(function()
                 InvHeavyPara:Set("⚖️ Heaviest Item", scan.HeaviestPet and string.format("%s [%s] (%s kg)", scan.HeaviestPet.DisplayName, scan.HeaviestPet.BaseMutation, formatNumber(scan.HeaviestPet.Weight)) or "-")
             end
             if EquipStatusPara then
-                local statusDesc = string.format("Status: %s\nMode: %s\nLast Equipped: %s\nTotal Equipped Sesi Ini: %d Asset ⚔️",
+                local candidates = StealAnEggTrade.GetEquipCandidates()
+                local limit = Config.AutoEquipMaxAmount or 5
+                local statusDesc = string.format("Status: %s\nMode: %s\nLimit Equip: %d Asset Teratas (Cocok: %d di Tas)\nLast Equipped: %s\nTotal Equipped Sesi Ini: %d Asset ⚔️",
                     Config.AutoEquipAsset and "🟢 Active (Looping)" or "⚪ Disabled",
                     tostring(Config.AutoEquipMode),
+                    limit,
+                    #candidates,
                     Config.LastEquippedAssetName and string.format("%s [UID: %s]", Config.LastEquippedAssetName, tostring(Config.LastEquippedAssetUID or "-")) or "-",
                     TradeStats.EquipCount or 0
                 )
