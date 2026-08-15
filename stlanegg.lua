@@ -1121,16 +1121,16 @@ function StealAnEggTrade.GetAllTools()
 end
 
 local INVENTORY_SORT_OPTIONS = {
-    "👑 Rarity (Tertinggi ➔ Terendah)",
-    "📉 Rarity (Terendah ➔ Tertinggi)",
-    "💰 Income / Detik (Terbesar ➔ Terkecil)",
-    "📉 Income / Detik (Terkecil ➔ Terbesar)",
-    "⚖️ Berat (Terberat ➔ Teringan)",
-    "📉 Berat (Teringan ➔ Terberat)",
-    "🌈 Mutasi Terlangka",
-    "⭐ Favorit Teratas (Favorites First)",
-    "🔤 Nama Item (A ➔ Z)",
-    "🔤 Nama Item (Z ➔ A)"
+    "👑 Rarity (Highest ➔ Lowest)",
+    "📉 Rarity (Lowest ➔ Highest)",
+    "💰 Income/s (Highest ➔ Lowest)",
+    "📉 Income/s (Lowest ➔ Highest)",
+    "⚖️ Weight (Heaviest ➔ Lightest)",
+    "📉 Weight (Lightest ➔ Heaviest)",
+    "🌈 Rarest Mutation",
+    "⭐ Favorites First",
+    "🔤 Name (A ➔ Z)",
+    "🔤 Name (Z ➔ A)"
 }
 
 local currentInventorySort = INVENTORY_SORT_OPTIONS[1]
@@ -1223,34 +1223,34 @@ function StealAnEggTrade.ScanInventory(sortMethod, searchKeyword, minIncome)
     end
     
     table.sort(toolDataList, function(a, b)
-        if sortMethod == "👑 Rarity (Tertinggi ➔ Terendah)" then
+        if sortMethod == "👑 Rarity (Highest ➔ Lowest)" then
             if a.RarityRank ~= b.RarityRank then return a.RarityRank > b.RarityRank end
             if a.PerSecond ~= b.PerSecond then return a.PerSecond > b.PerSecond end
             return a.Weight > b.Weight
-        elseif sortMethod == "📉 Rarity (Terendah ➔ Tertinggi)" then
+        elseif sortMethod == "📉 Rarity (Lowest ➔ Highest)" then
             if a.RarityRank ~= b.RarityRank then return a.RarityRank < b.RarityRank end
             return a.Weight < b.Weight
-        elseif sortMethod == "💰 Income / Detik (Terbesar ➔ Terkecil)" then
+        elseif sortMethod == "💰 Income/s (Highest ➔ Lowest)" then
             if a.PerSecond ~= b.PerSecond then return a.PerSecond > b.PerSecond end
             return a.RarityRank > b.RarityRank
-        elseif sortMethod == "📉 Income / Detik (Terkecil ➔ Terbesar)" then
+        elseif sortMethod == "📉 Income/s (Lowest ➔ Highest)" then
             if a.PerSecond ~= b.PerSecond then return a.PerSecond < b.PerSecond end
             return a.Weight < b.Weight
-        elseif sortMethod == "⚖️ Berat (Terberat ➔ Teringan)" then
+        elseif sortMethod == "⚖️ Weight (Heaviest ➔ Lightest)" then
             if a.Weight ~= b.Weight then return a.Weight > b.Weight end
             return a.RarityRank > b.RarityRank
-        elseif sortMethod == "📉 Berat (Teringan ➔ Terberat)" then
+        elseif sortMethod == "📉 Weight (Lightest ➔ Heaviest)" then
             if a.Weight ~= b.Weight then return a.Weight < b.Weight end
             return a.RarityRank < b.RarityRank
-        elseif sortMethod == "🌈 Mutasi Terlangka" then
+        elseif sortMethod == "🌈 Rarest Mutation" then
             if a.MutationRank ~= b.MutationRank then return a.MutationRank > b.MutationRank end
             return a.RarityRank > b.RarityRank
-        elseif sortMethod == "⭐ Favorit Teratas (Favorites First)" then
+        elseif sortMethod == "⭐ Favorites First" then
             if a.Favorite ~= b.Favorite then return a.Favorite == true end
             return a.RarityRank > b.RarityRank
-        elseif sortMethod == "🔤 Nama Item (A ➔ Z)" then
+        elseif sortMethod == "🔤 Name (A ➔ Z)" then
             return a.DisplayName:lower() < b.DisplayName:lower()
-        elseif sortMethod == "🔤 Nama Item (Z ➔ A)" then
+        elseif sortMethod == "🔤 Name (Z ➔ A)" then
             return a.DisplayName:lower() > b.DisplayName:lower()
         else
             if a.RarityRank ~= b.RarityRank then return a.RarityRank > b.RarityRank end
@@ -2563,281 +2563,96 @@ end)
 
 
 -- ---------------------------------------------------------
--- TAB 2: 🎒 BACKPACK & INVENTORY EXPLORER (RPG REVAMPED)
+-- TAB 2: 🎒 BACKPACK EXPLORER (CLEAN ENGLISH EDITION)
 -- ---------------------------------------------------------
 local InvTab = Window:MakeTab("🎒")
-local InvSec = InvTab:AddSection("🎒 Penjelajah & Manajemen Inventaris")
 
 local initialScan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch)
-local InvDropdown = nil
-local SelectedItemCardPara = nil
 
-local function UpdateItemCard(info)
-    if not SelectedItemCardPara then return end
-    if not info then
-        SelectedItemCardPara:Set("🎴 Detail Item Terpilih", "Pilih Item dari dropdown untuk melihat detail lengkap.")
-        return
+-- Helper: Build the full item list text from scan results
+local function BuildItemListText(scan)
+    local filtered = scan.FilteredTools
+    if not filtered or #filtered == 0 then
+        if currentInventoryMinIncome > 0 then
+            return string.format("No items match the current filter (Min Income: +%s/s).", formatNumber(currentInventoryMinIncome))
+        end
+        return "Your backpack is empty."
     end
     
-    local rBadge = GetRarityBadge(info.Rarity)
-    local mBadge = GetMutationBadge(info.BaseMutation)
-    local wStr = formatNumber(info.Weight)
-    local incStr = formatIncome(info.PerSecond)
-    local inChar = info.Instance and info.Instance.Parent == LocalPlayer.Character
+    local lines = {}
+    for i, info in ipairs(filtered) do
+        local rBadge = GetRarityBadge(info.Rarity)
+        local mBadge = GetMutationBadge(info.BaseMutation)
+        local incStr = formatIncome(info.PerSecond)
+        local wStr = formatNumber(info.Weight)
+        local inChar = info.Instance and info.Instance.Parent == LocalPlayer.Character
+        
+        local mutPart = (info.BaseMutation ~= "Normal" and info.BaseMutation ~= "") and string.format(" [%s]", mBadge) or ""
+        local favPart = info.Favorite and " ⭐" or ""
+        local locPart = inChar and " ✋" or ""
+        
+        local line = string.format("#%d. [%s] %s%s • ⚖️ %s kg • 💰 +%s/s%s%s%s",
+            i,
+            rBadge,
+            tostring(info.DisplayName),
+            mutPart,
+            wStr,
+            formatNumber(info.PerSecond),
+            incStr ~= "" and (" " .. incStr) or "",
+            favPart,
+            locPart
+        )
+        table.insert(lines, line)
+    end
     
-    local desc = string.format("Nama Item: %s\nRarity: %s\nMutasi: %s\nBerat: %s kg (Skala: %.2fx)\nPasif Income: %s / detik%s\nStatus: %s\nLokasi: %s",
-        tostring(info.DisplayName),
-        rBadge,
-        mBadge,
-        wStr,
-        info.Scale or 1,
-        formatNumber(info.PerSecond),
-        incStr ~= "" and (" " .. incStr) or "",
-        info.Favorite and "⭐ Favorit" or "⚪ Biasa",
-        inChar and "✋ Di Tangan Karakter" or "🎒 Di Dalam Backpack"
-    )
-    SelectedItemCardPara:Set("🎴 Detail Item Terpilih", desc)
+    return table.concat(lines, "\n")
 end
-local UpdateToolCard = UpdateItemCard
-local SelectedToolCardPara = SelectedItemCardPara
 
--- 1. Live Search Input Bar
-InvSec:AddInput({
-    Name = "🔍 Cari Item di Backpack (Live Search)",
-    Placeholder = "Ketik nama, rarity, mutasi... (Cth: Unicorn, Divine, Rainbow)",
-    Tooltip = "Menyaring daftar item secara instan berdasarkan kata kunci yang diketik"
-}, function(text)
-    currentInventorySearch = text or ""
+-- ─── Section 1: Filters & Sorting ─────────────────────
+local InvFilterSec = InvTab:AddSection("🔧 Filters & Sorting")
+
+InvFilterSec:AddDropdown({
+    Name = "🔀 Sort By",
+    Options = INVENTORY_SORT_OPTIONS,
+    Default = currentInventorySort,
+    Flag = "InvSortDropdown",
+    Tooltip = "Choose how to sort items in the backpack"
+}, function(selectedSort)
+    currentInventorySort = selectedSort or INVENTORY_SORT_OPTIONS[1]
     local scan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch, currentInventoryMinIncome)
-    if InvDropdown then
-        InvDropdown:Refresh(scan.DropdownOptions)
+    if InvItemListPara then
+        InvItemListPara:Set("📋 Item List", BuildItemListText(scan))
     end
 end)
 
--- 2. Min Income Filter Input Bar for Inventory
-InvSec:AddInput({
-    Name = "💰 Filter Min Income di Backpack (Satuan: JUTA / detik)",
-    Placeholder = Config.MinIncome > 0 and string.format("%.2fM/s", Config.MinIncome / 1000000) or "Cth: 100 (= 100M/s) atau 2.8B, 0 = Tampilkan Semua",
-    Tooltip = "Menyaring daftar item di backpack hanya yang menghasilkan pasif income minimal tertentu (Juga menyinkronkan filter Auto Trade)"
+InvFilterSec:AddInput({
+    Name = "💰 Min Income Filter (Unit: Millions /s)",
+    Placeholder = Config.MinIncome > 0 and string.format("%.2fM/s", Config.MinIncome / 1000000) or "e.g. 100 (= 100M/s) or 2.8B, 0 = Show All",
+    Tooltip = "Filter items by minimum passive income per second. Also syncs with Auto Trade filter."
 }, function(text)
     local incomeVal = ParseIncomeInput(text)
     Config.MinIncome = incomeVal
     currentInventoryMinIncome = incomeVal
     local scan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch, currentInventoryMinIncome)
-    if InvDropdown then
-        InvDropdown:Refresh(scan.DropdownOptions)
-    end
-    if incomeVal > 0 then
-        Library:Notify({
-            Title   = "Filter Min Income Diset 💰",
-            Content = string.format("Menampilkan & Auto Trade hanya item >= +%s/s%s (%d item)", formatNumber(incomeVal), formatIncome(incomeVal), scan.FilteredCount),
-            Type    = "Success",
-            Duration = 3
-        })
-    else
-        Library:Notify({
-            Title   = "Filter Min Income Diset 💰",
-            Content = "Bebas / Menampilkan seluruh item di Backpack",
-            Type    = "Info",
-            Duration = 2
-        })
+    if InvItemListPara then
+        InvItemListPara:Set("📋 Item List", BuildItemListText(scan))
     end
 end)
 
--- 3. Sort By Dropdown
-InvSec:AddDropdown({
-    Name = "🔀 Urutkan Berdasarkan (Sort By)",
-    Options = INVENTORY_SORT_OPTIONS,
-    Default = currentInventorySort,
-    Flag = "InvSortDropdown",
-    Tooltip = "Pilih kriteria pengurutan inventaris"
-}, function(selectedSort)
-    currentInventorySort = selectedSort or INVENTORY_SORT_OPTIONS[1]
-    local scan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch, currentInventoryMinIncome)
-    if InvDropdown then
-        InvDropdown:Refresh(scan.DropdownOptions)
-    end
-    Library:Notify({
-        Title   = "Urutan Diperbarui 🔀",
-        Content = "Inventaris diurutkan berdasarkan:\n" .. currentInventorySort,
-        Type    = "Info",
-        Duration = 2
-    })
-end)
+-- ─── Section 2: Item List ──────────────────────────────
+local InvListSec = InvTab:AddSection("📋 Item List")
 
--- 4. Item Selector Dropdown
-InvDropdown = InvSec:AddDropdown({
-    Name = "📦 Pilih Item dari Backpack",
-    Options = initialScan.DropdownOptions,
-    Default = initialScan.DropdownOptions[1] or "",
-    Flag = "InvItemDropdown",
-    Tooltip = "Pilih salah satu item yang ada di backpack untuk melihat detail & aksi"
-}, function(selected)
-    if not selected or selected == "Backpack Kosong" or selected:find("Tidak ada item") then 
-        Config.SelectedInvTool = nil
-        Config.SelectedItem = nil
-        UpdateItemCard(nil)
-        return 
-    end
-    local tools = StealAnEggTrade.GetAllTools()
-    local matchedTool = nil
-    local matchedInfo = nil
-    
-    for _, t in ipairs(tools) do
-        local info = StealAnEggTrade.GetToolInfo(t)
-        if info then
-            if info.OptionString == selected then
-                matchedTool = t
-                matchedInfo = info
-                break
-            elseif not matchedTool and (info.Name == selected or info.DisplayName == selected or selected:find(info.DisplayName, 1, true)) then
-                matchedTool = t
-                matchedInfo = info
-            end
-        end
-    end
-    
-    if matchedTool and matchedInfo then
-        Config.SelectedInvTool = matchedTool
-        Config.SelectedItem = matchedTool
-        UpdateItemCard(matchedInfo)
-    end
-end)
+local InvItemListPara = InvListSec:AddParagraph("📋 Item List", BuildItemListText(initialScan))
 
--- 5. Detail Item Card Paragraph (No UID displayed)
-SelectedItemCardPara = InvSec:AddParagraph("🎴 Detail Item Terpilih", "Pilih Item dari dropdown di atas untuk melihat detail lengkap.")
-SelectedToolCardPara = SelectedItemCardPara
+-- ─── Section 3: Backpack Summary ───────────────────────
+local InvStatSec = InvTab:AddSection("📊 Backpack Summary")
 
--- 6. Action Buttons
-InvSec:AddButton({
-    Name = "✋ Equip / Pegang Item Terpilih",
-    Tooltip = "Memegang item yang dipilih dari dropdown ke tangan karakter"
-}, function()
-    local selItem = Config.SelectedItem or Config.SelectedInvTool
-    if selItem and selItem.Parent then
-        local ok, msg = StealAnEggTrade.EquipTool(selItem)
-        if ok then
-            Library:Notify({Title = "Equipped", Content = "Berhasil memegang: " .. selItem.Name, Type = "Success", Duration = 2.5})
-            local info = StealAnEggTrade.GetToolInfo(selItem)
-            UpdateItemCard(info)
-        else
-            Library:Notify({Title = "Gagal Equip", Content = tostring(msg), Type = "Error", Duration = 3})
-        end
-    else
-        Library:Notify({Title = "Peringatan", Content = "Pilih Item di dropdown terlebih dahulu!", Type = "Warning", Duration = 3})
-    end
-end)
+local InvCountPara   = InvStatSec:AddParagraph("Total Items", string.format("%d Items", initialScan.Count))
+local InvWeightPara  = InvStatSec:AddParagraph("Total Weight", string.format("%s kg", formatNumber(initialScan.TotalWeight)))
+local InvIncomePara  = InvStatSec:AddParagraph("Total Passive Income", string.format("+%s/s 💰", formatNumber(initialScan.TotalIncome)))
+local InvBestPara    = InvStatSec:AddParagraph("👑 Highest Value Item", (initialScan.BestValuePet or initialScan.BestPet) and (initialScan.BestValuePet or initialScan.BestPet).OptionString or "-")
+local InvHeavyPara   = InvStatSec:AddParagraph("⚖️ Heaviest Item", initialScan.HeaviestPet and string.format("%s (%s kg)", initialScan.HeaviestPet.DisplayName, formatNumber(initialScan.HeaviestPet.Weight)) or "-")
 
-InvSec:AddButton({
-    Name = "🎁 Gift Item Terpilih ke Whitelist (1x)",
-    Tooltip = "Kirim item yang dipilih di dropdown langsung ke Target Whitelist"
-}, function()
-    local targetId, targetName = GetActiveWhitelistTarget()
-    if not targetId then
-        Library:Notify({Title = "Peringatan", Content = "Target Whitelist belum ditemukan di server!", Type = "Warning", Duration = 3})
-        return
-    end
-    local selItem = Config.SelectedItem or Config.SelectedInvTool
-    if not selItem or not selItem.Parent then
-        Library:Notify({Title = "Peringatan", Content = "Pilih Item di dropdown terlebih dahulu!", Type = "Warning", Duration = 3})
-        return
-    end
-    
-    local toolName = selItem.Name
-    local ok, err = StealAnEggTrade.SendGift(targetId, selItem)
-    if ok then
-        TradeStats.TotalSent = TradeStats.TotalSent + 1
-        TradeStats.SuccessCount = TradeStats.SuccessCount + 1
-        TradeStats.LastItemName = toolName
-        Library:Notify({Title = "Terkirim! 🎁", Content = string.format("Berhasil mengirim '%s' ke %s", toolName, targetName or tostring(targetId)), Type = "Success", Duration = 3})
-        
-        local scan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch, currentInventoryMinIncome)
-        InvDropdown:Refresh(scan.DropdownOptions)
-        Config.SelectedInvTool = nil
-        Config.SelectedItem = nil
-        UpdateItemCard(nil)
-    else
-        TradeStats.FailCount = TradeStats.FailCount + 1
-        Library:Notify({Title = "Gagal Gift", Content = "Error: " .. tostring(err), Type = "Error", Duration = 4})
-    end
-end)
-
-InvSec:AddButton({
-    Name = "🎁 Gift Semua Item Hasil Filter Ini ke Whitelist (1x Batch)",
-    Tooltip = "Kirim seluruh item yang sedang tampil di dropdown (hasil filter cari/min income) ke Target Whitelist"
-}, function()
-    local targetId, targetName = GetActiveWhitelistTarget()
-    if not targetId then
-        Library:Notify({Title = "Peringatan", Content = "Target Whitelist belum ditemukan di server!", Type = "Warning", Duration = 3})
-        return
-    end
-    
-    local scan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch, currentInventoryMinIncome)
-    if not scan.FilteredTools or #scan.FilteredTools == 0 then
-        Library:Notify({Title = "Peringatan", Content = "Tidak ada item hasil filter untuk dikirim!", Type = "Warning", Duration = 3})
-        return
-    end
-    
-    Library:Notify({
-        Title = "Memulai Batch Gift",
-        Content = string.format("Mengirim %d item hasil filter ke %s...", #scan.FilteredTools, targetName or tostring(targetId)),
-        Type = "Info",
-        Duration = 3
-    })
-    
-    task.spawn(function()
-        for _, info in ipairs(scan.FilteredTools) do
-            local t = info.Instance
-            if t and t.Parent then
-                local tName = info.DisplayName or t.Name
-                local ok, err = StealAnEggTrade.SendGift(targetId, t)
-                if ok then
-                    TradeStats.TotalSent = TradeStats.TotalSent + 1
-                    TradeStats.SuccessCount = TradeStats.SuccessCount + 1
-                    TradeStats.LastItemName = tName
-                else
-                    TradeStats.FailCount = TradeStats.FailCount + 1
-                end
-                task.wait(Config.DelayBetweenGifts)
-            end
-        end
-        local refreshed = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch, currentInventoryMinIncome)
-        InvDropdown:Refresh(refreshed.DropdownOptions)
-        Config.SelectedInvTool = nil
-        Config.SelectedItem = nil
-        UpdateItemCard(nil)
-        Library:Notify({Title = "Batch Selesai", Content = "Pengiriman item hasil filter selesai!", Type = "Success", Duration = 3.5})
-    end)
-end)
-
-InvSec:AddButton({
-    Name = "🔄 Refresh / Scan Ulang Backpack",
-    Tooltip = "Memperbarui daftar item, mutasi, rarity, dan statistik inventaris"
-}, function()
-    local scan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch, currentInventoryMinIncome)
-    InvDropdown:Refresh(scan.DropdownOptions)
-    local selItem = Config.SelectedItem or Config.SelectedInvTool
-    if selItem and selItem.Parent then
-        local info = StealAnEggTrade.GetToolInfo(selItem)
-        UpdateItemCard(info)
-    else
-        UpdateItemCard(nil)
-    end
-    Library:Notify({
-        Title   = "Backpack Discan 🎒",
-        Content = string.format("Ditemukan %d Item (Total: %s kg)", scan.Count, formatNumber(scan.TotalWeight)),
-        Type    = "Info",
-        Duration = 2.5
-    })
-end)
-
--- Section 2: Dashboard & Statistik Total Backpack
-local InvStatSec = InvTab:AddSection("📊 Ringkasan & Total Dashboard Backpack")
-local InvCountPara   = InvStatSec:AddParagraph("Total Koleksi", tostring(initialScan.Count) .. " Items")
-local InvWeightPara  = InvStatSec:AddParagraph("Total Berat Seluruh Tas", string.format("%s kg", formatNumber(initialScan.TotalWeight)))
-local InvIncomePara  = InvStatSec:AddParagraph("Total Pasif Income", string.format("+%s / detik 💰", formatNumber(initialScan.TotalIncome)))
-local InvBestPara    = InvStatSec:AddParagraph("👑 Item Value Tertinggi", initialScan.BestValuePet and initialScan.BestValuePet.OptionString or "-")
-local InvHeavyPara   = InvStatSec:AddParagraph("⚖️ Item Terberat", initialScan.HeaviestPet and string.format("%s (%s kg)", initialScan.HeaviestPet.DisplayName, formatNumber(initialScan.HeaviestPet.Weight)) or "-")
 
 
 -- ---------------------------------------------------------
@@ -2965,8 +2780,8 @@ FilterSec:AddInput({
     Config.MinIncome = incomeVal
     currentInventoryMinIncome = incomeVal
     local scan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch, currentInventoryMinIncome)
-    if InvDropdown then
-        InvDropdown:Refresh(scan.DropdownOptions)
+    if InvItemListPara then
+        InvItemListPara:Set("📋 Item List", BuildItemListText(scan))
     end
     if incomeVal > 0 then
         Library:Notify({
@@ -3484,13 +3299,16 @@ task.spawn(function()
             local scan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch, currentInventoryMinIncome)
             local tools = scan.Tools or StealAnEggTrade.GetAllTools()
             
-            -- 1. Tab 🎒: Ringkasan Backpack
+            -- 1. Tab 🎒: Item List & Backpack Summary (English)
+            if InvItemListPara then
+                InvItemListPara:Set("📋 Item List", BuildItemListText(scan))
+            end
             if InvCountPara and InvWeightPara and InvIncomePara and InvBestPara and InvHeavyPara then
-                InvCountPara:Set("Total Koleksi", string.format("%d Item di Backpack • %d Favorit ⭐", scan.Count, scan.FavoriteCount))
-                InvWeightPara:Set("Total Berat Seluruh Tas", string.format("%s kg (%.2f Juta kg)", formatNumber(scan.TotalWeight), scan.TotalWeight / 1000000))
-                InvIncomePara:Set("Total Pasif Income", string.format("+%s / detik 💰%s", formatNumber(scan.TotalIncome), formatIncome(scan.TotalIncome)))
-                InvBestPara:Set("👑 Item Value Tertinggi", (scan.BestValuePet or scan.BestPet) and (scan.BestValuePet or scan.BestPet).OptionString or "-")
-                InvHeavyPara:Set("⚖️ Item Terberat", scan.HeaviestPet and string.format("%s [%s] (%s kg)", scan.HeaviestPet.DisplayName, scan.HeaviestPet.BaseMutation, formatNumber(scan.HeaviestPet.Weight)) or "-")
+                InvCountPara:Set("Total Items", string.format("%d Items • %d Favorites ⭐", scan.Count, scan.FavoriteCount))
+                InvWeightPara:Set("Total Weight", string.format("%s kg (%.2fM kg)", formatNumber(scan.TotalWeight), scan.TotalWeight / 1000000))
+                InvIncomePara:Set("Total Passive Income", string.format("+%s/s 💰%s", formatNumber(scan.TotalIncome), formatIncome(scan.TotalIncome)))
+                InvBestPara:Set("👑 Highest Value Item", (scan.BestValuePet or scan.BestPet) and (scan.BestValuePet or scan.BestPet).OptionString or "-")
+                InvHeavyPara:Set("⚖️ Heaviest Item", scan.HeaviestPet and string.format("%s [%s] (%s kg)", scan.HeaviestPet.DisplayName, scan.HeaviestPet.BaseMutation, formatNumber(scan.HeaviestPet.Weight)) or "-")
             end
             
             -- 2. Tab 🎯: Hitung Item Cocok Trade Filter
