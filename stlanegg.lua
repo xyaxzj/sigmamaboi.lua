@@ -2635,6 +2635,9 @@ task.spawn(function()
     end
 end)
 
+-- ⚡ Scan Inventaris Awal untuk Mengisi Seluruh Opsi Dropdown di Semua Tab
+local initialScan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch)
+
 -- ---------------------------------------------------------
 -- TAB 1: ⚡ AUTO TRADE & RECEIVER (MAIN TAB)
 -- ---------------------------------------------------------
@@ -3123,7 +3126,7 @@ end)
 -- ---------------------------------------------------------
 local InvTab = Window:MakeTab("🎒")
 
-local initialScan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch)
+initialScan = StealAnEggTrade.ScanInventory(currentInventorySort, currentInventorySearch)
 
 -- Pagination state (10 items per page with compact single-line formatting)
 local ITEMS_PER_PAGE = 10
