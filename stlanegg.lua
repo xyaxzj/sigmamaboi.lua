@@ -1141,14 +1141,24 @@ function StealAnEggTrade.GetToolInfo(tool)
         or "-"
     local fav = tool:GetAttribute("Favorite") == true or (cfg and cfg:GetAttribute("Favorite") == true)
     local itemType = tool:GetAttribute("ItemType") or "Asset"
-    local scale = cfg and cfg:GetAttribute("scale") or 1
+    local scale = (cfg and (cfg:GetAttribute("scale") or cfg:GetAttribute("Scale"))) 
+        or tool:GetAttribute("Scale") 
+        or tool:GetAttribute("scale") 
+        or 1
+    scale = tonumber(scale) or 1
     local eyeColor = cfg and cfg:GetAttribute("eyeColor") or nil
     local colorSeed = cfg and cfg:GetAttribute("colorSeed") or nil
+    
+    -- ⚖️ Hitung Berat Nyata/Display Game (Rumus Game: Berat Tampil = Base Weight * Scale^2)
+    local displayWeight = weight
+    if scale > 0 and scale ~= 1 and weight > 0 then
+        displayWeight = weight * (scale ^ 2)
+    end
     
     local rBadge = GetRarityBadge(rarity)
     local mBadge = GetMutationBadge(baseMutation)
     local incomeText = formatIncome(perSecond)
-    local weightText = formatNumber(weight)
+    local weightText = formatNumber(displayWeight)
     
     local namePart = (baseMutation ~= "Normal" and baseMutation ~= "") 
         and string.format("[%s] %s [%s]", rBadge, tostring(dispName), mBadge)
@@ -1171,7 +1181,8 @@ function StealAnEggTrade.GetToolInfo(tool)
         Name = name,
         DisplayName = tostring(dispName),
         BaseMutation = tostring(baseMutation),
-        Weight = tonumber(weight) or 0,
+        Weight = tonumber(displayWeight) or 0,
+        BaseWeight = tonumber(weight) or 0,
         PerSecond = tonumber(perSecond) or 0,
         Category = tostring(category),
         UID = tostring(uid),
