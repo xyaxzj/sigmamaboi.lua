@@ -586,6 +586,85 @@ local function ParseWeightValue(val, itemName)
     return ExtractWeightFromName(itemName) or 0
 end
 
+-- Helper Ekstraksi & Parsing Income (PerSecond) dari String/Angka/Nama Item
+local function ExtractIncomeFromString(str)
+    if not str then return 0 end
+    if type(str) == "number" then return str end
+    local s = tostring(str):lower():gsub("%s+", "")
+    -- Bersihkan simbol uang, tanda tambah, kurung, dan akhiran satuan waktu
+    s = s:gsub("%$", ""):gsub("^%+", ""):gsub("/s$", ""):gsub("/detik$", ""):gsub("/sec$", "")
+    
+    if s == "" or s == "0" then return 0 end
+    
+    -- Format Triliun (T)
+    if s:find("t") then
+        local raw = s:gsub("triliun", ""):gsub("t", ""):gsub(",", ".")
+        local num = tonumber(raw)
+        return num and (num * 1e12) or 0
+    end
+    
+    -- Format Miliar / Billion (B)
+    if s:find("b") or s:find("miliar") or s:find("billion") then
+        local raw = s:gsub("billion", ""):gsub("miliar", ""):gsub("b", ""):gsub(",", ".")
+        local num = tonumber(raw)
+        return num and (num * 1e9) or 0
+    end
+    
+    -- Format Juta / Million (M / JT)
+    if s:find("m") or s:find("juta") or s:find("jt") or s:find("million") then
+        local raw = s:gsub("million", ""):gsub("juta", ""):gsub("jt", ""):gsub("m", ""):gsub(",", ".")
+        local num = tonumber(raw)
+        return num and (num * 1e6) or 0
+    end
+    
+    -- Format Ribu / Thousand (K / RB)
+    if s:find("k") or s:find("ribu") or s:find("rb") or s:find("thousand") then
+        local raw = s:gsub("thousand", ""):gsub("ribu", ""):gsub("rb", ""):gsub("k", ""):gsub(",", ".")
+        local num = tonumber(raw)
+        return num and (num * 1e3) or 0
+    end
+    
+    -- Pemisah ribuan dengan koma/titik: 1,000 atau 1.000 atau 1,000,000
+    if s:find(",") and s:find("%.") then
+        s = s:gsub(",", "")
+    elseif s:find(",") and not s:find("%.") then
+        if s:match(",%d%d%d$") or s:match(",%d%d%d,") then
+            s = s:gsub(",", "")
+        else
+            s = s:gsub(",", ".")
+        end
+    elseif s:find("%.") and not s:find(",") then
+        if s:match("%.%d%d%d$") or s:match("%.%d%d%d%.") then
+            s = s:gsub("%.", "")
+        end
+    end
+    
+    local finalNum = tonumber(s)
+    return finalNum or 0
+end
+
+local function ParseIncomeValue(val, itemName)
+    if type(val) == "number" and val > 0 then
+        return val
+    end
+    if type(val) == "string" and val ~= "" then
+        local extracted = ExtractIncomeFromString(val)
+        if extracted and extracted > 0 then
+            return extracted
+        end
+    end
+    if itemName then
+        local incFromName = itemName:match("%+([%d%.,%a]+)/s") or itemName:match("%$([%d%.,%a]+)") or itemName:match("💰%s*([%d%.,%a]+)")
+        if incFromName then
+            local extracted = ExtractIncomeFromString(incFromName)
+            if extracted and extracted > 0 then
+                return extracted
+            end
+        end
+    end
+    return 0
+end
+
 -- Helper Format PerSecond / Income
 local function formatIncome(n)
     n = tonumber(n)
@@ -636,40 +715,35 @@ local function ParseWeightInput(text)
         return num and (num * 1e3) or 0
     end
     
-    -- Cek jika user mengetik angka lengkap dengan pemisah ribuan (Cth: 272.058 atau 272,058)
-    local dotCount = 0
-    for _ in str:gmatch("%.") do dotCount = dotCount + 1 end
-    local commaCount = 0
-    for _ in str:gmatch(",") do commaCount = commaCount + 1 end
-    
-    if dotCount > 1 or commaCount > 1 or (dotCount == 1 and str:match("%.%d%d%d$")) or (commaCount == 1 and str:match(",%d%d%d$")) then
-        local cleanFull = str:gsub("[^%d]", "")
-        local fullNum = tonumber(cleanFull)
-        if fullNum and fullNum > 0 then
-            return fullNum
+    -- Cek jika user mengetik angka lengkap dengan pemisah ribuan (Cth: 272.058 atau 272,058 atau 1,000)
+    if str:find(",") and str:find("%.") then
+        str = str:gsub(",", "")
+    elseif str:find(",") and not str:find("%.") then
+        if str:match(",%d%d%d$") or str:match(",%d%d%d,") then
+            str = str:gsub(",", "")
+        else
+            str = str:gsub(",", ".")
+        end
+    elseif str:find("%.") and not str:find(",") then
+        if str:match("%.%d%d%d$") or str:match("%.%d%d%d%.") then
+            str = str:gsub("%.", "")
         end
     end
     
-    local normalNum = tonumber(str:gsub(",", "."))
+    local normalNum = tonumber(str)
     if normalNum and normalNum > 0 then
-        -- Jika angka >= 1000 atau diketik lengkap, langsung gunakan nilai kg tersebut
-        if normalNum >= 1000 then
-            return normalNum
-        else
-            -- Jika angka kecil < 1000 (Cth: 1 = 1 Juta kg, 2.5 = 2.5 Juta kg untuk kemudahan pengguna), dikalikan 1e6
-            return normalNum * 1e6
-        end
+        return normalNum
     end
     
     return 0
 end
 
--- Helper Parsing String Input Income (Juta, M, B, T, K, Ribu, /s, titik ribuan)
+-- Helper Parsing String Input Income (1B, 100M, 500k, 1000, 1,000, /s, titik ribuan)
 local function ParseIncomeInput(text)
     if not text then return 0 end
     local str = tostring(text):lower():gsub("%s+", "")
-    -- Bersihkan akhiran /s, /detik, /sec
-    str = str:gsub("/s$", ""):gsub("/detik$", ""):gsub("/sec$", "")
+    -- Bersihkan akhiran /s, /detik, /sec, simbol $ dan tanda +
+    str = str:gsub("/s$", ""):gsub("/detik$", ""):gsub("/sec$", ""):gsub("%$", ""):gsub("^%+", "")
     
     if str == "" or str == "0" or str == "bebas" or str == "none" or str == "all" or str == "semua" then 
         return 0 
@@ -683,8 +757,8 @@ local function ParseIncomeInput(text)
     end
     
     -- Format Miliar / Billion (B)
-    if str:find("b") or str:find("mil") or str:find("miliar") or str:find("billion") then
-        local raw = str:gsub("billion", ""):gsub("miliar", ""):gsub("mil", ""):gsub("b", ""):gsub(",", ".")
+    if str:find("b") or str:find("miliar") or str:find("billion") then
+        local raw = str:gsub("billion", ""):gsub("miliar", ""):gsub("b", ""):gsub(",", ".")
         local num = tonumber(raw)
         return num and (num * 1e9) or 0
     end
@@ -703,28 +777,24 @@ local function ParseIncomeInput(text)
         return num and (num * 1e3) or 0
     end
     
-    -- Cek jika user mengetik angka lengkap dengan pemisah ribuan (Cth: 100.000.000 atau 100,000,000)
-    local dotCount = 0
-    for _ in str:gmatch("%.") do dotCount = dotCount + 1 end
-    local commaCount = 0
-    for _ in str:gmatch(",") do commaCount = commaCount + 1 end
-    
-    if dotCount > 1 or commaCount > 1 or (dotCount == 1 and str:match("%.%d%d%d$")) or (commaCount == 1 and str:match(",%d%d%d$")) then
-        local cleanFull = str:gsub("[^%d]", "")
-        local fullNum = tonumber(cleanFull)
-        if fullNum and fullNum > 0 then
-            return fullNum
+    -- Cek jika user mengetik angka lengkap dengan pemisah ribuan (Cth: 100.000.000 atau 100,000,000 atau 1,000)
+    if str:find(",") and str:find("%.") then
+        str = str:gsub(",", "")
+    elseif str:find(",") and not str:find("%.") then
+        if str:match(",%d%d%d$") or str:match(",%d%d%d,") then
+            str = str:gsub(",", "")
+        else
+            str = str:gsub(",", ".")
+        end
+    elseif str:find("%.") and not str:find(",") then
+        if str:match("%.%d%d%d$") or str:match("%.%d%d%d%.") then
+            str = str:gsub("%.", "")
         end
     end
     
-    -- Angka biasa: (Cth: 100 = 100 Juta, 2.5 = 2.5 Juta, 1006279922 = 1.006 Miliar)
-    local normalNum = tonumber(str:gsub(",", "."))
+    local normalNum = tonumber(str)
     if normalNum and normalNum > 0 then
-        if normalNum >= 1000000 then
-            return normalNum
-        else
-            return normalNum * 1e6
-        end
+        return normalNum
     end
     
     return 0
@@ -1027,10 +1097,10 @@ function StealAnEggTrade.GetToolInfo(tool)
         
     local weight = ParseWeightValue(rawWeight, name)
         
-    -- PerSecond / Income (Deep Attribute Check)
-    local perSecond = 0
+    -- PerSecond / Income (Deep Attribute & Value Check dengan Multi-Format Parser)
+    local rawIncome = nil
     if cfg then
-        perSecond = cfg:GetAttribute("perSecondDisplay") 
+        rawIncome = cfg:GetAttribute("perSecondDisplay") 
             or cfg:GetAttribute("perSecond") 
             or cfg:GetAttribute("PerSecond") 
             or cfg:GetAttribute("Income") 
@@ -1038,19 +1108,18 @@ function StealAnEggTrade.GetToolInfo(tool)
             or (cfg:FindFirstChild("perSecond") and cfg.perSecond.Value)
             or (cfg:FindFirstChild("PerSecond") and cfg.PerSecond.Value)
             or (cfg:FindFirstChild("Income") and cfg.Income.Value)
-            or 0
     end
-    if not perSecond or perSecond == 0 then
-        perSecond = tool:GetAttribute("perSecondDisplay") 
+    if not rawIncome or rawIncome == 0 or rawIncome == "" then
+        rawIncome = tool:GetAttribute("perSecondDisplay") 
             or tool:GetAttribute("perSecond") 
             or tool:GetAttribute("PerSecond") 
             or tool:GetAttribute("Income") 
             or tool:GetAttribute("income") 
             or (tool:FindFirstChild("perSecond") and tool.perSecond.Value)
             or (tool:FindFirstChild("PerSecond") and tool.PerSecond.Value)
-            or 0
+            or (tool:FindFirstChild("Income") and tool.Income.Value)
     end
-    perSecond = tonumber(perSecond) or 0
+    local perSecond = ParseIncomeValue(rawIncome, name)
     
     -- Rarity (Cth: "Divine", "Eternal", "Secret", "Mythical")
     local rarity = StealAnEggTrade.GetToolRarity(tool)
