@@ -137,6 +137,15 @@ lp.Idled:Connect(function()
 end)
 
 -- =============================================
+-- 📜 DIAGNOSTIC LOGGER & NETWORK INSPECTOR
+-- =============================================
+local function LogDiag(category, msg)
+    local now = os.date and os.date("%X") or tostring(math.floor(tick()))
+    local formatted = string.format("[AutoFarm %s] [%s] %s", now, tostring(category), tostring(msg))
+    print(formatted)
+end
+
+-- =============================================
 -- 📡 CARI REMOTE
 -- =============================================
 local networkFolder = ReplicatedStorage:WaitForChild("Shared", 10):WaitForChild("Packages", 10):WaitForChild("Network", 10)
@@ -155,7 +164,12 @@ if not ref_KickEvent and not rev_KickEvent then
     end
 end
 
--- Helper Eksekusi Kick Baru (Non-Blocking via task.spawn)
+LogDiag("INIT", string.format("Remote Status -> ref_KickEvent: %s | rev_KickEvent: %s", 
+    ref_KickEvent and ref_KickEvent:GetFullName() or "TIDAK DITEMUKAN ❌",
+    rev_KickEvent and rev_KickEvent:GetFullName() or "TIDAK DITEMUKAN ❌"
+))
+
+-- Helper Eksekusi Kick Baru (Non-Blocking + Full Diagnostic Return Value Logger)
 local function executeKick()
     local timestamp = nil
     pcall(function()
@@ -165,20 +179,36 @@ local function executeKick()
         timestamp = tick()
     end
 
+    LogDiag("KICK", string.format("Mengirim Kick Request: Args=(1, 1, %.6f)...", timestamp))
+
     task.spawn(function()
+        local startCall = os.clock()
+        
         -- 1. Prioritas RemoteFunction ref_KickEvent:InvokeServer(1, 1, timestamp)
         if ref_KickEvent then
             local success, result = pcall(function()
                 return ref_KickEvent:InvokeServer(1, 1, timestamp)
             end)
+            local elapsedMs = math.floor((os.clock() - startCall) * 1000)
+            
             if success then
-                -- Kick sukses terpanggil
+                local resType = typeof(result)
+                local resStr = tostring(result)
+                if resType == "table" then
+                    local items = {}
+                    for k, v in pairs(result) do table.insert(items, string.format("%s=%s", tostring(k), tostring(v))) end
+                    resStr = "Table{" .. table.concat(items, ", ") .. "}"
+                end
+                LogDiag("KICK", string.format("✅ ref_KickEvent SUKSES (%d ms) | Return Value [%s]: %s", elapsedMs, resType, resStr))
                 return
+            else
+                LogDiag("KICK", string.format("❌ ref_KickEvent ERROR (%d ms): %s", elapsedMs, tostring(result)))
             end
         end
 
-        -- 2. Fallback ke rev_KickEvent
+        -- 2. Fallback ke rev_KickEvent jika ref_KickEvent gagal / tidak ada
         if rev_KickEvent then
+            LogDiag("KICK", "⚠️ Mencoba fallback ke rev_KickEvent...")
             pcall(function()
                 if rev_KickEvent:IsA("RemoteFunction") then
                     rev_KickEvent:InvokeServer(1, 1, timestamp)
@@ -190,13 +220,13 @@ local function executeKick()
     end)
 end
 
+-- =============================================
+-- 📡 DAFTAR EVENT LISTENER & NETWORK SPY
+-- =============================================
 local rev_kickPhase2 = networkFolder and networkFolder:WaitForChild("rev_kickPhase2", 5)
 local rev_Collected = networkFolder and networkFolder:WaitForChild("rev_Collected", 5)
 local rev_KickEventEnded = networkFolder and networkFolder:WaitForChild("rev_KickEventEnded", 5)
 
--- =============================================
--- 📡 DAFTAR EVENT LISTENER
--- =============================================
 local phase2Fired = false
 local collectedFired = false
 local kickEndedFired = false
@@ -204,19 +234,38 @@ local kickEndedFired = false
 if rev_kickPhase2 then
     rev_kickPhase2.OnClientEvent:Connect(function(...)
         phase2Fired = true
+        LogDiag("NET IN", "rev_kickPhase2 terpanggil dari server!")
     end)
 end
 
 if rev_Collected then
     rev_Collected.OnClientEvent:Connect(function(...)
         collectedFired = true
+        LogDiag("NET IN", "rev_Collected terpanggil dari server!")
     end)
 end
 
 if rev_KickEventEnded then
     rev_KickEventEnded.OnClientEvent:Connect(function(...)
         kickEndedFired = true
+        LogDiag("NET IN", "rev_KickEventEnded terpanggil dari server!")
     end)
+end
+
+-- Pasang Listener ke seluruh remote di networkFolder untuk mendeteksi event game baru
+if networkFolder then
+    for _, child in ipairs(networkFolder:GetChildren()) do
+        if child:IsA("RemoteEvent") and child ~= rev_kickPhase2 and child ~= rev_Collected and child ~= rev_KickEventEnded then
+            child.OnClientEvent:Connect(function(...)
+                local args = {...}
+                local strArgs = {}
+                for i, a in ipairs(args) do
+                    table.insert(strArgs, string.format("#%d:%s", i, tostring(a)))
+                end
+                LogDiag("NET IN", string.format("Event Lain: '%s' | Data: [%s]", child.Name, table.concat(strArgs, ", ")))
+            end)
+        end
+    end
 end
 
 -- =============================================
@@ -253,6 +302,7 @@ task.spawn(function()
         -- 🚨 PENGATUR WAKTU OTOMATIS & FAILSAFE 25s
         -- ==========================================
         if _G.lastAction ~= _G.targetAction then
+            LogDiag("STATE", string.format("%s ➔ %s", tostring(_G.lastAction), tostring(_G.targetAction)))
             _G.globalStuckTimer = 0 
             _G.stateTimer = 0 
             _G.lastAction = _G.targetAction
