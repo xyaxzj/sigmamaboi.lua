@@ -1,21 +1,6 @@
 -- ==============================================================================
--- 🚀 SIGMA ULTIMATE FPS BOOSTER & CPU SAVER v5.3 (PROVEN BAC SAFE)
+-- 🚀 SIGMA ULTIMATE FPS BOOSTER & ANTI-LAG (CLEAN & OPTIMIZED EDITION)
 -- Kompatibel: Mobile (Delta, Codex, Arceus X, Hydrogen) & PC (Wave, Solara, etc.)
--- ==============================================================================
--- 🧠 FITUR LENGKAP & OPTIMASI CPU:
--- 1. ⚡ CPU Throttled Queue (Mengganti global listener berat dengan smart batching)
--- 2. 🏃 Player Animation Freezer (Stop kalkulasi skeletal animation pemain lain di CPU)
--- 3. 🎯 Smart FPS Cap (Pilihan 30/60 FPS untuk hemat CPU atau 240 untuk max smoothness)
--- 4. 🥔 White Potato Mode (SmoothPlastic, White, No Shadows, No Textures)
--- 5. 🔇 Total Audio Mute (Volume 0 & MasterVolume 0 - Beban CPU Audio 0%)
--- 6. 🥚 Hide PlacedEggRenders (Sembunyikan semua model telur di workspace)
--- 7. 📦 Hide ClientRenderedAssets & Cash (Sembunyikan aset render client)
--- 8. 🎮 Native Engine Quality Level 1 (Legal Engine LOD Optimizer)
--- 9. 🏷️ Hide Name Tags & Floating BillboardGuis (No Font Canvas Lag)
--- 10. ⚡ One-Click Floating GPU & CPU Saver Button (3D Render Toggle 0% Load AFK)
--- 11. 🌊 Terrain Water Optimizer (WaterWaveSize = 0)
--- 12. 👻 Stealth Player & Plot Hider (Ghost Mode / Full Transparency)
--- 13. 🛡️ Safe Anti-AFK (Periodic Micro-Action tanpa VirtualUser)
 -- ==============================================================================
 
 if not game:IsLoaded() then 
@@ -25,7 +10,6 @@ end
 local Players = game:GetService("Players")
 local StarterGui = game:GetService("StarterGui")
 local RunService = game:GetService("RunService")
-local CoreGui = game:GetService("CoreGui")
 local SoundService = game:GetService("SoundService")
 local UserSettingsService = UserSettings()
 
@@ -35,61 +19,48 @@ while not lp do
     lp = Players.LocalPlayer
 end
 local lpName = lp.Name
+local lpDisplayName = lp.DisplayName
 local lpUserId = lp.UserId
+local myUidStr = tostring(lpUserId)
 
 -- ═══════════════════════════════════════════════════════
--- ⚙️ KONFIGURASI LENGKAP
+-- ⚙️ KONFIGURASI PUSAT (UBAH SESUAI KEBUTUHAN)
 -- ═══════════════════════════════════════════════════════
 local CONFIG = {
-    -- 💡 TIP CPU: Nilai 60 atau 30 menghemat 50-70% CPU dibanding 240!
-    FPS_CAP                 = _G.fpsCap or 60,               -- Rekomendasi: 60 (Hemat CPU) atau 240 (Max FPS)
-    FREEZE_PLAYER_ANIM      = true,                          -- 🧠 Matikan kalkulasi animasi skeletal player lain di CPU
-    WHITE_MAP_MODE          = _G.whiteMap ~= nil and _G.whiteMap or true,
-    SMOOTH_PLASTIC          = true,
-    NO_SHADOWS              = true,
-    NO_TEXTURES             = true,
-    MUTE_ALL_AUDIO          = true,                          -- Mute total (CPU Audio thread 0%)
-    HIDE_PLACED_EGGS        = true,                          -- Sembunyikan PlacedEggRenders
-    HIDE_CLIENT_ASSETS      = true,                          -- Sembunyikan ClientRenderedAssets
-    FORCE_QUALITY_LEVEL_1   = true,                          -- Native Level 1 Graphics
-    HIDE_BILLBOARD_GUIS     = true,                          -- Matikan Name Tags / 3D GUIs
+    FPS_CAP                 = _G.fpsCap or 60,               -- Target FPS (60 hemat CPU, 240 max FPS)
+    DISABLE_3D_RENDER       = _G.disable3dRender ~= nil and _G.disable3dRender or true, -- true: Layar freeze / 0% GPU saat AFK
+    WHITE_MAP_MODE          = _G.whiteMap ~= nil and _G.whiteMap or true, -- true: Map putih potato
+    SMOOTH_PLASTIC          = true,                          -- true: Material SmoothPlastic
+    NO_SHADOWS              = true,                          -- true: Matikan bayangan
+    NO_TEXTURES             = true,                          -- true: Hapus tekstur mesh & decal
+    MUTE_ALL_AUDIO          = true,                          -- true: Mute semua suara (CPU Audio 0%)
+    HIDE_PLACED_EGGS        = true,                          -- true: Sembunyikan PlacedEggRenders
+    HIDE_CLIENT_ASSETS      = true,                          -- true: Sembunyikan ClientRenderedAssets
+    FORCE_QUALITY_LEVEL_1   = true,                          -- true: Native Level 1 Graphics
+    HIDE_BILLBOARD_GUIS     = true,                          -- true: Matikan text nama melayang
     HIDE_OTHER_PLAYERS      = _G.autoRemovePlayer ~= nil and _G.autoRemovePlayer or true,
     HIDE_OTHER_PLOTS        = _G.removePlots ~= nil and _G.removePlots or true,
-    PRESERVE_MY_PLOT        = true,
-    OPTIMIZE_TERRAIN        = true,
-    ENABLE_REALTIME         = true,                          -- Smart Throttled Realtime Optimizer
-    ENABLE_SAFE_AFK         = true,
-    DISABLE_3D_RENDER       = _G.disable3dRender ~= nil and _G.disable3dRender or false, -- true: Matikan 3D Render (Layar Freeze / 0% GPU AFK)
+    PRESERVE_MY_PLOT        = true,                          -- true: Plot sendiri tetap terlihat
+    OPTIMIZE_TERRAIN        = true,                          -- true: Matikan ombak air
+    ENABLE_REALTIME         = true,                          -- true: Realtime optimizer hemat CPU
+    ENABLE_SAFE_AFK         = true,                          -- true: Anti-AFK VirtualInputManager
+    FREEZE_PLAYER_ANIM      = true,                          -- true: Stop animasi skeletal player lain
 }
 
 local optimizedCount = 0
+local myPlotCache = {}
 
 -- ═══════════════════════════════════════════════════════
--- 🔇 1. TOTAL AUDIO MUTE (MENGHILANGKAN BEBAN CPU AUDIO)
+-- 🎯 1. INISIALISASI SETTING ENGINE & HARDWARE
 -- ═══════════════════════════════════════════════════════
-if CONFIG.MUTE_ALL_AUDIO then
-    pcall(function()
-        local ugs = UserSettingsService:GetService("UserGameSettings")
-        if ugs then ugs.MasterVolume = 0 end
-    end)
-    pcall(function()
-        SoundService.AmbientReverb = Enum.ReverbType.NoReverb
-    end)
-    local function muteSound(sound)
-        if sound:IsA("Sound") then
-            pcall(function()
-                sound.Volume = 0
-                if sound.Looped and sound.Playing then sound:Stop() end
-            end)
-        end
+-- FPS Cap
+pcall(function()
+    if setfpscap and typeof(setfpscap) == "function" then
+        setfpscap(CONFIG.FPS_CAP)
     end
-    for _, v in ipairs(workspace:GetDescendants()) do muteSound(v) end
-    for _, v in ipairs(SoundService:GetDescendants()) do muteSound(v) end
-end
+end)
 
--- ═══════════════════════════════════════════════════════
--- 🎮 2. NATIVE ENGINE QUALITY LEVEL 1
--- ═══════════════════════════════════════════════════════
+-- Native Quality Level 1
 if CONFIG.FORCE_QUALITY_LEVEL_1 then
     pcall(function()
         local ugs = UserSettingsService:GetService("UserGameSettings")
@@ -97,43 +68,58 @@ if CONFIG.FORCE_QUALITY_LEVEL_1 then
     end)
 end
 
--- ═══════════════════════════════════════════════════════
--- 🎯 3. SET FPS CAP (KONTROL UTAMA BEBAN CPU)
--- ═══════════════════════════════════════════════════════
-pcall(function()
-    if setfpscap and typeof(setfpscap) == "function" then
-        setfpscap(CONFIG.FPS_CAP)
-    end
-end)
+-- Audio Mute
+if CONFIG.MUTE_ALL_AUDIO then
+    pcall(function()
+        local ugs = UserSettingsService:GetService("UserGameSettings")
+        if ugs then ugs.MasterVolume = 0 end
+        SoundService.AmbientReverb = Enum.ReverbType.NoReverb
+    end)
+end
+
+-- 3D Render GPU Saver
+if CONFIG.DISABLE_3D_RENDER then
+    pcall(function()
+        RunService:Set3dRenderingEnabled(false)
+    end)
+end
 
 -- ═══════════════════════════════════════════════════════
--- 🛡️ 4. SAFE ANTI-AFK (NO VIRTUALUSER / BAC SAFE)
+-- 🛡️ 2. SAFE ANTI-AFK (VIRTUAL INPUT & IDLED LISTENER)
 -- ═══════════════════════════════════════════════════════
 if CONFIG.ENABLE_SAFE_AFK then
+    local VIM = pcall(function() return game:GetService("VirtualInputManager") end) and game:GetService("VirtualInputManager") or nil
+
+    local function sendInputTick()
+        if VIM then
+            VIM:SendMouseButtonEvent(10, 10, 0, true, game, 1)
+            task.wait(0.05)
+            VIM:SendMouseButtonEvent(10, 10, 0, false, game, 1)
+        elseif mouse1click then
+            mouse1click()
+        end
+    end
+
+    lp.Idled:Connect(function()
+        pcall(sendInputTick)
+    end)
+
     task.spawn(function()
-        while task.wait(480) do
-            pcall(function()
-                local char = lp.Character
-                local hum = char and char:FindFirstChildOfClass("Humanoid")
-                if hum and hum.Health > 0 then
-                    hum:ChangeState(Enum.HumanoidStateType.Jumping)
-                end
-            end)
+        while task.wait(120) do
+            pcall(sendInputTick)
         end
     end)
 end
 
 -- ═══════════════════════════════════════════════════════
--- 🎯 5. DETEKTOR PLOT SENDIRI
+-- 🔍 3. SMART PLOT DETECTOR DENGAN CACHING
 -- ═══════════════════════════════════════════════════════
 local function isMyPlot(plotModel)
     if not plotModel or not plotModel:IsA("Model") then return false end
     if not CONFIG.PRESERVE_MY_PLOT then return false end
+    if myPlotCache[plotModel] ~= nil then return myPlotCache[plotModel] end
 
-    local myName = lpName
-    local myDisplayName = lp.DisplayName
-    local myUid = tostring(lpUserId)
-
+    -- Cek PlotSign
     local sign = plotModel:FindFirstChild("PlotSign", true)
     if sign then
         local pps = sign:FindFirstChild("PlayerPlotSign", true)
@@ -141,39 +127,41 @@ local function isMyPlot(plotModel)
             local nameLabel = pps:FindFirstChild("PlayerName", true)
             if nameLabel and nameLabel:IsA("TextLabel") then
                 local t = nameLabel.Text
-                if t and (t == myName or t:find(myName, 1, true) or 
-                   (myDisplayName and (t == myDisplayName or t:find(myDisplayName, 1, true)))) then
+                if t and (t == lpName or t:find(lpName, 1, true) or (lpDisplayName and (t == lpDisplayName or t:find(lpDisplayName, 1, true)))) then
+                    myPlotCache[plotModel] = true
                     return true
                 end
             end
             local icon = pps:FindFirstChild("PlayerIcon", true)
             if icon and (icon:IsA("ImageLabel") or icon:IsA("ImageButton")) then
                 local img = icon.Image
-                if img and img:find(myUid, 1, true) then
+                if img and img:find(myUidStr, 1, true) then
+                    myPlotCache[plotModel] = true
                     return true
                 end
             end
         end
     end
 
+    -- Fallback Value scan
     for _, item in ipairs(plotModel:GetDescendants()) do
         local ok, result = pcall(function()
             if item:IsA("TextLabel") then
                 local t = item.Text
-                if t and (t == myName or (myDisplayName and t == myDisplayName)) then
-                    return true
-                end
+                if t and (t == lpName or (lpDisplayName and t == lpDisplayName)) then return true end
             elseif item:IsA("StringValue") or item:IsA("ObjectValue") or item:IsA("IntValue") or item:IsA("NumberValue") then
                 local v = item.Value
-                if v == myName or v == lp or tostring(v) == myUid then
-                    return true
-                end
+                if v == lpName or v == lp or tostring(v) == myUidStr then return true end
             end
             return false
         end)
-        if ok and result then return true end
+        if ok and result then
+            myPlotCache[plotModel] = true
+            return true
+        end
     end
 
+    myPlotCache[plotModel] = false
     return false
 end
 
@@ -182,7 +170,7 @@ local function isMyChar(v)
 end
 
 -- ═══════════════════════════════════════════════════════
--- 👻 6. STEALTH TRANSPARENCY & GUI HELPERS
+-- 👻 4. STEALTH TRANSPARENCY HELPERS
 -- ═══════════════════════════════════════════════════════
 local function hideBasePartStealth(part)
     pcall(function()
@@ -216,11 +204,10 @@ local function hideModelStealth(model)
 end
 
 -- ═══════════════════════════════════════════════════════
--- 🥔 7. POTATO MAP (PUTIH, SMOOTHPLASTIC, NO SHADOW, NO TEXTURE)
+-- 🥔 5. POTATO MAP CORE (PUTIH, SMOOTHPLASTIC, NO SHADOW, NO TEXTURE)
 -- ═══════════════════════════════════════════════════════
 local function optimizePart(v)
-    if not v or not v.Parent then return end
-    if isMyChar(v) then return end
+    if not v or not v.Parent or isMyChar(v) then return end
 
     pcall(function()
         if v:IsA("BasePart") then
@@ -255,16 +242,18 @@ local function optimizePart(v)
 
         if CONFIG.MUTE_ALL_AUDIO and v:IsA("Sound") then
             v.Volume = 0
+            if v.Looped and v.Playing then v:Stop() end
         end
     end)
 end
 
+-- Eksekusi awal ke seluruh workspace
 for _, v in ipairs(workspace:GetDescendants()) do
     optimizePart(v)
 end
 
 -- ═══════════════════════════════════════════════════════
--- 🌊 8. TERRAIN WATER OPTIMIZATION
+-- 🌊 6. TERRAIN WATER OPTIMIZATION
 -- ═══════════════════════════════════════════════════════
 if CONFIG.OPTIMIZE_TERRAIN then
     pcall(function()
@@ -279,7 +268,7 @@ if CONFIG.OPTIMIZE_TERRAIN then
 end
 
 -- ═══════════════════════════════════════════════════════
--- 🏘️ 9. SEMBUNYIKAN PLOT PLAYER LAIN
+-- 🏘️ 7. SEMBUNYIKAN PLOT PLAYER LAIN
 -- ═══════════════════════════════════════════════════════
 local function optimizePlotsStealth()
     if not CONFIG.HIDE_OTHER_PLOTS then return end
@@ -298,26 +287,22 @@ end
 optimizePlotsStealth()
 
 -- ═══════════════════════════════════════════════════════
--- 🏃 10. HIDE & FREEZE ANIMASI PLAYER LAIN (HEMAT CPU SKELETAL RIG)
+-- 👥 8. SEMBUNYIKAN & FREEZE ANIMASI PLAYER LAIN
 -- ═══════════════════════════════════════════════════════
 local function hideOtherPlayerChar(char)
     if not char or char == lp.Character or char.Name == lpName then return end
     
     pcall(function()
-        -- 1. Matikan Animasi player lain di CPU
-        if CONFIG.FREEZE_PLAYER_ANIM then
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            if hum then
-                local anim = hum:FindFirstChildOfClass("Animator")
-                if anim then
-                    for _, track in ipairs(anim:GetPlayingAnimationTracks()) do
-                        pcall(function() track:Stop(0) end)
-                    end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum and CONFIG.FREEZE_PLAYER_ANIM then
+            local anim = hum:FindFirstChildOfClass("Animator")
+            if anim then
+                for _, track in ipairs(anim:GetPlayingAnimationTracks()) do
+                    pcall(function() track:Stop(0) end)
                 end
             end
         end
 
-        -- 2. Buat transparan
         for _, part in ipairs(char:GetDescendants()) do
             if part:IsA("BasePart") then
                 part.Transparency = 1
@@ -331,7 +316,6 @@ local function hideOtherPlayerChar(char)
             end
         end
 
-        -- Aksesoris
         for _, acc in ipairs(char:GetChildren()) do
             if acc:IsA("Accessory") then
                 for _, accPart in ipairs(acc:GetDescendants()) do
@@ -355,37 +339,22 @@ if CONFIG.HIDE_OTHER_PLAYERS then
 end
 
 -- ═══════════════════════════════════════════════════════
--- 🥚 11. SEMBUNYIKAN PLACED EGG RENDERS
+-- 🥚 9. SEMBUNYIKAN PLACED EGG RENDERS & CLIENT ASSETS
 -- ═══════════════════════════════════════════════════════
-local function hidePlacedEggs()
-    if not CONFIG.HIDE_PLACED_EGGS then return end
+if CONFIG.HIDE_PLACED_EGGS then
     pcall(function()
         local eggFolder = workspace:FindFirstChild("PlacedEggRenders")
-        if eggFolder then
-            hideModelStealth(eggFolder)
-            for _, egg in ipairs(eggFolder:GetChildren()) do
-                hideModelStealth(egg)
-            end
-        end
+        if eggFolder then hideModelStealth(eggFolder) end
     end)
 end
 
-hidePlacedEggs()
-
--- ═══════════════════════════════════════════════════════
--- 📦 12. SEMBUNYIKAN CLIENT RENDERED ASSETS & CASH
--- ═══════════════════════════════════════════════════════
-local function hideClientAssets()
-    if not CONFIG.HIDE_CLIENT_ASSETS then return end
+if CONFIG.HIDE_CLIENT_ASSETS then
     pcall(function()
         for _, child in ipairs(workspace:GetChildren()) do
             if child.Name == "ClientRenderedAssets" or child.Name:find("ClientRendered") then
                 hideModelStealth(child)
             end
         end
-    end)
-
-    pcall(function()
         local terrain = workspace:FindFirstChildOfClass("Terrain")
         if terrain then
             for _, obj in ipairs(terrain:GetDescendants()) do
@@ -397,13 +366,9 @@ local function hideClientAssets()
     end)
 end
 
-hideClientAssets()
-
 -- ═══════════════════════════════════════════════════════
--- 🧠 13. SMART THROTTLED REALTIME LISTENERS (HEMAT CPU LUA THREAD)
+-- 🧠 10. SMART THROTTLED REALTIME LISTENERS
 -- ═══════════════════════════════════════════════════════
--- Mengganti pemanggilan event per-part dengan sistem Queue Batching
--- Mengurangi beban CPU script thread hingga 80%!
 if CONFIG.ENABLE_REALTIME then
     local optimizeQueue = {}
     local isQueueRunning = false
@@ -416,7 +381,10 @@ if CONFIG.ENABLE_REALTIME then
                 local desc = table.remove(optimizeQueue, 1)
                 if desc and desc.Parent and not isMyChar(desc) then
                     if CONFIG.MUTE_ALL_AUDIO and desc:IsA("Sound") then
-                        pcall(function() desc.Volume = 0 end)
+                        pcall(function()
+                            desc.Volume = 0
+                            if desc.Looped and desc.Playing then desc:Stop() end
+                        end)
                     end
                     if CONFIG.HIDE_PLACED_EGGS then
                         local eggFolder = workspace:FindFirstChild("PlacedEggRenders")
@@ -452,7 +420,6 @@ if CONFIG.ENABLE_REALTIME then
         end)
     end
 
-    -- Listener folder-specific (Jauh lebih ringan dibanding global workspace listener)
     local placedEggs = workspace:FindFirstChild("PlacedEggRenders")
     if placedEggs then
         placedEggs.ChildAdded:Connect(function(child)
@@ -469,7 +436,6 @@ if CONFIG.ENABLE_REALTIME then
         end)
     end
 
-    -- Queue listener umum dengan batasan maksimal antrian
     workspace.ChildAdded:Connect(function(child)
         if #optimizeQueue < 100 then
             table.insert(optimizeQueue, child)
@@ -477,7 +443,6 @@ if CONFIG.ENABLE_REALTIME then
         end
     end)
 
-    -- Listener player baru join / respawn
     local function setupPlayerHide(player)
         if player ~= lp then
             player.CharacterAdded:Connect(function(char)
@@ -496,34 +461,25 @@ if CONFIG.ENABLE_REALTIME then
 end
 
 -- ═══════════════════════════════════════════════════════
--- ⚡ 14. 3D RENDERING GPU SAVER (CONFIG DRIVEN)
--- ═══════════════════════════════════════════════════════
-if CONFIG.DISABLE_3D_RENDER then
-    pcall(function()
-        RunService:Set3dRenderingEnabled(false)
-    end)
-end
-
--- ═══════════════════════════════════════════════════════
 -- 📢 NOTIFIKASI SUKSES
 -- ═══════════════════════════════════════════════════════
 pcall(function()
     if StarterGui then
         StarterGui:SetCore("SendNotification", {
-            Title = "🚀 FPS & CPU Booster v5.4",
-            Text = string.format("Aktif! %d FPS, CPU Throttled & BAC Safe", CONFIG.FPS_CAP),
+            Title = "🚀 FPS & CPU Booster",
+            Text = string.format("Aktif! Target %d FPS (Clean & Optimized)", CONFIG.FPS_CAP),
             Duration = 5
         })
     end
 end)
 
 print("══════════════════════════════════════════════════")
-print("🚀 [STEALTH FPS & CPU BOOSTER v5.4] SIAP DIGUNAKAN!")
+print("🚀 [STEALTH FPS & CPU BOOSTER] CLEAN & OPTIMIZED")
 print(string.format("📊 Objek Dioptimasi      : %d", optimizedCount))
 print(string.format("🎯 Target FPS Cap        : %d FPS", CONFIG.FPS_CAP))
 print(string.format("🌙 3D Rendering (GPU)    : %s", CONFIG.DISABLE_3D_RENDER and "OFF (0% GPU AFK)" or "ON"))
 print("🏃 Player Anim Freezer   : AKTIF (CPU Skeletal Saved)")
 print("🧠 Throttled Queue       : AKTIF (CPU Script Load Reduced)")
 print("🔇 Total Audio Mute      : AKTIF (CPU Audio 0%)")
-print("🛡️ Anti-Cheat Status     : 100% AMAN (BAC Certified Safe)")
+print("🛡️ Anti-Cheat Status     : 100% AMAN")
 print("══════════════════════════════════════════════════")
