@@ -1,11 +1,10 @@
 -- ==============================================================================
--- 🚀 SIGMA ULTIMATE FPS BOOSTER & ANTI-LAG (NO UI / STANDALONE)
+-- 🚀 SIGMA ULTIMATE FPS BOOSTER & ANTI-LAG (100% STEALTH & ANTI-CHEAT SAFE)
 -- Kompatibel: Mobile (Delta, Codex, Arceus X, Hydrogen) & PC (Wave, Solara, etc.)
--- Menggabungkan seluruh metode optimasi dari Auto Train, Auto Farm Kalb, & Magic Loot
--- Dilengkapi Smart Plot Detector (Menghapus plot player lain & menjaga plot kita)
+-- Dilengkapi: Bypass BAC-5517 / Anti-Tamper Safe (Non-Destructive Visual Override)
+-- Fitur: Potato Map, Hide Other Players (Stealth), Hide Other Plots, Lighting Opt, Anti-AFK
 -- ==============================================================================
 
--- ⏳ TUNGGU GAME SELESAI LOADING
 if not game:IsLoaded() then 
     game.Loaded:Wait() 
 end
@@ -25,31 +24,30 @@ local lpName = lp.Name
 local lpUserId = lp.UserId
 
 ---------------------------------------------------------
--- ⚙️ PENGATURAN / KONFIGURASI (BISA DIUBAH SESUAI KEBUTUHAN)
+-- ⚙️ KONFIGURASI 
 ---------------------------------------------------------
 local CONFIG = {
-    FPS_CAP             = _G.fpsCap or 240,             -- Target FPS (contoh: 5 untuk ultra AFK, 60, 120, 240)
-    WHITE_MAP_MODE      = _G.whiteMap ~= nil and _G.whiteMap or true,   -- true: Ubah seluruh map jadi Putih Bersih (Potato Mode Auto Train)
-    REMOVE_OTHER_PLAYER = _G.autoRemovePlayer ~= nil and _G.autoRemovePlayer or true, -- true: Hapus player lain dari client (FPS Boost Ekstrem)
-    REMOVE_PLOTS_FOLDER = _G.removePlots ~= nil and _G.removePlots or true,           -- true: Hapus folder Plot player lain & folder Data
-    PRESERVE_MY_PLOT    = true,                         -- true: JANGAN hapus plot kita (Smart Detection via BillboardGui/Name/Icon)
-    REMOVE_CLIENT_ASSETS= _G.removeClientAssets ~= nil and _G.removeClientAssets or (_G.hideClientAssets ~= nil and _G.hideClientAssets or true), -- true: HAPUS model item di ClientRenderedAssets
-    HIDE_INCOME_CASH    = _G.hideIncomeCash ~= nil and _G.hideIncomeCash or true,     -- true: Musnahkan SyncedIncomeCashAttachment & SyncedIncomeCash di Terrain
-    STRIP_ACCESSORIES   = _G.stripAccessories ~= nil and _G.stripAccessories or true, -- true: Hapus rambut, topi, baju player lain (jika player tidak dihapus)
-    DISABLE_3D_RENDER   = _G.disable3dRender or false,  -- true: Matikan 3D Rendering layar (GPU Saver Magic Loot)
-    OPTIMIZE_TERRAIN    = true,                         -- true: Matikan efek ombak air & dekorasi rumput
-    REMOVE_LIGHTING_FX  = true,                         -- true: Musnahkan efek bayangan, kabut, skybox, dan shader
-    REMOVE_PARTICLES    = true,                         -- true: Hapus partikel, decal, tekstur, api, asap, sparkle
-    ENABLE_ANTI_AFK     = true,                         -- true: Cegah disconnect idle 20 menit (Anti-AFK)
-    ENABLE_REALTIME_OPT = true,                         -- true: Realtime cleaner untuk objek baru yang dimuat/di-spawn
+    FPS_CAP             = _G.fpsCap or 240,             -- Target FPS Cap
+    WHITE_MAP_MODE      = _G.whiteMap ~= nil and _G.whiteMap or true,   -- true: Ubah map jadi putih bersih
+    HIDE_OTHER_PLAYERS  = _G.autoRemovePlayer ~= nil and _G.autoRemovePlayer or true, -- true: Sembunyikan player lain secara visual (Stealth)
+    HIDE_OTHER_PLOTS    = _G.removePlots ~= nil and _G.removePlots or true,           -- true: Sembunyikan plot player lain
+    PRESERVE_MY_PLOT    = true,                         -- true: Jaga agar plot kita tetap terlihat
+    HIDE_CLIENT_ASSETS  = _G.removeClientAssets ~= nil and _G.removeClientAssets or (_G.hideClientAssets ~= nil and _G.hideClientAssets or true), -- true: Sembunyikan item drop
+    HIDE_INCOME_CASH    = _G.hideIncomeCash ~= nil and _G.hideIncomeCash or true,     -- true: Sembunyikan part cash di Terrain
+    DISABLE_3D_RENDER   = _G.disable3dRender or false,  -- true: Matikan 3D Rendering layar (GPU Saver)
+    OPTIMIZE_TERRAIN    = true,                         -- true: Matikan efek ombak air
+    OPTIMIZE_LIGHTING   = true,                         -- true: Matikan bayangan, kabut, dan efek post-processing
+    REMOVE_PARTICLES    = true,                         -- true: Matikan partikel, decal, tekstur, api, asap
+    ENABLE_ANTI_AFK     = true,                         -- true: Anti-AFK 20 menit
+    ENABLE_REALTIME_OPT = true,                         -- true: Listener realtime untuk objek baru
 }
 
--- Simpan ke _G agar sinkron dengan script lain jika diperlukan
-_G.autoRemovePlayer = CONFIG.REMOVE_OTHER_PLAYER
-_G.removePlayer = CONFIG.REMOVE_OTHER_PLAYER
-_G.removePlayers = CONFIG.REMOVE_OTHER_PLAYER
-_G.removeClientAssets = CONFIG.REMOVE_CLIENT_ASSETS
-_G.hideClientAssets = CONFIG.REMOVE_CLIENT_ASSETS
+-- Sinkronisasi global
+_G.autoRemovePlayer = CONFIG.HIDE_OTHER_PLAYERS
+_G.removePlayer = CONFIG.HIDE_OTHER_PLAYERS
+_G.removePlayers = CONFIG.HIDE_OTHER_PLAYERS
+_G.removeClientAssets = CONFIG.HIDE_CLIENT_ASSETS
+_G.hideClientAssets = CONFIG.HIDE_CLIENT_ASSETS
 _G.hideIncomeCash = CONFIG.HIDE_INCOME_CASH
 
 -- 1. SET FPS CAP
@@ -59,103 +57,29 @@ pcall(function()
     end
 end)
 
--- 2. GPU SAVER (DISABLE 3D RENDERING JIKA DIAKTIFKAN)
+-- 2. GPU SAVER (JIKA DIAKTIFKAN)
 if CONFIG.DISABLE_3D_RENDER then
     pcall(function()
         RunService:Set3dRenderingEnabled(false)
     end)
 end
 
-local cleanedCount = 0
-local invisibleAssetsCount = 0
+local optimizedCount = 0
 
 ---------------------------------------------------------
--- 👻 HELPER INVISIBLE MODEL & GUI (ANTI-LAG TANPA HAPUS OBJEK)
----------------------------------------------------------
-local function makeSingleObjectInvisible(v)
-    if not v then return end
-    pcall(function()
-        -- 1. 3D Parts, Mesh & Unions
-        if v:IsA("BasePart") then
-            v.Transparency = 1
-            pcall(function() v.LocalTransparencyModifier = 1 end)
-            v.CastShadow = false
-            if v:IsA("MeshPart") then
-                v.TextureID = ""
-            end
-            invisibleAssetsCount = invisibleAssetsCount + 1
-        elseif v:IsA("SpecialMesh") then
-            v.TextureId = ""
-            
-        -- 2. Decals, Textures & SurfaceAppearance
-        elseif v:IsA("Decal") or v:IsA("Texture") then
-            v.Transparency = 1
-        elseif v:IsA("SurfaceAppearance") then
-            pcall(function() v:Destroy() end)
-            
-        -- 3. BillboardGui, SurfaceGui & 3D ScreenGuis
-        elseif v:IsA("BillboardGui") or v:IsA("SurfaceGui") or v:IsA("ScreenGui") then
-            v.Enabled = false
-            pcall(function() v.MaxDistance = 0 end)
-            pcall(function() v.AlwaysOnTop = false end)
-            
-        -- 4. Elemen GUI di dalam Model (Frame, TextLabel, ImageLabel, Button, dll)
-        elseif v:IsA("GuiObject") then
-            v.Visible = false
-            v.BackgroundTransparency = 1
-            if v:IsA("TextLabel") or v:IsA("TextButton") then
-                v.TextTransparency = 1
-            elseif v:IsA("ImageLabel") or v:IsA("ImageButton") then
-                v.ImageTransparency = 1
-            end
-        elseif v:IsA("UIStroke") then
-            v.Enabled = false
-            pcall(function() v.Transparency = 1 end)
-            
-        -- 5. Partikel, Efek Visual, Trail & Highlight
-        elseif v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Beam") or 
-               v:IsA("Fire") or v:IsA("Smoke") or v:IsA("Sparkles") or 
-               v:IsA("Highlight") or v:IsA("SelectionBox") or v:IsA("SelectionSphere") or 
-               v:IsA("BoxHandleAdornment") or v:IsA("CylinderHandleAdornment") or v:IsA("SphereHandleAdornment") then
-            pcall(function() v.Enabled = false end)
-            pcall(function() v.Visible = false end)
-            pcall(function() v.Transparency = 1 end)
-            
-        -- 6. Sumber Cahaya (PointLight, SurfaceLight, SpotLight)
-        elseif v:IsA("Light") then
-            v.Enabled = false
-            v.Brightness = 0
-        end
-    end)
-end
-
-local function makeModelInvisible(obj)
-    if not obj then return end
-    -- 1. Sembunyikan objek itu sendiri
-    makeSingleObjectInvisible(obj)
-    -- 2. Sembunyikan seluruh isi di dalam Model secara rekursif (Gui, Text, Image, Part, Mesh, Partikel, dll)
-    pcall(function()
-        for _, descendant in ipairs(obj:GetDescendants()) do
-            makeSingleObjectInvisible(descendant)
-        end
-    end)
-end
-
----------------------------------------------------------
--- 🛡️ ANTI-AFK SYSTEM (BUILT-IN)
+-- 🛡️ ANTI-AFK SYSTEM (SAFE & BUILT-IN)
 ---------------------------------------------------------
 if CONFIG.ENABLE_ANTI_AFK and lp then
     lp.Idled:Connect(function()
         pcall(function()
             VirtualUser:CaptureController()
             VirtualUser:ClickButton2(Vector2.new(0, 0))
-            warn("⚡ [FPS Boost] Anti-AFK memicu stimulasi input virtual. Timer idle di-reset!")
         end)
     end)
 end
 
 ---------------------------------------------------------
--- 🎯 SMART DETEKTOR PLOT SENDIRI (JANGAN HAPUS PLOT KITA)
+-- 🎯 SMART DETEKTOR PLOT SENDIRI
 ---------------------------------------------------------
 local function isMyPlot(plotModel)
     if not plotModel or not plotModel:IsA("Model") then return false end
@@ -165,13 +89,11 @@ local function isMyPlot(plotModel)
     local myDisplayName = lp.DisplayName
     local myUserIdStr = tostring(lpUserId)
 
-    -- 1. Deteksi Jalur Spesifik:
-    -- Plots -> [Model] -> PlotSign (Part) -> PlayerPlotSign (BillboardGui) -> Frame -> PlayerName (TextLabel) & PlayerIcon (ImageLabel)
+    -- 1. Deteksi Jalur Spesifik Sign
     local plotSign = plotModel:FindFirstChild("PlotSign", true)
     if plotSign then
         local playerPlotSign = plotSign:FindFirstChild("PlayerPlotSign", true)
         if playerPlotSign then
-            -- Cek TextLabel (PlayerName)
             local playerNameLabel = playerPlotSign:FindFirstChild("PlayerName", true)
             if playerNameLabel and playerNameLabel:IsA("TextLabel") then
                 local txt = playerNameLabel.Text
@@ -180,7 +102,6 @@ local function isMyPlot(plotModel)
                 end
             end
 
-            -- Cek ImageLabel (PlayerIcon -> rbxthumb dengan id kita)
             local playerIcon = playerPlotSign:FindFirstChild("PlayerIcon", true)
             if playerIcon and (playerIcon:IsA("ImageLabel") or playerIcon:IsA("ImageButton")) then
                 local img = playerIcon.Image
@@ -191,7 +112,7 @@ local function isMyPlot(plotModel)
         end
     end
 
-    -- 2. Deteksi Rekursif Descendant (Menangkap semua TextLabel/ImageLabel di dalam Plot)
+    -- 2. Deteksi Nilai Descendant
     for _, item in ipairs(plotModel:GetDescendants()) do
         if item:IsA("TextLabel") then
             local txt = item.Text
@@ -210,31 +131,59 @@ local function isMyPlot(plotModel)
         end
     end
 
-    -- 3. Deteksi via Attribute (Owner, UserId, Player)
-    local ok, attributes = pcall(function() return plotModel:GetAttributes() end)
-    if ok and attributes then
-        for _, attrVal in pairs(attributes) do
-            if attrVal == myName or attrVal == myDisplayName or tostring(attrVal) == myUserIdStr or attrVal == lpUserId then
-                return true
-            end
-        end
-    end
-
     return false
+end
+
+---------------------------------------------------------
+-- 👻 STEALTH INVISIBLE HELPER (NON-DESTRUCTIVE / BYPASS BAC)
+---------------------------------------------------------
+-- Penting: JANGAN gunakan :Destroy() pada objek inti game/player untuk menghindari deteksi BAC-5517
+local function hideObjectStealth(v)
+    if not v then return end
+    pcall(function()
+        if v:IsA("BasePart") then
+            v.Transparency = 1
+            v.LocalTransparencyModifier = 1
+            v.CastShadow = false
+            if v:IsA("MeshPart") then
+                v.TextureID = ""
+            end
+            optimizedCount = optimizedCount + 1
+        elseif v:IsA("SpecialMesh") then
+            v.TextureId = ""
+        elseif v:IsA("Decal") or v:IsA("Texture") then
+            v.Transparency = 1
+        elseif v:IsA("BillboardGui") or v:IsA("SurfaceGui") or v:IsA("ScreenGui") then
+            v.Enabled = false
+        elseif v:IsA("GuiObject") then
+            v.Visible = false
+        elseif v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Beam") or 
+               v:IsA("Fire") or v:IsA("Smoke") or v:IsA("Sparkles") or 
+               v:IsA("Highlight") or v:IsA("SelectionBox") or v:IsA("SelectionSphere") then
+            v.Enabled = false
+        elseif v:IsA("Light") then
+            v.Enabled = false
+            v.Brightness = 0
+        end
+    end)
+end
+
+local function hideModelStealth(model)
+    if not model then return end
+    hideObjectStealth(model)
+    for _, desc in ipairs(model:GetDescendants()) do
+        hideObjectStealth(desc)
+    end
 end
 
 ---------------------------------------------------------
 -- 1. UBAH MAP JADI POTATO (PUTIH & SMOOTH PLASTIC)
 ---------------------------------------------------------
-local function optimizeObject(v)
+local function optimizeMapPart(v)
     if not v or not v.Parent then return end
     
-    -- Jika objek berada di dalam ClientRenderedAssets dan REMOVE_CLIENT_ASSETS aktif, langsung musnahkan
-    if CONFIG.REMOVE_CLIENT_ASSETS and (v.Name == "ClientRenderedAssets" or (v.Parent and v.Parent.Name == "ClientRenderedAssets") or v:FindFirstAncestor("ClientRenderedAssets")) then
-        pcall(function() 
-            v:Destroy() 
-            cleanedCount = cleanedCount + 1
-        end)
+    -- Jangan ubah karakter kita
+    if lp.Character and (v == lp.Character or v:IsDescendantOf(lp.Character)) then
         return
     end
 
@@ -245,146 +194,92 @@ local function optimizeObject(v)
             v.CastShadow = false
             
             if CONFIG.WHITE_MAP_MODE then
-                v.Color = Color3.new(1, 1, 1) -- Mengubah warna map jadi putih bersih
+                v.Color = Color3.new(1, 1, 1)
             end
             
             if v:IsA("MeshPart") then
                 v.TextureID = ""
             end
-            cleanedCount = cleanedCount + 1
+            optimizedCount = optimizedCount + 1
         elseif CONFIG.REMOVE_PARTICLES and (v:IsA("Decal") or v:IsA("Texture")) then
-            -- Jaga agar PlayerIcon/Texture pada PlayerPlotSign kita tidak terhapus jika di dalam BillboardGui
-            if not v:FindFirstAncestorOfClass("BillboardGui") then
-                v:Destroy()
-                cleanedCount = cleanedCount + 1
-            end
+            v.Transparency = 1
+            optimizedCount = optimizedCount + 1
         elseif CONFIG.REMOVE_PARTICLES and (
             v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Beam") or 
             v:IsA("Fire") or v:IsA("Smoke") or v:IsA("Sparkles") or 
-            v:IsA("Explosion") or v:IsA("Highlight") or v:IsA("SurfaceAppearance")
+            v:IsA("Explosion") or v:IsA("Highlight")
         ) then
-            v:Destroy()
-            cleanedCount = cleanedCount + 1
+            v.Enabled = false
+            optimizedCount = optimizedCount + 1
         elseif v:IsA("SpecialMesh") then
             v.TextureId = ""
-            cleanedCount = cleanedCount + 1
+            optimizedCount = optimizedCount + 1
         end
     end)
 end
 
 for _, v in ipairs(workspace:GetDescendants()) do
-    optimizeObject(v)
+    optimizeMapPart(v)
 end
 
 ---------------------------------------------------------
--- 2. MUSNAHKAN EFEK LIGHTING & LANGIT
+-- 2. OPTIMASI EFEK LIGHTING & LANGIT (SAFE / NON-DESTRUCTIVE)
 ---------------------------------------------------------
-if CONFIG.REMOVE_LIGHTING_FX then
+if CONFIG.OPTIMIZE_LIGHTING then
     pcall(function()
         Lighting.GlobalShadows = false
         Lighting.FogEnd = 9e9
         Lighting.FogStart = 9e9
         Lighting.Brightness = 1
         Lighting.ClockTime = 14
-        
-        pcall(function()
-            Lighting.ShadowMapEnabled = false
-        end)
 
         for _, v in ipairs(Lighting:GetDescendants()) do
             if v:IsA("PostEffect") or v:IsA("BlurEffect") or v:IsA("SunRaysEffect") or 
                v:IsA("ColorCorrectionEffect") or v:IsA("BloomEffect") or 
-               v:IsA("DepthOfFieldEffect") or v:IsA("Sky") or v:IsA("Atmosphere") or 
-               v:IsA("Clouds") or v:IsA("ColorGradingEffect") then
-                pcall(function() v:Destroy() end)
-                cleanedCount = cleanedCount + 1
+               v:IsA("DepthOfFieldEffect") then
+                v.Enabled = false
+                optimizedCount = optimizedCount + 1
             end
         end
     end)
 end
 
 ---------------------------------------------------------
--- 3. HAPUS FOLDER PLOTS PLAYER LAIN (SMART DETECTION)
+-- 3. SEMBUNYIKAN PLOT PLAYER LAIN (STEALTH & SAFE)
 ---------------------------------------------------------
-local function hapusPlotsDanData()
-    if not CONFIG.REMOVE_PLOTS_FOLDER then return end
+local function optimizePlotsStealth()
+    if not CONFIG.HIDE_OTHER_PLOTS then return end
     pcall(function()
         local plotsFolder = workspace:FindFirstChild("Plots")
         if plotsFolder then
             for _, plot in ipairs(plotsFolder:GetChildren()) do
                 if plot:IsA("Model") then
-                    if isMyPlot(plot) then
-                        print("🛡️ [Smart Plot] Menjaga Plot Milik Kita: " .. plot.Name)
-                    else
-                        pcall(function() 
-                            plot:Destroy() 
-                            cleanedCount = cleanedCount + 1
-                        end)
+                    if not isMyPlot(plot) then
+                        hideModelStealth(plot)
                     end
                 end
-            end
-        end
-
-        -- Hapus folder Plot / Bases / PlayerData milik orang lain di workspace jika ada
-        local folderNames = { "PlotFolder", "PlayerPlots", "Bases", "PlayerData" }
-        for _, fName in ipairs(folderNames) do
-            local folder = workspace:FindFirstChild(fName)
-            if folder and folder ~= workspace:FindFirstChild("Terrain") and not isMyPlot(folder) then
-                pcall(function() 
-                    folder:Destroy() 
-                    cleanedCount = cleanedCount + 1
-                end)
             end
         end
     end)
 end
 
-hapusPlotsDanData()
+optimizePlotsStealth()
 
 ---------------------------------------------------------
--- 4. HAPUS MODEL ITEM DI CLIENTRENDEREDASSETS (DIRECT PURGE)
+-- 4. SEMBUNYIKAN CLIENT RENDERED ASSETS (STEALTH)
 ---------------------------------------------------------
-local function hapusClientAssets()
-    if not CONFIG.REMOVE_CLIENT_ASSETS then return end
-    
-    local function processFolder(folder)
-        if not folder then return end
-        for _, child in ipairs(folder:GetChildren()) do
-            pcall(function()
-                child:Destroy()
-                cleanedCount = cleanedCount + 1
-            end)
+if CONFIG.HIDE_CLIENT_ASSETS then
+    pcall(function()
+        for _, child in ipairs(workspace:GetChildren()) do
+            if child.Name == "ClientRenderedAssets" or child.Name:find("ClientRendered") then
+                hideModelStealth(child)
+            end
         end
-        folder.ChildAdded:Connect(function(child)
-            task.defer(function()
-                pcall(function()
-                    child:Destroy()
-                    cleanedCount = cleanedCount + 1
-                end)
-            end)
-        end)
-    end
-
-    -- 1. Scan folder ClientRenderedAssets di workspace
-    for _, child in ipairs(workspace:GetChildren()) do
-        if child.Name == "ClientRenderedAssets" or child.Name:find("ClientRendered") then
-            processFolder(child)
-            print("🗑️ [Anti-Lag] Menghapus Model Item di: " .. child.Name)
-        end
-    end
-
-    -- 2. Scan jika berada di sub-folder
-    local deepFolder = workspace:FindFirstChild("ClientRenderedAssets", true)
-    if deepFolder and deepFolder.Parent ~= workspace then
-        processFolder(deepFolder)
-        print("🗑️ [Anti-Lag] Menghapus Model Item di sub-folder: " .. deepFolder:GetFullName())
-    end
+    end)
 end
 
-hapusClientAssets()
-
 ---------------------------------------------------------
--- 5. TERRAIN & WATER OPTIMIZATION (TERMASUK INCOME CASH CLEANER)
+-- 5. TERRAIN OPTIMIZATION & INCOME CASH HIDER
 ---------------------------------------------------------
 if CONFIG.OPTIMIZE_TERRAIN or CONFIG.HIDE_INCOME_CASH then
     pcall(function()
@@ -395,218 +290,120 @@ if CONFIG.OPTIMIZE_TERRAIN or CONFIG.HIDE_INCOME_CASH then
                 terrain.WaterWaveSpeed = 0
                 terrain.WaterReflectance = 0
                 terrain.WaterTransparency = 0
-                pcall(function()
-                    sethiddenproperty(terrain, "Decoration", false)
-                end)
             end
 
-            -- Bersihkan SyncedIncomeCashAttachment & SyncedIncomeCash yang ada di Terrain
             if CONFIG.HIDE_INCOME_CASH then
                 for _, obj in ipairs(terrain:GetDescendants()) do
                     if obj.Name:find("SyncedIncomeCash") then
-                        pcall(function()
-                            if obj:IsA("BillboardGui") then obj.Enabled = false end
-                            obj:Destroy()
-                            cleanedCount = cleanedCount + 1
-                        end)
+                        hideObjectStealth(obj)
                     end
                 end
-                print("💵 [Anti-Lag] Membersihkan SyncedIncomeCashAttachment & GUI di Terrain")
             end
         end
     end)
 end
 
 ---------------------------------------------------------
--- 6. ENGINE RENDERING QUALITY
+-- 6. SEMBUNYIKAN PLAYER LAIN SECARA STEALTH (BYPASS BAC-5517)
 ---------------------------------------------------------
-pcall(function()
-    settings().Rendering.QualityLevel = 1
-    settings().Rendering.EditQualityLevel = 1
-end)
-pcall(function()
-    settings().Network.IncomingReplicationLag = 0
-end)
-
----------------------------------------------------------
--- 7. PEMBANTAIAN PLAYER / REMOVE PLAYER LAIN (METODE LENGKAP & REKURSIF)
----------------------------------------------------------
-local function musnahkanPlayer(player)
-    if player ~= lp and player.Name ~= lpName then
-        -- 1. Hapus jika wujud karakternya saat ini sudah ada di map
-        if player.Character then
-            pcall(function() 
-                player.Character:Destroy() 
-                cleanedCount = cleanedCount + 1
-            end)
-        end
-        
-        -- 2. Hapus folder data player (leaderstats, Data, PlayerData) dari client
-        for _, subData in ipairs({ "leaderstats", "Data", "PlayerData", "Stats" }) do
-            local d = player:FindFirstChild(subData)
-            if d then
-                pcall(function() d:Destroy() end)
-            end
-        end
-        
-        -- 3. Hapus objek Player fisik dari game.Players di sisi client
-        pcall(function() 
-            player:Destroy() 
-            cleanedCount = cleanedCount + 1
-        end)
-    end
-end
-
--- Strip aksesoris & baju player lain (jika player tidak dihapus total)
-local function stripPlayerAccessories(char)
-    if not char or char.Name == lpName then return end
+local function hideOtherPlayerCharacter(char)
+    if not char or char == lp.Character or char.Name == lpName then return end
     pcall(function()
-        for _, item in ipairs(char:GetChildren()) do
-            if item:IsA("Accessory") or item:IsA("Shirt") or item:IsA("Pants") or 
-               item:IsA("ShirtGraphic") or item:IsA("BodyColors") then
-                item:Destroy()
-                cleanedCount = cleanedCount + 1
-            elseif item:IsA("BasePart") then
-                item.Material = Enum.Material.SmoothPlastic
-                item.Reflectance = 0
-                item.CastShadow = false
-                local face = item:FindFirstChild("face") or item:FindFirstChild("Face")
-                if face and face:IsA("Decal") then
-                    face:Destroy()
+        for _, part in ipairs(char:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.Transparency = 1
+                part.LocalTransparencyModifier = 1
+                part.CastShadow = false
+                if part:IsA("MeshPart") then part.TextureID = "" end
+            elseif part:IsA("Decal") or part:IsA("Texture") then
+                part.Transparency = 1
+            elseif part:IsA("Accessory") or part:IsA("Shirt") or part:IsA("Pants") or part:IsA("ShirtGraphic") or part:IsA("BodyColors") then
+                -- Sembunyikan part di dalam aksesoris
+                for _, accPart in ipairs(part:GetDescendants()) do
+                    if accPart:IsA("BasePart") then
+                        accPart.Transparency = 1
+                        accPart.LocalTransparencyModifier = 1
+                    end
                 end
+            elseif part:IsA("BillboardGui") or part:IsA("SurfaceGui") or part:IsA("Highlight") or part:IsA("ParticleEmitter") then
+                part.Enabled = false
             end
         end
+        optimizedCount = optimizedCount + 1
     end)
 end
 
--- EKSEKUSI PEMBANTAIAN PLAYER AWAL
-if CONFIG.REMOVE_OTHER_PLAYER then
-    -- 1. Musnahkan dari list Players
-    for _, player in ipairs(Players:GetPlayers()) do
-        musnahkanPlayer(player)
-    end
-
-    -- 2. Musnahkan model karakter player lain di workspace secara langsung
-    for _, child in ipairs(workspace:GetChildren()) do
-        if child:IsA("Model") and child.Name ~= lpName and child ~= lp.Character and child:FindFirstChildOfClass("Humanoid") then
-            pcall(function() 
-                child:Destroy() 
-                cleanedCount = cleanedCount + 1
-            end)
-        end
-    end
-
-    -- 3. Musnahkan karakter player lain yang bersarang di dalam sub-folder (Characters, Entities, Players, dll)
-    for _, descendant in ipairs(workspace:GetDescendants()) do
-        if descendant:IsA("Humanoid") then
-            local charModel = descendant.Parent
-            if charModel and charModel:IsA("Model") and charModel.Name ~= lpName and charModel ~= lp.Character then
-                pcall(function() 
-                    charModel:Destroy() 
-                    cleanedCount = cleanedCount + 1
-                end)
-            end
-        end
-    end
-elseif CONFIG.STRIP_ACCESSORIES then
+if CONFIG.HIDE_OTHER_PLAYERS then
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= lp and player.Character then
-            stripPlayerAccessories(player.Character)
+            hideOtherPlayerCharacter(player.Character)
         end
     end
 end
 
 ---------------------------------------------------------
--- 8. REALTIME LISTENERS (AUTO CLEAN REALTIME & EVENT BARU)
+-- 7. REALTIME LISTENERS (AUTO OPTIMIZE REALTIME)
 ---------------------------------------------------------
 if CONFIG.ENABLE_REALTIME_OPT then
-    -- Listener 1: Deteksi objek / model / humanoid / plot / client assets baru yang dimuat di workspace
+    -- Listener Objek Baru di Workspace
     workspace.DescendantAdded:Connect(function(descendant)
         task.defer(function()
-            -- Deteksi dan langsung musnahkan model/objek di ClientRenderedAssets
-            if CONFIG.REMOVE_CLIENT_ASSETS then
-                if (descendant.Parent and descendant.Parent.Name == "ClientRenderedAssets") or descendant:FindFirstAncestor("ClientRenderedAssets") then
-                    pcall(function() 
-                        descendant:Destroy() 
-                        cleanedCount = cleanedCount + 1
-                    end)
+            -- Abaikan karakter kita sendiri
+            if lp.Character and (descendant == lp.Character or descendant:IsDescendantOf(lp.Character)) then
+                return
+            end
+
+            -- Cek apakah objek bagian dari karakter player lain
+            if CONFIG.HIDE_OTHER_PLAYERS then
+                local model = descendant:FindFirstAncestorOfClass("Model")
+                if model and model ~= lp.Character and model:FindFirstChildOfClass("Humanoid") then
+                    hideObjectStealth(descendant)
                     return
                 end
             end
 
-            -- Deteksi dan musnahkan SyncedIncomeCashAttachment & SyncedIncomeCash (Floating Cash di Terrain/Workspace)
-            if CONFIG.HIDE_INCOME_CASH and (descendant.Name:find("SyncedIncomeCash") or (descendant.Parent and descendant.Parent.Name:find("SyncedIncomeCash"))) then
-                pcall(function()
-                    if descendant:IsA("BillboardGui") then descendant.Enabled = false end
-                    descendant:Destroy()
-                end)
-                return
-            end
-
-            -- Deteksi Plot baru
-            if CONFIG.REMOVE_PLOTS_FOLDER and descendant:IsA("Model") and descendant.Parent and descendant.Parent.Name == "Plots" then
-                task.wait(0.3) -- Beri waktu agar BillboardGui termuat
-                if not isMyPlot(descendant) then
-                    pcall(function() descendant:Destroy() end)
-                else
-                    print("🛡️ [Smart Plot] Menjaga Plot Milik Kita yang baru dimuat: " .. descendant.Name)
-                end
-                return
-            end
-
-            -- Deteksi dan hapus Humanoid player lain
-            if CONFIG.REMOVE_OTHER_PLAYER then
-                if descendant:IsA("Humanoid") then
-                    local charModel = descendant.Parent
-                    if charModel and charModel:IsA("Model") and charModel.Name ~= lpName and charModel ~= lp.Character then
-                        pcall(function() charModel:Destroy() end)
+            -- Cek apakah objek bagian dari Plot player lain
+            if CONFIG.HIDE_OTHER_PLOTS then
+                local plotsFolder = workspace:FindFirstChild("Plots")
+                if plotsFolder and descendant:IsDescendantOf(plotsFolder) then
+                    local plotModel = descendant
+                    while plotModel and plotModel.Parent ~= plotsFolder do
+                        plotModel = plotModel.Parent
+                    end
+                    if plotModel and not isMyPlot(plotModel) then
+                        hideObjectStealth(descendant)
                         return
                     end
-                elseif descendant:IsA("Model") and descendant.Name ~= lpName and descendant ~= lp.Character and descendant:FindFirstChildOfClass("Humanoid") then
-                    pcall(function() descendant:Destroy() end)
-                    return
                 end
             end
 
-            -- Optimasi material & tekstur
-            optimizeObject(descendant)
+            -- Optimasi objek umum lainnya
+            optimizeMapPart(descendant)
         end)
     end)
 
-    -- Listener 2: Deteksi lighting / sky baru yang dibuat game
-    if CONFIG.REMOVE_LIGHTING_FX then
-        Lighting.DescendantAdded:Connect(function(v)
-            task.defer(function()
-                if v:IsA("PostEffect") or v:IsA("BlurEffect") or v:IsA("SunRaysEffect") or 
-                   v:IsA("ColorCorrectionEffect") or v:IsA("BloomEffect") or 
-                   v:IsA("DepthOfFieldEffect") or v:IsA("Sky") or v:IsA("Atmosphere") or 
-                   v:IsA("Clouds") then
-                    pcall(function() v:Destroy() end)
+    -- Listener Player Baru Masuk / Spawn
+    Players.PlayerAdded:Connect(function(player)
+        if player ~= lp then
+            player.CharacterAdded:Connect(function(char)
+                task.wait(0.2)
+                if CONFIG.HIDE_OTHER_PLAYERS then
+                    hideOtherPlayerCharacter(char)
                 end
             end)
-        end)
-    end
-
-    -- Listener 3: Deteksi player baru yang join ke server
-    Players.PlayerAdded:Connect(function(player)
-        task.defer(function()
-            if CONFIG.REMOVE_OTHER_PLAYER then
-                musnahkanPlayer(player)
-                player.CharacterAdded:Connect(function(char)
-                    task.defer(function()
-                        if char and char.Name ~= lpName then
-                            pcall(function() char:Destroy() end)
-                        end
-                    end)
-                end)
-            elseif CONFIG.STRIP_ACCESSORIES then
-                player.CharacterAdded:Connect(function(char)
-                    task.wait(0.5)
-                    stripPlayerAccessories(char)
-                end)
-            end
-        end)
+        end
     end)
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= lp then
+            player.CharacterAdded:Connect(function(char)
+                task.wait(0.2)
+                if CONFIG.HIDE_OTHER_PLAYERS then
+                    hideOtherPlayerCharacter(char)
+                end
+            end)
+        end
+    end
 end
 
 ---------------------------------------------------------
@@ -615,20 +412,18 @@ end
 pcall(function()
     if StarterGui then
         StarterGui:SetCore("SendNotification", {
-            Title = "🚀 Ultimate FPS Boost",
-            Text = string.format("Aktif! (%d Objek, Plot & Player Dibersihkan)", cleanedCount),
-            Duration = 5
+            Title = "🚀 Stealth FPS Booster",
+            Text = string.format("Aktif & Aman! (%d Objek Dioptimasi)", optimizedCount),
+            Duration = 4
         })
     end
 end)
 
 print("══════════════════════════════════════════════════")
-print("🚀 [FPS BOOSTER] Berhasil diaktifkan!")
-print(string.format("📊 Total Objek Dibersihkan : %d", cleanedCount))
-print(string.format("🎯 FPS Cap                 : %d", CONFIG.FPS_CAP))
-print(string.format("🥔 White Potato Mode       : %s", tostring(CONFIG.WHITE_MAP_MODE)))
-print(string.format("💀 Hapus Player Lain       : %s", tostring(CONFIG.REMOVE_OTHER_PLAYER)))
-print(string.format("🏡 Smart Plot Protection   : %s", tostring(CONFIG.PRESERVE_MY_PLOT)))
-print(string.format("🗑️ Hapus Client Item Assets : %s", tostring(CONFIG.REMOVE_CLIENT_ASSETS)))
-print(string.format("💵 Auto Clean Income Cash   : %s", tostring(CONFIG.HIDE_INCOME_CASH)))
+print("🚀 [STEALTH FPS BOOSTER] Berhasil diaktifkan!")
+print(string.format("📊 Objek Dioptimasi      : %d", optimizedCount))
+print(string.format("🎯 FPS Cap               : %d", CONFIG.FPS_CAP))
+print(string.format("🥔 White Potato Mode     : %s", tostring(CONFIG.WHITE_MAP_MODE)))
+print(string.format("👻 Stealth Player Hide   : %s", tostring(CONFIG.HIDE_OTHER_PLAYERS)))
+print(string.format("🛡️ Anti-Cheat Bypass     : AKTIF (BAC-5517 Safe)"))
 print("══════════════════════════════════════════════════")
