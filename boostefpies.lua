@@ -1,5 +1,14 @@
 -- ==============================================================================
--- 🔬 BOOSTFPS DIAGNOSTIC v2 — TANPA VIRTUALUSER
+-- 🔬 BOOSTFPS DIAGNOSTIC v3 — TEST PROPERTI BASEPART SAJA (TANPA PARTIKEL)
+-- ==============================================================================
+-- Kita sudah tahu:
+-- ❌ VirtualUser   -> Trigger BAC-7518
+-- ❌ Partikel      -> Trigger BAC-10512
+-- ❌ Lighting      -> Trigger BAC-8513
+-- ❌ :Destroy()    -> Trigger BAC-5517
+-- ❌ getconnections -> Trigger BAC-5513
+--
+-- Sekarang kita test properti BasePart (Material, Shadow, Color, Texture, Hide Player, Hide Plot)
 -- ==============================================================================
 
 if not game:IsLoaded() then game.Loaded:Wait() end
@@ -17,62 +26,73 @@ local function notify(fase, text)
     print(fase .. ": " .. text)
 end
 
-notify("START", "Diagnostic v2 tanpa VirtualUser. Mulai...")
+notify("START", "Diagnostic v3: Test BasePart Properties...")
 
--- FASE 1 (0 detik): DISABLE PARTIKEL
-task.wait(15)
-notify("FASE 1", "Disable partikel...")
-for _, v in ipairs(workspace:GetDescendants()) do
-    pcall(function()
-        if v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Beam") or
-           v:IsA("Fire") or v:IsA("Smoke") or v:IsA("Sparkles") then
-            v.Enabled = false
-        end
-    end)
+-- Helper: cek apakah part milik karakter kita sendiri
+local function isMyChar(v)
+    return lp.Character and (v == lp.Character or v:IsDescendantOf(lp.Character))
 end
 
--- FASE 2 (15 detik): CASTSHADOW = FALSE
+-- ═══════════════════════════════════════════════════════
+-- FASE 1 (detik 15): CASTSHADOW = FALSE
+-- ═══════════════════════════════════════════════════════
 task.wait(15)
-notify("FASE 2", "CastShadow = false...")
+notify("FASE 1", "CastShadow = false pada BasePart...")
 for _, v in ipairs(workspace:GetDescendants()) do
-    pcall(function()
-        if v:IsA("BasePart") then v.CastShadow = false end
-    end)
+    if not isMyChar(v) and v:IsA("BasePart") then
+        pcall(function() v.CastShadow = false end)
+    end
 end
 
--- FASE 3 (30 detik): MATERIAL = SMOOTHPLASTIC
+-- ═══════════════════════════════════════════════════════
+-- FASE 2 (detik 30): MATERIAL = SMOOTHPLASTIC
+-- ═══════════════════════════════════════════════════════
 task.wait(15)
-notify("FASE 3", "Material = SmoothPlastic...")
+notify("FASE 2", "Material = SmoothPlastic...")
 for _, v in ipairs(workspace:GetDescendants()) do
-    pcall(function()
-        if v:IsA("BasePart") then v.Material = Enum.Material.SmoothPlastic end
-    end)
+    if not isMyChar(v) and v:IsA("BasePart") then
+        pcall(function() 
+            v.Material = Enum.Material.SmoothPlastic 
+            v.Reflectance = 0
+        end)
+    end
 end
 
--- FASE 4 (45 detik): COLOR = PUTIH
+-- ═══════════════════════════════════════════════════════
+-- FASE 3 (detik 45): COLOR = PUTIH (WHITE MAP)
+-- ═══════════════════════════════════════════════════════
 task.wait(15)
-notify("FASE 4", "Color = Putih...")
+notify("FASE 3", "Color = Putih (White Map)...")
 for _, v in ipairs(workspace:GetDescendants()) do
-    pcall(function()
-        if v:IsA("BasePart") then v.Color = Color3.new(1, 1, 1) end
-    end)
+    if not isMyChar(v) and v:IsA("BasePart") then
+        pcall(function() v.Color = Color3.new(1, 1, 1) end)
+    end
 end
 
--- FASE 5 (60 detik): HAPUS TEKSTUR
+-- ═══════════════════════════════════════════════════════
+-- FASE 4 (detik 60): HAPUS TEKSTUR MESHPART / DECAL
+-- ═══════════════════════════════════════════════════════
 task.wait(15)
-notify("FASE 5", "Hapus tekstur MeshPart/Decal...")
+notify("FASE 4", "Hapus tekstur MeshPart/Decal...")
 for _, v in ipairs(workspace:GetDescendants()) do
-    pcall(function()
-        if v:IsA("MeshPart") then v.TextureID = ""
-        elseif v:IsA("Decal") or v:IsA("Texture") then v.Transparency = 1
-        elseif v:IsA("SpecialMesh") then v.TextureId = ""
-        end
-    end)
+    if not isMyChar(v) then
+        pcall(function()
+            if v:IsA("MeshPart") then
+                v.TextureID = ""
+            elseif v:IsA("SpecialMesh") then
+                v.TextureId = ""
+            elseif v:IsA("Decal") or v:IsA("Texture") then
+                v.Transparency = 1
+            end
+        end)
+    end
 end
 
--- FASE 6 (75 detik): TERRAIN WATER
+-- ═══════════════════════════════════════════════════════
+-- FASE 5 (detik 75): TERRAIN WATER
+-- ═══════════════════════════════════════════════════════
 task.wait(15)
-notify("FASE 6", "Terrain water optimization...")
+notify("FASE 5", "Terrain water optimization...")
 pcall(function()
     local t = workspace:FindFirstChildOfClass("Terrain")
     if t then
@@ -83,9 +103,11 @@ pcall(function()
     end
 end)
 
--- FASE 7 (90 detik): HIDE PLAYER LAIN
+-- ═══════════════════════════════════════════════════════
+-- FASE 6 (detik 90): HIDE PLAYER LAIN (TRANSPARENCY)
+-- ═══════════════════════════════════════════════════════
 task.wait(15)
-notify("FASE 7", "Hide player lain...")
+notify("FASE 6", "Hide player lain (transparency)...")
 for _, p in ipairs(Players:GetPlayers()) do
     if p ~= lp and p.Character then
         for _, part in ipairs(p.Character:GetDescendants()) do
@@ -99,9 +121,11 @@ for _, p in ipairs(Players:GetPlayers()) do
     end
 end
 
--- FASE 8 (105 detik): HIDE PLOT LAIN
+-- ═══════════════════════════════════════════════════════
+-- FASE 7 (detik 105): HIDE PLOT LAIN (TRANSPARENCY)
+-- ═══════════════════════════════════════════════════════
 task.wait(15)
-notify("FASE 8", "Hide plot lain...")
+notify("FASE 7", "Hide plot lain (transparency)...")
 pcall(function()
     local plots = workspace:FindFirstChild("Plots")
     if plots then
@@ -117,4 +141,4 @@ pcall(function()
     end
 end)
 
-notify("✅ SELESAI", "Semua 8 fase selesai tanpa kick!")
+notify("✅ SELESAI", "Semua 7 fase BasePart selesai tanpa kick!")
