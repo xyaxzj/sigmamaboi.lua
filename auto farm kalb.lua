@@ -178,50 +178,76 @@ local function updateStatus(text, color)
 end
 
 -- =============================================
--- 🚀 INISIALISASI AWAL (TELEPORT + KLIK AUTOBUTTON 1X SAJA)
+-- 🚀 INISIALISASI AWAL (TELEPORT + JEDA 5 DETIK + KLIK AUTOBUTTON 1X)
 -- =============================================
 task.spawn(function()
     -- 1. Teleport ke Safe Zone saat script dieksekusi
+    updateStatus("📍 Teleport ke Safe Zone...", Color3.fromRGB(100, 200, 255))
     local char = lp.Character or lp.CharacterAdded:Wait()
     local hrp = char:WaitForChild("HumanoidRootPart", 10)
     if hrp then
         hrp.CFrame = safeZoneCFrame
+    end
+
+    -- 2. Jeda Waktu 5 Detik Sebelum Klik
+    for i = 5, 1, -1 do
+        updateStatus(string.format("⏳ Menunggu %d detik sebelum klik Auto Kick...", i), Color3.fromRGB(255, 200, 80))
         task.wait(1.0)
     end
 
-    -- 2. Cari AutoButton di PlayerGui.HUD.AutoKickFrame
+    -- 3. Cari AutoButton di PlayerGui.HUD.AutoKickFrame
     pcall(function()
         local playerGui = lp:WaitForChild("PlayerGui", 10)
         local hud = playerGui and playerGui:WaitForChild("HUD", 10)
         local autoKickFrame = hud and (hud:FindFirstChild("AutoKickFrame", true) or hud:FindFirstChild("AutoKick", true))
         local autoBtn = autoKickFrame and (autoKickFrame:FindFirstChild("AutoButton", true) or autoKickFrame:FindFirstChildOfClass("ImageButton") or autoKickFrame:FindFirstChildOfClass("GuiButton"))
         
+        -- Fallback pencarian berbasis Image Asset atau Text Label "AUTO KICK"
         if not autoBtn and hud then
             for _, v in ipairs(hud:GetDescendants()) do
                 if v:IsA("ImageButton") and (v.Name == "AutoButton" or tostring(v.Image):find("136607941521284")) then
                     autoBtn = v
                     break
+                elseif v:IsA("TextLabel") and v.Text:upper():find("AUTO KICK") then
+                    local p = v.Parent
+                    autoBtn = p and (p:FindFirstChildOfClass("ImageButton") or p:FindFirstChildOfClass("GuiButton"))
+                    if autoBtn then break end
                 end
             end
         end
 
-        -- 3. Klik AutoButton Tepat 1 Kali Saja
-        if autoBtn and autoBtn:IsA("GuiButton") and autoBtn.Visible then
+        -- 4. Eksekusi Klik Bersih Tepat 1 Kali Saja
+        if autoBtn and autoBtn:IsA("GuiButton") then
+            local pos = autoBtn.AbsolutePosition + (autoBtn.AbsoluteSize / 2)
+            
+            -- Sinyal Event Button
             if firesignal then
-                firesignal(autoBtn.Activated)
-            else
-                local pos = autoBtn.AbsolutePosition + (autoBtn.AbsoluteSize / 2)
-                local vim = game:GetService("VirtualInputManager")
-                if vim then
+                pcall(function() firesignal(autoBtn.Activated) end)
+                pcall(function() firesignal(autoBtn.MouseButton1Click) end)
+            end
+            
+            -- Simulasi Fisik Virtual Input (Mouse & Touch)
+            local vim = nil
+            pcall(function() vim = game:GetService("VirtualInputManager") end)
+            if vim then
+                pcall(function()
                     vim:SendMouseButtonEvent(pos.X, pos.Y, 0, true, game, 0)
                     task.wait(0.05)
                     vim:SendMouseButtonEvent(pos.X, pos.Y, 0, false, game, 0)
-                else
+                    vim:SendTouchEvent(0, 0, pos.X, pos.Y)
+                    task.wait(0.05)
+                    vim:SendTouchEvent(0, 2, pos.X, pos.Y)
+                end)
+            else
+                pcall(function()
                     VirtualUser:CaptureController()
                     VirtualUser:ClickButton1(pos)
-                end
+                end)
             end
-            updateStatus("✅ Auto Kick Diaktifkan (1x)!", Color3.fromRGB(100, 240, 120))
+            
+            updateStatus("✅ Auto Kick Berhasil Diklik (1x)!", Color3.fromRGB(100, 240, 120))
+        else
+            updateStatus("⚠️ AutoButton tidak ditemukan di HUD.", Color3.fromRGB(255, 100, 100))
         end
     end)
 end)
