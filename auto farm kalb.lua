@@ -1,11 +1,16 @@
 -- ==============================================================================
--- ⚡ AUTO FARM KALB (REVERSED & PROVEN INSTANT PERFECT KICK)
+-- ⚡ AUTO FARM KALB (NATIVE IN-GAME AUTO KICK INTEGRATION)
 -- ==============================================================================
--- Berdasarkan hasil sniffing reverse-engineering terhadap hub script lain:
--- 1. Berada di Safe Zone
--- 2. Direct Invoke: ref_KickEvent:InvokeServer(1, 1, timestamp) -> 100% Perfect Max Power
--- 3. Server memproses penerbangan bola & menembakkan rev_kickPhase2 saat mendarat (Reward Mutation)
--- 4. Langsung melakukan kick ulang begitu rev_kickPhase2 diterima (Loop Tanpa Cooldown/Stuck)
+-- Memanfaatkan fitur Auto Kick bawaan resmi game:
+-- game:GetService("ReplicatedStorage").Shared.Packages.Network.ref_AutoRequest:InvokeServer(true)
+-- 
+-- Fitur:
+-- 1. Anti-Lag & Potato Map Ekstrem (Plastic, White, No Shadows, Plot & Player Removed)
+-- 2. Anti-AFK
+-- 3. Teleport otomatis ke Safe Zone saat pertama kali run & saat respawn
+-- 4. Mengaktifkan fitur resmi Auto Kick bawaan game
+-- 5. Auto Interupsi Event Cuaca Luck Machine (Barbell Training x8 Luck)
+-- 6. Floating Status HUD Real-Time
 -- ==============================================================================
 
 if not game:IsLoaded() then game.Loaded:Wait() end
@@ -41,7 +46,7 @@ for _, v in ipairs(workspace:GetDescendants()) do
     end)
 end
 
--- 2. Musnahkan Lighting Effects
+-- 2. Musnahkan Efek Lighting
 Lighting.GlobalShadows = false
 Lighting.FogEnd = 9e9
 for _, v in ipairs(Lighting:GetDescendants()) do
@@ -89,12 +94,12 @@ local safeZoneCFrame = CFrame.new(698.030701, 3.298559, 233.707077, -0.061024, -
 -- 📡 CARI REMOTE NETWORK
 -- =============================================
 local networkFolder = ReplicatedStorage:WaitForChild("Shared", 10):WaitForChild("Packages", 10):WaitForChild("Network", 10)
-local ref_KickEvent = networkFolder and (networkFolder:FindFirstChild("ref_KickEvent") or networkFolder:WaitForChild("ref_KickEvent", 5))
+local ref_AutoRequest = networkFolder and (networkFolder:FindFirstChild("ref_AutoRequest") or networkFolder:WaitForChild("ref_AutoRequest", 5))
 
-if not ref_KickEvent then
+if not ref_AutoRequest then
     for _, r in pairs(ReplicatedStorage:GetDescendants()) do
-        if r.Name == "ref_KickEvent" and r:IsA("RemoteFunction") then
-            ref_KickEvent = r
+        if r.Name == "ref_AutoRequest" and r:IsA("RemoteFunction") then
+            ref_AutoRequest = r
             break
         end
     end
@@ -140,7 +145,7 @@ Title.Size = UDim2.new(1, -10, 0, 22)
 Title.Position = UDim2.new(0, 8, 0, 4)
 Title.BackgroundTransparency = 1
 Title.Font = Enum.Font.GothamBold
-Title.Text = "⚡ KALB PERFECT AUTO FARM"
+Title.Text = "⚡ KALB OFFICIAL AUTO KICK"
 Title.TextColor3 = Color3.fromRGB(100, 240, 140)
 Title.TextSize = 11
 Title.TextXAlignment = Enum.TextXAlignment.Left
@@ -176,17 +181,14 @@ end
 -- =============================================
 -- 📡 DAFTAR EVENT LISTENER
 -- =============================================
-local currentFlightEnd = 0
-local phase2Received = false
 local weatherEventPending = false
 local luckBuffObtained = false
 
 if rev_kickPhase2 then
     rev_kickPhase2.OnClientEvent:Connect(function(rewardTable, ...)
-        phase2Received = true
         _G.mutationCount = _G.mutationCount + 1
         
-        local rewardName = "Unknown"
+        local rewardName = "Brainrot"
         local mutationType = "Normal"
         pcall(function()
             if type(rewardTable) == "table" and rewardTable[1] then
@@ -222,59 +224,62 @@ if rev_PlayMessage then
     end)
 end
 
--- =============================================
--- 🚀 FUNGSI PROVEN INSTANT PERFECT KICK
--- =============================================
-local function executePerfectKick()
-    local timestamp = workspace:GetServerTimeNow() or tick()
-    phase2Received = false
-    
-    local results = table.pack(pcall(function()
-        return ref_KickEvent:InvokeServer(1, 1, timestamp)
-    end))
-    
-    if results[1] and results[2] == true then
-        local flightData = results[5] -- #4 return table {KickEnd, KickStart}
-        local flightTime = 16
+-- Helper Aktifkan Auto Kick Bawaan Game
+local function enableInGameAutoKick()
+    if ref_AutoRequest then
         pcall(function()
-            if type(flightData) == "table" and flightData.KickEnd and flightData.KickStart then
-                flightTime = math.max(2, flightData.KickEnd - flightData.KickStart)
-            end
+            ref_AutoRequest:InvokeServer(true)
         end)
-        
-        currentFlightEnd = os.clock() + flightTime
-        return true, flightTime
-    else
-        return false, 2
     end
 end
 
 -- =============================================
--- ⚙️ MAIN LOOP (PROVEN INSTANT KICK FARM)
+-- ⚙️ MAIN LOOP (AUTO FARM WITH IN-GAME AUTO KICK)
 -- =============================================
 task.spawn(function()
-    updateStatus("🚀 Auto Farm Aktif!", Color3.fromRGB(100, 240, 120))
+    updateStatus("📍 Teleport ke Safe Zone...", Color3.fromRGB(100, 200, 255))
     
-    while task.wait(0.1) do
+    -- 1. Teleport awal ke Safe Zone
+    local char = lp.Character or lp.CharacterAdded:Wait()
+    local hrp = char:WaitForChild("HumanoidRootPart", 10)
+    if hrp then
+        hrp.CFrame = safeZoneCFrame
+        task.wait(0.5)
+    end
+
+    -- 2. Aktifkan Fitur Resmi Auto Kick Ingame
+    enableInGameAutoKick()
+    updateStatus("✅ Auto Kick In-Game Aktif!", Color3.fromRGB(100, 240, 120))
+
+    while task.wait(1) do
         if not _G.autoFarm then continue end
 
-        local char = lp.Character
-        local hum = char and char:FindFirstChild("Humanoid")
-        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        local currentChar = lp.Character
+        local currentHum = currentChar and currentChar:FindFirstChild("Humanoid")
+        local currentHrp = currentChar and currentChar:FindFirstChild("HumanoidRootPart")
 
-        if not hum or not hrp then continue end
+        if not currentHum or not currentHrp then continue end
 
-        -- Reset jika mati
-        if hum.Health <= 0 then
+        -- [ PENDETEKSI MATI / RESPAWN ]
+        if currentHum.Health <= 0 then
             updateStatus("Menunggu respawn...", Color3.fromRGB(255, 100, 100))
-            task.wait(1)
+            task.wait(1.5)
+            
+            -- Begitu hidup kembali, teleport ke safezone dan re-aktifkan auto kick
+            local newChar = lp.Character or lp.CharacterAdded:Wait()
+            local newHrp = newChar:WaitForChild("HumanoidRootPart", 10)
+            if newHrp then
+                newHrp.CFrame = safeZoneCFrame
+                task.wait(0.5)
+                enableInGameAutoKick()
+            end
             continue
         end
 
         -- [ EVENT CUACA LUCK MACHINE ]
         if weatherEventPending then
             weatherEventPending = false
-            updateStatus("⚡ Menuju Luck Machine...", Color3.fromRGB(220, 120, 240))
+            updateStatus("⚡ Event Cuaca! Menuju Luck Machine...", Color3.fromRGB(220, 120, 240))
             
             local targetPart = nil
             pcall(function()
@@ -287,13 +292,13 @@ task.spawn(function()
             end)
             
             if targetPart then
-                hrp.CFrame = targetPart.CFrame + Vector3.new(0, 3, 0)
+                currentHrp.CFrame = targetPart.CFrame + Vector3.new(0, 3, 0)
                 task.wait(0.5)
                 
                 local trainStart = os.clock()
                 while os.clock() - trainStart < 240 and not luckBuffObtained do
                     if not _G.autoFarm then break end
-                    local currentTool = char:FindFirstChildOfClass("Tool")
+                    local currentTool = currentChar:FindFirstChildOfClass("Tool")
                     if currentTool and string.match(currentTool.Name, "Barbell$") then
                         currentTool:Activate()
                     else
@@ -301,7 +306,7 @@ task.spawn(function()
                         if backpack then
                             for _, tool in ipairs(backpack:GetChildren()) do
                                 if tool:IsA("Tool") and string.match(tool.Name, "Barbell$") then
-                                    hum:EquipTool(tool)
+                                    currentHum:EquipTool(tool)
                                     task.wait(0.1)
                                     tool:Activate()
                                     break
@@ -312,35 +317,23 @@ task.spawn(function()
                     task.wait(0.2)
                 end
                 
-                pcall(function() hum:UnequipTools() end)
+                pcall(function() currentHum:UnequipTools() end)
                 luckBuffObtained = false
+                
+                -- Teleport balik ke Safe Zone & nyalakan kembali Auto Kick
+                currentHrp.CFrame = safeZoneCFrame
+                task.wait(0.5)
+                enableInGameAutoKick()
+                updateStatus("✅ Auto Kick Dilanjutkan!", Color3.fromRGB(100, 240, 120))
             end
         end
 
-        -- Pastikan posisi di Safe Zone
-        local distToSafeZone = (hrp.Position - safeZone).Magnitude
-        if distToSafeZone > 10 then
-            hrp.CFrame = safeZoneCFrame
-            task.wait(0.4)
-        end
-
-        -- Eksekusi 100% Perfect Max Power Kick
-        updateStatus("⚡ Mengeksekusi Perfect Kick...", Color3.fromRGB(100, 200, 255))
-        local success, flightDuration = executePerfectKick()
-
-        if success then
-            -- Tunggu sampai server mengirimkan reward rev_kickPhase2 atau durasi penerbangan selesai
-            local waitStart = os.clock()
-            while os.clock() - waitStart < (flightDuration + 1) and not phase2Received do
-                if not _G.autoFarm then break end
-                task.wait(0.1)
-            end
-            
-            -- Jeda 0.3s sebelum tendangan berikutnya
-            task.wait(0.3)
-        else
-            -- Jika server sedang cooldown, tunggu sebentar lalu coba lagi
-            task.wait(1.0)
+        -- Pastikan posisi tidak tersesat jauh dari Safe Zone saat sedang idle
+        local distToSafeZone = (currentHrp.Position - safeZone).Magnitude
+        if distToSafeZone > 40 and not weatherEventPending then
+            currentHrp.CFrame = safeZoneCFrame
+            task.wait(0.5)
+            enableInGameAutoKick()
         end
     end
 end)
