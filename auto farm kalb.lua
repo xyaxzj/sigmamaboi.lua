@@ -216,17 +216,34 @@ task.spawn(function()
             end
         end
 
-        -- 4. Eksekusi Klik Bersih Tepat 1 Kali Saja
+        -- 4. Eksekusi Aktivasi Auto Kick (getconnections + firesignal + VirtualInput + Remote)
         if autoBtn and autoBtn:IsA("GuiButton") then
             local pos = autoBtn.AbsolutePosition + (autoBtn.AbsoluteSize / 2)
             
-            -- Sinyal Event Button
+            -- 1. getconnections (Memicu langsung listener script game asli di executor)
+            if getconnections then
+                pcall(function()
+                    for _, conn in ipairs(getconnections(autoBtn.Activated)) do
+                        if conn.Function then conn.Function() elseif conn.Fire then conn:Fire() end
+                    end
+                    for _, conn in ipairs(getconnections(autoBtn.MouseButton1Click)) do
+                        if conn.Function then conn.Function() elseif conn.Fire then conn:Fire() end
+                    end
+                    for _, conn in ipairs(getconnections(autoBtn.MouseButton1Down)) do
+                        if conn.Function then conn.Function() elseif conn.Fire then conn:Fire() end
+                    end
+                end)
+            end
+            
+            -- 2. firesignal (Fallback Event)
             if firesignal then
                 pcall(function() firesignal(autoBtn.Activated) end)
                 pcall(function() firesignal(autoBtn.MouseButton1Click) end)
+                pcall(function() firesignal(autoBtn.MouseButton1Down) end)
+                pcall(function() firesignal(autoBtn.MouseButton1Up) end)
             end
             
-            -- Simulasi Fisik Virtual Input (Mouse & Touch)
+            -- 3. Virtual Input Manager (Simulasi Layar Sentuh & Mouse)
             local vim = nil
             pcall(function() vim = game:GetService("VirtualInputManager") end)
             if vim then
@@ -244,10 +261,25 @@ task.spawn(function()
                     VirtualUser:ClickButton1(pos)
                 end)
             end
+
+            -- 4. Remote Server Request (Memastikan Server Mengaktifkan Auto Kick)
+            pcall(function()
+                local ref_Auto = networkFolder and (networkFolder:FindFirstChild("ref_AutoRequest") or networkFolder:WaitForChild("ref_AutoRequest", 2))
+                if ref_Auto then
+                    ref_Auto:InvokeServer(true)
+                end
+            end)
             
-            updateStatus("✅ Auto Kick Berhasil Diklik (1x)!", Color3.fromRGB(100, 240, 120))
+            updateStatus("✅ Auto Kick Berhasil Diaktifkan!", Color3.fromRGB(100, 240, 120))
         else
-            updateStatus("⚠️ AutoButton tidak ditemukan di HUD.", Color3.fromRGB(255, 100, 100))
+            -- Backup langsung lewat remote jika objek GUI belum siap
+            pcall(function()
+                local ref_Auto = networkFolder and (networkFolder:FindFirstChild("ref_AutoRequest") or networkFolder:WaitForChild("ref_AutoRequest", 2))
+                if ref_Auto then
+                    ref_Auto:InvokeServer(true)
+                end
+            end)
+            updateStatus("✅ Auto Kick Diaktifkan via Server!", Color3.fromRGB(100, 240, 120))
         end
     end)
 end)
