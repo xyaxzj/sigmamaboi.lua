@@ -216,64 +216,88 @@ task.spawn(function()
             end
         end
 
-        -- 4. Visual Cursor + Simulasi Gerakan & Klik Mouse Fisik
-        if autoBtn and autoBtn:IsA("GuiButton") then
-            local pos = autoBtn.AbsolutePosition + (autoBtn.AbsoluteSize / 2)
+        -- 4. Hitung Koordinat Presisi (Sesuai Properties: Pos X: 331.67, Y: 254.83, Size X: 76.67, Y: 19.67)
+        local targetX = 370.0
+        local targetY = 264.67
+        if autoBtn and autoBtn:IsA("GuiObject") and autoBtn.AbsoluteSize.X > 0 then
+            targetX = autoBtn.AbsolutePosition.X + (autoBtn.AbsoluteSize.X / 2)
+            targetY = autoBtn.AbsolutePosition.Y + (autoBtn.AbsoluteSize.Y / 2)
+        end
+        local pos = Vector2.new(targetX, targetY)
+
+        -- Buat Virtual Mouse Cursor Visual di Layar
+        local cursorGui = Instance.new("ScreenGui")
+        cursorGui.Name = "VirtualCursorGui"
+        cursorGui.ResetOnSpawn = false
+        cursorGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        cursorGui.Parent = guiParent
+        
+        local cursor = Instance.new("ImageLabel")
+        cursor.Size = UDim2.new(0, 24, 0, 24)
+        cursor.Position = UDim2.new(0.5, 0, 0.5, 0) -- Mulai dari tengah layar
+        cursor.BackgroundTransparency = 1
+        cursor.Image = "rbxassetid://10651767117" -- Mouse Cursor Icon
+        cursor.ImageColor3 = Color3.fromRGB(255, 230, 80)
+        cursor.ZIndex = 999
+        cursor.Parent = cursorGui
+
+        -- Gerakkan kursor secara halus ke koordinat target presisi (370, 265)
+        local startPos = Vector2.new(workspace.CurrentCamera.ViewportSize.X / 2, workspace.CurrentCamera.ViewportSize.Y / 2)
+        local steps = 20
+        for s = 1, steps do
+            local currentX = startPos.X + (pos.X - startPos.X) * (s / steps)
+            local currentY = startPos.Y + (pos.Y - startPos.Y) * (s / steps)
+            cursor.Position = UDim2.new(0, currentX, 0, currentY)
             
-            -- Buat Virtual Mouse Cursor Visual di Layar
-            local cursorGui = Instance.new("ScreenGui")
-            cursorGui.Name = "VirtualCursorGui"
-            cursorGui.ResetOnSpawn = false
-            cursorGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-            cursorGui.Parent = guiParent
-            
-            local cursor = Instance.new("ImageLabel")
-            cursor.Size = UDim2.new(0, 24, 0, 24)
-            cursor.Position = UDim2.new(0.5, 0, 0.5, 0) -- Mulai dari tengah layar
-            cursor.BackgroundTransparency = 1
-            cursor.Image = "rbxassetid://10651767117" -- Mouse Cursor Icon
-            cursor.ImageColor3 = Color3.fromRGB(255, 230, 80)
-            cursor.ZIndex = 999
-            cursor.Parent = cursorGui
-
-            -- Gerakkan kursor secara halus ke arah AutoButton
-            local startPos = Vector2.new(workspace.CurrentCamera.ViewportSize.X / 2, workspace.CurrentCamera.ViewportSize.Y / 2)
-            local steps = 20
-            for s = 1, steps do
-                local currentX = startPos.X + (pos.X - startPos.X) * (s / steps)
-                local currentY = startPos.Y + (pos.Y - startPos.Y) * (s / steps)
-                cursor.Position = UDim2.new(0, currentX, 0, currentY)
-                
-                -- Kirim event gerakan mouse ke game
-                pcall(function()
-                    if mousemoveabs then
-                        mousemoveabs(currentX, currentY)
-                    elseif mousemoverel then
-                        mousemoverel((pos.X - startPos.X) / steps, (pos.Y - startPos.Y) / steps)
-                    end
-                    local vim = game:GetService("VirtualInputManager")
-                    if vim then vim:SendMouseMoveEvent(currentX, currentY, game) end
-                end)
-                task.wait(0.02)
-            end
-
-            -- Efek Animasi Klik Kursor
-            cursor.ImageColor3 = Color3.fromRGB(100, 255, 100)
-            cursor.Size = UDim2.new(0, 18, 0, 18)
-            task.wait(0.05)
-
-            -- 1. Eksekusi Executor Mouse API (mouse1click / mouse1press / mouse1release)
             pcall(function()
-                if mouse1click then
-                    mouse1click()
-                elseif mouse1press and mouse1release then
-                    mouse1press()
-                    task.wait(0.05)
-                    mouse1release()
+                if mousemoveabs then
+                    mousemoveabs(currentX, currentY)
+                elseif mousemoverel then
+                    mousemoverel((pos.X - startPos.X) / steps, (pos.Y - startPos.Y) / steps)
                 end
+                local vim = game:GetService("VirtualInputManager")
+                if vim then vim:SendMouseMoveEvent(currentX, currentY, game) end
             end)
+            task.wait(0.02)
+        end
 
-            -- 2. getconnections (Memicu langsung listener script game asli)
+        -- Efek Animasi Klik Kursor
+        cursor.ImageColor3 = Color3.fromRGB(100, 255, 100)
+        cursor.Size = UDim2.new(0, 18, 0, 18)
+        task.wait(0.05)
+
+        -- 1. Eksekusi Executor Mouse API
+        pcall(function()
+            if mouse1click then
+                mouse1click()
+            elseif mouse1press and mouse1release then
+                mouse1press()
+                task.wait(0.05)
+                mouse1release()
+            end
+        end)
+
+        -- 2. Virtual Input Manager (Touch & Mouse Event pada Koordinat Presisi)
+        local vim = nil
+        pcall(function() vim = game:GetService("VirtualInputManager") end)
+        if vim then
+            pcall(function()
+                vim:SendMouseButtonEvent(pos.X, pos.Y, 0, true, game, 0)
+                task.wait(0.05)
+                vim:SendMouseButtonEvent(pos.X, pos.Y, 0, false, game, 0)
+                vim:SendTouchEvent(0, 0, pos.X, pos.Y)
+                task.wait(0.05)
+                vim:SendTouchEvent(0, 2, pos.X, pos.Y)
+            end)
+        else
+            pcall(function()
+                VirtualUser:CaptureController()
+                VirtualUser:ClickButton1(pos)
+            end)
+        end
+
+        -- 3. getconnections & firesignal jika autoBtn terdeteksi
+        if autoBtn and autoBtn:IsA("GuiButton") then
             if getconnections then
                 pcall(function()
                     for _, conn in ipairs(getconnections(autoBtn.Activated)) do
@@ -282,56 +306,23 @@ task.spawn(function()
                     for _, conn in ipairs(getconnections(autoBtn.MouseButton1Click)) do
                         if conn.Function then conn.Function() elseif conn.Fire then conn:Fire() end
                     end
-                    for _, conn in ipairs(getconnections(autoBtn.MouseButton1Down)) do
-                        if conn.Function then conn.Function() elseif conn.Fire then conn:Fire() end
-                    end
                 end)
             end
-            
-            -- 3. firesignal Event
             if firesignal then
                 pcall(function() firesignal(autoBtn.Activated) end)
                 pcall(function() firesignal(autoBtn.MouseButton1Click) end)
-                pcall(function() firesignal(autoBtn.MouseButton1Down) end)
-                pcall(function() firesignal(autoBtn.MouseButton1Up) end)
             end
-            
-            -- 4. Virtual Input Manager (Touch & Mouse Event)
-            local vim = nil
-            pcall(function() vim = game:GetService("VirtualInputManager") end)
-            if vim then
-                pcall(function()
-                    vim:SendMouseButtonEvent(pos.X, pos.Y, 0, true, game, 0)
-                    task.wait(0.05)
-                    vim:SendMouseButtonEvent(pos.X, pos.Y, 0, false, game, 0)
-                    vim:SendTouchEvent(0, 0, pos.X, pos.Y)
-                    task.wait(0.05)
-                    vim:SendTouchEvent(0, 2, pos.X, pos.Y)
-                end)
-            else
-                pcall(function()
-                    VirtualUser:CaptureController()
-                    VirtualUser:ClickButton1(pos)
-                end)
-            end
-
-            -- 5. Remote Backup
-            pcall(function()
-                local ref_Auto = networkFolder and (networkFolder:FindFirstChild("ref_AutoRequest") or networkFolder:WaitForChild("ref_AutoRequest", 2))
-                if ref_Auto then ref_Auto:InvokeServer(true) end
-            end)
-            
-            updateStatus("✅ Auto Kick Berhasil Diklik (1x)!", Color3.fromRGB(100, 240, 120))
-            task.wait(0.5)
-            cursorGui:Destroy()
-        else
-            -- Backup langsung lewat remote jika objek GUI belum siap
-            pcall(function()
-                local ref_Auto = networkFolder and (networkFolder:FindFirstChild("ref_AutoRequest") or networkFolder:WaitForChild("ref_AutoRequest", 2))
-                if ref_Auto then ref_Auto:InvokeServer(true) end
-            end)
-            updateStatus("✅ Auto Kick Diaktifkan via Server!", Color3.fromRGB(100, 240, 120))
         end
+
+        -- 4. Remote Server Request
+        pcall(function()
+            local ref_Auto = networkFolder and (networkFolder:FindFirstChild("ref_AutoRequest") or networkFolder:WaitForChild("ref_AutoRequest", 2))
+            if ref_Auto then ref_Auto:InvokeServer(true) end
+        end)
+        
+        updateStatus(string.format("✅ Auto Kick Diklik di (%d, %d)!", math.floor(pos.X), math.floor(pos.Y)), Color3.fromRGB(100, 240, 120))
+        task.wait(0.5)
+        cursorGui:Destroy()
     end)
 end)
 
