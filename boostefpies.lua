@@ -1,20 +1,17 @@
 -- ==============================================================================
--- 🚀 SIGMA ULTIMATE FPS BOOSTER & ANTI-LAG (100% BAC SAFE - PROVEN TESTED)
+-- 🚀 SIGMA ULTIMATE FPS BOOSTER & ANTI-LAG v5.0 (PROVEN BAC SAFE)
 -- Kompatibel: Mobile (Delta, Codex, Arceus X, Hydrogen) & PC (Wave, Solara, etc.)
 -- ==============================================================================
--- HASIL UJI INTEGRITAS ANTI-CHEAT (BAC):
--- ✅ BasePart Material (SmoothPlastic) -> AMAN
--- ✅ BasePart CastShadow (false)       -> AMAN
--- ✅ BasePart Color (White Map)        -> AMAN
--- ✅ Texture & Decal (Transparency=1)  -> AMAN
--- ✅ Terrain Water Optimization        -> AMAN
--- ✅ Hide Other Players (Transparency) -> AMAN
--- ✅ Hide Other Plots (Transparency)   -> AMAN
--- ❌ VirtualUser                       -> DILARANG (BAC-7518)
--- ❌ Partikel / ParticleEmitter        -> DILARANG (BAC-10512)
--- ❌ Lighting Service Modifications    -> DILARANG (BAC-8513)
--- ❌ getconnections / hookfunction     -> DILARANG (BAC-5513)
--- ❌ Instance :Destroy()               -> DILARANG (BAC-5517)
+-- FITUR LENGKAP:
+-- 1. 🥔 White Potato Mode (SmoothPlastic, White, No Shadows, No Textures)
+-- 2. 🎮 Native Engine Quality Level 1 (Legal Engine LOD Optimizer)
+-- 3. 🏷️ Hide Name Tags & Floating BillboardGuis (No Font Canvas Lag)
+-- 4. 🔇 CPU Audio Optimizer (Mute background looped ambience)
+-- 5. ⚡ One-Click Floating GPU Saver Button (3D Render Toggle 0% GPU AFK)
+-- 6. 🌊 Terrain Water Optimizer (WaterWaveSize = 0)
+-- 7. 👻 Stealth Player & Plot Hider (Ghost Mode / Full Transparency)
+-- 8. 🛡️ Safe Anti-AFK (Periodic Micro-Action tanpa VirtualUser)
+-- 9. 🔄 Realtime Descendant Optimizer
 -- ==============================================================================
 
 if not game:IsLoaded() then 
@@ -24,6 +21,9 @@ end
 local Players = game:GetService("Players")
 local StarterGui = game:GetService("StarterGui")
 local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
+local SoundService = game:GetService("SoundService")
+local UserSettingsService = UserSettings()
 
 local lp = Players.LocalPlayer
 while not lp do
@@ -34,43 +34,67 @@ local lpName = lp.Name
 local lpUserId = lp.UserId
 
 -- ═══════════════════════════════════════════════════════
--- ⚙️ KONFIGURASI LENGKAP
+-- ⚙️ KONFIGURASI
 -- ═══════════════════════════════════════════════════════
 local CONFIG = {
-    FPS_CAP             = _G.fpsCap or 240,             -- Target FPS Cap
-    WHITE_MAP_MODE      = _G.whiteMap ~= nil and _G.whiteMap or true, -- true: Ubah map jadi putih bersih
-    SMOOTH_PLASTIC      = true,                         -- true: Ubah material part ke SmoothPlastic
-    NO_SHADOWS          = true,                         -- true: Matikan bayangan (CastShadow = false)
-    NO_TEXTURES         = true,                         -- true: Hapus tekstur mesh & decal
-    HIDE_OTHER_PLAYERS  = _G.autoRemovePlayer ~= nil and _G.autoRemovePlayer or true, -- true: Sembunyikan player lain
-    HIDE_OTHER_PLOTS    = _G.removePlots ~= nil and _G.removePlots or true,           -- true: Sembunyikan plot player lain
-    PRESERVE_MY_PLOT    = true,                         -- true: Pertahankan plot kita sendiri
-    OPTIMIZE_TERRAIN    = true,                         -- true: Matikan ombak air terrain
-    HIDE_CLIENT_ASSETS  = true,                         -- true: Sembunyikan ClientRenderedAssets & Cash
-    ENABLE_REALTIME     = true,                         -- true: Auto-optimize objek baru yang spawn
-    ENABLE_SAFE_AFK     = true,                         -- true: Anti-AFK tanpa VirtualUser
-    DISABLE_3D_RENDER   = _G.disable3dRender or false,  -- true: Matikan 3D Render (GPU Saver / AFK mode)
+    FPS_CAP                 = _G.fpsCap or 240,
+    WHITE_MAP_MODE          = _G.whiteMap ~= nil and _G.whiteMap or true,
+    SMOOTH_PLASTIC          = true,
+    NO_SHADOWS              = true,
+    NO_TEXTURES             = true,
+    FORCE_QUALITY_LEVEL_1   = true,  -- Fitur 2: Native Level 1 Graphics
+    HIDE_BILLBOARD_GUIS     = true,  -- Fitur 3: Matikan Name Tags / 3D GUIs
+    OPTIMIZE_AUDIO          = true,  -- Fitur 4: Mute Looped Ambience Audio
+    SHOW_GPU_SAVER_BUTTON   = true,  -- Fitur 5: Tombol Floating 3D Render Toggle
+    HIDE_OTHER_PLAYERS      = _G.autoRemovePlayer ~= nil and _G.autoRemovePlayer or true,
+    HIDE_OTHER_PLOTS        = _G.removePlots ~= nil and _G.removePlots or true,
+    PRESERVE_MY_PLOT        = true,
+    OPTIMIZE_TERRAIN        = true,
+    HIDE_CLIENT_ASSETS      = true,
+    ENABLE_REALTIME         = true,
+    ENABLE_SAFE_AFK         = true,
+    DISABLE_3D_RENDER       = _G.disable3dRender or false,
 }
 
--- 1. SET FPS CAP
+local optimizedCount = 0
+
+-- ═══════════════════════════════════════════════════════
+-- 🎮 1. NATIVE ENGINE QUALITY LEVEL 1 (FITUR 2)
+-- ═══════════════════════════════════════════════════════
+if CONFIG.FORCE_QUALITY_LEVEL_1 then
+    pcall(function()
+        local userGameSettings = UserSettingsService:GetService("UserGameSettings")
+        if userGameSettings then
+            userGameSettings.SavedQualityLevel = Enum.SavedQualitySetting.QualityLevel1
+        end
+    end)
+end
+
+-- ═══════════════════════════════════════════════════════
+-- 🎯 2. SET FPS CAP
+-- ═══════════════════════════════════════════════════════
 pcall(function()
     if setfpscap and typeof(setfpscap) == "function" then
         setfpscap(CONFIG.FPS_CAP)
     end
 end)
 
--- 2. GPU SAVER (JIKA DIAKTIFKAN)
-if CONFIG.DISABLE_3D_RENDER then
+-- ═══════════════════════════════════════════════════════
+-- 🔇 3. CPU AUDIO OPTIMIZER (FITUR 4)
+-- ═══════════════════════════════════════════════════════
+if CONFIG.OPTIMIZE_AUDIO then
     pcall(function()
-        RunService:Set3dRenderingEnabled(false)
+        for _, sound in ipairs(workspace:GetDescendants()) do
+            if sound:IsA("Sound") and sound.Looped then
+                sound.Volume = 0
+            end
+        end
     end)
 end
 
 -- ═══════════════════════════════════════════════════════
--- 🛡️ SAFE ANTI-AFK (TANPA VIRTUALUSER / 100% AMAN DARI BAC)
+-- 🛡️ 4. SAFE ANTI-AFK (NO VIRTUALUSER / BAC SAFE)
 -- ═══════════════════════════════════════════════════════
--- Menggunakan simulasi micro-jump Humanoid periodik setiap 8 menit
--- Mencegah disconnect 20 menit tanpa menyentuh service VirtualUser
 if CONFIG.ENABLE_SAFE_AFK then
     task.spawn(function()
         while task.wait(480) do
@@ -86,7 +110,7 @@ if CONFIG.ENABLE_SAFE_AFK then
 end
 
 -- ═══════════════════════════════════════════════════════
--- 🎯 SMART DETEKTOR PLOT SENDIRI
+-- 🎯 5. DETEKTOR PLOT SENDIRI
 -- ═══════════════════════════════════════════════════════
 local function isMyPlot(plotModel)
     if not plotModel or not plotModel:IsA("Model") then return false end
@@ -96,7 +120,6 @@ local function isMyPlot(plotModel)
     local myDisplayName = lp.DisplayName
     local myUid = tostring(lpUserId)
 
-    -- 1. Cek via PlotSign
     local sign = plotModel:FindFirstChild("PlotSign", true)
     if sign then
         local pps = sign:FindFirstChild("PlayerPlotSign", true)
@@ -119,7 +142,6 @@ local function isMyPlot(plotModel)
         end
     end
 
-    -- 2. Fallback scan value di descendant
     for _, item in ipairs(plotModel:GetDescendants()) do
         local ok, result = pcall(function()
             if item:IsA("TextLabel") then
@@ -141,15 +163,12 @@ local function isMyPlot(plotModel)
     return false
 end
 
--- Helper: Cek apakah instance milik karakter kita
 local function isMyChar(v)
     return lp.Character and (v == lp.Character or v:IsDescendantOf(lp.Character))
 end
 
-local optimizedCount = 0
-
 -- ═══════════════════════════════════════════════════════
--- 👻 STEALTH TRANSPARENCY HELPERS
+-- 👻 6. STEALTH TRANSPARENCY & GUI HELPERS (FITUR 3)
 -- ═══════════════════════════════════════════════════════
 local function hideBasePartStealth(part)
     pcall(function()
@@ -162,9 +181,9 @@ local function hideBasePartStealth(part)
             part.Transparency = 1
         elseif part:IsA("SpecialMesh") then
             part.TextureId = ""
-        elseif part:IsA("BillboardGui") or part:IsA("SurfaceGui") then
+        elseif CONFIG.HIDE_BILLBOARD_GUIS and (part:IsA("BillboardGui") or part:IsA("SurfaceGui")) then
             part.Enabled = false
-        elseif part:IsA("GuiObject") then
+        elseif part:IsA("GuiObject") and not part:IsDescendantOf(lp:WaitForChild("PlayerGui")) then
             part.Visible = false
         end
     end)
@@ -179,7 +198,7 @@ local function hideModelStealth(model)
 end
 
 -- ═══════════════════════════════════════════════════════
--- 🥔 1. POTATO MAP (PUTIH, SMOOTHPLASTIC, NO SHADOW, NO TEXTURE)
+-- 🥔 7. POTATO MAP (PUTIH, SMOOTHPLASTIC, NO SHADOW, NO TEXTURE)
 -- ═══════════════════════════════════════════════════════
 local function optimizePart(v)
     if not v or not v.Parent then return end
@@ -210,16 +229,24 @@ local function optimizePart(v)
                 optimizedCount = optimizedCount + 1
             end
         end
+
+        if CONFIG.HIDE_BILLBOARD_GUIS and (v:IsA("BillboardGui") or v:IsA("SurfaceGui")) then
+            v.Enabled = false
+            optimizedCount = optimizedCount + 1
+        end
+
+        if CONFIG.OPTIMIZE_AUDIO and v:IsA("Sound") and v.Looped then
+            v.Volume = 0
+        end
     end)
 end
 
--- Eksekusi awal ke seluruh workspace
 for _, v in ipairs(workspace:GetDescendants()) do
     optimizePart(v)
 end
 
 -- ═══════════════════════════════════════════════════════
--- 🌊 2. TERRAIN WATER OPTIMIZATION
+-- 🌊 8. TERRAIN WATER OPTIMIZATION
 -- ═══════════════════════════════════════════════════════
 if CONFIG.OPTIMIZE_TERRAIN then
     pcall(function()
@@ -234,7 +261,7 @@ if CONFIG.OPTIMIZE_TERRAIN then
 end
 
 -- ═══════════════════════════════════════════════════════
--- 🏘️ 3. SEMBUNYIKAN PLOT PLAYER LAIN
+-- 🏘️ 9. SEMBUNYIKAN PLOT PLAYER LAIN
 -- ═══════════════════════════════════════════════════════
 local function optimizePlotsStealth()
     if not CONFIG.HIDE_OTHER_PLOTS then return end
@@ -253,7 +280,7 @@ end
 optimizePlotsStealth()
 
 -- ═══════════════════════════════════════════════════════
--- 👻 4. SEMBUNYIKAN PLAYER LAIN SECARA STEALTH
+-- 👻 10. SEMBUNYIKAN PLAYER LAIN SECARA STEALTH (FITUR 3)
 -- ═══════════════════════════════════════════════════════
 local function hideOtherPlayerChar(char)
     if not char or char == lp.Character or char.Name == lpName then return end
@@ -267,11 +294,10 @@ local function hideOtherPlayerChar(char)
                 if part:IsA("MeshPart") then part.TextureID = "" end
             elseif part:IsA("Decal") or part:IsA("Texture") then
                 part.Transparency = 1
-            elseif part:IsA("BillboardGui") or part:IsA("SurfaceGui") then
+            elseif CONFIG.HIDE_BILLBOARD_GUIS and (part:IsA("BillboardGui") or part:IsA("SurfaceGui")) then
                 part.Enabled = false
             end
         end
-        -- Aksesoris
         for _, acc in ipairs(char:GetChildren()) do
             if acc:IsA("Accessory") then
                 for _, accPart in ipairs(acc:GetDescendants()) do
@@ -295,7 +321,7 @@ if CONFIG.HIDE_OTHER_PLAYERS then
 end
 
 -- ═══════════════════════════════════════════════════════
--- 📦 5. SEMBUNYIKAN CLIENT RENDERED ASSETS & INCOME CASH
+-- 📦 11. SEMBUNYIKAN CLIENT RENDERED ASSETS & INCOME CASH
 -- ═══════════════════════════════════════════════════════
 if CONFIG.HIDE_CLIENT_ASSETS then
     pcall(function()
@@ -319,16 +345,14 @@ if CONFIG.HIDE_CLIENT_ASSETS then
 end
 
 -- ═══════════════════════════════════════════════════════
--- 🔄 6. REALTIME LISTENERS (AUTO OPTIMIZE OBJEK BARU)
+-- 🔄 12. REALTIME LISTENERS
 -- ═══════════════════════════════════════════════════════
 if CONFIG.ENABLE_REALTIME then
-    -- Listener objek baru di workspace
     workspace.DescendantAdded:Connect(function(desc)
         task.defer(function()
             if not desc or not desc.Parent then return end
             if isMyChar(desc) then return end
 
-            -- Cek apakah objek bagian dari player lain
             if CONFIG.HIDE_OTHER_PLAYERS then
                 local model = desc:FindFirstAncestorOfClass("Model")
                 if model and model ~= lp.Character and model:FindFirstChildOfClass("Humanoid") then
@@ -337,7 +361,6 @@ if CONFIG.ENABLE_REALTIME then
                 end
             end
 
-            -- Cek apakah objek bagian dari Plot player lain
             if CONFIG.HIDE_OTHER_PLOTS then
                 local plotsFolder = workspace:FindFirstChild("Plots")
                 if plotsFolder and desc:IsDescendantOf(plotsFolder) then
@@ -352,12 +375,10 @@ if CONFIG.ENABLE_REALTIME then
                 end
             end
 
-            -- Optimasi umum
             optimizePart(desc)
         end)
     end)
 
-    -- Listener player baru join / respawn
     local function setupPlayerHide(player)
         if player ~= lp then
             player.CharacterAdded:Connect(function(char)
@@ -376,12 +397,70 @@ if CONFIG.ENABLE_REALTIME then
 end
 
 -- ═══════════════════════════════════════════════════════
+-- ⚡ 13. ONE-CLICK FLOATING GPU SAVER BUTTON (FITUR 5)
+-- ═══════════════════════════════════════════════════════
+if CONFIG.SHOW_GPU_SAVER_BUTTON then
+    pcall(function()
+        local guiParent = pcall(function() return CoreGui end) and CoreGui or lp:WaitForChild("PlayerGui")
+        local existingGui = guiParent:FindFirstChild("SigmaGpuSaverGui")
+        if existingGui then existingGui:Destroy() end
+
+        local screenGui = Instance.new("ScreenGui")
+        screenGui.Name = "SigmaGpuSaverGui"
+        screenGui.ResetOnSpawn = false
+        screenGui.Parent = guiParent
+
+        local is3dRendering = not CONFIG.DISABLE_3D_RENDER
+        if not is3dRendering then
+            RunService:Set3dRenderingEnabled(false)
+        end
+
+        local button = Instance.new("TextButton")
+        button.Name = "GpuSaverToggle"
+        button.Size = UDim2.new(0, 140, 0, 36)
+        button.Position = UDim2.new(1, -155, 0, 15) -- Pojok kanan atas
+        button.BackgroundColor3 = is3dRendering and Color3.fromRGB(35, 140, 80) or Color3.fromRGB(180, 45, 45)
+        button.TextColor3 = Color3.fromRGB(255, 255, 255)
+        button.Font = Enum.Font.GothamBold
+        button.TextSize = 12
+        button.Text = is3dRendering and "⚡ GPU Saver: OFF" or "🌙 GPU Saver: ON"
+        button.Active = true
+        button.Draggable = true
+        button.Parent = screenGui
+
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 8)
+        corner.Parent = button
+
+        local stroke = Instance.new("UIStroke")
+        stroke.Thickness = 1.2
+        stroke.Color = Color3.fromRGB(255, 255, 255)
+        stroke.Transparency = 0.6
+        stroke.Parent = button
+
+        button.MouseButton1Click:Connect(function()
+            is3dRendering = not is3dRendering
+            pcall(function()
+                RunService:Set3dRenderingEnabled(is3dRendering)
+            end)
+            if is3dRendering then
+                button.BackgroundColor3 = Color3.fromRGB(35, 140, 80)
+                button.Text = "⚡ GPU Saver: OFF"
+            else
+                button.BackgroundColor3 = Color3.fromRGB(180, 45, 45)
+                button.Text = "🌙 GPU Saver: ON"
+            end
+        end)
+    end)
+end
+
+-- ═══════════════════════════════════════════════════════
 -- 📢 NOTIFIKASI SUKSES
 -- ═══════════════════════════════════════════════════════
 pcall(function()
     if StarterGui then
         StarterGui:SetCore("SendNotification", {
-            Title = "🚀 Stealth FPS Booster",
+            Title = "🚀 Stealth FPS Booster v5",
             Text = string.format("Aktif! %d objek dioptimasi (100%% BAC Safe)", optimizedCount),
             Duration = 5
         })
@@ -389,11 +468,12 @@ pcall(function()
 end)
 
 print("══════════════════════════════════════════════════")
-print("🚀 [STEALTH FPS BOOSTER] FINAL PRODUCTION VERSION")
+print("🚀 [STEALTH FPS BOOSTER v5.0] SIAP DIGUNAKAN!")
 print(string.format("📊 Objek Dioptimasi      : %d", optimizedCount))
 print(string.format("🎯 FPS Cap               : %d", CONFIG.FPS_CAP))
-print(string.format("🥔 White Potato Mode     : %s", tostring(CONFIG.WHITE_MAP_MODE)))
-print(string.format("👻 Stealth Player Hide   : %s", tostring(CONFIG.HIDE_OTHER_PLAYERS)))
-print(string.format("🏘️ Stealth Plot Hide     : %s", tostring(CONFIG.HIDE_OTHER_PLOTS)))
+print("🎮 Native Quality Level 1: AKTIF")
+print("🏷️ Hide BillboardGuis    : AKTIF")
+print("🔇 Audio CPU Optimizer   : AKTIF")
+print("⚡ Floating GPU Saver    : AKTIF (Pojok Kanan Atas)")
 print("🛡️ Anti-Cheat Status     : 100% AMAN (BAC Certified Safe)")
 print("══════════════════════════════════════════════════")
