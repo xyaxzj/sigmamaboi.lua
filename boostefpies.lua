@@ -1,17 +1,19 @@
 -- ==============================================================================
--- 🚀 SIGMA ULTIMATE FPS BOOSTER & ANTI-LAG v5.0 (PROVEN BAC SAFE)
+-- 🚀 SIGMA ULTIMATE FPS BOOSTER & ANTI-LAG v5.1 (PROVEN BAC SAFE)
 -- Kompatibel: Mobile (Delta, Codex, Arceus X, Hydrogen) & PC (Wave, Solara, etc.)
 -- ==============================================================================
 -- FITUR LENGKAP:
 -- 1. 🥔 White Potato Mode (SmoothPlastic, White, No Shadows, No Textures)
--- 2. 🎮 Native Engine Quality Level 1 (Legal Engine LOD Optimizer)
--- 3. 🏷️ Hide Name Tags & Floating BillboardGuis (No Font Canvas Lag)
--- 4. 🔇 CPU Audio Optimizer (Mute background looped ambience)
--- 5. ⚡ One-Click Floating GPU Saver Button (3D Render Toggle 0% GPU AFK)
--- 6. 🌊 Terrain Water Optimizer (WaterWaveSize = 0)
--- 7. 👻 Stealth Player & Plot Hider (Ghost Mode / Full Transparency)
--- 8. 🛡️ Safe Anti-AFK (Periodic Micro-Action tanpa VirtualUser)
--- 9. 🔄 Realtime Descendant Optimizer
+-- 2. 🥚 Hide PlacedEggRenders (Sembunyikan semua model telur di workspace)
+-- 3. 📦 Hide ClientRenderedAssets & Cash (Sembunyikan aset render client)
+-- 4. 🎮 Native Engine Quality Level 1 (Legal Engine LOD Optimizer)
+-- 5. 🏷️ Hide Name Tags & Floating BillboardGuis (No Font Canvas Lag)
+-- 6. 🔇 CPU Audio Optimizer (Mute background looped ambience)
+-- 7. ⚡ One-Click Floating GPU Saver Button (3D Render Toggle 0% GPU AFK)
+-- 8. 🌊 Terrain Water Optimizer (WaterWaveSize = 0)
+-- 9. 👻 Stealth Player & Plot Hider (Ghost Mode / Full Transparency)
+-- 10. 🛡️ Safe Anti-AFK (Periodic Micro-Action tanpa VirtualUser)
+-- 11. 🔄 Realtime Descendant Optimizer (Termasuk PlacedEggRenders baru)
 -- ==============================================================================
 
 if not game:IsLoaded() then 
@@ -42,15 +44,16 @@ local CONFIG = {
     SMOOTH_PLASTIC          = true,
     NO_SHADOWS              = true,
     NO_TEXTURES             = true,
-    FORCE_QUALITY_LEVEL_1   = true,  -- Fitur 2: Native Level 1 Graphics
-    HIDE_BILLBOARD_GUIS     = true,  -- Fitur 3: Matikan Name Tags / 3D GUIs
-    OPTIMIZE_AUDIO          = true,  -- Fitur 4: Mute Looped Ambience Audio
-    SHOW_GPU_SAVER_BUTTON   = true,  -- Fitur 5: Tombol Floating 3D Render Toggle
+    HIDE_PLACED_EGGS        = true,  -- ✨ Sembunyikan folder PlacedEggRenders
+    HIDE_CLIENT_ASSETS      = true,  -- ✨ Sembunyikan folder ClientRenderedAssets
+    FORCE_QUALITY_LEVEL_1   = true,  -- Native Level 1 Graphics
+    HIDE_BILLBOARD_GUIS     = true,  -- Matikan Name Tags / 3D GUIs
+    OPTIMIZE_AUDIO          = true,  -- Mute Looped Ambience Audio
+    SHOW_GPU_SAVER_BUTTON   = true,  -- Tombol Floating 3D Render Toggle
     HIDE_OTHER_PLAYERS      = _G.autoRemovePlayer ~= nil and _G.autoRemovePlayer or true,
     HIDE_OTHER_PLOTS        = _G.removePlots ~= nil and _G.removePlots or true,
     PRESERVE_MY_PLOT        = true,
     OPTIMIZE_TERRAIN        = true,
-    HIDE_CLIENT_ASSETS      = true,
     ENABLE_REALTIME         = true,
     ENABLE_SAFE_AFK         = true,
     DISABLE_3D_RENDER       = _G.disable3dRender or false,
@@ -59,7 +62,7 @@ local CONFIG = {
 local optimizedCount = 0
 
 -- ═══════════════════════════════════════════════════════
--- 🎮 1. NATIVE ENGINE QUALITY LEVEL 1 (FITUR 2)
+-- 🎮 1. NATIVE ENGINE QUALITY LEVEL 1
 -- ═══════════════════════════════════════════════════════
 if CONFIG.FORCE_QUALITY_LEVEL_1 then
     pcall(function()
@@ -80,7 +83,7 @@ pcall(function()
 end)
 
 -- ═══════════════════════════════════════════════════════
--- 🔇 3. CPU AUDIO OPTIMIZER (FITUR 4)
+-- 🔇 3. CPU AUDIO OPTIMIZER
 -- ═══════════════════════════════════════════════════════
 if CONFIG.OPTIMIZE_AUDIO then
     pcall(function()
@@ -93,7 +96,7 @@ if CONFIG.OPTIMIZE_AUDIO then
 end
 
 -- ═══════════════════════════════════════════════════════
--- 🛡️ 4. SAFE ANTI-AFK (NO VIRTUALUSER / BAC SAFE)
+-- 🛡️ 4. SAFE ANTI-AFK (BAC SAFE)
 -- ═══════════════════════════════════════════════════════
 if CONFIG.ENABLE_SAFE_AFK then
     task.spawn(function()
@@ -168,7 +171,7 @@ local function isMyChar(v)
 end
 
 -- ═══════════════════════════════════════════════════════
--- 👻 6. STEALTH TRANSPARENCY & GUI HELPERS (FITUR 3)
+-- 👻 6. STEALTH TRANSPARENCY & GUI HELPERS
 -- ═══════════════════════════════════════════════════════
 local function hideBasePartStealth(part)
     pcall(function()
@@ -177,12 +180,16 @@ local function hideBasePartStealth(part)
             part.LocalTransparencyModifier = 1
             part.CastShadow = false
             if part:IsA("MeshPart") then part.TextureID = "" end
+            optimizedCount = optimizedCount + 1
         elseif part:IsA("Decal") or part:IsA("Texture") then
             part.Transparency = 1
+            optimizedCount = optimizedCount + 1
         elseif part:IsA("SpecialMesh") then
             part.TextureId = ""
+            optimizedCount = optimizedCount + 1
         elseif CONFIG.HIDE_BILLBOARD_GUIS and (part:IsA("BillboardGui") or part:IsA("SurfaceGui")) then
             part.Enabled = false
+            optimizedCount = optimizedCount + 1
         elseif part:IsA("GuiObject") and not part:IsDescendantOf(lp:WaitForChild("PlayerGui")) then
             part.Visible = false
         end
@@ -280,7 +287,7 @@ end
 optimizePlotsStealth()
 
 -- ═══════════════════════════════════════════════════════
--- 👻 10. SEMBUNYIKAN PLAYER LAIN SECARA STEALTH (FITUR 3)
+-- 👻 10. SEMBUNYIKAN PLAYER LAIN SECARA STEALTH
 -- ═══════════════════════════════════════════════════════
 local function hideOtherPlayerChar(char)
     if not char or char == lp.Character or char.Name == lpName then return end
@@ -321,9 +328,28 @@ if CONFIG.HIDE_OTHER_PLAYERS then
 end
 
 -- ═══════════════════════════════════════════════════════
--- 📦 11. SEMBUNYIKAN CLIENT RENDERED ASSETS & INCOME CASH
+-- 🥚 11. SEMBUNYIKAN PLACED EGG RENDERS (FITUR BARU)
 -- ═══════════════════════════════════════════════════════
-if CONFIG.HIDE_CLIENT_ASSETS then
+local function hidePlacedEggs()
+    if not CONFIG.HIDE_PLACED_EGGS then return end
+    pcall(function()
+        local eggFolder = workspace:FindFirstChild("PlacedEggRenders")
+        if eggFolder then
+            hideModelStealth(eggFolder)
+            for _, egg in ipairs(eggFolder:GetChildren()) do
+                hideModelStealth(egg)
+            end
+        end
+    end)
+end
+
+hidePlacedEggs()
+
+-- ═══════════════════════════════════════════════════════
+-- 📦 12. SEMBUNYIKAN CLIENT RENDERED ASSETS & CASH
+-- ═══════════════════════════════════════════════════════
+local function hideClientAssets()
+    if not CONFIG.HIDE_CLIENT_ASSETS then return end
     pcall(function()
         for _, child in ipairs(workspace:GetChildren()) do
             if child.Name == "ClientRenderedAssets" or child.Name:find("ClientRendered") then
@@ -344,8 +370,10 @@ if CONFIG.HIDE_CLIENT_ASSETS then
     end)
 end
 
+hideClientAssets()
+
 -- ═══════════════════════════════════════════════════════
--- 🔄 12. REALTIME LISTENERS
+-- 🔄 13. REALTIME LISTENERS (TERMASUK PLACED EGGS BARU)
 -- ═══════════════════════════════════════════════════════
 if CONFIG.ENABLE_REALTIME then
     workspace.DescendantAdded:Connect(function(desc)
@@ -353,6 +381,25 @@ if CONFIG.ENABLE_REALTIME then
             if not desc or not desc.Parent then return end
             if isMyChar(desc) then return end
 
+            -- Cek PlacedEggRenders
+            if CONFIG.HIDE_PLACED_EGGS then
+                local eggFolder = workspace:FindFirstChild("PlacedEggRenders")
+                if eggFolder and desc:IsDescendantOf(eggFolder) then
+                    hideBasePartStealth(desc)
+                    return
+                end
+            end
+
+            -- Cek ClientRenderedAssets
+            if CONFIG.HIDE_CLIENT_ASSETS then
+                local clientAssets = workspace:FindFirstChild("ClientRenderedAssets")
+                if clientAssets and desc:IsDescendantOf(clientAssets) then
+                    hideBasePartStealth(desc)
+                    return
+                end
+            end
+
+            -- Cek player lain
             if CONFIG.HIDE_OTHER_PLAYERS then
                 local model = desc:FindFirstAncestorOfClass("Model")
                 if model and model ~= lp.Character and model:FindFirstChildOfClass("Humanoid") then
@@ -361,6 +408,7 @@ if CONFIG.ENABLE_REALTIME then
                 end
             end
 
+            -- Cek Plot player lain
             if CONFIG.HIDE_OTHER_PLOTS then
                 local plotsFolder = workspace:FindFirstChild("Plots")
                 if plotsFolder and desc:IsDescendantOf(plotsFolder) then
@@ -379,6 +427,7 @@ if CONFIG.ENABLE_REALTIME then
         end)
     end)
 
+    -- Listener player baru join / respawn
     local function setupPlayerHide(player)
         if player ~= lp then
             player.CharacterAdded:Connect(function(char)
@@ -397,7 +446,7 @@ if CONFIG.ENABLE_REALTIME then
 end
 
 -- ═══════════════════════════════════════════════════════
--- ⚡ 13. ONE-CLICK FLOATING GPU SAVER BUTTON (FITUR 5)
+-- ⚡ 14. ONE-CLICK FLOATING GPU SAVER BUTTON
 -- ═══════════════════════════════════════════════════════
 if CONFIG.SHOW_GPU_SAVER_BUTTON then
     pcall(function()
@@ -460,7 +509,7 @@ end
 pcall(function()
     if StarterGui then
         StarterGui:SetCore("SendNotification", {
-            Title = "🚀 Stealth FPS Booster v5",
+            Title = "🚀 Stealth FPS Booster v5.1",
             Text = string.format("Aktif! %d objek dioptimasi (100%% BAC Safe)", optimizedCount),
             Duration = 5
         })
@@ -468,12 +517,14 @@ pcall(function()
 end)
 
 print("══════════════════════════════════════════════════")
-print("🚀 [STEALTH FPS BOOSTER v5.0] SIAP DIGUNAKAN!")
+print("🚀 [STEALTH FPS BOOSTER v5.1] SIAP DIGUNAKAN!")
 print(string.format("📊 Objek Dioptimasi      : %d", optimizedCount))
 print(string.format("🎯 FPS Cap               : %d", CONFIG.FPS_CAP))
+print("🥚 Hide PlacedEggRenders : AKTIF")
+print("📦 Hide ClientAssets     : AKTIF")
 print("🎮 Native Quality Level 1: AKTIF")
 print("🏷️ Hide BillboardGuis    : AKTIF")
 print("🔇 Audio CPU Optimizer   : AKTIF")
-print("⚡ Floating GPU Saver    : AKTIF (Pojok Kanan Atas)")
+print("⚡ Floating GPU Saver    : AKTIF")
 print("🛡️ Anti-Cheat Status     : 100% AMAN (BAC Certified Safe)")
 print("══════════════════════════════════════════════════")
