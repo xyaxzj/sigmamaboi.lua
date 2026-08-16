@@ -47,7 +47,7 @@ local lpUserId = lp.UserId
 -- ═══════════════════════════════════════════════════════
 local CONFIG = {
     FPS_CAP                 = _G.fpsCap or 60,               -- Target FPS (60 hemat CPU, 240 max smooth)
-    DISABLE_3D_RENDER       = _G.disable3dRender ~= nil and _G.disable3dRender or true, -- true: Layar Freeze / 0% GPU AFK
+    DISABLE_3D_RENDER       = _G.disable3dRender ~= nil and _G.disable3dRender or false, -- true: Layar Freeze / 0% GPU AFK
     WHITE_MAP_MODE          = _G.whiteMap ~= nil and _G.whiteMap or true, -- true: Map putih potato mode
     SMOOTH_PLASTIC          = true,                          -- true: Material SmoothPlastic
     NO_SHADOWS              = true,                          -- true: CastShadow = false
