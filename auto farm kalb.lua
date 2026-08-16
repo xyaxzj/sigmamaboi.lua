@@ -245,7 +245,6 @@ pcall(function()
     local debris = workspace:WaitForChild("Debris", 10)
     if debris then
         debris.ChildAdded:Connect(function(child)
-            if not isMeteorShowerActive then return end
             task.defer(function()
                 if child:IsA("Model") and (tonumber(child.Name) or child.Name:lower():find("meteor")) then
                     task.wait(0.05)
@@ -262,7 +261,7 @@ end)
 -- Background Sweeper: Memastikan Tidak Ada Meteor yang Terlewat (Hanya saat MeteorShower Aktif)
 task.spawn(function()
     while task.wait(0.2) do
-        if not isMeteorShowerActive or not _G.autoFarm then continue end
+        if not _G.autoFarm then continue end
         local debris = workspace:FindFirstChild("Debris")
         if debris then
             for _, child in ipairs(debris:GetChildren()) do
