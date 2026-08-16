@@ -96,6 +96,7 @@ local rev_kickPhase2 = networkFolder and networkFolder:WaitForChild("rev_kickPha
 local rev_KickData = networkFolder and networkFolder:WaitForChild("rev_KickData", 15)
 local rev_AddedWeather = networkFolder and networkFolder:WaitForChild("rev_AddedWeather", 15)
 local rev_RemovedWeather = networkFolder and networkFolder:WaitForChild("rev_RemovedWeather", 15)
+local ref_B_SellAll = networkFolder and (networkFolder:FindFirstChild("ref_B_SellAll") or networkFolder:WaitForChild("ref_B_SellAll", 5))
 
 -- =============================================
 -- 📊 FLOATING STATUS HUD ON-SCREEN
@@ -287,5 +288,27 @@ task.spawn(function()
                 end
             end
         end
+    end
+end)
+
+-- =============================================
+-- 💰 AUTO SELL ALL (SETIAP 5 DETIK)
+-- =============================================
+task.spawn(function()
+    while task.wait(5) do
+        if not _G.autoFarm then continue end
+        pcall(function()
+            if ref_B_SellAll then
+                ref_B_SellAll:InvokeServer()
+            else
+                local net = ReplicatedStorage:FindFirstChild("Shared")
+                net = net and net:FindFirstChild("Packages")
+                net = net and net:FindFirstChild("Network")
+                local sellRemote = net and net:FindFirstChild("ref_B_SellAll")
+                if sellRemote then
+                    sellRemote:InvokeServer()
+                end
+            end
+        end)
     end
 end)
