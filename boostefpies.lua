@@ -1,7 +1,5 @@
 -- ==============================================================================
--- 🔬 BOOSTFPS DIAGNOSTIC MODE — Cari fitur mana yang trigger BAC
--- Setiap fase diaktifkan 1-per-1 dengan jeda 15 detik.
--- CATAT berapa detik setelah eksekusi kamu kena kick!
+-- 🔬 BOOSTFPS DIAGNOSTIC v2 — TANPA VIRTUALUSER
 -- ==============================================================================
 
 if not game:IsLoaded() then game.Loaded:Wait() end
@@ -10,36 +8,20 @@ local Players = game:GetService("Players")
 local StarterGui = game:GetService("StarterGui")
 local lp = Players.LocalPlayer
 
-local function notify(title, text)
+local function notify(fase, text)
     pcall(function()
         StarterGui:SetCore("SendNotification", {
-            Title = title, Text = text, Duration = 5
+            Title = fase, Text = text, Duration = 5
         })
     end)
-    print(title .. ": " .. text)
+    print(fase .. ": " .. text)
 end
 
-notify("🔬 DIAGNOSTIC", "Mulai! Perhatikan fase mana yang bikin kick...")
+notify("START", "Diagnostic v2 tanpa VirtualUser. Mulai...")
 
--- ═══════════════════════════════════════════════════════
--- FASE 1 (detik ke-0): ANTI-AFK SAJA
--- ═══════════════════════════════════════════════════════
-notify("FASE 1", "Anti-AFK diaktifkan...")
-pcall(function()
-    local vu = game:GetService("VirtualUser")
-    lp.Idled:Connect(function()
-        pcall(function()
-            vu:CaptureController()
-            vu:ClickButton2(Vector2.new(0, 0))
-        end)
-    end)
-end)
-
--- ═══════════════════════════════════════════════════════
--- FASE 2 (detik ke-15): DISABLE PARTIKEL SAJA
--- ═══════════════════════════════════════════════════════
+-- FASE 1 (0 detik): DISABLE PARTIKEL
 task.wait(15)
-notify("FASE 2", "Disable partikel...")
+notify("FASE 1", "Disable partikel...")
 for _, v in ipairs(workspace:GetDescendants()) do
     pcall(function()
         if v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Beam") or
@@ -49,68 +31,64 @@ for _, v in ipairs(workspace:GetDescendants()) do
     end)
 end
 
--- ═══════════════════════════════════════════════════════
--- FASE 3 (detik ke-30): TERRAIN WATER OPTIMIZATION
--- ═══════════════════════════════════════════════════════
+-- FASE 2 (15 detik): CASTSHADOW = FALSE
 task.wait(15)
-notify("FASE 3", "Terrain water optimization...")
+notify("FASE 2", "CastShadow = false...")
+for _, v in ipairs(workspace:GetDescendants()) do
+    pcall(function()
+        if v:IsA("BasePart") then v.CastShadow = false end
+    end)
+end
+
+-- FASE 3 (30 detik): MATERIAL = SMOOTHPLASTIC
+task.wait(15)
+notify("FASE 3", "Material = SmoothPlastic...")
+for _, v in ipairs(workspace:GetDescendants()) do
+    pcall(function()
+        if v:IsA("BasePart") then v.Material = Enum.Material.SmoothPlastic end
+    end)
+end
+
+-- FASE 4 (45 detik): COLOR = PUTIH
+task.wait(15)
+notify("FASE 4", "Color = Putih...")
+for _, v in ipairs(workspace:GetDescendants()) do
+    pcall(function()
+        if v:IsA("BasePart") then v.Color = Color3.new(1, 1, 1) end
+    end)
+end
+
+-- FASE 5 (60 detik): HAPUS TEKSTUR
+task.wait(15)
+notify("FASE 5", "Hapus tekstur MeshPart/Decal...")
+for _, v in ipairs(workspace:GetDescendants()) do
+    pcall(function()
+        if v:IsA("MeshPart") then v.TextureID = ""
+        elseif v:IsA("Decal") or v:IsA("Texture") then v.Transparency = 1
+        elseif v:IsA("SpecialMesh") then v.TextureId = ""
+        end
+    end)
+end
+
+-- FASE 6 (75 detik): TERRAIN WATER
+task.wait(15)
+notify("FASE 6", "Terrain water optimization...")
 pcall(function()
-    local terrain = workspace:FindFirstChildOfClass("Terrain")
-    if terrain then
-        terrain.WaterWaveSize = 0
-        terrain.WaterWaveSpeed = 0
-        terrain.WaterReflectance = 0
-        terrain.WaterTransparency = 0
+    local t = workspace:FindFirstChildOfClass("Terrain")
+    if t then
+        t.WaterWaveSize = 0
+        t.WaterWaveSpeed = 0
+        t.WaterReflectance = 0
+        t.WaterTransparency = 0
     end
 end)
 
--- ═══════════════════════════════════════════════════════
--- FASE 4 (detik ke-45): CASTSHADOW = FALSE (SEMUA BASEPART)
--- ═══════════════════════════════════════════════════════
+-- FASE 7 (90 detik): HIDE PLAYER LAIN
 task.wait(15)
-notify("FASE 4", "CastShadow = false pada semua BasePart...")
-for _, v in ipairs(workspace:GetDescendants()) do
-    pcall(function()
-        if v:IsA("BasePart") then
-            v.CastShadow = false
-        end
-    end)
-end
-
--- ═══════════════════════════════════════════════════════
--- FASE 5 (detik ke-60): MATERIAL = SMOOTHPLASTIC (SEMUA BASEPART)
--- ═══════════════════════════════════════════════════════
-task.wait(15)
-notify("FASE 5", "Material = SmoothPlastic...")
-for _, v in ipairs(workspace:GetDescendants()) do
-    pcall(function()
-        if v:IsA("BasePart") then
-            v.Material = Enum.Material.SmoothPlastic
-        end
-    end)
-end
-
--- ═══════════════════════════════════════════════════════
--- FASE 6 (detik ke-75): COLOR = PUTIH (SEMUA BASEPART)
--- ═══════════════════════════════════════════════════════
-task.wait(15)
-notify("FASE 6", "Color = Putih (White Map)...")
-for _, v in ipairs(workspace:GetDescendants()) do
-    pcall(function()
-        if v:IsA("BasePart") then
-            v.Color = Color3.new(1, 1, 1)
-        end
-    end)
-end
-
--- ═══════════════════════════════════════════════════════
--- FASE 7 (detik ke-90): HIDE PLAYER LAIN (TRANSPARENCY)
--- ═══════════════════════════════════════════════════════
-task.wait(15)
-notify("FASE 7", "Sembunyikan player lain (transparency)...")
-for _, player in ipairs(Players:GetPlayers()) do
-    if player ~= lp and player.Character then
-        for _, part in ipairs(player.Character:GetDescendants()) do
+notify("FASE 7", "Hide player lain...")
+for _, p in ipairs(Players:GetPlayers()) do
+    if p ~= lp and p.Character then
+        for _, part in ipairs(p.Character:GetDescendants()) do
             pcall(function()
                 if part:IsA("BasePart") then
                     part.Transparency = 1
@@ -121,21 +99,17 @@ for _, player in ipairs(Players:GetPlayers()) do
     end
 end
 
--- ═══════════════════════════════════════════════════════
--- FASE 8 (detik ke-105): HIDE PLOT LAIN (TRANSPARENCY)
--- ═══════════════════════════════════════════════════════
+-- FASE 8 (105 detik): HIDE PLOT LAIN
 task.wait(15)
-notify("FASE 8", "Sembunyikan plot lain (transparency)...")
+notify("FASE 8", "Hide plot lain...")
 pcall(function()
-    local plotsFolder = workspace:FindFirstChild("Plots")
-    if plotsFolder then
-        for _, plot in ipairs(plotsFolder:GetChildren()) do
+    local plots = workspace:FindFirstChild("Plots")
+    if plots then
+        for _, plot in ipairs(plots:GetChildren()) do
             if plot:IsA("Model") then
                 for _, part in ipairs(plot:GetDescendants()) do
                     pcall(function()
-                        if part:IsA("BasePart") then
-                            part.Transparency = 1
-                        end
+                        if part:IsA("BasePart") then part.Transparency = 1 end
                     end)
                 end
             end
@@ -143,25 +117,4 @@ pcall(function()
     end
 end)
 
--- ═══════════════════════════════════════════════════════
--- FASE 9 (detik ke-120): TEXTURE REMOVAL (MESHPART + SPECIALMESH)
--- ═══════════════════════════════════════════════════════
-task.wait(15)
-notify("FASE 9", "Hapus tekstur MeshPart/SpecialMesh...")
-for _, v in ipairs(workspace:GetDescendants()) do
-    pcall(function()
-        if v:IsA("MeshPart") then
-            v.TextureID = ""
-        elseif v:IsA("SpecialMesh") then
-            v.TextureId = ""
-        elseif v:IsA("Decal") or v:IsA("Texture") then
-            v.Transparency = 1
-        end
-    end)
-end
-
--- ═══════════════════════════════════════════════════════
-notify("✅ SELESAI", "Semua 9 fase selesai tanpa kick! Semua fitur AMAN.")
-print("══════════════════════════════════════════════════")
-print("✅ Semua fase selesai! Jika kamu sampai sini = semua fitur aman.")
-print("══════════════════════════════════════════════════")
+notify("✅ SELESAI", "Semua 8 fase selesai tanpa kick!")
