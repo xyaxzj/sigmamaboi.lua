@@ -243,31 +243,64 @@ local function clickKickButton()
     end)
 end
 
--- Helper Eksekusi Tap / Klik Minigame (Simultan: Mouse, Touch, Spacebar)
+-- Helper Eksekusi Tap / Klik Minigame (Simultan: Mobile Touch, Mouse, Spacebar & UserInputService)
 local function triggerMinigameTap()
     pcall(function()
         local cam = workspace.CurrentCamera
         local center = cam and Vector2.new(cam.ViewportSize.X / 2, cam.ViewportSize.Y / 2) or Vector2.new(500, 500)
-        
-        -- 1. VirtualInputManager Mouse Click
+        local uis = game:GetService("UserInputService")
+
+        -- 1. Simulasi Mobile Touch VirtualInputManager (Touch Index 0: Begin -> End)
         if VirtualInputManager then
-            VirtualInputManager:SendMouseButtonEvent(center.X, center.Y, 0, true, game, 0)
-            task.wait(0.02)
-            VirtualInputManager:SendMouseButtonEvent(center.X, center.Y, 0, false, game, 0)
-            -- 2. VirtualInputManager Spacebar
-            VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
-            task.wait(0.02)
-            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
+            pcall(function()
+                VirtualInputManager:SendTouchEvent(0, 0, center.X, center.Y) -- 0 = TouchBegin
+                task.wait(0.02)
+                VirtualInputManager:SendTouchEvent(0, 2, center.X, center.Y) -- 2 = TouchEnd
+            end)
+            
+            pcall(function()
+                VirtualInputManager:SendMouseButtonEvent(center.X, center.Y, 0, true, game, 0)
+                task.wait(0.02)
+                VirtualInputManager:SendMouseButtonEvent(center.X, center.Y, 0, false, game, 0)
+            end)
+
+            pcall(function()
+                VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
+                task.wait(0.02)
+                VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
+            end)
         end
         
-        -- 3. VirtualUser Click & Key
-        VirtualUser:CaptureController()
-        VirtualUser:ClickButton1(center)
+        -- 2. Simulasi VirtualUser (Button1Down/Up + ClickButton1)
         pcall(function()
-            VirtualUser:SetKeyDown("0x20")
+            VirtualUser:CaptureController()
+            VirtualUser:Button1Down(center)
             task.wait(0.02)
-            VirtualUser:SetKeyUp("0x20")
+            VirtualUser:Button1Up(center)
+            VirtualUser:ClickButton1(center)
         end)
+
+        -- 3. Firesignal Langsung ke UserInputService (Touch & Mouse InputBegan)
+        if firesignal then
+            pcall(function()
+                local mockTouch = {
+                    UserInputType = Enum.UserInputType.Touch,
+                    UserInputState = Enum.UserInputState.Begin,
+                    Position = Vector3.new(center.X, center.Y, 0)
+                }
+                firesignal(uis.InputBegan, mockTouch, false)
+                firesignal(uis.TouchStarted, mockTouch, false)
+                firesignal(uis.TouchTap, {Vector2.new(center.X, center.Y)}, false)
+            end)
+            pcall(function()
+                local mockMouse = {
+                    UserInputType = Enum.UserInputType.MouseButton1,
+                    UserInputState = Enum.UserInputState.Begin,
+                    Position = Vector3.new(center.X, center.Y, 0)
+                }
+                firesignal(uis.InputBegan, mockMouse, false)
+            end)
+        end
     end)
 end
 
