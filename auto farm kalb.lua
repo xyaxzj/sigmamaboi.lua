@@ -208,6 +208,11 @@ if rev_PlayMessage then
     end)
 end
 
+local VirtualInputManager = nil
+pcall(function()
+    VirtualInputManager = game:GetService("VirtualInputManager")
+end)
+
 -- Helper Tekan Tombol Kick di HUD
 local function clickKickButton()
     pcall(function()
@@ -225,64 +230,99 @@ local function clickKickButton()
             
             pcall(function()
                 local pos = kickButton.AbsolutePosition + (kickButton.AbsoluteSize / 2)
-                VirtualUser:CaptureController()
-                VirtualUser:ClickButton1(pos)
+                if VirtualInputManager then
+                    VirtualInputManager:SendMouseButtonEvent(pos.X, pos.Y, 0, true, game, 0)
+                    task.wait(0.02)
+                    VirtualInputManager:SendMouseButtonEvent(pos.X, pos.Y, 0, false, game, 0)
+                else
+                    VirtualUser:CaptureController()
+                    VirtualUser:ClickButton1(pos)
+                end
             end)
         end
     end)
 end
 
--- Helper Instant Perfect Kick (GUI + Bar Hijau Instan + Remote Invoke)
+-- Helper Eksekusi Tap / Klik Minigame (Simultan: Mouse, Touch, Spacebar)
+local function triggerMinigameTap()
+    pcall(function()
+        local cam = workspace.CurrentCamera
+        local center = cam and Vector2.new(cam.ViewportSize.X / 2, cam.ViewportSize.Y / 2) or Vector2.new(500, 500)
+        
+        -- 1. VirtualInputManager Mouse Click
+        if VirtualInputManager then
+            VirtualInputManager:SendMouseButtonEvent(center.X, center.Y, 0, true, game, 0)
+            task.wait(0.02)
+            VirtualInputManager:SendMouseButtonEvent(center.X, center.Y, 0, false, game, 0)
+            -- 2. VirtualInputManager Spacebar
+            VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
+            task.wait(0.02)
+            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
+        end
+        
+        -- 3. VirtualUser Click & Key
+        VirtualUser:CaptureController()
+        VirtualUser:ClickButton1(center)
+        pcall(function()
+            VirtualUser:SetKeyDown("0x20")
+            task.wait(0.02)
+            VirtualUser:SetKeyUp("0x20")
+        end)
+    end)
+end
+
+-- Helper Instant Perfect Kick (Pure GUI Flow dengan Auto Tap Akurat)
 local isExecutingKick = false
 local function doKick()
     if isExecutingKick then return end
     isExecutingKick = true
 
     task.spawn(function()
-        local timestamp = nil
-        pcall(function() timestamp = workspace:GetServerTimeNow() end)
-        if not timestamp or type(timestamp) ~= "number" or timestamp <= 0 then
-            timestamp = tick()
+        -- 1. Tekan tombol KickButton di HUD
+        clickKickButton()
+        
+        -- 2. Tunggu KickMinigame benar-benar terbuka (Timeout 1.5s)
+        local playerGui = lp:FindFirstChild("PlayerGui")
+        local kickMinigame = nil
+        local startWait = os.clock()
+        while os.clock() - startWait < 1.5 do
+            kickMinigame = playerGui and playerGui:FindFirstChild("KickMinigame")
+            if kickMinigame and (kickMinigame.Enabled or kickMinigame.Visible) then
+                break
+            end
+            task.wait(0.05)
         end
 
-        -- 1. Tekan tombol KickButton di HUD agar game masuk mode tendang
-        clickKickButton()
-        task.wait(0.05)
-
-        -- 2. Paksa MovingBar di KickMinigame menjadi Instant 100% Perfect Hijau
-        pcall(function()
-            local playerGui = lp:FindFirstChild("PlayerGui")
-            local kickMinigame = playerGui and playerGui:FindFirstChild("KickMinigame")
-            if kickMinigame then
-                local movingBar = kickMinigame:FindFirstChild("MovingBar", true)
+        -- 3. Pantau MovingBar dan eksekusi Tap saat di Zona Hijau Perfect
+        if kickMinigame and (kickMinigame.Enabled or kickMinigame.Visible) then
+            local movingBar = kickMinigame:FindFirstChild("MovingBar", true)
+            local barWaitStart = os.clock()
+            local tapped = false
+            
+            while os.clock() - barWaitStart < 2.5 and kickMinigame.Parent and (kickMinigame.Enabled or kickMinigame.Visible) do
                 if movingBar then
-                    movingBar.Size = UDim2.new(1, 0, 1, 0)
-                    movingBar.BackgroundColor3 = Color3.fromRGB(113, 239, 107) -- Warna Perfect Murni
+                    local c = movingBar.BackgroundColor3
+                    -- Deteksi zona hijau puncak (AbsY >= 120 atau Hijau)
+                    if movingBar.AbsoluteSize.Y >= 120 or (c.G > 0.88 and c.R < 0.6) then
+                        triggerMinigameTap()
+                        tapped = true
+                        break
+                    end
                 end
+                task.wait()
             end
-        end)
-
-        -- 3. Eksekusi Tap Virtual di Layar (untuk menyelesaikan minigame)
-        pcall(function()
-            local cam = workspace.CurrentCamera
-            local center = cam and Vector2.new(cam.ViewportSize.X / 2, cam.ViewportSize.Y / 2) or Vector2.new(500, 500)
-            VirtualUser:CaptureController()
-            VirtualUser:ClickButton1(center)
-        end)
-
-        -- 4. Konfirmasi Eksekusi Remote Perfect Max Power ke Server
-        if ref_KickEvent then
-            pcall(function()
-                ref_KickEvent:InvokeServer(1, 1, timestamp)
-            end)
-        elseif kickRemote then
-            pcall(function()
-                kickRemote:FireServer(1, 1)
-            end)
+            
+            -- Failsafe tap jika waktu tunggu habis
+            if not tapped then
+                triggerMinigameTap()
+            end
+        else
+            -- Failsafe tap langsung
+            triggerMinigameTap()
         end
 
         phase2Fired = true
-        task.wait(0.2)
+        task.wait(0.3)
         isExecutingKick = false
     end)
 end
