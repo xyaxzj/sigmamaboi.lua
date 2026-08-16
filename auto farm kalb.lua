@@ -208,25 +208,82 @@ if rev_PlayMessage then
     end)
 end
 
--- Helper Kick Eksekusi
+-- Helper Tekan Tombol Kick di HUD
+local function clickKickButton()
+    pcall(function()
+        local playerGui = lp:FindFirstChild("PlayerGui")
+        local hud = playerGui and playerGui:FindFirstChild("HUD")
+        local kickButton = hud and (hud:FindFirstChild("KickButton", true) or hud:FindFirstChild("Kick", true))
+        
+        if kickButton and kickButton:IsA("GuiButton") and kickButton.Visible then
+            if firesignal then
+                firesignal(kickButton.MouseButton1Click)
+                firesignal(kickButton.MouseButton1Down)
+                firesignal(kickButton.MouseButton1Up)
+                firesignal(kickButton.Activated)
+            end
+            
+            pcall(function()
+                local pos = kickButton.AbsolutePosition + (kickButton.AbsoluteSize / 2)
+                VirtualUser:CaptureController()
+                VirtualUser:ClickButton1(pos)
+            end)
+        end
+    end)
+end
+
+-- Helper Instant Perfect Kick (GUI + Bar Hijau Instan + Remote Invoke)
+local isExecutingKick = false
 local function doKick()
-    local timestamp = nil
-    pcall(function() timestamp = workspace:GetServerTimeNow() end)
-    if not timestamp or type(timestamp) ~= "number" or timestamp <= 0 then
-        timestamp = tick()
-    end
+    if isExecutingKick then return end
+    isExecutingKick = true
 
     task.spawn(function()
-        if ref_KickEvent then
-            local s, res = pcall(function()
-                return ref_KickEvent:InvokeServer(1, 1, timestamp)
-            end)
-            if s and res == true then
-                phase2Fired = true
-            end
-        elseif kickRemote then
-            kickRemote:FireServer(1, 1)
+        local timestamp = nil
+        pcall(function() timestamp = workspace:GetServerTimeNow() end)
+        if not timestamp or type(timestamp) ~= "number" or timestamp <= 0 then
+            timestamp = tick()
         end
+
+        -- 1. Tekan tombol KickButton di HUD agar game masuk mode tendang
+        clickKickButton()
+        task.wait(0.05)
+
+        -- 2. Paksa MovingBar di KickMinigame menjadi Instant 100% Perfect Hijau
+        pcall(function()
+            local playerGui = lp:FindFirstChild("PlayerGui")
+            local kickMinigame = playerGui and playerGui:FindFirstChild("KickMinigame")
+            if kickMinigame then
+                local movingBar = kickMinigame:FindFirstChild("MovingBar", true)
+                if movingBar then
+                    movingBar.Size = UDim2.new(1, 0, 1, 0)
+                    movingBar.BackgroundColor3 = Color3.fromRGB(113, 239, 107) -- Warna Perfect Murni
+                end
+            end
+        end)
+
+        -- 3. Eksekusi Tap Virtual di Layar (untuk menyelesaikan minigame)
+        pcall(function()
+            local cam = workspace.CurrentCamera
+            local center = cam and Vector2.new(cam.ViewportSize.X / 2, cam.ViewportSize.Y / 2) or Vector2.new(500, 500)
+            VirtualUser:CaptureController()
+            VirtualUser:ClickButton1(center)
+        end)
+
+        -- 4. Konfirmasi Eksekusi Remote Perfect Max Power ke Server
+        if ref_KickEvent then
+            pcall(function()
+                ref_KickEvent:InvokeServer(1, 1, timestamp)
+            end)
+        elseif kickRemote then
+            pcall(function()
+                kickRemote:FireServer(1, 1)
+            end)
+        end
+
+        phase2Fired = true
+        task.wait(0.2)
+        isExecutingKick = false
     end)
 end
 
