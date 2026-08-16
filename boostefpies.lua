@@ -59,7 +59,7 @@ local CONFIG = {
     OPTIMIZE_TERRAIN        = true,
     ENABLE_REALTIME         = true,                          -- Smart Throttled Realtime Optimizer
     ENABLE_SAFE_AFK         = true,
-    DISABLE_3D_RENDER       = _G.disable3dRender ~= nil and _G.disable3dRender or true, -- true: Matikan 3D Render (Layar Freeze / 0% GPU AFK)
+    DISABLE_3D_RENDER       = _G.disable3dRender ~= nil and _G.disable3dRender or false, -- true: Matikan 3D Render (Layar Freeze / 0% GPU AFK)
 }
 
 local optimizedCount = 0
