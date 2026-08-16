@@ -1,14 +1,12 @@
 -- ==============================================================================
--- ☄️ KALB AUTO METEOR CLAIMER & ANTI-LAG (MANUAL AUTO KICK MODE)
+-- ☄️ KALB AUTO METEOR CLAIMER, ANTI-LAG & ANTI-AFK
 -- ==============================================================================
 -- Fitur:
--- 1. ☄️ Auto Meteor Claimer (Real-time firetouchinterest saat bola di udara)
+-- 1. ☄️ Auto Meteor Claimer (Aktif otomatis saat cuaca MeteorShower, klaim via firetouchinterest)
 -- 2. 🥔 Anti-Lag Ekstrem & Potato Map (Plastic, White, No Shadows, Plot & Player Removed)
--- 3. 🛡️ Anti-AFK
--- 4. ⚡ Auto Interupsi Event Cuaca Luck Machine (Barbell Training x8 Luck)
+-- 3. 🛡️ Anti-AFK (Mencegah disconnect 20 menit)
+-- 4. 💰 Auto Sell All (Setiap 5 detik via remote ref_B_SellAll)
 -- 5. 📊 Floating Status HUD Real-Time (Brainrot Counter, Meteor Counter, Jarak Bola)
--- 
--- * Catatan: Fitur Auto Kick dikendalikan manual oleh Anda langsung di tombol game!
 -- ==============================================================================
 
 if not game:IsLoaded() then game.Loaded:Wait() end
@@ -26,6 +24,7 @@ local lp = Players.LocalPlayer
 _G.autoFarm = true
 _G.mutationCount = 0
 local meteorClaimCount = 0
+local isMeteorShowerActive = false
 
 -- =============================================
 -- 🚀 SYSTEM ANTI-LAG & OPTIMISASI EKSTREM
@@ -82,11 +81,6 @@ lp.Idled:Connect(function()
     VirtualUser:CaptureController()
     VirtualUser:ClickButton2(Vector2.new())
 end)
-
--- =============================================
--- 📍 KOORDINAT SAFE ZONE
--- =============================================
-local safeZoneCFrame = CFrame.new(698.030701, 3.298559, 233.707077, -0.061024, -0.000000, 0.998136, -0.000000, 1.000000, 0.000000, -0.998136, -0.000000, -0.061024)
 
 -- =============================================
 -- 📡 CARI REMOTE NETWORK
@@ -178,183 +172,8 @@ local function updateStatus(text, color)
 end
 
 -- =============================================
--- 🚀 INISIALISASI AWAL (TELEPORT + JEDA 5 DETIK + KLIK AUTOBUTTON 1X)
--- =============================================
-task.spawn(function()
-    -- 1. Teleport ke Safe Zone saat script dieksekusi
-    updateStatus("📍 Teleport ke Safe Zone...", Color3.fromRGB(100, 200, 255))
-    local char = lp.Character or lp.CharacterAdded:Wait()
-    local hrp = char:WaitForChild("HumanoidRootPart", 10)
-    if hrp then
-        hrp.CFrame = safeZoneCFrame
-    end
-
-    -- 2. Jeda Waktu 5 Detik Sebelum Klik
-    for i = 5, 1, -1 do
-        updateStatus(string.format("⏳ Menunggu %d detik sebelum klik Auto Kick...", i), Color3.fromRGB(255, 200, 80))
-        task.wait(1.0)
-    end
-
-    -- 3. Cari AutoButton di PlayerGui.HUD.AutoKickFrame
-    pcall(function()
-        local playerGui = lp:WaitForChild("PlayerGui", 10)
-        local hud = playerGui and playerGui:WaitForChild("HUD", 10)
-        local autoKickFrame = hud and (hud:FindFirstChild("AutoKickFrame", true) or hud:FindFirstChild("AutoKick", true))
-        local autoBtn = autoKickFrame and (autoKickFrame:FindFirstChild("AutoButton", true) or autoKickFrame:FindFirstChildOfClass("ImageButton") or autoKickFrame:FindFirstChildOfClass("GuiButton"))
-        
-        -- Fallback pencarian berbasis Image Asset atau Text Label "AUTO KICK"
-        if not autoBtn and hud then
-            for _, v in ipairs(hud:GetDescendants()) do
-                if v:IsA("ImageButton") and (v.Name == "AutoButton" or tostring(v.Image):find("136607941521284")) then
-                    autoBtn = v
-                    break
-                elseif v:IsA("TextLabel") and v.Text:upper():find("AUTO KICK") then
-                    local p = v.Parent
-                    autoBtn = p and (p:FindFirstChildOfClass("ImageButton") or p:FindFirstChildOfClass("GuiButton"))
-                    if autoBtn then break end
-                end
-            end
-        end
-
-        -- 4. Engine Klik & Seleksi Baru (Multi-Method: GuiService + Viewport Multi-Offset + VirtualUser + Signals)
-        local guiService = game:GetService("GuiService")
-        local vim = nil
-        pcall(function() vim = game:GetService("VirtualInputManager") end)
-        local guiInset = Vector2.new(0, 0)
-        pcall(function() guiInset = guiService:GetGuiInset() end)
-
-        -- Koordinat target dari properties & dynamic calculation
-        local targetX = 370.0
-        local targetY = 264.67
-        if autoBtn and autoBtn:IsA("GuiObject") and autoBtn.AbsoluteSize.X > 0 then
-            targetX = autoBtn.AbsolutePosition.X + (autoBtn.AbsoluteSize.X / 2)
-            targetY = autoBtn.AbsolutePosition.Y + (autoBtn.AbsoluteSize.Y / 2)
-        end
-        local pos = Vector2.new(targetX, targetY)
-
-        -- Tampilkan Visual Indicator Target Ring (Tidak Memblokir Input / Active = false)
-        pcall(function()
-            local ringGui = Instance.new("ScreenGui")
-            ringGui.Name = "AutoClickRingGui"
-            ringGui.ResetOnSpawn = false
-            ringGui.Parent = guiParent
-
-            local ring = Instance.new("Frame")
-            ring.Size = UDim2.new(0, 36, 0, 36)
-            ring.AnchorPoint = Vector2.new(0.5, 0.5)
-            ring.Position = UDim2.new(0, pos.X, 0, pos.Y)
-            ring.BackgroundColor3 = Color3.fromRGB(255, 220, 50)
-            ring.BackgroundTransparency = 0.5
-            ring.Active = false
-            ring.Selectable = false
-            ring.Parent = ringGui
-
-            local corner = Instance.new("UICorner")
-            corner.CornerRadius = UDim.new(1, 0)
-            corner.Parent = ring
-
-            task.delay(1.5, function() ringGui:Destroy() end)
-        end)
-
-        -- [METHOD 1] Seleksi Objek Nativ Roblox (GuiService SelectedObject + KeyCode.Return / ButtonA)
-        if autoBtn and autoBtn:IsA("GuiObject") then
-            pcall(function()
-                guiService.SelectedObject = autoBtn
-                task.wait(0.05)
-                if vim then
-                    vim:SendKeyEvent(true, Enum.KeyCode.Return, false, game)
-                    task.wait(0.05)
-                    vim:SendKeyEvent(false, Enum.KeyCode.Return, false, game)
-                    vim:SendKeyEvent(true, Enum.KeyCode.ButtonA, false, game)
-                    task.wait(0.05)
-                    vim:SendKeyEvent(false, Enum.KeyCode.ButtonA, false, game)
-                end
-                guiService.SelectedObject = nil
-            end)
-        end
-
-        -- [METHOD 2] Virtual Input Manager Sweep (Koordinat Normal & Offset TopBar Inset)
-        if vim then
-            pcall(function()
-                local coords = {
-                    pos,
-                    Vector2.new(pos.X, pos.Y + guiInset.Y),
-                    Vector2.new(pos.X, pos.Y - guiInset.Y)
-                }
-                for _, pt in ipairs(coords) do
-                    vim:SendMouseMoveEvent(pt.X, pt.Y, game)
-                    vim:SendMouseButtonEvent(pt.X, pt.Y, 0, true, game, 0)
-                    task.wait(0.03)
-                    vim:SendMouseButtonEvent(pt.X, pt.Y, 0, false, game, 0)
-                    vim:SendTouchEvent(0, 0, pt.X, pt.Y)
-                    task.wait(0.03)
-                    vim:SendTouchEvent(0, 2, pt.X, pt.Y)
-                end
-            end)
-        end
-
-        -- [METHOD 3] VirtualUser Click & Button1Down
-        pcall(function()
-            VirtualUser:CaptureController()
-            VirtualUser:ClickButton1(pos)
-            local camCF = workspace.CurrentCamera and workspace.CurrentCamera.CFrame or CFrame.new()
-            VirtualUser:Button1Down(pos, camCF)
-            task.wait(0.05)
-            VirtualUser:Button1Up(pos, camCF)
-        end)
-
-        -- [METHOD 4] Executor Hardware Mouse (mouse1click / mousemoveabs)
-        pcall(function()
-            if mousemoveabs then mousemoveabs(pos.X, pos.Y) end
-            if mouse1click then mouse1click() end
-            if mouse1press and mouse1release then
-                mouse1press()
-                task.wait(0.05)
-                mouse1release()
-            end
-        end)
-
-        -- [METHOD 5] Memanggil Sinyal Event UI Lengkap (Activated, Click, InputBegan)
-        if autoBtn and autoBtn:IsA("GuiButton") then
-            -- getconnections
-            if getconnections then
-                pcall(function()
-                    for _, conn in ipairs(getconnections(autoBtn.Activated)) do
-                        if conn.Function then conn.Function() elseif conn.Fire then conn:Fire() end
-                    end
-                    for _, conn in ipairs(getconnections(autoBtn.MouseButton1Click)) do
-                        if conn.Function then conn.Function() elseif conn.Fire then conn:Fire() end
-                    end
-                    for _, conn in ipairs(getconnections(autoBtn.InputBegan)) do
-                        if conn.Function then conn.Function({ UserInputType = Enum.UserInputType.MouseButton1, UserInputState = Enum.UserInputState.Begin }) elseif conn.Fire then conn:Fire({ UserInputType = Enum.UserInputType.MouseButton1, UserInputState = Enum.UserInputState.Begin }) end
-                    end
-                end)
-            end
-            
-            -- firesignal
-            if firesignal then
-                pcall(function() firesignal(autoBtn.Activated) end)
-                pcall(function() firesignal(autoBtn.MouseButton1Click) end)
-                pcall(function() firesignal(autoBtn.MouseButton1Down) end)
-                pcall(function() firesignal(autoBtn.MouseButton1Up) end)
-            end
-        end
-
-        -- [METHOD 6] Remote Server Request
-        pcall(function()
-            local ref_Auto = networkFolder and (networkFolder:FindFirstChild("ref_AutoRequest") or networkFolder:WaitForChild("ref_AutoRequest", 2))
-            if ref_Auto then ref_Auto:InvokeServer(true) end
-        end)
-        
-        updateStatus("✅ Auto Kick Berhasil Diaktifkan!", Color3.fromRGB(100, 240, 120))
-    end)
-end)
-
--- =============================================
 -- 📡 DAFTAR EVENT LISTENER
 -- =============================================
-local isMeteorShowerActive = false
-
 if rev_kickPhase2 then
     rev_kickPhase2.OnClientEvent:Connect(function(rewardTable, ...)
         _G.mutationCount = _G.mutationCount + 1
