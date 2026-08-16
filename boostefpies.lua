@@ -1,19 +1,19 @@
 -- ==============================================================================
--- 🚀 SIGMA ULTIMATE FPS BOOSTER & ANTI-LAG v5.1 (PROVEN BAC SAFE)
+-- 🚀 SIGMA ULTIMATE FPS BOOSTER & ANTI-LAG v5.2 (PROVEN BAC SAFE)
 -- Kompatibel: Mobile (Delta, Codex, Arceus X, Hydrogen) & PC (Wave, Solara, etc.)
 -- ==============================================================================
 -- FITUR LENGKAP:
 -- 1. 🥔 White Potato Mode (SmoothPlastic, White, No Shadows, No Textures)
--- 2. 🥚 Hide PlacedEggRenders (Sembunyikan semua model telur di workspace)
--- 3. 📦 Hide ClientRenderedAssets & Cash (Sembunyikan aset render client)
--- 4. 🎮 Native Engine Quality Level 1 (Legal Engine LOD Optimizer)
--- 5. 🏷️ Hide Name Tags & Floating BillboardGuis (No Font Canvas Lag)
--- 6. 🔇 CPU Audio Optimizer (Mute background looped ambience)
+-- 2. 🔇 Total Audio Mute (Volume 0 & MasterVolume 0 - Hemat CPU Audio Thread)
+-- 3. 🥚 Hide PlacedEggRenders (Sembunyikan semua model telur di workspace)
+-- 4. 📦 Hide ClientRenderedAssets & Cash (Sembunyikan aset render client)
+-- 5. 🎮 Native Engine Quality Level 1 (Legal Engine LOD Optimizer)
+-- 6. 🏷️ Hide Name Tags & Floating BillboardGuis (No Font Canvas Lag)
 -- 7. ⚡ One-Click Floating GPU Saver Button (3D Render Toggle 0% GPU AFK)
 -- 8. 🌊 Terrain Water Optimizer (WaterWaveSize = 0)
 -- 9. 👻 Stealth Player & Plot Hider (Ghost Mode / Full Transparency)
 -- 10. 🛡️ Safe Anti-AFK (Periodic Micro-Action tanpa VirtualUser)
--- 11. 🔄 Realtime Descendant Optimizer (Termasuk PlacedEggRenders baru)
+-- 11. 🔄 Realtime Descendant Optimizer (Termasuk PlacedEggRenders & Sound baru)
 -- ==============================================================================
 
 if not game:IsLoaded() then 
@@ -44,11 +44,11 @@ local CONFIG = {
     SMOOTH_PLASTIC          = true,
     NO_SHADOWS              = true,
     NO_TEXTURES             = true,
-    HIDE_PLACED_EGGS        = true,  -- ✨ Sembunyikan folder PlacedEggRenders
-    HIDE_CLIENT_ASSETS      = true,  -- ✨ Sembunyikan folder ClientRenderedAssets
+    MUTE_ALL_AUDIO          = true,  -- 🔇 Matikan 100% semua suara (CPU & Battery Saver)
+    HIDE_PLACED_EGGS        = true,  -- Sembunyikan folder PlacedEggRenders
+    HIDE_CLIENT_ASSETS      = true,  -- Sembunyikan folder ClientRenderedAssets
     FORCE_QUALITY_LEVEL_1   = true,  -- Native Level 1 Graphics
     HIDE_BILLBOARD_GUIS     = true,  -- Matikan Name Tags / 3D GUIs
-    OPTIMIZE_AUDIO          = true,  -- Mute Looped Ambience Audio
     SHOW_GPU_SAVER_BUTTON   = true,  -- Tombol Floating 3D Render Toggle
     HIDE_OTHER_PLAYERS      = _G.autoRemovePlayer ~= nil and _G.autoRemovePlayer or true,
     HIDE_OTHER_PLOTS        = _G.removePlots ~= nil and _G.removePlots or true,
@@ -62,7 +62,40 @@ local CONFIG = {
 local optimizedCount = 0
 
 -- ═══════════════════════════════════════════════════════
--- 🎮 1. NATIVE ENGINE QUALITY LEVEL 1
+-- 🔇 1. TOTAL AUDIO MUTE (HEMAT CPU AUDIO DECODING & MIXING)
+-- ═══════════════════════════════════════════════════════
+if CONFIG.MUTE_ALL_AUDIO then
+    -- 1. Master Volume Engine resmi ke 0
+    pcall(function()
+        local userGameSettings = UserSettingsService:GetService("UserGameSettings")
+        if userGameSettings then
+            userGameSettings.MasterVolume = 0
+        end
+    end)
+
+    -- 2. Matikan reverb effect di SoundService
+    pcall(function()
+        SoundService.AmbientReverb = Enum.ReverbType.NoReverb
+    end)
+
+    -- 3. Set Volume = 0 ke semua Sound yang ada
+    local function muteSound(sound)
+        if sound:IsA("Sound") then
+            pcall(function()
+                sound.Volume = 0
+                if sound.Looped and sound.Playing then
+                    sound:Stop()
+                end
+            end)
+        end
+    end
+
+    for _, v in ipairs(workspace:GetDescendants()) do muteSound(v) end
+    for _, v in ipairs(SoundService:GetDescendants()) do muteSound(v) end
+end
+
+-- ═══════════════════════════════════════════════════════
+-- 🎮 2. NATIVE ENGINE QUALITY LEVEL 1
 -- ═══════════════════════════════════════════════════════
 if CONFIG.FORCE_QUALITY_LEVEL_1 then
     pcall(function()
@@ -74,26 +107,13 @@ if CONFIG.FORCE_QUALITY_LEVEL_1 then
 end
 
 -- ═══════════════════════════════════════════════════════
--- 🎯 2. SET FPS CAP
+-- 🎯 3. SET FPS CAP
 -- ═══════════════════════════════════════════════════════
 pcall(function()
     if setfpscap and typeof(setfpscap) == "function" then
         setfpscap(CONFIG.FPS_CAP)
     end
 end)
-
--- ═══════════════════════════════════════════════════════
--- 🔇 3. CPU AUDIO OPTIMIZER
--- ═══════════════════════════════════════════════════════
-if CONFIG.OPTIMIZE_AUDIO then
-    pcall(function()
-        for _, sound in ipairs(workspace:GetDescendants()) do
-            if sound:IsA("Sound") and sound.Looped then
-                sound.Volume = 0
-            end
-        end
-    end)
-end
 
 -- ═══════════════════════════════════════════════════════
 -- 🛡️ 4. SAFE ANTI-AFK (BAC SAFE)
@@ -242,7 +262,7 @@ local function optimizePart(v)
             optimizedCount = optimizedCount + 1
         end
 
-        if CONFIG.OPTIMIZE_AUDIO and v:IsA("Sound") and v.Looped then
+        if CONFIG.MUTE_ALL_AUDIO and v:IsA("Sound") then
             v.Volume = 0
         end
     end)
@@ -328,7 +348,7 @@ if CONFIG.HIDE_OTHER_PLAYERS then
 end
 
 -- ═══════════════════════════════════════════════════════
--- 🥚 11. SEMBUNYIKAN PLACED EGG RENDERS (FITUR BARU)
+-- 🥚 11. SEMBUNYIKAN PLACED EGG RENDERS
 -- ═══════════════════════════════════════════════════════
 local function hidePlacedEggs()
     if not CONFIG.HIDE_PLACED_EGGS then return end
@@ -373,13 +393,18 @@ end
 hideClientAssets()
 
 -- ═══════════════════════════════════════════════════════
--- 🔄 13. REALTIME LISTENERS (TERMASUK PLACED EGGS BARU)
+-- 🔄 13. REALTIME LISTENERS (EGG, ASSETS, PLAYER, SOUND)
 -- ═══════════════════════════════════════════════════════
 if CONFIG.ENABLE_REALTIME then
     workspace.DescendantAdded:Connect(function(desc)
         task.defer(function()
             if not desc or not desc.Parent then return end
             if isMyChar(desc) then return end
+
+            -- Mute suara baru secara realtime
+            if CONFIG.MUTE_ALL_AUDIO and desc:IsA("Sound") then
+                pcall(function() desc.Volume = 0 end)
+            end
 
             -- Cek PlacedEggRenders
             if CONFIG.HIDE_PLACED_EGGS then
@@ -427,7 +452,6 @@ if CONFIG.ENABLE_REALTIME then
         end)
     end)
 
-    -- Listener player baru join / respawn
     local function setupPlayerHide(player)
         if player ~= lp then
             player.CharacterAdded:Connect(function(char)
@@ -509,22 +533,22 @@ end
 pcall(function()
     if StarterGui then
         StarterGui:SetCore("SendNotification", {
-            Title = "🚀 Stealth FPS Booster v5.1",
-            Text = string.format("Aktif! %d objek dioptimasi (100%% BAC Safe)", optimizedCount),
+            Title = "🚀 Stealth FPS Booster v5.2",
+            Text = string.format("Aktif! %d objek dioptimasi (Total Mute & BAC Safe)", optimizedCount),
             Duration = 5
         })
     end
 end)
 
 print("══════════════════════════════════════════════════")
-print("🚀 [STEALTH FPS BOOSTER v5.1] SIAP DIGUNAKAN!")
+print("🚀 [STEALTH FPS BOOSTER v5.2] SIAP DIGUNAKAN!")
 print(string.format("📊 Objek Dioptimasi      : %d", optimizedCount))
 print(string.format("🎯 FPS Cap               : %d", CONFIG.FPS_CAP))
+print("🔇 Total Audio Mute      : AKTIF (MasterVolume = 0)")
 print("🥚 Hide PlacedEggRenders : AKTIF")
 print("📦 Hide ClientAssets     : AKTIF")
 print("🎮 Native Quality Level 1: AKTIF")
 print("🏷️ Hide BillboardGuis    : AKTIF")
-print("🔇 Audio CPU Optimizer   : AKTIF")
 print("⚡ Floating GPU Saver    : AKTIF")
 print("🛡️ Anti-Cheat Status     : 100% AMAN (BAC Certified Safe)")
 print("══════════════════════════════════════════════════")
