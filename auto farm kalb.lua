@@ -178,6 +178,55 @@ local function updateStatus(text, color)
 end
 
 -- =============================================
+-- 🚀 INISIALISASI AWAL (TELEPORT + KLIK AUTOBUTTON 1X SAJA)
+-- =============================================
+task.spawn(function()
+    -- 1. Teleport ke Safe Zone saat script dieksekusi
+    local char = lp.Character or lp.CharacterAdded:Wait()
+    local hrp = char:WaitForChild("HumanoidRootPart", 10)
+    if hrp then
+        hrp.CFrame = safeZoneCFrame
+        task.wait(1.0)
+    end
+
+    -- 2. Cari AutoButton di PlayerGui.HUD.AutoKickFrame
+    pcall(function()
+        local playerGui = lp:WaitForChild("PlayerGui", 10)
+        local hud = playerGui and playerGui:WaitForChild("HUD", 10)
+        local autoKickFrame = hud and (hud:FindFirstChild("AutoKickFrame", true) or hud:FindFirstChild("AutoKick", true))
+        local autoBtn = autoKickFrame and (autoKickFrame:FindFirstChild("AutoButton", true) or autoKickFrame:FindFirstChildOfClass("ImageButton") or autoKickFrame:FindFirstChildOfClass("GuiButton"))
+        
+        if not autoBtn and hud then
+            for _, v in ipairs(hud:GetDescendants()) do
+                if v:IsA("ImageButton") and (v.Name == "AutoButton" or tostring(v.Image):find("136607941521284")) then
+                    autoBtn = v
+                    break
+                end
+            end
+        end
+
+        -- 3. Klik AutoButton Tepat 1 Kali Saja
+        if autoBtn and autoBtn:IsA("GuiButton") and autoBtn.Visible then
+            if firesignal then
+                firesignal(autoBtn.Activated)
+            else
+                local pos = autoBtn.AbsolutePosition + (autoBtn.AbsoluteSize / 2)
+                local vim = game:GetService("VirtualInputManager")
+                if vim then
+                    vim:SendMouseButtonEvent(pos.X, pos.Y, 0, true, game, 0)
+                    task.wait(0.05)
+                    vim:SendMouseButtonEvent(pos.X, pos.Y, 0, false, game, 0)
+                else
+                    VirtualUser:CaptureController()
+                    VirtualUser:ClickButton1(pos)
+                end
+            end
+            updateStatus("✅ Auto Kick Diaktifkan (1x)!", Color3.fromRGB(100, 240, 120))
+        end
+    end)
+end)
+
+-- =============================================
 -- 📡 DAFTAR EVENT LISTENER
 -- =============================================
 local isMeteorShowerActive = false
