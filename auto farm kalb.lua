@@ -27,62 +27,66 @@ local meteorClaimCount = 0
 local isMeteorShowerActive = false
 
 -- =============================================
--- 🚀 SYSTEM ANTI-LAG & OPTIMISASI EKSTREM
+-- 🚀 SYSTEM ANTI-LAG & OPTIMISASI (BAC SAFE)
 -- =============================================
--- 1. Ubah Map Jadi Potato (Putih & Plastic)
+-- 1. Ubah Map Jadi Potato (Putih & SmoothPlastic)
 for _, v in ipairs(workspace:GetDescendants()) do
-    pcall(function()
-        if v:IsA("BasePart") then
-            v.Material = Enum.Material.Plastic
-            v.Reflectance = 0
-            v.CastShadow = false
-            v.Color = Color3.new(1, 1, 1)
-            if v:IsA("MeshPart") then v.TextureID = "" end
-        elseif v:IsA("Decal") or v:IsA("Texture") or v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Beam") or v:IsA("Fire") or v:IsA("Smoke") or v:IsA("Sparkles") or v:IsA("SpecialMesh") then
-            v:Destroy()
+    if not (lp.Character and (v == lp.Character or v:IsDescendantOf(lp.Character))) then
+        pcall(function()
+            if v:IsA("BasePart") then
+                v.Material = Enum.Material.SmoothPlastic
+                v.Reflectance = 0
+                v.CastShadow = false
+                v.Color = Color3.new(1, 1, 1)
+                if v:IsA("MeshPart") then v.TextureID = "" end
+            elseif v:IsA("SpecialMesh") then
+                v.TextureId = ""
+            elseif v:IsA("Decal") or v:IsA("Texture") then
+                v.Transparency = 1
+            end
+        end)
+    end
+end
+
+-- 2. Sembunyikan Player Lain Secara Stealth (Transparency)
+local function hideOtherPlayer(player)
+    if player ~= lp and player.Character then
+        for _, part in ipairs(player.Character:GetDescendants()) do
+            pcall(function()
+                if part:IsA("BasePart") then
+                    part.Transparency = 1
+                    part.LocalTransparencyModifier = 1
+                    part.CastShadow = false
+                elseif part:IsA("Decal") or part:IsA("Texture") then
+                    part.Transparency = 1
+                end
+            end)
         end
-    end)
-end
-
--- 2. Musnahkan Efek Lighting
-Lighting.GlobalShadows = false
-Lighting.FogEnd = 9e9
-for _, v in ipairs(Lighting:GetDescendants()) do
-    if v:IsA("PostEffect") or v:IsA("BlurEffect") or v:IsA("SunRaysEffect") or v:IsA("ColorCorrectionEffect") or v:IsA("BloomEffect") or v:IsA("DepthOfFieldEffect") or v:IsA("Sky") then
-        pcall(function() v:Destroy() end)
     end
 end
 
--- 3. Hapus Plot 1-5 & Musnahkan Player Lain (FPS Boost)
-local plotsFolder = workspace:FindFirstChild("Plots")
-if plotsFolder then
-    for i = 1, 5 do
-        local plot = plotsFolder:FindFirstChild("Plot" .. tostring(i))
-        if plot then pcall(function() plot:Destroy() end) end
-    end
-end
-
-local function musnahkanPlayer(player)
-    if player ~= lp then
-        if player.Character then pcall(function() player.Character:Destroy() end) end
-        pcall(function() player:Destroy() end)
-    end
-end
-
-for _, player in ipairs(Players:GetPlayers()) do musnahkanPlayer(player) end
+for _, player in ipairs(Players:GetPlayers()) do hideOtherPlayer(player) end
 Players.PlayerAdded:Connect(function(player)
-    task.defer(function() musnahkanPlayer(player) end)
+    player.CharacterAdded:Connect(function()
+        task.wait(0.2)
+        hideOtherPlayer(player)
+    end)
 end)
 
 -- =============================================
--- 🛡️ ANTI AFK
+-- 🛡️ ANTI AFK (BAC SAFE - TANPA VIRTUALUSER)
 -- =============================================
-lp.Idled:Connect(function()
-    VirtualUser:CaptureController()
-    VirtualUser:ClickButton2(Vector2.new())
+task.spawn(function()
+    while task.wait(500) do
+        pcall(function()
+            local char = lp.Character
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if hum and hum.Health > 0 then
+                hum:ChangeState(Enum.HumanoidStateType.Jumping)
+            end
+        end)
+    end
 end)
-
--- =============================================
 -- 📡 CARI REMOTE NETWORK
 -- =============================================
 local networkFolder = ReplicatedStorage:WaitForChild("Shared", 10):WaitForChild("Packages", 10):WaitForChild("Network", 10)
@@ -217,69 +221,108 @@ if rev_RemovedWeather then
 end
 
 -- =============================================
--- ☄️ AUTO METEOR EVENT CLAIMER (WORKSPACE.DEBRIS)
+-- ☄️ AUTO METEOR EVENT CLAIMER (DEBRIS & WORKSPACE)
 -- =============================================
--- METHOD: Resize model meteor jadi SANGAT BESAR (100x) dan posisikan
--- ke karakter pemain. Collision otomatis terjadi karena area touch
--- model yang besar menimpa karakter kita → game auto klaim.
+local MAX_SIZE = Vector3.new(2048, 2048, 2048) -- Ukuran part maksimal engine Roblox
+local processedObjects = {}
 
-local METEOR_SCALE = 9999 -- Faktor pembesaran (SUPER BESAR)
-local processedMeteors = {} -- Tracking agar tidak proses 2x
+local function enlargePart(part)
+    if not part or not part:IsA("BasePart") then return end
+    pcall(function()
+        part.Size = MAX_SIZE
+        part.CanCollide = false
+    end)
+end
 
-local function claimMeteorModel(model)
-    if not model or not model:IsA("Model") then return end
-    if processedMeteors[model] then return end
-    processedMeteors[model] = true
-    
-    for _, part in ipairs(model:GetDescendants()) do
-        if part:IsA("BasePart") then
-            pcall(function()
-                part.Size = part.Size * METEOR_SCALE
-            end)
+local function processMeteorObject(obj)
+    if not obj then return end
+    if processedObjects[obj] then return end
+    processedObjects[obj] = true
+
+    local nameLower = obj.Name:lower()
+    local isTarget = tonumber(obj.Name) ~= nil or nameLower:find("meteor") or nameLower:find("hit")
+
+    if obj:IsA("Model") and isTarget then
+        -- Perbesar semua part di dalam model (Main, RootPart, VFX, dll)
+        for _, descendant in ipairs(obj:GetDescendants()) do
+            if descendant:IsA("BasePart") then
+                enlargePart(descendant)
+            end
         end
+        meteorClaimCount = meteorClaimCount + 1
+        MeteorLabel.Text = string.format("☄️ Meteor Diklaim: %d", meteorClaimCount)
+        updateStatus(string.format("☄️ Enlarge Model #%s!", tostring(obj.Name)), Color3.fromRGB(255, 170, 50))
+    elseif obj:IsA("BasePart") and isTarget then
+        -- Standalone Part seperti HitMeteor
+        enlargePart(obj)
+        meteorClaimCount = meteorClaimCount + 1
+        MeteorLabel.Text = string.format("☄️ Meteor Diklaim: %d", meteorClaimCount)
+        updateStatus(string.format("☄️ Enlarge Part: %s!", tostring(obj.Name)), Color3.fromRGB(255, 170, 50))
     end
 end
 
--- Listener Real-Time: Saat Meteor Baru Muncul di Debris (Hanya saat MeteorShower Aktif)
+-- 1. Scan & Listener di workspace.Debris
 pcall(function()
     local debris = workspace:WaitForChild("Debris", 10)
     if debris then
+        -- Proses yang sudah ada di Debris
+        for _, child in ipairs(debris:GetChildren()) do
+            processMeteorObject(child)
+        end
+
+        -- Listener untuk objek baru di Debris
         debris.ChildAdded:Connect(function(child)
             task.defer(function()
-                if child:IsA("Model") and (tonumber(child.Name) or child.Name:lower():find("meteor")) then
-                    task.wait(0.05)
-                    claimMeteorModel(child)
-                    meteorClaimCount = meteorClaimCount + 1
-                    MeteorLabel.Text = string.format("☄️ Meteor Diklaim: %d", meteorClaimCount)
-                    updateStatus(string.format("☄️ Resize+Claim Meteor #%s!", tostring(child.Name)), Color3.fromRGB(255, 170, 50))
+                task.wait(0.02)
+                processMeteorObject(child)
+                -- Jika child adalah model, listen juga jika sub-part baru masuk
+                if child:IsA("Model") then
+                    for _, sub in ipairs(child:GetDescendants()) do
+                        if sub:IsA("BasePart") then enlargePart(sub) end
+                    end
+                    child.DescendantAdded:Connect(function(sub)
+                        if sub:IsA("BasePart") then enlargePart(sub) end
+                    end)
                 end
             end)
+        end)
+
+        debris.ChildRemoved:Connect(function(child)
+            processedObjects[child] = nil
         end)
     end
 end)
 
--- Background Sweeper: Memastikan Tidak Ada Meteor yang Terlewat (Hanya saat MeteorShower Aktif)
+-- 2. Scan & Listener di Workspace langsung (untuk model 1, 2, atau HitMeteor yang spawn di workspace)
+workspace.ChildAdded:Connect(function(child)
+    task.defer(function()
+        if tonumber(child.Name) or child.Name:find("HitMeteor") or child.Name:lower():find("meteor") then
+            task.wait(0.02)
+            processMeteorObject(child)
+            if child:IsA("Model") then
+                child.DescendantAdded:Connect(function(sub)
+                    if sub:IsA("BasePart") then enlargePart(sub) end
+                end)
+            end
+        end
+    end)
+end)
+
+-- 3. Background Sweeper Rutin (Setiap 0.2 detik)
 task.spawn(function()
     while task.wait(0.2) do
         if not _G.autoFarm then continue end
         local debris = workspace:FindFirstChild("Debris")
         if debris then
             for _, child in ipairs(debris:GetChildren()) do
-                if child:IsA("Model") and (tonumber(child.Name) or child.Name:lower():find("meteor")) then
-                    claimMeteorModel(child)
-                end
+                processMeteorObject(child)
             end
         end
-    end
-end)
-
--- Cleanup tracker saat meteor dihapus dari Debris
-pcall(function()
-    local debris = workspace:FindFirstChild("Debris")
-    if debris then
-        debris.ChildRemoved:Connect(function(child)
-            processedMeteors[child] = nil
-        end)
+        for _, child in ipairs(workspace:GetChildren()) do
+            if tonumber(child.Name) or child.Name:find("HitMeteor") then
+                processMeteorObject(child)
+            end
+        end
     end
 end)
 
