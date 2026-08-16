@@ -304,55 +304,63 @@ local function triggerMinigameTap()
     end)
 end
 
--- Helper Instant Perfect Kick (Pure GUI Flow dengan Auto Tap Akurat)
+-- Helper Instant Perfect Kick (Visual Minigame + Auto Tap Presisi Puncak + Loop Tanpa Henti)
 local isExecutingKick = false
 local function doKick()
     if isExecutingKick then return end
     isExecutingKick = true
 
     task.spawn(function()
-        -- 1. Tekan tombol KickButton di HUD
-        clickKickButton()
-        
-        -- 2. Tunggu KickMinigame benar-benar terbuka (Timeout 1.5s)
-        local playerGui = lp:FindFirstChild("PlayerGui")
-        local kickMinigame = nil
-        local startWait = os.clock()
-        while os.clock() - startWait < 1.5 do
-            kickMinigame = playerGui and playerGui:FindFirstChild("KickMinigame")
-            if kickMinigame and (kickMinigame.Enabled or kickMinigame.Visible) then
-                break
-            end
-            task.wait(0.05)
-        end
-
-        -- 3. Pantau MovingBar dan eksekusi Tap saat di Zona Hijau Perfect
-        if kickMinigame and (kickMinigame.Enabled or kickMinigame.Visible) then
-            local movingBar = kickMinigame:FindFirstChild("MovingBar", true)
-            local barWaitStart = os.clock()
-            local tapped = false
+        local success = pcall(function()
+            -- 1. Tekan tombol KickButton di HUD agar minigame terbuka
+            clickKickButton()
             
-            while os.clock() - barWaitStart < 2.5 and kickMinigame.Parent and (kickMinigame.Enabled or kickMinigame.Visible) do
-                if movingBar then
-                    local c = movingBar.BackgroundColor3
-                    -- Deteksi zona hijau puncak (AbsY >= 120 atau Hijau)
-                    if movingBar.AbsoluteSize.Y >= 120 or (c.G > 0.88 and c.R < 0.6) then
-                        triggerMinigameTap()
-                        tapped = true
-                        break
-                    end
+            -- 2. Tunggu KickMinigame aktif
+            local playerGui = lp:FindFirstChild("PlayerGui")
+            local kickMinigame = nil
+            local startWait = os.clock()
+            while os.clock() - startWait < 1.5 do
+                kickMinigame = playerGui and playerGui:FindFirstChild("KickMinigame")
+                if kickMinigame and (kickMinigame.Enabled or kickMinigame.Visible) then
+                    break
                 end
-                task.wait()
+                task.wait(0.03)
             end
-            
-            -- Failsafe tap jika waktu tunggu habis
-            if not tapped then
+
+            -- 3. Pantau MovingBar dan eksekusi Tap TEPAT di Puncak Hijau (AbsY >= 130)
+            if kickMinigame and (kickMinigame.Enabled or kickMinigame.Visible) then
+                local movingBar = kickMinigame:FindFirstChild("MovingBar", true)
+                local barWaitStart = os.clock()
+                local tapped = false
+                
+                while os.clock() - barWaitStart < 3 and kickMinigame.Parent and (kickMinigame.Enabled or kickMinigame.Visible) do
+                    if movingBar then
+                        local c = movingBar.BackgroundColor3
+                        -- Puncak Perfect: AbsY >= 128 atau Warna Hijau Puncak (R < 130, G > 235, B > 95)
+                        if movingBar.AbsoluteSize.Y >= 128 or (c.R <= (130/255) and c.G >= (235/255) and c.B >= (95/255)) then
+                            triggerMinigameTap()
+                            tapped = true
+                            break
+                        end
+                    end
+                    RunService.RenderStepped:Wait()
+                end
+                
+                if not tapped then
+                    triggerMinigameTap()
+                end
+            else
                 triggerMinigameTap()
             end
-        else
-            -- Failsafe tap langsung
-            triggerMinigameTap()
-        end
+
+            -- 4. Konfirmasi Perfect Max Kick ke Server agar 100% Tercatat Perfect
+            local timestamp = workspace:GetServerTimeNow() or tick()
+            if ref_KickEvent then
+                pcall(function()
+                    ref_KickEvent:InvokeServer(1, 1, timestamp)
+                end)
+            end
+        end)
 
         phase2Fired = true
         task.wait(0.3)
@@ -464,7 +472,7 @@ task.spawn(function()
 
         -- [ FASE 5: NUNGGU COLLECTED ATAU KICKENDED (LANGSUNG KICK KEMBALI) ]
         elseif _G.targetAction == "WaitingForCollected" then
-            if collectedFired or kickEndedFired then
+            if collectedFired or kickEndedFired or _G.stateTimer >= 2.0 then
                 collectedFired = false
                 kickEndedFired = false
                 _G.mutationCount = _G.mutationCount + 1
@@ -473,8 +481,6 @@ task.spawn(function()
                 phase2Fired = false
                 doKick()
                 _G.targetAction = "WaitingForPhase2"
-            elseif _G.stateTimer > 5 then
-                _G.targetAction = "Idle"
             end
 
         -- [ FASE EX-1: TELEPORT KE LUCK MACHINE ]
