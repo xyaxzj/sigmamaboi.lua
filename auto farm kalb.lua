@@ -118,21 +118,35 @@ if plotsFolder then
     end)
 end
 
--- 3. Hapus Karakter Player Lain
-local function removeOtherPlayer(player)
-    if player ~= lp then
-        if player.Character then
-            pcall(function() player.Character:Destroy() end)
-        end
+-- 3. Hapus Total Player Lain & Data-Datanya (Character, Leaderstats, Instance)
+local function purgePlayerTotal(player)
+    if player and player ~= lp then
+        pcall(function()
+            if player.Character then
+                player.Character:ClearAllChildren()
+                player.Character:Destroy()
+            end
+        end)
+        pcall(function()
+            player:ClearAllChildren()
+            player:Destroy()
+        end)
     end
 end
 
-for _, player in ipairs(Players:GetPlayers()) do removeOtherPlayer(player) end
+for _, player in ipairs(Players:GetPlayers()) do purgePlayerTotal(player) end
 Players.PlayerAdded:Connect(function(player)
     if player ~= lp then
+        task.defer(function()
+            purgePlayerTotal(player)
+        end)
         player.CharacterAdded:Connect(function(char)
-            task.wait(0.1)
-            pcall(function() char:Destroy() end)
+            task.defer(function()
+                pcall(function()
+                    char:ClearAllChildren()
+                    char:Destroy()
+                end)
+            end)
         end)
     end
 end)
@@ -280,7 +294,7 @@ if rev_RemovedWeather then
 end
 
 -- =============================================
--- ☄️ AUTO METEOR EVENT CLAIMER (DEBRIS & WORKSPACE)
+-- ☄️ AUTO METEOR EVENT CLAIMER (KHUSUS WORKSPACE.DEBRIS)
 -- =============================================
 local MAX_SIZE = Vector3.new(2048, 2048, 2048) -- Ukuran part maksimal engine Roblox
 local processedObjects = {}
@@ -293,16 +307,13 @@ local function enlargePart(part)
     end)
 end
 
-local function processMeteorObject(obj)
+local function processDebrisItem(obj)
     if not obj then return end
     if processedObjects[obj] then return end
     processedObjects[obj] = true
 
-    local nameLower = obj.Name:lower()
-    local isTarget = tonumber(obj.Name) ~= nil or nameLower:find("meteor") or nameLower:find("hit")
-
-    if obj:IsA("Model") and isTarget then
-        -- Perbesar semua part di dalam model (Main, RootPart, VFX, dll)
+    if obj:IsA("Model") then
+        -- Perbesar semua part di dalam model meteor di Debris (Main, RootPart, VFX, dll)
         for _, descendant in ipairs(obj:GetDescendants()) do
             if descendant:IsA("BasePart") then
                 enlargePart(descendant)
@@ -310,31 +321,31 @@ local function processMeteorObject(obj)
         end
         meteorClaimCount = meteorClaimCount + 1
         MeteorLabel.Text = string.format("☄️ Meteor Diklaim: %d", meteorClaimCount)
-        updateStatus(string.format("☄️ Enlarge Model #%s!", tostring(obj.Name)), Color3.fromRGB(255, 170, 50))
-    elseif obj:IsA("BasePart") and isTarget then
-        -- Standalone Part seperti HitMeteor
+        updateStatus(string.format("☄️ Enlarge Debris Model #%s!", tostring(obj.Name)), Color3.fromRGB(255, 170, 50))
+    elseif obj:IsA("BasePart") then
+        -- Standalone Part di dalam Debris seperti HitMeteor
         enlargePart(obj)
         meteorClaimCount = meteorClaimCount + 1
         MeteorLabel.Text = string.format("☄️ Meteor Diklaim: %d", meteorClaimCount)
-        updateStatus(string.format("☄️ Enlarge Part: %s!", tostring(obj.Name)), Color3.fromRGB(255, 170, 50))
+        updateStatus(string.format("☄️ Enlarge Debris Part: %s!", tostring(obj.Name)), Color3.fromRGB(255, 170, 50))
     end
 end
 
--- 1. Scan & Listener di workspace.Debris
+-- 1. Scan & Listener Eksklusif di workspace.Debris
 pcall(function()
     local debris = workspace:WaitForChild("Debris", 10)
     if debris then
-        -- Proses yang sudah ada di Debris
+        -- Proses item yang sudah ada di Debris
         for _, child in ipairs(debris:GetChildren()) do
-            processMeteorObject(child)
+            processDebrisItem(child)
         end
 
-        -- Listener untuk objek baru di Debris
+        -- Listener untuk objek baru yang masuk ke Debris
         debris.ChildAdded:Connect(function(child)
             task.defer(function()
                 task.wait(0.02)
-                processMeteorObject(child)
-                -- Jika child adalah model, listen juga jika sub-part baru masuk
+                processDebrisItem(child)
+                -- Jika child adalah model, listen juga jika ada sub-part baru masuk
                 if child:IsA("Model") then
                     for _, sub in ipairs(child:GetDescendants()) do
                         if sub:IsA("BasePart") then enlargePart(sub) end
@@ -352,34 +363,14 @@ pcall(function()
     end
 end)
 
--- 2. Scan & Listener di Workspace langsung (untuk model 1, 2, atau HitMeteor yang spawn di workspace)
-workspace.ChildAdded:Connect(function(child)
-    task.defer(function()
-        if tonumber(child.Name) or child.Name:find("HitMeteor") or child.Name:lower():find("meteor") then
-            task.wait(0.02)
-            processMeteorObject(child)
-            if child:IsA("Model") then
-                child.DescendantAdded:Connect(function(sub)
-                    if sub:IsA("BasePart") then enlargePart(sub) end
-                end)
-            end
-        end
-    end)
-end)
-
--- 3. Background Sweeper Rutin (Setiap 0.2 detik)
+-- 2. Background Sweeper Rutin (Hanya memeriksa workspace.Debris)
 task.spawn(function()
     while task.wait(0.2) do
         if not _G.autoFarm then continue end
         local debris = workspace:FindFirstChild("Debris")
         if debris then
             for _, child in ipairs(debris:GetChildren()) do
-                processMeteorObject(child)
-            end
-        end
-        for _, child in ipairs(workspace:GetChildren()) do
-            if tonumber(child.Name) or child.Name:find("HitMeteor") then
-                processMeteorObject(child)
+                processDebrisItem(child)
             end
         end
     end
