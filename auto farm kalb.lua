@@ -1,41 +1,47 @@
+-- ==============================================================================
+-- ⚡ AUTO FARM KALB (REVERSED & PROVEN INSTANT PERFECT KICK)
+-- ==============================================================================
+-- Berdasarkan hasil sniffing reverse-engineering terhadap hub script lain:
+-- 1. Berada di Safe Zone
+-- 2. Direct Invoke: ref_KickEvent:InvokeServer(1, 1, timestamp) -> 100% Perfect Max Power
+-- 3. Server memproses penerbangan bola & menembakkan rev_kickPhase2 saat mendarat (Reward Mutation)
+-- 4. Langsung melakukan kick ulang begitu rev_kickPhase2 diterima (Loop Tanpa Cooldown/Stuck)
+-- ==============================================================================
+
 if not game:IsLoaded() then game.Loaded:Wait() end
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local VirtualUser = game:GetService("VirtualUser")
 local CoreGui = game:GetService("CoreGui")
-local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
 local lp = Players.LocalPlayer
 
 -- =============================================
 -- ⚙️ KONFIGURASI 
 -- =============================================
-_G.autoFarm = true              
-_G.animDelay = 5              
+_G.autoFarm = true
+_G.mutationCount = 0
 
 -- =============================================
 -- 🚀 SYSTEM ANTI-LAG & OPTIMISASI EKSTREM
 -- =============================================
--- 1. UBAH MAP JADI POTATO (PUTIH & PLASTIC)
+-- 1. Ubah Map Jadi Potato (Putih & Plastic)
 for _, v in ipairs(workspace:GetDescendants()) do
     pcall(function()
         if v:IsA("BasePart") then
             v.Material = Enum.Material.Plastic
             v.Reflectance = 0
             v.CastShadow = false
-            v.Color = Color3.new(1, 1, 1) -- Mengubah warna map jadi putih bersih
-            
-            if v:IsA("MeshPart") then
-                v.TextureID = ""
-            end
+            v.Color = Color3.new(1, 1, 1)
+            if v:IsA("MeshPart") then v.TextureID = "" end
         elseif v:IsA("Decal") or v:IsA("Texture") or v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Beam") or v:IsA("Fire") or v:IsA("Smoke") or v:IsA("Sparkles") or v:IsA("SpecialMesh") then
             v:Destroy()
         end
     end)
 end
 
--- 2. MUSNAHKAN EFEK LIGHTING & LANGIT
+-- 2. Musnahkan Lighting Effects
 Lighting.GlobalShadows = false
 Lighting.FogEnd = 9e9
 for _, v in ipairs(Lighting:GetDescendants()) do
@@ -44,83 +50,26 @@ for _, v in ipairs(Lighting:GetDescendants()) do
     end
 end
 
--- 3. HAPUS FOLDER PLOT 1 SAMPAI 5
+-- 3. Hapus Plot 1-5 & Musnahkan Player Lain (FPS Boost)
 local plotsFolder = workspace:FindFirstChild("Plots")
 if plotsFolder then
     for i = 1, 5 do
         local plot = plotsFolder:FindFirstChild("Plot" .. tostring(i))
-        if plot then
-            pcall(function() plot:Destroy() end)
-        end
+        if plot then pcall(function() plot:Destroy() end) end
     end
 end
 
--- 4. PEMBANTAIAN PLAYER (REMOVE PLAYER LAIN)
 local function musnahkanPlayer(player)
     if player ~= lp then
-        -- 1. Hapus jika wujud karakternya saat ini sudah ada di map
-        if player.Character then
-            pcall(function() player.Character:Destroy() end)
-        end
-        
-        -- 2. Hapus objek Player fisik beserta datanya dari game.Players di sisi client
+        if player.Character then pcall(function() player.Character:Destroy() end) end
         pcall(function() player:Destroy() end)
     end
 end
 
--- Eksekusi ke player yang sudah ada di server sekarang
-for _, player in ipairs(Players:GetPlayers()) do
-    musnahkanPlayer(player)
-end
-
--- Eksekusi ke player yang baru join ke server nanti
+for _, player in ipairs(Players:GetPlayers()) do musnahkanPlayer(player) end
 Players.PlayerAdded:Connect(function(player)
-    task.defer(function()
-        musnahkanPlayer(player)
-    end)
+    task.defer(function() musnahkanPlayer(player) end)
 end)
-
--- Perangkap Ekstrem & Pembersihan Karakter (Mendeteksi Humanoid secara rekursif)
-local function periksaDanHapus(descendant)
-    if descendant:IsA("Humanoid") then
-        local charModel = descendant.Parent
-        if charModel and charModel:IsA("Model") and charModel.Name ~= lp.Name then
-            pcall(function() charModel:Destroy() end)
-        end
-    end
-end
-
--- Bersihkan karakter player lain yang sudah terlanjur ada di workspace
-for _, descendant in ipairs(workspace:GetDescendants()) do
-    if descendant:IsA("Model") and descendant:FindFirstChildOfClass("Humanoid") and descendant.Name ~= lp.Name then
-        pcall(function() descendant:Destroy() end)
-    end
-end
-
--- Pasang listener real-time untuk mendeteksi humanoid baru yang di-load
-workspace.DescendantAdded:Connect(function(descendant)
-    task.defer(periksaDanHapus, descendant)
-end)
-
--- =============================================
--- 🧠 VARIABEL OTAK UTAMA (STATE MACHINE)
--- =============================================
-_G.targetAction = "Idle"
-_G.lastAction = "Idle"
-_G.nextAction = "Idle"          
-_G.stateTimer = 0               
-_G.globalStuckTimer = 0         
-_G.mutationCount = 0            
-_G.targetItemPos = nil          
-local safeZone = Vector3.new(698.030701, 3.298559, 233.707077)
-local safeZoneCFrame = CFrame.new(698.030701, 3.298559, 233.707077, -0.061024, -0.000000, 0.998136, -0.000000, 1.000000, 0.000000, -0.998136, -0.000000, -0.061024)
-
--- =============================================
--- ⬛ HAPUS BLACKSCREEN UI JIKA ADA
--- =============================================
-local guiParent = pcall(function() return CoreGui end) and CoreGui or lp:WaitForChild("PlayerGui")
-local oldGui = guiParent:FindFirstChild("AFK_Blackscreen")
-if oldGui then oldGui:Destroy() end 
 
 -- =============================================
 -- 🛡️ ANTI AFK
@@ -131,64 +80,129 @@ lp.Idled:Connect(function()
 end)
 
 -- =============================================
--- 📡 CARI REMOTE
+-- 📍 KOORDINAT SAFE ZONE
 -- =============================================
-local kickRemote = nil
-local ref_KickEvent = nil
+local safeZone = Vector3.new(698.030701, 3.298559, 233.707077)
+local safeZoneCFrame = CFrame.new(698.030701, 3.298559, 233.707077, -0.061024, -0.000000, 0.998136, -0.000000, 1.000000, 0.000000, -0.998136, -0.000000, -0.061024)
+
+-- =============================================
+-- 📡 CARI REMOTE NETWORK
+-- =============================================
 local networkFolder = ReplicatedStorage:WaitForChild("Shared", 10):WaitForChild("Packages", 10):WaitForChild("Network", 10)
-if networkFolder then
-    kickRemote = networkFolder:FindFirstChild("rev_KickEvent")
-    ref_KickEvent = networkFolder:FindFirstChild("ref_KickEvent") or networkFolder:WaitForChild("ref_KickEvent", 5)
-end
+local ref_KickEvent = networkFolder and (networkFolder:FindFirstChild("ref_KickEvent") or networkFolder:WaitForChild("ref_KickEvent", 5))
 
 if not ref_KickEvent then
     for _, r in pairs(ReplicatedStorage:GetDescendants()) do
         if r.Name == "ref_KickEvent" and r:IsA("RemoteFunction") then
-            ref_KickEvent = r; break
-        elseif r.Name == "rev_KickEvent" and r:IsA("RemoteEvent") then
-            kickRemote = r
+            ref_KickEvent = r
+            break
         end
     end
 end
 
 local rev_kickPhase2 = networkFolder and networkFolder:WaitForChild("rev_kickPhase2", 15)
 local rev_KickData = networkFolder and networkFolder:WaitForChild("rev_KickData", 15)
-local rev_Collected = networkFolder and networkFolder:WaitForChild("rev_Collected", 15)
-local rev_KickEventEnded = networkFolder and networkFolder:WaitForChild("rev_KickEventEnded", 15)
 local rev_AddedWeather = networkFolder and networkFolder:WaitForChild("rev_AddedWeather", 15)
 local rev_PlayMessage = networkFolder and networkFolder:WaitForChild("rev_PlayMessage", 15)
 
 -- =============================================
+-- 📊 FLOATING STATUS HUD ON-SCREEN
+-- =============================================
+local guiParent = pcall(function() return CoreGui end) and CoreGui or lp:WaitForChild("PlayerGui")
+local oldHud = guiParent:FindFirstChild("KalbFarmStatusGui")
+if oldHud then oldHud:Destroy() end
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "KalbFarmStatusGui"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = guiParent
+
+local StatusFrame = Instance.new("Frame")
+StatusFrame.Size = UDim2.new(0, 260, 0, 90)
+StatusFrame.Position = UDim2.new(0, 15, 0, 15)
+StatusFrame.BackgroundColor3 = Color3.fromRGB(15, 18, 26)
+StatusFrame.BorderSizePixel = 0
+StatusFrame.Active = true
+StatusFrame.Draggable = true
+StatusFrame.Parent = ScreenGui
+
+local Corner = Instance.new("UICorner")
+Corner.CornerRadius = UDim.new(0, 8)
+Corner.Parent = StatusFrame
+
+local Stroke = Instance.new("UIStroke")
+Stroke.Color = Color3.fromRGB(70, 180, 120)
+Stroke.Thickness = 1.2
+Stroke.Parent = StatusFrame
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, -10, 0, 22)
+Title.Position = UDim2.new(0, 8, 0, 4)
+Title.BackgroundTransparency = 1
+Title.Font = Enum.Font.GothamBold
+Title.Text = "⚡ KALB PERFECT AUTO FARM"
+Title.TextColor3 = Color3.fromRGB(100, 240, 140)
+Title.TextSize = 11
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = StatusFrame
+
+local StatusLabel = Instance.new("TextLabel")
+StatusLabel.Size = UDim2.new(1, -10, 0, 20)
+StatusLabel.Position = UDim2.new(0, 8, 0, 28)
+StatusLabel.BackgroundTransparency = 1
+StatusLabel.Font = Enum.Font.GothamMedium
+StatusLabel.Text = "Status: Memulai..."
+StatusLabel.TextColor3 = Color3.fromRGB(240, 240, 255)
+StatusLabel.TextSize = 11
+StatusLabel.TextXAlignment = Enum.TextXAlignment.Left
+StatusLabel.Parent = StatusFrame
+
+local RewardLabel = Instance.new("TextLabel")
+RewardLabel.Size = UDim2.new(1, -10, 0, 20)
+RewardLabel.Position = UDim2.new(0, 8, 0, 50)
+RewardLabel.BackgroundTransparency = 1
+RewardLabel.Font = Enum.Font.GothamBold
+RewardLabel.Text = "Total Brainrots: 0"
+RewardLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
+RewardLabel.TextSize = 12
+RewardLabel.TextXAlignment = Enum.TextXAlignment.Left
+RewardLabel.Parent = StatusFrame
+
+local function updateStatus(text, color)
+    StatusLabel.Text = "Status: " .. tostring(text)
+    if color then StatusLabel.TextColor3 = color end
+end
+
+-- =============================================
 -- 📡 DAFTAR EVENT LISTENER
 -- =============================================
-local phase2Fired = false
-local collectedFired = false
-local kickEndedFired = false
+local currentFlightEnd = 0
+local phase2Received = false
 local weatherEventPending = false
 local luckBuffObtained = false
 
 if rev_kickPhase2 then
-    rev_kickPhase2.OnClientEvent:Connect(function(...)
-        phase2Fired = true
+    rev_kickPhase2.OnClientEvent:Connect(function(rewardTable, ...)
+        phase2Received = true
+        _G.mutationCount = _G.mutationCount + 1
+        
+        local rewardName = "Unknown"
+        local mutationType = "Normal"
+        pcall(function()
+            if type(rewardTable) == "table" and rewardTable[1] then
+                rewardName = tostring(rewardTable[1].Name or "Brainrot")
+                mutationType = tostring(rewardTable[1].Mutation or "Normal")
+            end
+        end)
+        
+        RewardLabel.Text = string.format("Brainrot: %s (%s) | Total: %d", rewardName, mutationType, _G.mutationCount)
+        updateStatus(string.format("🎉 Didapat: %s [%s]!", rewardName, mutationType), Color3.fromRGB(100, 240, 120))
     end)
 end
 
 if rev_KickData then
-    rev_KickData.OnClientEvent:Connect(function(...)
-        phase2Fired = true
-        collectedFired = true
-    end)
-end
-
-if rev_Collected then
-    rev_Collected.OnClientEvent:Connect(function(...)
-        collectedFired = true
-    end)
-end
-
-if rev_KickEventEnded then
-    rev_KickEventEnded.OnClientEvent:Connect(function(...)
-        kickEndedFired = true
+    rev_KickData.OnClientEvent:Connect(function(powerVal, distVal)
+        updateStatus(string.format("🚀 Bola Melayang! Jarak: %sm", tostring(distVal)), Color3.fromRGB(255, 200, 80))
     end)
 end
 
@@ -208,349 +222,125 @@ if rev_PlayMessage then
     end)
 end
 
-local VirtualInputManager = nil
-pcall(function()
-    VirtualInputManager = game:GetService("VirtualInputManager")
-end)
-
--- Helper Tekan Tombol Kick di HUD
-local function clickKickButton()
-    pcall(function()
-        local playerGui = lp:FindFirstChild("PlayerGui")
-        local hud = playerGui and playerGui:FindFirstChild("HUD")
-        local kickButton = hud and (hud:FindFirstChild("KickButton", true) or hud:FindFirstChild("Kick", true))
-        
-        if kickButton and kickButton:IsA("GuiButton") and kickButton.Visible then
-            if firesignal then
-                firesignal(kickButton.MouseButton1Click)
-                firesignal(kickButton.MouseButton1Down)
-                firesignal(kickButton.MouseButton1Up)
-                firesignal(kickButton.Activated)
-            end
-            
-            pcall(function()
-                local pos = kickButton.AbsolutePosition + (kickButton.AbsoluteSize / 2)
-                if VirtualInputManager then
-                    VirtualInputManager:SendMouseButtonEvent(pos.X, pos.Y, 0, true, game, 0)
-                    task.wait(0.02)
-                    VirtualInputManager:SendMouseButtonEvent(pos.X, pos.Y, 0, false, game, 0)
-                else
-                    VirtualUser:CaptureController()
-                    VirtualUser:ClickButton1(pos)
-                end
-            end)
-        end
-    end)
-end
-
--- Helper Eksekusi Tap / Klik Minigame (Simultan: Mobile Touch, Mouse, Spacebar & UserInputService)
-local function triggerMinigameTap()
-    pcall(function()
-        local cam = workspace.CurrentCamera
-        local center = cam and Vector2.new(cam.ViewportSize.X / 2, cam.ViewportSize.Y / 2) or Vector2.new(500, 500)
-        local uis = game:GetService("UserInputService")
-
-        -- 1. Simulasi Mobile Touch VirtualInputManager (Touch Index 0: Begin -> End)
-        if VirtualInputManager then
-            pcall(function()
-                VirtualInputManager:SendTouchEvent(0, 0, center.X, center.Y) -- 0 = TouchBegin
-                task.wait(0.02)
-                VirtualInputManager:SendTouchEvent(0, 2, center.X, center.Y) -- 2 = TouchEnd
-            end)
-            
-            pcall(function()
-                VirtualInputManager:SendMouseButtonEvent(center.X, center.Y, 0, true, game, 0)
-                task.wait(0.02)
-                VirtualInputManager:SendMouseButtonEvent(center.X, center.Y, 0, false, game, 0)
-            end)
-
-            pcall(function()
-                VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
-                task.wait(0.02)
-                VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
-            end)
-        end
-        
-        -- 2. Simulasi VirtualUser (Button1Down/Up + ClickButton1)
+-- =============================================
+-- 🚀 FUNGSI PROVEN INSTANT PERFECT KICK
+-- =============================================
+local function executePerfectKick()
+    local timestamp = workspace:GetServerTimeNow() or tick()
+    phase2Received = false
+    
+    local results = table.pack(pcall(function()
+        return ref_KickEvent:InvokeServer(1, 1, timestamp)
+    end))
+    
+    if results[1] and results[2] == true then
+        local flightData = results[5] -- #4 return table {KickEnd, KickStart}
+        local flightTime = 16
         pcall(function()
-            VirtualUser:CaptureController()
-            VirtualUser:Button1Down(center)
-            task.wait(0.02)
-            VirtualUser:Button1Up(center)
-            VirtualUser:ClickButton1(center)
-        end)
-
-        -- 3. Firesignal Langsung ke UserInputService (Touch & Mouse InputBegan)
-        if firesignal then
-            pcall(function()
-                local mockTouch = {
-                    UserInputType = Enum.UserInputType.Touch,
-                    UserInputState = Enum.UserInputState.Begin,
-                    Position = Vector3.new(center.X, center.Y, 0)
-                }
-                firesignal(uis.InputBegan, mockTouch, false)
-                firesignal(uis.TouchStarted, mockTouch, false)
-                firesignal(uis.TouchTap, {Vector2.new(center.X, center.Y)}, false)
-            end)
-            pcall(function()
-                local mockMouse = {
-                    UserInputType = Enum.UserInputType.MouseButton1,
-                    UserInputState = Enum.UserInputState.Begin,
-                    Position = Vector3.new(center.X, center.Y, 0)
-                }
-                firesignal(uis.InputBegan, mockMouse, false)
-            end)
-        end
-    end)
-end
-
--- Helper Instant Perfect Kick (Visual Minigame + Auto Tap Presisi Puncak + Loop Tanpa Henti)
-local isExecutingKick = false
-local function doKick()
-    if isExecutingKick then return end
-    isExecutingKick = true
-
-    task.spawn(function()
-        local success = pcall(function()
-            -- 1. Tekan tombol KickButton di HUD agar minigame terbuka
-            clickKickButton()
-            
-            -- 2. Tunggu KickMinigame aktif
-            local playerGui = lp:FindFirstChild("PlayerGui")
-            local kickMinigame = nil
-            local startWait = os.clock()
-            while os.clock() - startWait < 1.5 do
-                kickMinigame = playerGui and playerGui:FindFirstChild("KickMinigame")
-                if kickMinigame and (kickMinigame.Enabled or kickMinigame.Visible) then
-                    break
-                end
-                task.wait(0.03)
-            end
-
-            -- 3. Pantau MovingBar dan eksekusi Tap TEPAT di Puncak Hijau (AbsY >= 130)
-            if kickMinigame and (kickMinigame.Enabled or kickMinigame.Visible) then
-                local movingBar = kickMinigame:FindFirstChild("MovingBar", true)
-                local barWaitStart = os.clock()
-                local tapped = false
-                
-                while os.clock() - barWaitStart < 3 and kickMinigame.Parent and (kickMinigame.Enabled or kickMinigame.Visible) do
-                    if movingBar then
-                        local c = movingBar.BackgroundColor3
-                        -- Puncak Perfect: AbsY >= 128 atau Warna Hijau Puncak (R < 130, G > 235, B > 95)
-                        if movingBar.AbsoluteSize.Y >= 128 or (c.R <= (130/255) and c.G >= (235/255) and c.B >= (95/255)) then
-                            triggerMinigameTap()
-                            tapped = true
-                            break
-                        end
-                    end
-                    RunService.RenderStepped:Wait()
-                end
-                
-                if not tapped then
-                    triggerMinigameTap()
-                end
-            else
-                triggerMinigameTap()
-            end
-
-            -- 4. Konfirmasi Perfect Max Kick ke Server agar 100% Tercatat Perfect
-            local timestamp = workspace:GetServerTimeNow() or tick()
-            if ref_KickEvent then
-                pcall(function()
-                    ref_KickEvent:InvokeServer(1, 1, timestamp)
-                end)
+            if type(flightData) == "table" and flightData.KickEnd and flightData.KickStart then
+                flightTime = math.max(2, flightData.KickEnd - flightData.KickStart)
             end
         end)
-
-        phase2Fired = true
-        task.wait(0.3)
-        isExecutingKick = false
-    end)
+        
+        currentFlightEnd = os.clock() + flightTime
+        return true, flightTime
+    else
+        return false, 2
+    end
 end
 
 -- =============================================
--- ⚙️ MAIN LOOP (STATE MACHINE - OPTIMIZED)
+-- ⚙️ MAIN LOOP (PROVEN INSTANT KICK FARM)
 -- =============================================
 task.spawn(function()
-    while task.wait(0.05) do
+    updateStatus("🚀 Auto Farm Aktif!", Color3.fromRGB(100, 240, 120))
+    
+    while task.wait(0.1) do
         if not _G.autoFarm then continue end
 
         local char = lp.Character
         local hum = char and char:FindFirstChild("Humanoid")
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
 
-        if not hum or not hrp then 
-            -- Coba wait jika character belum dimuat
-            continue 
-        end 
+        if not hum or not hrp then continue end
 
-        -- [ PENDETEKSI MATI ]
+        -- Reset jika mati
         if hum.Health <= 0 then
-            _G.targetAction = "WaitingRespawn"
-            _G.lastAction = "WaitingRespawn"
-            _G.globalStuckTimer = 0
-            continue 
+            updateStatus("Menunggu respawn...", Color3.fromRGB(255, 100, 100))
+            task.wait(1)
+            continue
         end
 
-        -- [ PENDETEKSI HIDUP KEMBALI ]
-        if _G.targetAction == "WaitingRespawn" and hum.Health > 0 then
-            _G.targetAction = "Idle"
-            _G.lastAction = "Idle"
-        end
-
-        -- ==========================================
-        -- 🚨 PENGATUR WAKTU OTOMATIS & FAILSAFE 25s
-        -- ==========================================
-        if _G.targetAction ~= _G.lastAction then
-            _G.globalStuckTimer = 0
-            _G.stateTimer = 0 
-            _G.lastAction = _G.targetAction
-        else
-            _G.globalStuckTimer = _G.globalStuckTimer + 0.05
-            _G.stateTimer = _G.stateTimer + 0.05 
-            
-            -- Failsafe 25 detik dinonaktifkan saat sedang berada di Luck Machine agar tidak mati prematur
-            if _G.globalStuckTimer >= 25 and _G.targetAction ~= "LuckMachineTraining" and _G.targetAction ~= "LuckMachineTeleport" then
-                _G.globalStuckTimer = 0
-                _G.targetAction = "WaitingRespawn"
-                hum.Health = 0 
-                continue
-            end
-        end
-
-        -- [ INTERUPSI EVENT CUACA (PAUSE AUTO FARM KECUALI SEDANG PULANG KE SAFE ZONE) ]
+        -- [ EVENT CUACA LUCK MACHINE ]
         if weatherEventPending then
-            if _G.targetAction ~= "WalkToSafeZone" then
-                weatherEventPending = false
-                luckBuffObtained = false
-                _G.targetAction = "LuckMachineTeleport"
-            end
-        end
-
-        local distToSafeZone = (hrp.Position - safeZone).Magnitude
-
-        -- [ FASE 1: IDLE / NENDANG (JEDA HANYA DI SPAWN) ]
-        if _G.targetAction == "Idle" then
-            if distToSafeZone > 10 then
-                -- Jeda 1 detik setelah hidup di spawn sebelum teleport agar cepat aktif
-                if _G.stateTimer >= 1 then
-                    hrp.CFrame = safeZoneCFrame
-                    _G.stateTimer = 0 
-                end
-            else
-                -- Jeda 0.5 detik setelah teleport agar server mereplikasi posisi baru sebelum kick
-                if _G.stateTimer >= 0.5 then
-                    phase2Fired = false
-                    collectedFired = false
-                    kickEndedFired = false
-                    doKick()
-                    _G.targetAction = "WaitingForPhase2"
-                end
-            end
-
-        -- [ FASE 2: NUNGGU PHASE 2 ]
-        elseif _G.targetAction == "WaitingForPhase2" then
-            if phase2Fired then
-                phase2Fired = false
-                _G.targetAction = "PlayingAnim"
-            elseif _G.stateTimer > 5 then
-                _G.targetAction = "Idle"
-            end
-
-        -- [ FASE 3: NUNGGU ANIMASI GACHA (5 DETIK) ]
-        elseif _G.targetAction == "PlayingAnim" then
-            if _G.stateTimer >= _G.animDelay then
-                _G.targetAction = "WalkToSafeZone"
-            end
-
-        -- [ FASE 4: JALAN BALIK KE SAFE ZONE ]
-        elseif _G.targetAction == "WalkToSafeZone" then
-            hum:MoveTo(safeZone)
-            if distToSafeZone < 8 then
-                _G.targetAction = "WaitingForCollected"
-            end
-
-        -- [ FASE 5: NUNGGU COLLECTED ATAU KICKENDED (LANGSUNG KICK KEMBALI) ]
-        elseif _G.targetAction == "WaitingForCollected" then
-            if collectedFired or kickEndedFired or _G.stateTimer >= 2.0 then
-                collectedFired = false
-                kickEndedFired = false
-                _G.mutationCount = _G.mutationCount + 1
-                
-                -- Langsung lakukan kick kembali tanpa delay
-                phase2Fired = false
-                doKick()
-                _G.targetAction = "WaitingForPhase2"
-            end
-
-        -- [ FASE EX-1: TELEPORT KE LUCK MACHINE ]
-        elseif _G.targetAction == "LuckMachineTeleport" then
+            weatherEventPending = false
+            updateStatus("⚡ Menuju Luck Machine...", Color3.fromRGB(220, 120, 240))
+            
             local targetPart = nil
             pcall(function()
                 local debris = workspace:FindFirstChild("Debris")
                 local luckMachine = debris and debris:FindFirstChild("LuckMachine")
                 local standingPlatforms = luckMachine and luckMachine:FindFirstChild("StandingPlatforms")
                 if standingPlatforms then
-                    targetPart = standingPlatforms:FindFirstChild("1") 
-                        or standingPlatforms:FindFirstChild("2") 
-                        or standingPlatforms:FindFirstChild("3")
+                    targetPart = standingPlatforms:FindFirstChild("1") or standingPlatforms:FindFirstChild("2") or standingPlatforms:FindFirstChild("3")
                 end
             end)
             
             if targetPart then
                 hrp.CFrame = targetPart.CFrame + Vector3.new(0, 3, 0)
                 task.wait(0.5)
-                _G.targetAction = "LuckMachineTraining"
-            else
-                if _G.stateTimer >= 3 then
-                    _G.targetAction = "Idle"
-                end
-            end
-
-        -- [ FASE EX-2: AUTO USE BARBELL DI LUCK MACHINE SAMPAI DAPAT LUCK BUFF ]
-        elseif _G.targetAction == "LuckMachineTraining" then
-            local targetPart = nil
-            pcall(function()
-                local debris = workspace:FindFirstChild("Debris")
-                local luckMachine = debris and debris:FindFirstChild("LuckMachine")
-                local standingPlatforms = luckMachine and luckMachine:FindFirstChild("StandingPlatforms")
-                if standingPlatforms then
-                    targetPart = standingPlatforms:FindFirstChild("1") 
-                        or standingPlatforms:FindFirstChild("2") 
-                        or standingPlatforms:FindFirstChild("3")
-                end
-            end)
-            
-            if targetPart and (hrp.Position - targetPart.Position).Magnitude > 8 then
-                hrp.CFrame = targetPart.CFrame + Vector3.new(0, 3, 0)
-            end
-            
-            -- Mekanik memegang & memakai Barbell
-            local currentTool = char:FindFirstChildOfClass("Tool")
-            if currentTool and string.match(currentTool.Name, "Barbell$") then
-                currentTool:Activate()
-            else
-                local backpack = lp:FindFirstChild("Backpack")
-                if backpack then
-                    for _, tool in ipairs(backpack:GetChildren()) do
-                        if tool:IsA("Tool") and string.match(tool.Name, "Barbell$") then
-                            hum:EquipTool(tool)
-                            task.wait(0.1)
-                            tool:Activate()
-                            break
+                
+                local trainStart = os.clock()
+                while os.clock() - trainStart < 240 and not luckBuffObtained do
+                    if not _G.autoFarm then break end
+                    local currentTool = char:FindFirstChildOfClass("Tool")
+                    if currentTool and string.match(currentTool.Name, "Barbell$") then
+                        currentTool:Activate()
+                    else
+                        local backpack = lp:FindFirstChild("Backpack")
+                        if backpack then
+                            for _, tool in ipairs(backpack:GetChildren()) do
+                                if tool:IsA("Tool") and string.match(tool.Name, "Barbell$") then
+                                    hum:EquipTool(tool)
+                                    task.wait(0.1)
+                                    tool:Activate()
+                                    break
+                                end
+                            end
                         end
                     end
+                    task.wait(0.2)
                 end
+                
+                pcall(function() hum:UnequipTools() end)
+                luckBuffObtained = false
+            end
+        end
+
+        -- Pastikan posisi di Safe Zone
+        local distToSafeZone = (hrp.Position - safeZone).Magnitude
+        if distToSafeZone > 10 then
+            hrp.CFrame = safeZoneCFrame
+            task.wait(0.4)
+        end
+
+        -- Eksekusi 100% Perfect Max Power Kick
+        updateStatus("⚡ Mengeksekusi Perfect Kick...", Color3.fromRGB(100, 200, 255))
+        local success, flightDuration = executePerfectKick()
+
+        if success then
+            -- Tunggu sampai server mengirimkan reward rev_kickPhase2 atau durasi penerbangan selesai
+            local waitStart = os.clock()
+            while os.clock() - waitStart < (flightDuration + 1) and not phase2Received do
+                if not _G.autoFarm then break end
+                task.wait(0.1)
             end
             
-            -- Jika buff keberuntungan sudah tercapai atau failsafe 240 detik terpenuhi
-            if luckBuffObtained or _G.stateTimer >= 240 then
-                pcall(function()
-                    hum:UnequipTools()
-                end)
-                luckBuffObtained = false
-                _G.targetAction = "Idle" -- Restart auto farm (Idle akan teleport balik ke safe zone)
-            end
+            -- Jeda 0.3s sebelum tendangan berikutnya
+            task.wait(0.3)
+        else
+            -- Jika server sedang cooldown, tunggu sebentar lalu coba lagi
+            task.wait(1.0)
         end
     end
 end)
