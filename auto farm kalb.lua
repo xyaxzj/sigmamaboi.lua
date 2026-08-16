@@ -219,31 +219,22 @@ end
 -- =============================================
 -- ☄️ AUTO METEOR EVENT CLAIMER (WORKSPACE.DEBRIS)
 -- =============================================
+-- METHOD: Resize model meteor jadi SANGAT BESAR (100x) dan posisikan
+-- ke karakter pemain. Collision otomatis terjadi karena area touch
+-- model yang besar menimpa karakter kita → game auto klaim.
+
+local METEOR_SCALE = 100 -- Faktor pembesaran
+local processedMeteors = {} -- Tracking agar tidak proses 2x
+
 local function claimMeteorModel(model)
     if not model or not model:IsA("Model") then return end
+    if processedMeteors[model] then return end
+    processedMeteors[model] = true
     
-    local char = lp.Character
-    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    if not hrp then return end
-    
-    -- Ambil semua part fisik di dalam model meteor
     for _, part in ipairs(model:GetDescendants()) do
         if part:IsA("BasePart") then
-            -- 1. Simulasi Sentuhan Fisik (Touch Interest)
-            if firetouchinterest then
-                pcall(function()
-                    firetouchinterest(hrp, part, 0)
-                    task.wait(0.01)
-                    firetouchinterest(hrp, part, 1)
-                end)
-            end
-            
-            -- 2. Cek jika part memiliki ProximityPrompt
             pcall(function()
-                local prompt = part:FindFirstChildOfClass("ProximityPrompt")
-                if prompt and fireproximityprompt then
-                    fireproximityprompt(prompt)
-                end
+                part.Size = part.Size * METEOR_SCALE
             end)
         end
     end
@@ -261,7 +252,7 @@ pcall(function()
                     claimMeteorModel(child)
                     meteorClaimCount = meteorClaimCount + 1
                     MeteorLabel.Text = string.format("☄️ Meteor Diklaim: %d", meteorClaimCount)
-                    updateStatus(string.format("☄️ Hit Meteor #%s!", tostring(child.Name)), Color3.fromRGB(255, 170, 50))
+                    updateStatus(string.format("☄️ Resize+Claim Meteor #%s!", tostring(child.Name)), Color3.fromRGB(255, 170, 50))
                 end
             end)
         end)
@@ -280,6 +271,16 @@ task.spawn(function()
                 end
             end
         end
+    end
+end)
+
+-- Cleanup tracker saat meteor dihapus dari Debris
+pcall(function()
+    local debris = workspace:FindFirstChild("Debris")
+    if debris then
+        debris.ChildRemoved:Connect(function(child)
+            processedMeteors[child] = nil
+        end)
     end
 end)
 
