@@ -229,7 +229,7 @@ pcall(function()
     VirtualInputManager = game:GetService("VirtualInputManager")
 end)
 
--- Helper Klik Tombol AutoButton di PlayerGui.HUD.AutoKickFrame
+-- Helper Klik Tombol AutoButton di PlayerGui.HUD.AutoKickFrame (Tepat 1 Kali Saja)
 local function clickAutoButton()
     pcall(function()
         local playerGui = lp:FindFirstChild("PlayerGui")
@@ -248,58 +248,64 @@ local function clickAutoButton()
         
         if autoBtn and autoBtn:IsA("GuiButton") and autoBtn.Visible then
             if firesignal then
-                firesignal(autoBtn.MouseButton1Click)
-                firesignal(autoBtn.MouseButton1Down)
-                firesignal(autoBtn.MouseButton1Up)
                 firesignal(autoBtn.Activated)
-            end
-            
-            pcall(function()
+            else
                 local pos = autoBtn.AbsolutePosition + (autoBtn.AbsoluteSize / 2)
                 if VirtualInputManager then
                     VirtualInputManager:SendMouseButtonEvent(pos.X, pos.Y, 0, true, game, 0)
-                    task.wait(0.02)
+                    task.wait(0.05)
                     VirtualInputManager:SendMouseButtonEvent(pos.X, pos.Y, 0, false, game, 0)
-                    VirtualInputManager:SendTouchEvent(0, 0, pos.X, pos.Y)
-                    task.wait(0.02)
-                    VirtualInputManager:SendTouchEvent(0, 2, pos.X, pos.Y)
                 else
                     VirtualUser:CaptureController()
                     VirtualUser:ClickButton1(pos)
                 end
-            end)
+            end
         end
     end)
 end
 
--- Helper Aktifkan Auto Kick Bawaan Game (Remote + AutoButton GUI)
-local function enableInGameAutoKick()
-    if ref_AutoRequest then
-        pcall(function()
-            ref_AutoRequest:InvokeServer(true)
-        end)
-    end
-    task.wait(0.1)
-    clickAutoButton()
+-- Helper Aktifkan Auto Kick Bawaan Game (Teleport -> AutoRequest -> Tunggu 3 Detik -> Klik AutoButton)
+local isActivatingAutoKick = false
+local function triggerAutoKickSequence()
+    if isActivatingAutoKick then return end
+    isActivatingAutoKick = true
+
+    task.spawn(function()
+        -- 1. Teleport ke Safe Zone
+        local char = lp.Character or lp.CharacterAdded:Wait()
+        local hrp = char:WaitForChild("HumanoidRootPart", 10)
+        if hrp then
+            hrp.CFrame = safeZoneCFrame
+            task.wait(0.5)
+        end
+
+        -- 2. Panggil AutoRequest
+        updateStatus("📡 Memanggil ref_AutoRequest...", Color3.fromRGB(100, 200, 255))
+        if ref_AutoRequest then
+            pcall(function()
+                ref_AutoRequest:InvokeServer(true)
+            end)
+        end
+
+        -- 3. Tunggu 3 Detik
+        updateStatus("⏳ Menunggu 3 detik...", Color3.fromRGB(255, 200, 80))
+        task.wait(3)
+
+        -- 4. Klik AutoButton di GUI
+        updateStatus("🔘 Menekan AutoButton...", Color3.fromRGB(100, 200, 255))
+        clickAutoButton()
+        updateStatus("✅ Auto Kick Aktif!", Color3.fromRGB(100, 240, 120))
+
+        isActivatingAutoKick = false
+    end)
 end
 
 -- =============================================
 -- ⚙️ MAIN LOOP (AUTO FARM WITH IN-GAME AUTO KICK)
 -- =============================================
 task.spawn(function()
-    updateStatus("📍 Teleport ke Safe Zone...", Color3.fromRGB(100, 200, 255))
-    
-    -- 1. Teleport awal ke Safe Zone
-    local char = lp.Character or lp.CharacterAdded:Wait()
-    local hrp = char:WaitForChild("HumanoidRootPart", 10)
-    if hrp then
-        hrp.CFrame = safeZoneCFrame
-        task.wait(0.5)
-    end
-
-    -- 2. Aktifkan Fitur Resmi Auto Kick Ingame
-    enableInGameAutoKick()
-    updateStatus("✅ Auto Kick In-Game Aktif!", Color3.fromRGB(100, 240, 120))
+    -- 1. Jalankan urutan Auto Kick saat pertama kali start
+    triggerAutoKickSequence()
 
     while task.wait(1) do
         if not _G.autoFarm then continue end
@@ -313,16 +319,10 @@ task.spawn(function()
         -- [ PENDETEKSI MATI / RESPAWN ]
         if currentHum.Health <= 0 then
             updateStatus("Menunggu respawn...", Color3.fromRGB(255, 100, 100))
-            task.wait(1.5)
+            task.wait(2.0)
             
-            -- Begitu hidup kembali, teleport ke safezone dan re-aktifkan auto kick
-            local newChar = lp.Character or lp.CharacterAdded:Wait()
-            local newHrp = newChar:WaitForChild("HumanoidRootPart", 10)
-            if newHrp then
-                newHrp.CFrame = safeZoneCFrame
-                task.wait(0.5)
-                enableInGameAutoKick()
-            end
+            -- Begitu hidup kembali, jalankan sequence lagi
+            triggerAutoKickSequence()
             continue
         end
 
@@ -370,20 +370,9 @@ task.spawn(function()
                 pcall(function() currentHum:UnequipTools() end)
                 luckBuffObtained = false
                 
-                -- Teleport balik ke Safe Zone & nyalakan kembali Auto Kick
-                currentHrp.CFrame = safeZoneCFrame
-                task.wait(0.5)
-                enableInGameAutoKick()
-                updateStatus("✅ Auto Kick Dilanjutkan!", Color3.fromRGB(100, 240, 120))
+                -- Jalankan sequence Auto Kick kembali
+                triggerAutoKickSequence()
             end
-        end
-
-        -- Pastikan posisi tidak tersesat jauh dari Safe Zone saat sedang idle
-        local distToSafeZone = (currentHrp.Position - safeZone).Magnitude
-        if distToSafeZone > 40 and not weatherEventPending then
-            currentHrp.CFrame = safeZoneCFrame
-            task.wait(0.5)
-            enableInGameAutoKick()
         end
     end
 end)
