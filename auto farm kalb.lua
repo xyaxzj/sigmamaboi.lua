@@ -223,7 +223,7 @@ end
 -- ke karakter pemain. Collision otomatis terjadi karena area touch
 -- model yang besar menimpa karakter kita → game auto klaim.
 
-local METEOR_SCALE = 100 -- Faktor pembesaran
+local METEOR_SCALE = 9999 -- Faktor pembesaran (SUPER BESAR)
 local processedMeteors = {} -- Tracking agar tidak proses 2x
 
 local function claimMeteorModel(model)
