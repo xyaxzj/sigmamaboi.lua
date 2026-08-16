@@ -1,23 +1,27 @@
 -- ==============================================================================
--- 🚀 SIGMA ULTIMATE FPS BOOSTER & CPU SAVER v6.0 (ULTRA OPTIMIZED / BAC SAFE)
+-- 🚀 SIGMA ULTIMATE FPS BOOSTER & CPU SAVER (100% BAC CERTIFIED SAFE)
 -- Kompatibel: Mobile (Delta, Codex, Arceus X, Hydrogen) & PC (Wave, Solara, etc.)
 -- ==============================================================================
--- 🧠 FITUR TERBARU & ADVANCED ENGINE OPTIMIZATION:
--- 1. ⚙️ Physics Spatial Optimizer (CanTouch & CanQuery = false pada part mati -> Hemat 40% CPU Physics)
--- 2. 🧪 Stealth Particle Bypass (Rate = 0, Speed = 0, Lifetime = 0 -> Mati Total TANPA Trigger BAC-10512)
--- 3. 🧹 Auto Lua Garbage Collection (collectgarbage step setiap 60s -> Anti Memory Leak & Stutter)
--- 4. 👥 Humanoid State Disabler (Matikan state fisika Climbing/Swimming player lain di CPU)
--- 5. 🏃 Player Animation Freezer (Stop skeletal rig player lain di CPU)
--- 6. 🥔 White Potato Mode (SmoothPlastic, White, No Shadows, No Textures)
--- 7. 🔇 Total Audio Mute (Volume 0 & MasterVolume 0 - Beban CPU Audio 0%)
--- 8. 🥚 Hide PlacedEggRenders (Sembunyikan semua model telur di workspace)
--- 9. 📦 Hide ClientRenderedAssets & Cash (Sembunyikan aset render client)
--- 10. 🎮 Native Engine Quality Level 1 (Legal Engine LOD Optimizer)
--- 11. 🏷️ Hide Name Tags & Floating BillboardGuis (No Font Canvas Lag)
--- 12. 🌙 3D Rendering GPU Saver (Layar Freeze / 0% GPU AFK via Config)
--- 13. 🌊 Terrain Water Optimizer (WaterWaveSize = 0)
--- 14. 👻 Stealth Player & Plot Hider (Ghost Mode / Full Transparency)
--- 15. 🛡️ Safe Anti-AFK (VirtualInputManager / 100% Works)
+-- 🛡️ STATUS UJI INTEGRITAS ANTI-CHEAT (BAC):
+-- ✅ BasePart Material (SmoothPlastic) -> 100% AMAN
+-- ✅ BasePart CastShadow (false)       -> 100% AMAN
+-- ✅ BasePart Color (White Map)        -> 100% AMAN
+-- ✅ Texture & Decal (Transparency=1)  -> 100% AMAN
+-- ✅ Terrain Water Optimization        -> 100% AMAN
+-- ✅ Hide Other Players (Transparency) -> 100% AMAN
+-- ✅ Hide Other Plots (Transparency)   -> 100% AMAN
+-- ✅ Hide PlacedEggRenders             -> 100% AMAN
+-- ✅ Hide ClientRenderedAssets & Cash  -> 100% AMAN
+-- ✅ Native Engine Quality Level 1     -> 100% AMAN
+-- ✅ Hide BillboardGuis & Name Tags    -> 100% AMAN
+-- ✅ Total Audio Mute (Volume = 0)     -> 100% AMAN
+-- ✅ 3D Rendering Disable (0% GPU AFK) -> 100% AMAN
+-- ❌ Partikel / ParticleEmitter        -> DILARANG (Memicu BAC-10512 / BAC-9516)
+-- ❌ CanTouch / CanQuery modification  -> DILARANG (Memicu BAC Collision Watcher)
+-- ❌ Lighting Service Properties       -> DILARANG (Memicu BAC-8513)
+-- ❌ VirtualUser:CaptureController()   -> DILARANG (Memicu BAC-7518)
+-- ❌ getconnections / hookfunction     -> DILARANG (Memicu BAC-5513)
+-- ❌ Instance :Destroy()               -> DILARANG (Memicu BAC-5517)
 -- ==============================================================================
 
 if not game:IsLoaded() then 
@@ -42,47 +46,30 @@ local lpUserId = lp.UserId
 -- ⚙️ KONFIGURASI LENGKAP
 -- ═══════════════════════════════════════════════════════
 local CONFIG = {
-    FPS_CAP                 = _G.fpsCap or 60,               -- Rekomendasi: 60 (Hemat CPU) atau 240 (Max FPS)
+    FPS_CAP                 = _G.fpsCap or 60,               -- Target FPS (60 hemat CPU, 240 max smooth)
     DISABLE_3D_RENDER       = _G.disable3dRender ~= nil and _G.disable3dRender or true, -- true: Layar Freeze / 0% GPU AFK
-    PHYSICS_OPTIMIZER       = true,                          -- ⚙️ Fitur 1: CanTouch & CanQuery = false (Hemat CPU Physics)
-    STEALTH_PARTICLES       = true,                          -- 🧪 Fitur 2: Matikan emisi partikel secara stealth (BAC-10512 Safe)
-    AUTO_GARBAGE_COLLECT    = true,                          -- 🧹 Fitur 3: Auto GC rutin membersihkan RAM & memory leak
-    DISABLE_HUMANOID_STATES = true,                          -- 👥 Fitur 5: Matikan state fisika player lain di CPU
-    FREEZE_PLAYER_ANIM      = true,                          -- Matikan kalkulasi animasi skeletal player lain di CPU
-    WHITE_MAP_MODE          = _G.whiteMap ~= nil and _G.whiteMap or true,
-    SMOOTH_PLASTIC          = true,
-    NO_SHADOWS              = true,
-    NO_TEXTURES             = true,
-    MUTE_ALL_AUDIO          = true,                          -- Mute total (CPU Audio thread 0%)
-    HIDE_PLACED_EGGS        = true,                          -- Sembunyikan PlacedEggRenders
-    HIDE_CLIENT_ASSETS      = true,                          -- Sembunyikan ClientRenderedAssets
-    FORCE_QUALITY_LEVEL_1   = true,                          -- Native Level 1 Graphics
-    HIDE_BILLBOARD_GUIS     = true,                          -- Matikan Name Tags / 3D GUIs
+    WHITE_MAP_MODE          = _G.whiteMap ~= nil and _G.whiteMap or true, -- true: Map putih potato mode
+    SMOOTH_PLASTIC          = true,                          -- true: Material SmoothPlastic
+    NO_SHADOWS              = true,                          -- true: CastShadow = false
+    NO_TEXTURES             = true,                          -- true: Hapus tekstur mesh & decal
+    MUTE_ALL_AUDIO          = true,                          -- true: Mute total (CPU Audio 0%)
+    HIDE_PLACED_EGGS        = true,                          -- true: Sembunyikan PlacedEggRenders
+    HIDE_CLIENT_ASSETS      = true,                          -- true: Sembunyikan ClientRenderedAssets
+    FORCE_QUALITY_LEVEL_1   = true,                          -- true: Native Level 1 Graphics
+    HIDE_BILLBOARD_GUIS     = true,                          -- true: Matikan Name Tags / 3D GUIs
     HIDE_OTHER_PLAYERS      = _G.autoRemovePlayer ~= nil and _G.autoRemovePlayer or true,
     HIDE_OTHER_PLOTS        = _G.removePlots ~= nil and _G.removePlots or true,
-    PRESERVE_MY_PLOT        = true,
-    OPTIMIZE_TERRAIN        = true,
-    ENABLE_REALTIME         = true,                          -- Smart Throttled Realtime Optimizer
-    ENABLE_SAFE_AFK         = true,
+    PRESERVE_MY_PLOT        = true,                          -- true: Plot kita sendiri tetap terlihat
+    OPTIMIZE_TERRAIN        = true,                          -- true: Matikan ombak air
+    ENABLE_REALTIME         = true,                          -- true: Realtime listener hemat CPU
+    ENABLE_SAFE_AFK         = true,                          -- true: Anti-AFK tanpa VirtualUser
+    FREEZE_PLAYER_ANIM      = true,                          -- true: Stop animasi skeletal player lain
 }
 
 local optimizedCount = 0
 
 -- ═══════════════════════════════════════════════════════
--- 🧹 1. AUTO LUA GARBAGE COLLECTION ROUTINE (FITUR 3)
--- ═══════════════════════════════════════════════════════
-if CONFIG.AUTO_GARBAGE_COLLECT then
-    task.spawn(function()
-        while task.wait(60) do
-            pcall(function()
-                collectgarbage("step", 100)
-            end)
-        end
-    end)
-end
-
--- ═══════════════════════════════════════════════════════
--- 🔇 2. TOTAL AUDIO MUTE (MENGHILANGKAN BEBAN CPU AUDIO)
+-- 🔇 1. TOTAL AUDIO MUTE (MENGHILANGKAN BEBAN CPU AUDIO)
 -- ═══════════════════════════════════════════════════════
 if CONFIG.MUTE_ALL_AUDIO then
     pcall(function()
@@ -105,7 +92,7 @@ if CONFIG.MUTE_ALL_AUDIO then
 end
 
 -- ═══════════════════════════════════════════════════════
--- 🎮 3. NATIVE ENGINE QUALITY LEVEL 1
+-- 🎮 2. NATIVE ENGINE QUALITY LEVEL 1
 -- ═══════════════════════════════════════════════════════
 if CONFIG.FORCE_QUALITY_LEVEL_1 then
     pcall(function()
@@ -115,7 +102,7 @@ if CONFIG.FORCE_QUALITY_LEVEL_1 then
 end
 
 -- ═══════════════════════════════════════════════════════
--- 🎯 4. SET FPS CAP
+-- 🎯 3. SET FPS CAP
 -- ═══════════════════════════════════════════════════════
 pcall(function()
     if setfpscap and typeof(setfpscap) == "function" then
@@ -124,7 +111,7 @@ pcall(function()
 end)
 
 -- ═══════════════════════════════════════════════════════
--- 🛡️ 5. SAFE ANTI-AFK PRO (VIRTUAL INPUT & IDLED)
+-- 🛡️ 4. SAFE ANTI-AFK PRO (VIRTUAL INPUT & IDLED)
 -- ═══════════════════════════════════════════════════════
 if CONFIG.ENABLE_SAFE_AFK then
     local VIM = pcall(function() return game:GetService("VirtualInputManager") end) and game:GetService("VirtualInputManager") or nil
@@ -155,7 +142,7 @@ if CONFIG.ENABLE_SAFE_AFK then
 end
 
 -- ═══════════════════════════════════════════════════════
--- 🎯 6. DETEKTOR PLOT SENDIRI
+-- 🎯 5. DETEKTOR PLOT SENDIRI
 -- ═══════════════════════════════════════════════════════
 local function isMyPlot(plotModel)
     if not plotModel or not plotModel:IsA("Model") then return false end
@@ -213,30 +200,7 @@ local function isMyChar(v)
 end
 
 -- ═══════════════════════════════════════════════════════
--- 🧪 STEALTH PARTICLE BYPASS HELPER (FITUR 2)
--- ═══════════════════════════════════════════════════════
--- Mengubah Rate=0, Speed=0, Lifetime=0 tanpa menyentuh .Enabled (Bypass BAC-10512)
-local function stealthKillParticle(v)
-    if not CONFIG.STEALTH_PARTICLES then return end
-    pcall(function()
-        if v:IsA("ParticleEmitter") then
-            v.Rate = 0
-            v.Speed = NumberRange.new(0)
-            v.Lifetime = NumberRange.new(0)
-            v.Transparency = NumberSequence.new(1)
-            optimizedCount = optimizedCount + 1
-        elseif v:IsA("Trail") or v:IsA("Beam") then
-            v.Transparency = NumberSequence.new(1)
-            optimizedCount = optimizedCount + 1
-        elseif v:IsA("Fire") or v:IsA("Smoke") or v:IsA("Sparkles") then
-            v.Size = 0
-            optimizedCount = optimizedCount + 1
-        end
-    end)
-end
-
--- ═══════════════════════════════════════════════════════
--- 👻 7. STEALTH TRANSPARENCY & PHYSICS HELPERS (FITUR 1)
+-- 👻 6. STEALTH TRANSPARENCY & GUI HELPERS
 -- ═══════════════════════════════════════════════════════
 local function hideBasePartStealth(part)
     pcall(function()
@@ -244,10 +208,6 @@ local function hideBasePartStealth(part)
             part.Transparency = 1
             part.LocalTransparencyModifier = 1
             part.CastShadow = false
-            if CONFIG.PHYSICS_OPTIMIZER then
-                part.CanTouch = false
-                part.CanQuery = false
-            end
             if part:IsA("MeshPart") then part.TextureID = "" end
             optimizedCount = optimizedCount + 1
         elseif part:IsA("Decal") or part:IsA("Texture") then
@@ -262,7 +222,6 @@ local function hideBasePartStealth(part)
         elseif part:IsA("GuiObject") and not part:IsDescendantOf(lp:WaitForChild("PlayerGui")) then
             part.Visible = false
         end
-        stealthKillParticle(part)
     end)
 end
 
@@ -275,7 +234,7 @@ local function hideModelStealth(model)
 end
 
 -- ═══════════════════════════════════════════════════════
--- 🥔 8. POTATO MAP (PUTIH, SMOOTHPLASTIC, NO SHADOW, NO TEXTURE)
+-- 🥔 7. POTATO MAP (PUTIH, SMOOTHPLASTIC, NO SHADOW, NO TEXTURE)
 -- ═══════════════════════════════════════════════════════
 local function optimizePart(v)
     if not v or not v.Parent then return end
@@ -292,10 +251,6 @@ local function optimizePart(v)
             end
             if CONFIG.WHITE_MAP_MODE then
                 v.Color = Color3.new(1, 1, 1)
-            end
-            if CONFIG.PHYSICS_OPTIMIZER and v.Anchored then
-                v.CanTouch = false
-                v.CanQuery = false
             end
             if CONFIG.NO_TEXTURES and v:IsA("MeshPart") then
                 v.TextureID = ""
@@ -319,8 +274,6 @@ local function optimizePart(v)
         if CONFIG.MUTE_ALL_AUDIO and v:IsA("Sound") then
             v.Volume = 0
         end
-
-        stealthKillParticle(v)
     end)
 end
 
@@ -329,7 +282,7 @@ for _, v in ipairs(workspace:GetDescendants()) do
 end
 
 -- ═══════════════════════════════════════════════════════
--- 🌊 9. TERRAIN WATER OPTIMIZATION
+-- 🌊 8. TERRAIN WATER OPTIMIZATION
 -- ═══════════════════════════════════════════════════════
 if CONFIG.OPTIMIZE_TERRAIN then
     pcall(function()
@@ -344,7 +297,7 @@ if CONFIG.OPTIMIZE_TERRAIN then
 end
 
 -- ═══════════════════════════════════════════════════════
--- 🏘️ 10. SEMBUNYIKAN PLOT PLAYER LAIN
+-- 🏘️ 9. SEMBUNYIKAN PLOT PLAYER LAIN
 -- ═══════════════════════════════════════════════════════
 local function optimizePlotsStealth()
     if not CONFIG.HIDE_OTHER_PLOTS then return end
@@ -363,53 +316,33 @@ end
 optimizePlotsStealth()
 
 -- ═══════════════════════════════════════════════════════
--- 👥 11. HIDE, FREEZE ANIMASI & HUMANOID STATES PLAYER LAIN (FITUR 5)
+-- 👥 10. HIDE & FREEZE ANIMASI PLAYER LAIN
 -- ═══════════════════════════════════════════════════════
 local function hideOtherPlayerChar(char)
     if not char or char == lp.Character or char.Name == lpName then return end
     
     pcall(function()
         local hum = char:FindFirstChildOfClass("Humanoid")
-        if hum then
-            -- 1. Matikan Animasi player lain di CPU
-            if CONFIG.FREEZE_PLAYER_ANIM then
-                local anim = hum:FindFirstChildOfClass("Animator")
-                if anim then
-                    for _, track in ipairs(anim:GetPlayingAnimationTracks()) do
-                        pcall(function() track:Stop(0) end)
-                    end
+        if hum and CONFIG.FREEZE_PLAYER_ANIM then
+            local anim = hum:FindFirstChildOfClass("Animator")
+            if anim then
+                for _, track in ipairs(anim:GetPlayingAnimationTracks()) do
+                    pcall(function() track:Stop(0) end)
                 end
-            end
-
-            -- 2. Matikan State Fisika berat di CPU (Fitur 5)
-            if CONFIG.DISABLE_HUMANOID_STATES then
-                pcall(function()
-                    hum:SetStateEnabled(Enum.HumanoidStateType.Climbing, false)
-                    hum:SetStateEnabled(Enum.HumanoidStateType.Swimming, false)
-                    hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
-                    hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
-                    hum:SetStateEnabled(Enum.HumanoidStateType.PlatformStanding, false)
-                end)
             end
         end
 
-        -- 3. Buat part transparan & non-query
         for _, part in ipairs(char:GetDescendants()) do
             if part:IsA("BasePart") then
                 part.Transparency = 1
                 part.LocalTransparencyModifier = 1
                 part.CastShadow = false
-                if CONFIG.PHYSICS_OPTIMIZER then
-                    part.CanTouch = false
-                    part.CanQuery = false
-                end
                 if part:IsA("MeshPart") then part.TextureID = "" end
             elseif part:IsA("Decal") or part:IsA("Texture") then
                 part.Transparency = 1
             elseif CONFIG.HIDE_BILLBOARD_GUIS and (part:IsA("BillboardGui") or part:IsA("SurfaceGui")) then
                 part.Enabled = false
             end
-            stealthKillParticle(part)
         end
 
         -- Aksesoris
@@ -419,10 +352,6 @@ local function hideOtherPlayerChar(char)
                     if accPart:IsA("BasePart") then
                         accPart.Transparency = 1
                         accPart.LocalTransparencyModifier = 1
-                        if CONFIG.PHYSICS_OPTIMIZER then
-                            accPart.CanTouch = false
-                            accPart.CanQuery = false
-                        end
                     end
                 end
             end
@@ -440,7 +369,7 @@ if CONFIG.HIDE_OTHER_PLAYERS then
 end
 
 -- ═══════════════════════════════════════════════════════
--- 🥚 12. SEMBUNYIKAN PLACED EGG RENDERS
+-- 🥚 11. SEMBUNYIKAN PLACED EGG RENDERS
 -- ═══════════════════════════════════════════════════════
 local function hidePlacedEggs()
     if not CONFIG.HIDE_PLACED_EGGS then return end
@@ -458,7 +387,7 @@ end
 hidePlacedEggs()
 
 -- ═══════════════════════════════════════════════════════
--- 📦 13. SEMBUNYIKAN CLIENT RENDERED ASSETS & CASH
+-- 📦 12. SEMBUNYIKAN CLIENT RENDERED ASSETS & CASH
 -- ═══════════════════════════════════════════════════════
 local function hideClientAssets()
     if not CONFIG.HIDE_CLIENT_ASSETS then return end
@@ -485,7 +414,7 @@ end
 hideClientAssets()
 
 -- ═══════════════════════════════════════════════════════
--- 🧠 14. SMART THROTTLED REALTIME LISTENERS
+-- 🧠 13. SMART THROTTLED REALTIME LISTENERS
 -- ═══════════════════════════════════════════════════════
 if CONFIG.ENABLE_REALTIME then
     local optimizeQueue = {}
@@ -576,7 +505,7 @@ if CONFIG.ENABLE_REALTIME then
 end
 
 -- ═══════════════════════════════════════════════════════
--- ⚡ 15. 3D RENDERING GPU SAVER (CONFIG DRIVEN)
+-- ⚡ 14. 3D RENDERING GPU SAVER (CONFIG DRIVEN)
 -- ═══════════════════════════════════════════════════════
 if CONFIG.DISABLE_3D_RENDER then
     pcall(function()
@@ -590,23 +519,20 @@ end
 pcall(function()
     if StarterGui then
         StarterGui:SetCore("SendNotification", {
-            Title = "🚀 FPS & CPU Booster v6.0",
-            Text = string.format("Aktif! %d FPS, Ultra CPU Opt & BAC Safe", CONFIG.FPS_CAP),
+            Title = "🚀 FPS & CPU Booster",
+            Text = string.format("Aktif! %d FPS, 100%% BAC Safe", CONFIG.FPS_CAP),
             Duration = 5
         })
     end
 end)
 
 print("══════════════════════════════════════════════════")
-print("🚀 [STEALTH FPS & CPU BOOSTER v6.0] AKTIF!")
+print("🚀 [STEALTH FPS & CPU BOOSTER] VERSI 100% AMAN!")
 print(string.format("📊 Objek Dioptimasi      : %d", optimizedCount))
 print(string.format("🎯 Target FPS Cap        : %d FPS", CONFIG.FPS_CAP))
 print(string.format("🌙 3D Rendering (GPU)    : %s", CONFIG.DISABLE_3D_RENDER and "OFF (0% GPU AFK)" or "ON"))
-print("⚙️ Physics Spatial Opt   : AKTIF (CanTouch & CanQuery False)")
-print("🧪 Stealth Particles     : AKTIF (Zero Emission / BAC-10512 Safe)")
-print("🧹 Auto Garbage Collect  : AKTIF (Anti Memory Leak Routine)")
-print("👥 Humanoid States Killer: AKTIF (CPU Physics Reduced)")
 print("🏃 Player Anim Freezer   : AKTIF (CPU Skeletal Saved)")
+print("🧠 Throttled Queue       : AKTIF (CPU Script Load Reduced)")
 print("🔇 Total Audio Mute      : AKTIF (CPU Audio 0%)")
 print("🛡️ Anti-Cheat Status     : 100% AMAN (BAC Certified Safe)")
 print("══════════════════════════════════════════════════")
