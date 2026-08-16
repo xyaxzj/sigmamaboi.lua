@@ -48,44 +48,103 @@ for _, v in ipairs(workspace:GetDescendants()) do
     end
 end
 
--- 2. Sembunyikan Player Lain Secara Stealth (Transparency)
-local function hideOtherPlayer(player)
-    if player ~= lp and player.Character then
-        for _, part in ipairs(player.Character:GetDescendants()) do
-            pcall(function()
-                if part:IsA("BasePart") then
-                    part.Transparency = 1
-                    part.LocalTransparencyModifier = 1
-                    part.CastShadow = false
-                elseif part:IsA("Decal") or part:IsA("Texture") then
-                    part.Transparency = 1
+-- =============================================
+-- 🎯 DETEKTOR PLOT SENDIRI & REMOVER PLOT LAIN
+-- =============================================
+local lpName = lp.Name
+local lpDisplayName = lp.DisplayName
+local myUidStr = tostring(lp.UserId)
+
+local function isMyPlot(plotModel)
+    if not plotModel or not plotModel:IsA("Model") then return false end
+
+    -- 1. Cek via PlotSign
+    local sign = plotModel:FindFirstChild("PlotSign", true)
+    if sign then
+        local pps = sign:FindFirstChild("PlayerPlotSign", true)
+        if pps then
+            local nameLabel = pps:FindFirstChild("PlayerName", true)
+            if nameLabel and nameLabel:IsA("TextLabel") then
+                local t = nameLabel.Text
+                if t and (t == lpName or t:find(lpName, 1, true) or (lpDisplayName and (t == lpDisplayName or t:find(lpDisplayName, 1, true)))) then
+                    return true
                 end
-            end)
+            end
+            local icon = pps:FindFirstChild("PlayerIcon", true)
+            if icon and (icon:IsA("ImageLabel") or icon:IsA("ImageButton")) then
+                local img = icon.Image
+                if img and img:find(myUidStr, 1, true) then
+                    return true
+                end
+            end
+        end
+    end
+
+    -- 2. Fallback scan value di descendant
+    for _, item in ipairs(plotModel:GetDescendants()) do
+        local ok, result = pcall(function()
+            if item:IsA("TextLabel") then
+                local t = item.Text
+                if t and (t == lpName or (lpDisplayName and t == lpDisplayName)) then
+                    return true
+                end
+            elseif item:IsA("StringValue") or item:IsA("ObjectValue") or item:IsA("IntValue") or item:IsA("NumberValue") then
+                local v = item.Value
+                if v == lpName or v == lp or tostring(v) == myUidStr then
+                    return true
+                end
+            end
+            return false
+        end)
+        if ok and result then return true end
+    end
+
+    return false
+end
+
+-- 2. Hapus Plot Player Lain
+local plotsFolder = workspace:FindFirstChild("Plots")
+if plotsFolder then
+    for _, plot in ipairs(plotsFolder:GetChildren()) do
+        if plot:IsA("Model") and not isMyPlot(plot) then
+            pcall(function() plot:Destroy() end)
+        end
+    end
+    plotsFolder.ChildAdded:Connect(function(plot)
+        task.wait(0.2)
+        if plot:IsA("Model") and not isMyPlot(plot) then
+            pcall(function() plot:Destroy() end)
+        end
+    end)
+end
+
+-- 3. Hapus Karakter Player Lain
+local function removeOtherPlayer(player)
+    if player ~= lp then
+        if player.Character then
+            pcall(function() player.Character:Destroy() end)
         end
     end
 end
 
-for _, player in ipairs(Players:GetPlayers()) do hideOtherPlayer(player) end
+for _, player in ipairs(Players:GetPlayers()) do removeOtherPlayer(player) end
 Players.PlayerAdded:Connect(function(player)
-    player.CharacterAdded:Connect(function()
-        task.wait(0.2)
-        hideOtherPlayer(player)
-    end)
+    if player ~= lp then
+        player.CharacterAdded:Connect(function(char)
+            task.wait(0.1)
+            pcall(function() char:Destroy() end)
+        end)
+    end
 end)
 
 -- =============================================
--- 🛡️ ANTI AFK (BAC SAFE - TANPA VIRTUALUSER)
+-- 🛡️ ANTI AFK (KLASIK VIRTUALUSER)
 -- =============================================
-task.spawn(function()
-    while task.wait(500) do
-        pcall(function()
-            local char = lp.Character
-            local hum = char and char:FindFirstChildOfClass("Humanoid")
-            if hum and hum.Health > 0 then
-                hum:ChangeState(Enum.HumanoidStateType.Jumping)
-            end
-        end)
-    end
+lp.Idled:Connect(function()
+    pcall(function()
+        VirtualUser:CaptureController()
+        VirtualUser:ClickButton2(Vector2.new())
+    end)
 end)
 -- 📡 CARI REMOTE NETWORK
 -- =============================================
