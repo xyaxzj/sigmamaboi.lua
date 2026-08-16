@@ -224,13 +224,63 @@ if rev_PlayMessage then
     end)
 end
 
--- Helper Aktifkan Auto Kick Bawaan Game
+local VirtualInputManager = nil
+pcall(function()
+    VirtualInputManager = game:GetService("VirtualInputManager")
+end)
+
+-- Helper Klik Tombol AutoButton di PlayerGui.HUD.AutoKickFrame
+local function clickAutoButton()
+    pcall(function()
+        local playerGui = lp:FindFirstChild("PlayerGui")
+        local hud = playerGui and playerGui:FindFirstChild("HUD")
+        local autoKickFrame = hud and (hud:FindFirstChild("AutoKickFrame", true) or hud:FindFirstChild("AutoKick", true))
+        local autoBtn = autoKickFrame and (autoKickFrame:FindFirstChild("AutoButton", true) or autoKickFrame:FindFirstChildOfClass("ImageButton") or autoKickFrame:FindFirstChildOfClass("GuiButton"))
+        
+        if not autoBtn and hud then
+            for _, v in ipairs(hud:GetDescendants()) do
+                if v:IsA("ImageButton") and (v.Name == "AutoButton" or tostring(v.Image):find("136607941521284")) then
+                    autoBtn = v
+                    break
+                end
+            end
+        end
+        
+        if autoBtn and autoBtn:IsA("GuiButton") and autoBtn.Visible then
+            if firesignal then
+                firesignal(autoBtn.MouseButton1Click)
+                firesignal(autoBtn.MouseButton1Down)
+                firesignal(autoBtn.MouseButton1Up)
+                firesignal(autoBtn.Activated)
+            end
+            
+            pcall(function()
+                local pos = autoBtn.AbsolutePosition + (autoBtn.AbsoluteSize / 2)
+                if VirtualInputManager then
+                    VirtualInputManager:SendMouseButtonEvent(pos.X, pos.Y, 0, true, game, 0)
+                    task.wait(0.02)
+                    VirtualInputManager:SendMouseButtonEvent(pos.X, pos.Y, 0, false, game, 0)
+                    VirtualInputManager:SendTouchEvent(0, 0, pos.X, pos.Y)
+                    task.wait(0.02)
+                    VirtualInputManager:SendTouchEvent(0, 2, pos.X, pos.Y)
+                else
+                    VirtualUser:CaptureController()
+                    VirtualUser:ClickButton1(pos)
+                end
+            end)
+        end
+    end)
+end
+
+-- Helper Aktifkan Auto Kick Bawaan Game (Remote + AutoButton GUI)
 local function enableInGameAutoKick()
     if ref_AutoRequest then
         pcall(function()
             ref_AutoRequest:InvokeServer(true)
         end)
     end
+    task.wait(0.1)
+    clickAutoButton()
 end
 
 -- =============================================
