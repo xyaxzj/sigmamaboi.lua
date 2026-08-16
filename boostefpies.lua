@@ -53,14 +53,13 @@ local CONFIG = {
     HIDE_CLIENT_ASSETS      = true,                          -- Sembunyikan ClientRenderedAssets
     FORCE_QUALITY_LEVEL_1   = true,                          -- Native Level 1 Graphics
     HIDE_BILLBOARD_GUIS     = true,                          -- Matikan Name Tags / 3D GUIs
-    SHOW_GPU_SAVER_BUTTON   = true,                          -- Tombol Floating 3D Render Toggle
     HIDE_OTHER_PLAYERS      = _G.autoRemovePlayer ~= nil and _G.autoRemovePlayer or true,
     HIDE_OTHER_PLOTS        = _G.removePlots ~= nil and _G.removePlots or true,
     PRESERVE_MY_PLOT        = true,
     OPTIMIZE_TERRAIN        = true,
     ENABLE_REALTIME         = true,                          -- Smart Throttled Realtime Optimizer
     ENABLE_SAFE_AFK         = true,
-    DISABLE_3D_RENDER       = _G.disable3dRender or false,
+    DISABLE_3D_RENDER       = _G.disable3dRender ~= nil and _G.disable3dRender or true, -- true: Matikan 3D Render (Layar Freeze / 0% GPU AFK)
 }
 
 local optimizedCount = 0
@@ -497,63 +496,11 @@ if CONFIG.ENABLE_REALTIME then
 end
 
 -- ═══════════════════════════════════════════════════════
--- ⚡ 14. ONE-CLICK FLOATING GPU & CPU SAVER BUTTON
+-- ⚡ 14. 3D RENDERING GPU SAVER (CONFIG DRIVEN)
 -- ═══════════════════════════════════════════════════════
-if CONFIG.SHOW_GPU_SAVER_BUTTON then
+if CONFIG.DISABLE_3D_RENDER then
     pcall(function()
-        local guiParent = pcall(function() return CoreGui end) and CoreGui or lp:WaitForChild("PlayerGui")
-        local existingGui = guiParent:FindFirstChild("SigmaGpuSaverGui")
-        if existingGui then existingGui:Destroy() end
-
-        local screenGui = Instance.new("ScreenGui")
-        screenGui.Name = "SigmaGpuSaverGui"
-        screenGui.ResetOnSpawn = false
-        screenGui.Parent = guiParent
-
-        local is3dRendering = not CONFIG.DISABLE_3D_RENDER
-        if not is3dRendering then
-            RunService:Set3dRenderingEnabled(false)
-        end
-
-        local button = Instance.new("TextButton")
-        button.Name = "GpuSaverToggle"
-        button.Size = UDim2.new(0, 145, 0, 36)
-        button.Position = UDim2.new(1, -160, 0, 15)
-        button.BackgroundColor3 = is3dRendering and Color3.fromRGB(35, 140, 80) or Color3.fromRGB(180, 45, 45)
-        button.TextColor3 = Color3.fromRGB(255, 255, 255)
-        button.Font = Enum.Font.GothamBold
-        button.TextSize = 12
-        button.Text = is3dRendering and "⚡ GPU/CPU Saver: OFF" or "🌙 GPU/CPU Saver: ON"
-        button.Active = true
-        button.Draggable = true
-        button.Parent = screenGui
-
-        local corner = Instance.new("UICorner")
-        corner.CornerRadius = UDim.new(0, 8)
-        corner.Parent = button
-
-        local stroke = Instance.new("UIStroke")
-        stroke.Thickness = 1.2
-        stroke.Color = Color3.fromRGB(255, 255, 255)
-        stroke.Transparency = 0.6
-        stroke.Parent = button
-
-        button.MouseButton1Click:Connect(function()
-            is3dRendering = not is3dRendering
-            pcall(function()
-                RunService:Set3dRenderingEnabled(is3dRendering)
-            end)
-            if is3dRendering then
-                button.BackgroundColor3 = Color3.fromRGB(35, 140, 80)
-                button.Text = "⚡ GPU/CPU Saver: OFF"
-                pcall(function() if setfpscap then setfpscap(CONFIG.FPS_CAP) end end)
-            else
-                button.BackgroundColor3 = Color3.fromRGB(180, 45, 45)
-                button.Text = "🌙 GPU/CPU Saver: ON"
-                -- Saat AFK Mode aktif, cap FPS ke 15 untuk drop CPU hingga 90%
-                pcall(function() if setfpscap then setfpscap(15) end end)
-            end
-        end)
+        RunService:Set3dRenderingEnabled(false)
     end)
 end
 
@@ -563,20 +510,20 @@ end
 pcall(function()
     if StarterGui then
         StarterGui:SetCore("SendNotification", {
-            Title = "🚀 FPS & CPU Booster v5.3",
-            Text = string.format("Aktif! Target %d FPS, CPU Throttled & BAC Safe", CONFIG.FPS_CAP),
+            Title = "🚀 FPS & CPU Booster v5.4",
+            Text = string.format("Aktif! %d FPS, CPU Throttled & BAC Safe", CONFIG.FPS_CAP),
             Duration = 5
         })
     end
 end)
 
 print("══════════════════════════════════════════════════")
-print("🚀 [STEALTH FPS & CPU BOOSTER v5.3] SIAP DIGUNAKAN!")
+print("🚀 [STEALTH FPS & CPU BOOSTER v5.4] SIAP DIGUNAKAN!")
 print(string.format("📊 Objek Dioptimasi      : %d", optimizedCount))
-print(string.format("🎯 Target FPS Cap        : %d FPS (CPU Balanced)", CONFIG.FPS_CAP))
+print(string.format("🎯 Target FPS Cap        : %d FPS", CONFIG.FPS_CAP))
+print(string.format("🌙 3D Rendering (GPU)    : %s", CONFIG.DISABLE_3D_RENDER and "OFF (0% GPU AFK)" or "ON"))
 print("🏃 Player Anim Freezer   : AKTIF (CPU Skeletal Saved)")
 print("🧠 Throttled Queue       : AKTIF (CPU Script Load Reduced)")
 print("🔇 Total Audio Mute      : AKTIF (CPU Audio 0%)")
-print("⚡ Floating Saver Button : AKTIF (Klik untuk AFK 15 FPS + 0% GPU)")
 print("🛡️ Anti-Cheat Status     : 100% AMAN (BAC Certified Safe)")
 print("══════════════════════════════════════════════════")
