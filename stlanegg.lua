@@ -9,7 +9,6 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TeleportService = game:GetService("TeleportService")
 local HttpService = game:GetService("HttpService")
-local VirtualUser = game:GetService("VirtualUser")
 local LocalPlayer = Players.LocalPlayer
 
 -- ==========================================================
@@ -122,13 +121,14 @@ if getgenv().CancelStealAnEggTrade then
     pcall(getgenv().CancelStealAnEggTrade)
 end
 local scriptId = tick()
-getgenv().CurrentTradeScriptID = scriptId
-
--- Built-in Anti-AFK System
+-- Built-in Anti-AFK System (BAC Safe)
 LocalPlayer.Idled:Connect(function()
     pcall(function()
-        VirtualUser:CaptureController()
-        VirtualUser:ClickButton2(Vector2.new(0, 0))
+        local char = LocalPlayer.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if hum and hum.Health > 0 then
+            hum:ChangeState(Enum.HumanoidStateType.Jumping)
+        end
     end)
 end)
 
@@ -200,108 +200,8 @@ local KNOWN_RARITIES = {
     "Limited", "Admin"
 }
 
-local RarityTableToName = {}
 local ItemRarityDatabase = {}
-local isRarityLoaded = false
-
-local function LoadGameDirectoryRarities()
-    if isRarityLoaded then return end
-    
-    pcall(function()
-        local dir = ReplicatedStorage:FindFirstChild("Directory")
-        local rarityMod = dir and (dir:FindFirstChild("Rarity") or dir:FindFirstChild("Rarities"))
-        if not rarityMod then
-            for _, desc in ipairs(ReplicatedStorage:GetDescendants()) do
-                if desc:IsA("ModuleScript") and (desc.Name == "Rarity" or desc.Name == "Rarities") then
-                    rarityMod = desc
-                    break
-                end
-            end
-        end
-        
-        if rarityMod then
-            local ok, rarityModuleData = pcall(require, rarityMod)
-            if ok and type(rarityModuleData) == "table" then
-                local raritiesTbl = rarityModuleData.Rarities or rarityModuleData
-                if type(raritiesTbl) == "table" then
-                    for rarityName, rarityObj in pairs(raritiesTbl) do
-                        local rNameStr = tostring(rarityName)
-                        if type(rarityObj) == "table" then
-                            RarityTableToName[rarityObj] = rNameStr
-                            if rarityObj.Name then RarityTableToName[rarityObj] = tostring(rarityObj.Name) end
-                            if rarityObj.DisplayName then RarityTableToName[rarityObj] = tostring(rarityObj.DisplayName) end
-                        end
-                        
-                        local exists = false
-                        for _, existing in ipairs(KNOWN_RARITIES) do
-                            if existing:lower() == rNameStr:lower() then exists = true; break end
-                        end
-                        if not exists then
-                            table.insert(KNOWN_RARITIES, rNameStr)
-                        end
-                    end
-                end
-            end
-        end
-    end)
-
-    local itemCount = 0
-    pcall(function()
-        local dir = ReplicatedStorage:FindFirstChild("Directory") or ReplicatedStorage:FindFirstChild("Library")
-        if dir then
-            for _, desc in ipairs(dir:GetDescendants()) do
-                if desc:IsA("ModuleScript") and desc.Name ~= "Rarity" and desc.Name ~= "Rarities" and desc.Name ~= "Pipeline" and desc.Name ~= "Interface" and desc.Name ~= "Constants" then
-                    local ok, itemConfig = pcall(require, desc)
-                    if ok and type(itemConfig) == "table" then
-                        local rStr = nil
-                        
-                        if type(itemConfig.Rarity) == "string" then
-                            rStr = itemConfig.Rarity
-                        elseif type(itemConfig.Rarity) == "table" then
-                            rStr = RarityTableToName[itemConfig.Rarity] 
-                                or itemConfig.Rarity.Name 
-                                or itemConfig.Rarity.DisplayName
-                                or itemConfig.Rarity.Rarity
-                            
-                            if not rStr then
-                                for obj, name in pairs(RarityTableToName) do
-                                    if obj == itemConfig.Rarity then
-                                        rStr = name
-                                        break
-                                    end
-                                end
-                            end
-                        end
-                        
-                        if rStr then
-                            local rStrClean = tostring(rStr)
-                            local modName = desc.Name:lower()
-                            ItemRarityDatabase[modName] = rStrClean
-                            
-                            if itemConfig.DisplayName then
-                                ItemRarityDatabase[tostring(itemConfig.DisplayName):lower()] = rStrClean
-                            end
-                            if itemConfig.Name then
-                                ItemRarityDatabase[tostring(itemConfig.Name):lower()] = rStrClean
-                            end
-                            if itemConfig.Category then
-                                ItemRarityDatabase[tostring(itemConfig.Category):lower()] = rStrClean
-                            end
-                            itemCount = itemCount + 1
-                        end
-                    end
-                end
-            end
-        end
-    end)
-    
-    if itemCount > 0 then
-        isRarityLoaded = true
-        print(string.format("[StealAnEgg] Berhasil me-load %d Definisi Item Rarity dari ReplicatedStorage.Directory!", itemCount))
-    end
-end
-
-LoadGameDirectoryRarities()
+local isRarityLoaded = true
 
 
 -- ==========================================================
@@ -1141,11 +1041,7 @@ function StealAnEggTrade.GetToolRarity(tool)
         return tostring(rVal.Value)
     end
     
-    if not isRarityLoaded then
-        LoadGameDirectoryRarities()
-    end
-    
-    -- 3. Cek Database ReplicatedStorage.Directory berdasarkan displayName / nama tool
+    -- 3. Cek Database berdasarkan displayName / nama tool
     local rawName = tool.Name
     local dispName = cfg and (cfg:GetAttribute("displayName") or cfg:GetAttribute("DisplayName")) or tool:GetAttribute("DisplayName") or rawName
     dispName = tostring(dispName):lower()
