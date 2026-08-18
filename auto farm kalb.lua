@@ -20,26 +20,44 @@ local lp = Players.LocalPlayer
 _G.autoFarm = true
 
 -- =============================================
--- 🚀 SYSTEM ANTI-LAG & OPTIMISASI (BAC SAFE)
+-- 🚀 SYSTEM ANTI-LAG & OPTIMISASI (HAPUS SEMUA TEKSTUR MODEL)
 -- =============================================
--- 1. Ubah Map Jadi Potato (Putih & SmoothPlastic)
-for _, v in ipairs(workspace:GetDescendants()) do
-    if not (lp.Character and (v == lp.Character or v:IsDescendantOf(lp.Character))) then
-        pcall(function()
-            if v:IsA("BasePart") then
-                v.Material = Enum.Material.SmoothPlastic
-                v.Reflectance = 0
-                v.CastShadow = false
-                v.Color = Color3.new(1, 1, 1)
-                if v:IsA("MeshPart") then v.TextureID = "" end
-            elseif v:IsA("SpecialMesh") then
-                v.TextureId = ""
-            elseif v:IsA("Decal") or v:IsA("Texture") then
-                v.Transparency = 1
+local function removeTextures(v)
+    if not v then return end
+    if lp.Character and (v == lp.Character or v:IsDescendantOf(lp.Character)) then return end
+
+    pcall(function()
+        if v:IsA("BasePart") then
+            v.Material = Enum.Material.SmoothPlastic
+            v.Reflectance = 0
+            v.CastShadow = false
+            v.Color = Color3.new(1, 1, 1)
+            if v:IsA("MeshPart") then
+                v.TextureID = ""
             end
-        end)
-    end
+        elseif v:IsA("SpecialMesh") then
+            v.TextureId = ""
+        elseif v:IsA("SurfaceAppearance") then
+            v:Destroy() -- Hapus tekstur modern PBR/HD
+        elseif v:IsA("Decal") or v:IsA("Texture") then
+            v.Transparency = 1
+        elseif v:IsA("Clothing") or v:IsA("ShirtGraphic") then
+            v:Destroy() -- Hapus tekstur baju/celana pada model
+        elseif v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Beam") or v:IsA("Fire") or v:IsA("Smoke") or v:IsA("Sparkles") then
+            v.Enabled = false -- Matikan partikel efek visual
+        end
+    end)
 end
+
+-- 1. Bersihkan semua objek & model yang sudah ada di map
+for _, v in ipairs(workspace:GetDescendants()) do
+    removeTextures(v)
+end
+
+-- 2. Bersihkan otomatis jika ada model / part baru yang spawn
+workspace.DescendantAdded:Connect(function(v)
+    task.defer(removeTextures, v)
+end)
 
 -- =============================================
 -- 🎯 DETEKTOR PLOT SENDIRI & REMOVER PLOT LAIN
