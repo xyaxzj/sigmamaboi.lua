@@ -1,30 +1,49 @@
 -- ==============================================================================
--- 🥔 KALB ANTI-LAG, AUTO PURGE & AUTO SELL ALL
+-- 🥔 KALB ANTI-LAG, AUTO PURGE, AUTO SELL & METEOR SHOP AUTO BUY
 -- ==============================================================================
 -- Fitur:
 -- 1. 🥔 Anti-Lag Ekstrem & Potato Map (Plastic, White, No Shadows, Plot & Player Removed)
 -- 2. 🛡️ Anti-AFK (Mencegah disconnect 20 menit)
 -- 3. 💰 Auto Sell All (Setiap 5 detik via remote ref_B_SellAll)
+-- 4. 🛒 Meteor Shop Auto Buy Frigorex (Pantau stock setiap 5 menit via rev_MeteorShop_RequestSync)
 -- ==============================================================================
 
-if not game:IsLoaded() then game.Loaded:Wait() end
+pcall(function()
+    if not game:IsLoaded() then
+        game.Loaded:Wait()
+    end
+end)
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local VirtualUser = game:GetService("VirtualUser")
+
 local lp = Players.LocalPlayer
+if not lp then
+    local count = 0
+    repeat
+        task.wait(0.05)
+        lp = Players.LocalPlayer
+        count = count + 1
+    until lp or count > 50
+end
 
 -- =============================================
 -- ⚙️ KONFIGURASI 
 -- =============================================
 _G.autoFarm = true
+_G.autoBuyFrigorex = true
+
+local autoBuyItems = {
+    ["Frigorex"] = true, -- Otomatis beli Frigorex jika stock > 0
+}
 
 -- =============================================
 -- 🚀 SYSTEM ANTI-LAG & OPTIMISASI (HAPUS SEMUA TEKSTUR MODEL)
 -- =============================================
 local function removeTextures(v)
     if not v then return end
-    if lp.Character and (v == lp.Character or v:IsDescendantOf(lp.Character)) then return end
+    if lp and lp.Character and (v == lp.Character or v:IsDescendantOf(lp.Character)) then return end
 
     pcall(function()
         if v:IsA("BasePart") then
@@ -62,9 +81,9 @@ end)
 -- =============================================
 -- 🎯 DETEKTOR PLOT SENDIRI & REMOVER PLOT LAIN
 -- =============================================
-local lpName = lp.Name
-local lpDisplayName = lp.DisplayName
-local myUidStr = tostring(lp.UserId)
+local lpName = lp and lp.Name or ""
+local lpDisplayName = lp and lp.DisplayName or ""
+local myUidStr = lp and tostring(lp.UserId) or ""
 
 local function isMyPlot(plotModel)
     if not plotModel or not plotModel:IsA("Model") then return false end
@@ -129,15 +148,16 @@ if plotsFolder then
     end)
 end
 
--- 3. Hapus Karakter Player Lain Secara Total & Bersih
+-- =============================================
+-- 🚫 PENGHAPUS KARAKTER PLAYER LAIN (HEMAT CPU & ANTI-LAG)
+-- =============================================
 local function purgeOtherCharacter(char)
     if not char or not char:IsA("Model") then return end
-    if char == lp.Character or char.Name == lpName or (lpDisplayName and char.Name == lpDisplayName) then
+    if char == (lp and lp.Character) or char.Name == lpName or (lpDisplayName ~= "" and char.Name == lpDisplayName) then
         return
     end
 
     pcall(function()
-        -- Buat transparan & nonaktifkan collision terlebih dahulu
         for _, v in ipairs(char:GetDescendants()) do
             if v:IsA("BasePart") then
                 v.Transparency = 1
@@ -151,10 +171,9 @@ local function purgeOtherCharacter(char)
     end)
 end
 
--- Deteksi dan musnahkan model karakter yang memiliki Humanoid di Workspace
 local function scanAndPurgeHumanoids()
     for _, child in ipairs(workspace:GetChildren()) do
-        if child:IsA("Model") and child ~= lp.Character and child.Name ~= lpName and (not lpDisplayName or child.Name ~= lpDisplayName) then
+        if child:IsA("Model") and child ~= (lp and lp.Character) and child.Name ~= lpName and (lpDisplayName == "" or child.Name ~= lpDisplayName) then
             if child:FindFirstChildOfClass("Humanoid") or child:FindFirstChild("HumanoidRootPart") or Players:GetPlayerFromCharacter(child) then
                 purgeOtherCharacter(child)
             end
@@ -192,7 +211,7 @@ end)
 -- 3. Listener langsung di Workspace saat model/humanoid baru muncul
 workspace.ChildAdded:Connect(function(child)
     task.defer(function()
-        if child:IsA("Model") and child ~= lp.Character and child.Name ~= lpName and (not lpDisplayName or child.Name ~= lpDisplayName) then
+        if child:IsA("Model") and child ~= (lp and lp.Character) and child.Name ~= lpName and (lpDisplayName == "" or child.Name ~= lpDisplayName) then
             if child:FindFirstChildOfClass("Humanoid") or child:FindFirstChild("HumanoidRootPart") or Players:GetPlayerFromCharacter(child) then
                 purgeOtherCharacter(child)
             end
@@ -203,7 +222,7 @@ end)
 workspace.DescendantAdded:Connect(function(descendant)
     if descendant:IsA("Humanoid") then
         local parentModel = descendant.Parent
-        if parentModel and parentModel:IsA("Model") and parentModel ~= lp.Character and parentModel.Name ~= lpName then
+        if parentModel and parentModel:IsA("Model") and parentModel ~= (lp and lp.Character) and parentModel.Name ~= lpName then
             task.defer(function()
                 purgeOtherCharacter(parentModel)
             end)
@@ -222,18 +241,90 @@ end)
 -- =============================================
 -- 🛡️ ANTI AFK (KLASIK VIRTUALUSER)
 -- =============================================
-lp.Idled:Connect(function()
-    pcall(function()
-        VirtualUser:CaptureController()
-        VirtualUser:ClickButton2(Vector2.new())
+if lp then
+    lp.Idled:Connect(function()
+        pcall(function()
+            VirtualUser:CaptureController()
+            VirtualUser:ClickButton2(Vector2.new())
+        end)
     end)
-end)
+end
 
 -- =============================================
--- 📡 CARI REMOTE NETWORK UNTUK AUTO SELL
+-- 📡 CARI REMOTE NETWORK (SAFE DISCOVERY)
 -- =============================================
-local networkFolder = ReplicatedStorage:WaitForChild("Shared", 10):WaitForChild("Packages", 10):WaitForChild("Network", 10)
-local ref_B_SellAll = networkFolder and (networkFolder:FindFirstChild("ref_B_SellAll") or networkFolder:WaitForChild("ref_B_SellAll", 5))
+local networkFolder = nil
+pcall(function()
+    local shared = ReplicatedStorage:FindFirstChild("Shared") or ReplicatedStorage:WaitForChild("Shared", 3)
+    local packages = shared and (shared:FindFirstChild("Packages") or shared:WaitForChild("Packages", 3))
+    networkFolder = packages and (packages:FindFirstChild("Network") or packages:WaitForChild("Network", 3))
+end)
+
+local ref_B_SellAll = networkFolder and networkFolder:FindFirstChild("ref_B_SellAll")
+local rev_MeteorShop_RequestSync = networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_RequestSync")
+local rev_MeteorShop_Stock = networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_Stock")
+local rev_MeteorShop_Buy = networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_Buy")
+
+-- =============================================
+-- 🛒 AUTO PANTAU STOCK & AUTO BUY METEOR SHOP
+-- =============================================
+if rev_MeteorShop_Stock then
+    rev_MeteorShop_Stock.OnClientEvent:Connect(function(stockData, expiryTimestamp)
+        if type(stockData) ~= "table" then return end
+        
+        print("--------------------------------------------------")
+        print("🛒 [METEOR SHOP] Data Stock Diterima dari Server:")
+        
+        for itemName, itemInfo in pairs(stockData) do
+            if type(itemInfo) == "table" then
+                local stockCount = tonumber(itemInfo.Stock) or 0
+                local maxCount = tonumber(itemInfo.Max) or 0
+                
+                -- Jika item ini ada dalam target Auto Buy (misal: Frigorex)
+                if autoBuyItems[itemName] then
+                    print(string.format("⭐ [TARGET] %s | Stock: %d / %d", tostring(itemName), stockCount, maxCount))
+                    
+                    if _G.autoBuyFrigorex and stockCount > 0 then
+                        for i = 1, stockCount do
+                            pcall(function()
+                                if rev_MeteorShop_Buy then
+                                    rev_MeteorShop_Buy:FireServer(itemName)
+                                    print(string.format("🔥 [AUTO BUY] Membeli %s (#%d/%d)...", tostring(itemName), i, stockCount))
+                                end
+                            end)
+                            task.wait(0.2)
+                        end
+                    end
+                end
+            end
+        end
+        print("--------------------------------------------------")
+    end)
+end
+
+-- Loop Request Stock setiap 5 Menit (300 Detik)
+task.spawn(function()
+    task.wait(2) -- Jeda awal saat baru load
+    while true do
+        if _G.autoFarm and _G.autoBuyFrigorex then
+            pcall(function()
+                if rev_MeteorShop_RequestSync then
+                    rev_MeteorShop_RequestSync:FireServer()
+                    print("🛒 [METEOR SHOP] Mengirim RequestSync ke server (Loop 5 Menit)...")
+                else
+                    -- Fallback cari remote jika belum ter-cache
+                    local net = networkFolder or (ReplicatedStorage:FindFirstChild("Shared") and ReplicatedStorage.Shared:FindFirstChild("Packages") and ReplicatedStorage.Shared.Packages:FindFirstChild("Network"))
+                    local syncRemote = net and net:FindFirstChild("rev_MeteorShop_RequestSync")
+                    if syncRemote then
+                        syncRemote:FireServer()
+                        print("🛒 [METEOR SHOP] RequestSync dikirim via fallback...")
+                    end
+                end
+            end)
+        end
+        task.wait(300) -- Jeda 5 menit (300 detik) agar tidak membebani server
+    end
+end)
 
 -- =============================================
 -- 💰 AUTO SELL ALL (SETIAP 5 DETIK)
@@ -245,9 +336,7 @@ task.spawn(function()
             if ref_B_SellAll then
                 ref_B_SellAll:InvokeServer()
             else
-                local net = ReplicatedStorage:FindFirstChild("Shared")
-                net = net and net:FindFirstChild("Packages")
-                net = net and net:FindFirstChild("Network")
+                local net = networkFolder or (ReplicatedStorage:FindFirstChild("Shared") and ReplicatedStorage.Shared:FindFirstChild("Packages") and ReplicatedStorage.Shared.Packages:FindFirstChild("Network"))
                 local sellRemote = net and net:FindFirstChild("ref_B_SellAll")
                 if sellRemote then
                     sellRemote:InvokeServer()
@@ -256,3 +345,5 @@ task.spawn(function()
         end)
     end
 end)
+
+print("🥔 [KALB] Auto Farm (Anti-Lag, Auto Sell & Meteor Shop Frigorex Auto-Buy) Siap!")
