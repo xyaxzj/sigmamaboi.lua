@@ -6,6 +6,7 @@
 -- 2. 🛡️ Anti-AFK (Mencegah disconnect 20 menit)
 -- 3. 💰 Auto Sell All (Setiap 5 detik via remote ref_B_SellAll)
 -- 4. 🛒 Meteor Shop Auto Buy Frigorex (Pantau stock setiap 5 menit via rev_MeteorShop_RequestSync)
+-- 5. 🧪 Meteor Shop Auto Buy Farm Potion (Beli 1x setiap pergantian jam ganjil WIB: 1, 3, 5... 23)
 -- ==============================================================================
 
 pcall(function()
@@ -33,6 +34,7 @@ end
 -- =============================================
 _G.autoFarm = true
 _G.autoBuyFrigorex = true
+_G.autoBuyFarmPotion = true
 
 local autoBuyItems = {
     ["Frigorex"] = true, -- Otomatis beli Frigorex jika stock > 0
@@ -266,7 +268,7 @@ local rev_MeteorShop_Stock = networkFolder and networkFolder:FindFirstChild("rev
 local rev_MeteorShop_Buy = networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_Buy")
 
 -- =============================================
--- 🛒 AUTO PANTAU STOCK & AUTO BUY METEOR SHOP
+-- 🛒 AUTO PANTAU STOCK & AUTO BUY FRIGOREX
 -- =============================================
 if rev_MeteorShop_Stock then
     rev_MeteorShop_Stock.OnClientEvent:Connect(function(stockData, expiryTimestamp)
@@ -287,8 +289,9 @@ if rev_MeteorShop_Stock then
                     if _G.autoBuyFrigorex and stockCount > 0 then
                         for i = 1, stockCount do
                             pcall(function()
-                                if rev_MeteorShop_Buy then
-                                    rev_MeteorShop_Buy:FireServer(itemName)
+                                local buyRemote = rev_MeteorShop_Buy or (networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_Buy"))
+                                if buyRemote then
+                                    buyRemote:FireServer(itemName)
                                     print(string.format("🔥 [AUTO BUY] Membeli %s (#%d/%d)...", tostring(itemName), i, stockCount))
                                 end
                             end)
@@ -308,21 +311,51 @@ task.spawn(function()
     while true do
         if _G.autoFarm and _G.autoBuyFrigorex then
             pcall(function()
-                if rev_MeteorShop_RequestSync then
-                    rev_MeteorShop_RequestSync:FireServer()
+                local syncRemote = rev_MeteorShop_RequestSync or (networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_RequestSync"))
+                if syncRemote then
+                    syncRemote:FireServer()
                     print("🛒 [METEOR SHOP] Mengirim RequestSync ke server (Loop 5 Menit)...")
-                else
-                    -- Fallback cari remote jika belum ter-cache
-                    local net = networkFolder or (ReplicatedStorage:FindFirstChild("Shared") and ReplicatedStorage.Shared:FindFirstChild("Packages") and ReplicatedStorage.Shared.Packages:FindFirstChild("Network"))
-                    local syncRemote = net and net:FindFirstChild("rev_MeteorShop_RequestSync")
-                    if syncRemote then
-                        syncRemote:FireServer()
-                        print("🛒 [METEOR SHOP] RequestSync dikirim via fallback...")
-                    end
                 end
             end)
         end
         task.wait(300) -- Jeda 5 menit (300 detik) agar tidak membebani server
+    end
+end)
+
+-- =============================================
+-- 🧪 AUTO BUY FARM POTION (SETIAP JAM GANJIL WIB: 1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23)
+-- =============================================
+local lastBoughtFarmPotionHour = -1
+
+task.spawn(function()
+    task.wait(1)
+    while true do
+        if _G.autoFarm and _G.autoBuyFarmPotion then
+            pcall(function()
+                -- Hitung waktu Indonesia Barat (WIB = UTC+7)
+                local wibTime = os.date("!*t", os.time() + (7 * 3600))
+                local hourWIB = wibTime.hour
+                local minWIB = wibTime.min
+                local secWIB = wibTime.sec
+
+                -- Cek apakah jam ganjil (1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23)
+                if (hourWIB % 2 == 1) and (lastBoughtFarmPotionHour ~= hourWIB) then
+                    lastBoughtFarmPotionHour = hourWIB
+                    
+                    local buyRemote = rev_MeteorShop_Buy
+                    if not buyRemote then
+                        local net = networkFolder or (ReplicatedStorage:FindFirstChild("Shared") and ReplicatedStorage.Shared:FindFirstChild("Packages") and ReplicatedStorage.Shared.Packages:FindFirstChild("Network"))
+                        buyRemote = net and net:FindFirstChild("rev_MeteorShop_Buy")
+                    end
+
+                    if buyRemote then
+                        buyRemote:FireServer("Farm Potion")
+                        print(string.format("🧪 [AUTO BUY WIB] Berhasil membeli 1x Farm Potion pada jam %02d:%02d:%02d WIB!", hourWIB, minWIB, secWIB))
+                    end
+                end
+            end)
+        end
+        task.wait(5) -- Cek setiap 5 detik
     end
 end)
 
@@ -333,17 +366,12 @@ task.spawn(function()
     while task.wait(5) do
         if not _G.autoFarm then continue end
         pcall(function()
-            if ref_B_SellAll then
-                ref_B_SellAll:InvokeServer()
-            else
-                local net = networkFolder or (ReplicatedStorage:FindFirstChild("Shared") and ReplicatedStorage.Shared:FindFirstChild("Packages") and ReplicatedStorage.Shared.Packages:FindFirstChild("Network"))
-                local sellRemote = net and net:FindFirstChild("ref_B_SellAll")
-                if sellRemote then
-                    sellRemote:InvokeServer()
-                end
+            local sellRemote = ref_B_SellAll or (networkFolder and networkFolder:FindFirstChild("ref_B_SellAll"))
+            if sellRemote then
+                sellRemote:InvokeServer()
             end
         end)
     end
 end)
 
-print("🥔 [KALB] Auto Farm (Anti-Lag, Auto Sell & Meteor Shop Frigorex Auto-Buy) Siap!")
+print("🥔 [KALB] Auto Farm (Anti-Lag, Auto Sell, Frigorex & Farm Potion WIB Auto-Buy) Siap!")
