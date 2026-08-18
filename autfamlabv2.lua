@@ -1,10 +1,11 @@
 -- ==============================================================================
--- ☄️ KALB AUTO METEOR EVENT CLAIMER (ENLARGE DEBRIS ONLY)
+-- 💥 KALB AUTO METEOR CLAIMER (ULTIMATE COMBO ENGINE)
 -- ==============================================================================
 -- Fitur:
--- 1. ☄️ Memperbesar SEMUA part di dalam folder workspace.Debris (termasuk ClassName "Part")
--- 2. ⚡ Auto Claim instan saat meteor menyentuh hitbox besar (2048 studs)
--- 3. 📊 Floating Status HUD Real-Time
+-- 1. 🎯 Khusus mendeteksi Model bernama Angka (1, 2, 3...) di dalam folder workspace.Debris
+-- 2. 💥 Ultimate Combo Claim: Max Hitbox (2048) + CFrame Magnet + Multi-Limb Touch + Micro Flash Snap
+-- 3. 🛡️ Crash-Proof & Multi-Executor Compatibility (Delta, Codex, Arceus, Fluxus, Solara, Wave, PC)
+-- 4. 📊 Floating Status HUD Real-Time
 -- ==============================================================================
 
 if not game:IsLoaded() then game.Loaded:Wait() end
@@ -12,6 +13,7 @@ if not game:IsLoaded() then game.Loaded:Wait() end
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CoreGui = game:GetService("CoreGui")
+local RunService = game:GetService("RunService")
 local lp = Players.LocalPlayer
 
 -- =============================================
@@ -20,27 +22,38 @@ local lp = Players.LocalPlayer
 _G.autoMeteor = true
 local meteorClaimCount = 0
 local isMeteorShowerActive = false
+local MAX_SIZE = Vector3.new(2048, 2048, 2048)
+
+local activeMeteors = {}
+local processedRoots = {}
+local isSnapping = false
 
 -- =============================================
--- 📡 CARI REMOTE NETWORK
+-- 🛡️ GUI PARENT AMAN (ANTI-CRASH SEMUA EXECUTOR)
 -- =============================================
-local networkFolder = ReplicatedStorage:WaitForChild("Shared", 10):WaitForChild("Packages", 10):WaitForChild("Network", 10)
-local rev_kickPhase2 = networkFolder and networkFolder:WaitForChild("rev_kickPhase2", 15)
-local rev_KickData = networkFolder and networkFolder:WaitForChild("rev_KickData", 15)
-local rev_AddedWeather = networkFolder and networkFolder:WaitForChild("rev_AddedWeather", 15)
-local rev_RemovedWeather = networkFolder and networkFolder:WaitForChild("rev_RemovedWeather", 15)
+local function getSafeGuiParent()
+    if gethui then
+        local ok, res = pcall(gethui)
+        if ok and res then return res end
+    end
+    local okCore, core = pcall(function()
+        local test = Instance.new("Folder")
+        test.Parent = CoreGui
+        test:Destroy()
+        return CoreGui
+    end)
+    if okCore and core then return core end
+    return lp:WaitForChild("PlayerGui", 10) or lp.PlayerGui
+end
 
--- =============================================
--- 📊 FLOATING STATUS HUD ON-SCREEN
--- =============================================
-local guiParent = pcall(function() return CoreGui end) and CoreGui or lp:WaitForChild("PlayerGui")
+local guiParent = getSafeGuiParent()
 local oldHud = guiParent:FindFirstChild("KalbMeteorStatusGui")
-if oldHud then oldHud:Destroy() end
+if oldHud then pcall(function() oldHud:Destroy() end) end
 
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "KalbMeteorStatusGui"
 ScreenGui.ResetOnSpawn = false
-ScreenGui.Parent = guiParent
+pcall(function() ScreenGui.Parent = guiParent end)
 
 local StatusFrame = Instance.new("Frame")
 StatusFrame.Size = UDim2.new(0, 260, 0, 110)
@@ -105,18 +118,31 @@ RewardLabel.TextXAlignment = Enum.TextXAlignment.Left
 RewardLabel.Parent = StatusFrame
 
 local function updateStatus(text, color)
-    StatusLabel.Text = "Status: " .. tostring(text)
-    if color then StatusLabel.TextColor3 = color end
+    pcall(function()
+        StatusLabel.Text = "Status: " .. tostring(text)
+        if color then StatusLabel.TextColor3 = color end
+    end)
 end
 
 -- =============================================
--- 📡 DAFTAR EVENT LISTENER
+-- 📡 CARI REMOTE NETWORK (SAFE DISCOVERY)
 -- =============================================
+local networkFolder = nil
+pcall(function()
+    local shared = ReplicatedStorage:FindFirstChild("Shared") or ReplicatedStorage:WaitForChild("Shared", 3)
+    local packages = shared and (shared:FindFirstChild("Packages") or shared:WaitForChild("Packages", 3))
+    networkFolder = packages and (packages:FindFirstChild("Network") or packages:WaitForChild("Network", 3))
+end)
+
+local rev_kickPhase2 = networkFolder and networkFolder:FindFirstChild("rev_kickPhase2")
+local rev_KickData = networkFolder and networkFolder:FindFirstChild("rev_KickData")
+local rev_AddedWeather = networkFolder and networkFolder:FindFirstChild("rev_AddedWeather")
+local rev_RemovedWeather = networkFolder and networkFolder:FindFirstChild("rev_RemovedWeather")
+
 local mutationCount = 0
 if rev_kickPhase2 then
     rev_kickPhase2.OnClientEvent:Connect(function(rewardTable, ...)
         mutationCount = mutationCount + 1
-        
         local rewardName = "Brainrot"
         local mutationType = "Normal"
         pcall(function()
@@ -125,8 +151,9 @@ if rev_kickPhase2 then
                 mutationType = tostring(rewardTable[1].Mutation or "Normal")
             end
         end)
-        
-        RewardLabel.Text = string.format("Brainrot: %s (%s) | %d", rewardName, mutationType, mutationCount)
+        pcall(function()
+            RewardLabel.Text = string.format("Brainrot: %s (%s) | %d", rewardName, mutationType, mutationCount)
+        end)
         updateStatus(string.format("🎉 Didapat: %s [%s]!", rewardName, mutationType), Color3.fromRGB(100, 240, 120))
     end)
 end
@@ -156,14 +183,8 @@ if rev_RemovedWeather then
 end
 
 -- =============================================
--- 💥 ULTIMATE COMBO METEOR CLAIMER (ENLARGE + MAGNET + MULTI-TOUCH + FLASH-SNAP)
+-- 💥 ULTIMATE COMBO METEOR ENGINE (KHUSUS DEBRIS + ANGKA)
 -- =============================================
-local RunService = game:GetService("RunService")
-local MAX_SIZE = Vector3.new(2048, 2048, 2048) -- Ukuran hitbox maksimal
-
-local activeMeteors = {}
-local processedRoots = {}
-local isSnapping = false
 
 -- Mendeteksi HANYA model di dalam workspace.Debris yang namanya berupa angka (1, 2, 3, dst.)
 local function isTargetModel(model)
@@ -188,7 +209,7 @@ local function getTargetModelParent(instance)
     return nil
 end
 
--- 1. Multi-Limb Touch Simulator (Menyentuhkan seluruh bagian tubuh ke part meteor)
+-- 1. Multi-Limb Touch Simulator
 local function triggerMultiTouch(part)
     if not part or not firetouchinterest then return end
     local char = lp.Character
@@ -235,7 +256,7 @@ local function processMeteorPart(part, targetCFrame)
     triggerMultiTouch(part)
 end
 
--- 3. Flash-Touch Snap (Micro 0.08s touch di titik server asli lalu balik ke posisi awal)
+-- 3. Flash-Touch Snap (Micro 0.08s touch di titik server asli)
 local function performFlashTouch(targetPart)
     if isSnapping or not targetPart then return end
     local char = lp.Character
@@ -248,7 +269,6 @@ local function performFlashTouch(targetPart)
     local meteorPos = targetPart.CFrame
 
     pcall(function()
-        -- Micro Teleport ke koordinat fisik meteor
         hrp.CFrame = meteorPos + Vector3.new(0, 1, 0)
         triggerMultiTouch(targetPart)
     end)
@@ -295,7 +315,9 @@ local function handleNewMeteor(model)
     if not processedRoots[model] then
         processedRoots[model] = true
         meteorClaimCount = meteorClaimCount + 1
-        MeteorLabel.Text = string.format("☄️ Meteor Diklaim: %d", meteorClaimCount)
+        pcall(function()
+            MeteorLabel.Text = string.format("☄️ Meteor Diklaim: %d", meteorClaimCount)
+        end)
         updateStatus(string.format("💥 Combo Claim Meteor #%s!", tostring(model.Name)), Color3.fromRGB(100, 240, 120))
     end
 end
@@ -309,7 +331,6 @@ RunService.Heartbeat:Connect(function()
     if not hrp or not hum or hum.Health <= 0 then return end
 
     local currentCFrame = hrp.CFrame
-
     local debris = workspace:FindFirstChild("Debris")
     if not debris then return end
 
@@ -361,9 +382,9 @@ local function setupDebrisListeners(debris)
     end)
 end
 
--- Jalankan setup Debris
-pcall(function()
-    local debris = workspace:FindFirstChild("Debris") or workspace:WaitForChild("Debris", 10)
+-- Setup Debris Loop (Non-blocking)
+task.spawn(function()
+    local debris = workspace:FindFirstChild("Debris") or workspace:WaitForChild("Debris", 5)
     if debris then
         setupDebrisListeners(debris)
     end
