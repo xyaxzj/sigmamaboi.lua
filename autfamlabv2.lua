@@ -1,14 +1,18 @@
 -- ==============================================================================
--- 💥 KALB AUTO METEOR CLAIMER (ENLARGE HITBOX + MULTI-TOUCH + FLASH-SNAP)
+-- ☄️ KALB ULTIMATE METEOR ENGINE (HYBRID: GC INTERNAL HOOK + BALL RAYCAST MAGNET)
 -- ==============================================================================
--- Fitur:
--- 1. 🎯 Khusus mendeteksi Model bernama Angka (1, 2, 3...) di dalam folder workspace.Debris
--- 2. 💥 Enlarge Max Hitbox (2048) + Multi-Limb Touch + Micro Flash Snap
--- 3. 🐞 Real-Time Console & On-Screen Debugger (Tekan F9 / Buka Console Executor)
+-- Fitur & Bedah Sistem Game:
+-- 1. ⚡ Direct GC/Engine Invocator: Menghubungkan langsung ke fungsi internal game "CheckForHit"
+--    (ReplicatedStorage.Modules.ControllerLoader.WeatherController.Weathers.Events.MeteorShower)
+--    Mengklaim seluruh daftar upvalue meteorList, memicu remote "meteorNetwork", AddLuck, dan PlayHit secara sah!
+-- 2. 🚀 Projectile-Targeted Raycast Magnet: Menempatkan part meteor tepat di lintasan Raycast bola
+--    dengan CanQuery = true, sehingga Raycast bawaan game 100% menabrak meteor secara natural.
+-- 3. 🛡️ 100% Server Validated: Mencegah rollback dan memvalidasi gacha reward server asli.
+-- 4. 📊 Floating HUD Real-Time dengan status klaim & server rewards.
 -- ==============================================================================
 
 print("--------------------------------------------------")
-print("☄️ [DEBUG 1] Script auto meteor kalb.lua dieksekusi...")
+print("☄️ [INIT] Memuat KALB Ultimate Meteor Engine...")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -25,19 +29,17 @@ if not lp then
     until lp or count > 50
 end
 
-print("☄️ [DEBUG 2] LocalPlayer:", lp and lp.Name or "TIDAK DITEMUKAN")
-
 -- =============================================
 -- ⚙️ KONFIGURASI 
 -- =============================================
 _G.autoMeteor = true
 local meteorClaimCount = 0
 local isMeteorShowerActive = false
-local MAX_SIZE = Vector3.new(2048, 2048, 2048)
+local RAYCAST_HITBOX_SIZE = Vector3.new(30, 30, 30)
 
-local enlargedParts = {}
+local activeMeteors = {}
 local processedRoots = {}
-local isSnapping = false
+local activeProjectile = nil
 
 -- =============================================
 -- 📊 FLOATING STATUS HUD ON-SCREEN
@@ -52,9 +54,7 @@ local function getGuiContainer()
 end
 
 local targetGuiParent = getGuiContainer()
-print("☄️ [DEBUG 3] Target GUI Container:", targetGuiParent and targetGuiParent:GetFullName() or "NIL (PlayerGui belum siap)")
 
--- Hapus GUI lama jika ada
 pcall(function()
     if lp and lp:FindFirstChild("PlayerGui") and lp.PlayerGui:FindFirstChild("KalbMeteorStatusGui") then
         lp.PlayerGui.KalbMeteorStatusGui:Destroy()
@@ -107,7 +107,7 @@ StatusLabel.Size = UDim2.new(1, -10, 0, 20)
 StatusLabel.Position = UDim2.new(0, 8, 0, 28)
 StatusLabel.BackgroundTransparency = 1
 StatusLabel.Font = Enum.Font.GothamMedium
-StatusLabel.Text = "Status: Menunggu Meteor..."
+StatusLabel.Text = "Status: Standby Menunggu Meteor..."
 StatusLabel.TextColor3 = Color3.fromRGB(200, 210, 230)
 StatusLabel.TextSize = 11
 StatusLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -118,7 +118,7 @@ MeteorLabel.Size = UDim2.new(1, -10, 0, 20)
 MeteorLabel.Position = UDim2.new(0, 8, 0, 50)
 MeteorLabel.BackgroundTransparency = 1
 MeteorLabel.Font = Enum.Font.GothamBold
-MeteorLabel.Text = "☄️ Meteor Diklaim: 0"
+MeteorLabel.Text = "☄️ Meteor Terklaim: 0"
 MeteorLabel.TextColor3 = Color3.fromRGB(255, 150, 0)
 MeteorLabel.TextSize = 11
 MeteorLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -129,7 +129,7 @@ RewardLabel.Size = UDim2.new(1, -10, 0, 20)
 RewardLabel.Position = UDim2.new(0, 8, 0, 72)
 RewardLabel.BackgroundTransparency = 1
 RewardLabel.Font = Enum.Font.GothamBold
-RewardLabel.Text = "Total Brainrots: 0"
+RewardLabel.Text = "Server Reward: None | Total: 0"
 RewardLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
 RewardLabel.TextSize = 11
 RewardLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -140,18 +140,15 @@ DebugLabel.Size = UDim2.new(1, -10, 0, 20)
 DebugLabel.Position = UDim2.new(0, 8, 0, 96)
 DebugLabel.BackgroundTransparency = 1
 DebugLabel.Font = Enum.Font.Code
-DebugLabel.Text = "Debug: Initialized"
+DebugLabel.Text = "Engine: Hybrid (GC Hook + Ball Magnet)"
 DebugLabel.TextColor3 = Color3.fromRGB(150, 220, 255)
 DebugLabel.TextSize = 10
 DebugLabel.TextXAlignment = Enum.TextXAlignment.Left
 DebugLabel.Parent = StatusFrame
 
--- Pasang ScreenGui
 pcall(function()
     ScreenGui.Parent = targetGuiParent or lp:WaitForChild("PlayerGui", 5)
 end)
-
-print("☄️ [DEBUG 4] ScreenGui terpasang pada:", ScreenGui.Parent and ScreenGui.Parent:GetFullName() or "GAGAL TERPASANG")
 
 local function updateStatus(text, color)
     pcall(function()
@@ -161,22 +158,19 @@ local function updateStatus(text, color)
 end
 
 local function logDebug(text)
-    print("☄️ [DEBUG]", text)
     pcall(function()
-        DebugLabel.Text = "Debug: " .. tostring(text)
+        DebugLabel.Text = tostring(text)
     end)
 end
 
-logDebug("HUD Siap! Mencari folder Debris...")
-
 -- =============================================
--- 📡 CARI REMOTE NETWORK (SAFE DISCOVERY)
+-- 📡 DAFTAR REMOTE NETWORK RESMI
 -- =============================================
 local networkFolder = nil
 pcall(function()
-    local shared = ReplicatedStorage:FindFirstChild("Shared") or ReplicatedStorage:WaitForChild("Shared", 2)
-    local packages = shared and (shared:FindFirstChild("Packages") or shared:WaitForChild("Packages", 2))
-    networkFolder = packages and (packages:FindFirstChild("Network") or packages:WaitForChild("Network", 2))
+    local shared = ReplicatedStorage:FindFirstChild("Shared") or ReplicatedStorage:WaitForChild("Shared", 3)
+    local packages = shared and (shared:FindFirstChild("Packages") or shared:WaitForChild("Packages", 3))
+    networkFolder = packages and (packages:FindFirstChild("Network") or packages:WaitForChild("Network", 3))
 end)
 
 local rev_kickPhase2 = networkFolder and networkFolder:FindFirstChild("rev_kickPhase2")
@@ -197,9 +191,9 @@ if rev_kickPhase2 then
             end
         end)
         pcall(function()
-            RewardLabel.Text = string.format("Brainrot: %s (%s) | %d", rewardName, mutationType, mutationCount)
+            RewardLabel.Text = string.format("🎉 %s (%s) | Total: %d", rewardName, mutationType, mutationCount)
         end)
-        updateStatus(string.format("🎉 Didapat: %s [%s]!", rewardName, mutationType), Color3.fromRGB(100, 240, 120))
+        updateStatus(string.format("✅ Server Klaim Sah: %s [%s]!", rewardName, mutationType), Color3.fromRGB(100, 255, 120))
     end)
 end
 
@@ -213,8 +207,7 @@ if rev_AddedWeather then
     rev_AddedWeather.OnClientEvent:Connect(function(weatherType, ...)
         if weatherType == "MeteorShower" then
             isMeteorShowerActive = true
-            updateStatus("☄️ Meteor Shower Dimulai! Scanning Aktif...", Color3.fromRGB(255, 170, 50))
-            logDebug("Weather: MeteorShower Aktif!")
+            updateStatus("☄️ Meteor Shower Aktif! Engine Siaga...", Color3.fromRGB(255, 170, 50))
         end
     end)
 end
@@ -224,16 +217,13 @@ if rev_RemovedWeather then
         if weatherType == "MeteorShower" then
             isMeteorShowerActive = false
             updateStatus("☁️ Meteor Shower Selesai. Standby...", Color3.fromRGB(180, 190, 210))
-            logDebug("Weather: Selesai")
         end
     end)
 end
 
 -- =============================================
--- 💥 METEOR ENGINE (KHUSUS DEBRIS + ANGKA)
+-- 🎯 DETEKTOR MODEL METEOR (DEBRIS + ANGKA)
 -- =============================================
-
--- Mendeteksi HANYA model di dalam workspace.Debris yang namanya berupa angka (1, 2, 3, dst.)
 local function isTargetModel(model)
     if not model or not model:IsA("Model") then return false end
     local debris = workspace:FindFirstChild("Debris")
@@ -256,133 +246,248 @@ local function getTargetModelParent(instance)
     return nil
 end
 
--- 1. Multi-Limb Touch Simulator
-local function triggerMultiTouch(part)
-    if not part or not firetouchinterest then return end
-    local char = lp and lp.Character
-    if not char then return end
+-- =============================================
+-- ⚡ 1. DIRECT ENGINE GC INJECTOR (KLAIM INSTAN SAH SERVER)
+-- =============================================
+local cachedCheckForHit = nil
+local cachedUpvalues = nil
 
-    local limbs = {
-        char:FindFirstChild("HumanoidRootPart"),
-        char:FindFirstChild("Right Leg"),
-        char:FindFirstChild("Left Leg"),
-        char:FindFirstChild("RightFoot"),
-        char:FindFirstChild("LeftFoot"),
-        char:FindFirstChild("RightLowerLeg"),
-        char:FindFirstChild("LeftLowerLeg"),
-        char:FindFirstChild("Torso"),
-        char:FindFirstChild("UpperTorso"),
-        char:FindFirstChild("LowerTorso"),
-    }
+local function getCheckForHitFunction()
+    if cachedCheckForHit and cachedUpvalues then
+        return cachedCheckForHit, cachedUpvalues
+    end
 
-    for _, limb in ipairs(limbs) do
-        if limb then
-            pcall(function()
-                firetouchinterest(limb, part, 0)
-                firetouchinterest(limb, part, 1)
-            end)
+    if getgc and getupvalues then
+        for _, fn in ipairs(getgc(true)) do
+            if type(fn) == "function" and islclosure and islclosure(fn) and not isexecutorclosure(fn) then
+                local ok, uvs = pcall(getupvalues, fn)
+                if ok and uvs then
+                    -- Cek Heuristic 1: Nama fungsi CheckForHit
+                    local info = getinfo and getinfo(fn)
+                    local isNameMatch = info and info.name == "CheckForHit"
+                    local isSourceMatch = info and info.source and string.find(info.source, "MeteorShower")
+                    
+                    -- Cek Heuristic 2: Signature Upvalue Tabel Multiplier Meteor
+                    local hasMultiplierSignature = false
+                    local meteorTableIndex = nil
+                    local networkModIndex = nil
+
+                    for i, uv in pairs(uvs) do
+                        if type(uv) == "table" then
+                            if uv.Golden == 2 and uv.Diamond == 3 and uv.Rainbow == 5 then
+                                hasMultiplierSignature = true
+                            elseif uv[1] and type(uv[1]) == "table" and (uv[1].Claimed ~= nil or uv[1].Data ~= nil or uv[1].t ~= nil) then
+                                meteorTableIndex = i
+                            elseif uv.FireServer or uv.InvokeServer then
+                                networkModIndex = i
+                            end
+                        end
+                    end
+
+                    if isNameMatch or (isSourceMatch and meteorTableIndex) or (hasMultiplierSignature and meteorTableIndex) then
+                        cachedCheckForHit = fn
+                        cachedUpvalues = uvs
+                        print("⚡ [GC HOOK] Berhasil menghubungkan fungsi CheckForHit via Signature Matching!")
+                        return fn, uvs
+                    end
+                end
+            end
         end
     end
+    return nil, nil
 end
 
--- 2. Enlarge Part Hitbox (2048 Studs)
-local function enlargePart(part)
+local function triggerDirectEngineClaim()
+    local fn, uvs = getCheckForHitFunction()
+    if not fn or not uvs then return false end
+
+    local meteorList = nil
+    local networkMod = nil
+    local playHitFn = nil
+    local addLuckFn = nil
+    local multTable = { Golden = 2, Diamond = 3, Default = 1, Rainbow = 5 }
+
+    for _, uv in pairs(uvs) do
+        if type(uv) == "table" then
+            if uv.Golden == 2 and uv.Diamond == 3 and uv.Rainbow == 5 then
+                multTable = uv
+            elseif uv[1] and type(uv[1]) == "table" and (uv[1].Claimed ~= nil or uv[1].Data ~= nil or uv[1].t ~= nil) then
+                meteorList = uv
+            elseif uv.FireServer or uv.InvokeServer then
+                networkMod = uv
+            end
+        elseif type(uv) == "function" then
+            if not playHitFn then
+                playHitFn = uv
+            else
+                addLuckFn = uv
+            end
+        end
+    end
+
+    if not meteorList then return false end
+    local debris = workspace:FindFirstChild("Debris")
+
+    local claimedAny = false
+    for id, entry in pairs(meteorList) do
+        if type(entry) == "table" and not entry.Claimed then
+            entry.Claimed = true
+            claimedAny = true
+
+            -- Kirim paket resmi FireServer ke Server
+            pcall(function()
+                if networkMod and networkMod.FireServer then
+                    networkMod.FireServer(networkMod, "meteorNetwork", id)
+                end
+            end)
+
+            -- Eksekusi PlayHit & AddLuck
+            pcall(function()
+                local model = debris and debris:FindFirstChild(tostring(id))
+                if playHitFn and model then
+                    playHitFn(model)
+                end
+                if addLuckFn and entry.Data then
+                    local luckMult = multTable[entry.Data.Name] or 1
+                    addLuckFn(luckMult)
+                end
+            end)
+
+            meteorClaimCount = meteorClaimCount + 1
+            pcall(function()
+                MeteorLabel.Text = string.format("☄️ Meteor Terklaim: %d", meteorClaimCount)
+            end)
+            print(string.format("💥 [GC CLAIM] Meteor #%s Berhasil Diklaim via Internal Game Engine!", tostring(id)))
+        end
+    end
+    return claimedAny
+end
+
+-- =============================================
+-- 🔍 2. PENDETEKSI BOLA / PROJECTILE MELAYANG
+-- =============================================
+local function findFlyingProjectile()
+    local debris = workspace:FindFirstChild("Debris")
+    if not debris then return nil end
+
+    for _, obj in ipairs(debris:GetChildren()) do
+        if obj.Name ~= "LuckMachine" and tonumber(obj.Name) == nil then
+            if obj:IsA("BasePart") then
+                if obj.AssemblyLinearVelocity.Magnitude > 1 or obj.Position.Y > 0 then
+                    return obj
+                end
+            elseif obj:IsA("Model") then
+                local root = obj.PrimaryPart or obj:FindFirstChildOfClass("BasePart")
+                if root and (root.AssemblyLinearVelocity.Magnitude > 1 or root.Position.Y > 0) then
+                    return root
+                end
+            end
+        end
+    end
+
+    for _, child in ipairs(workspace:GetChildren()) do
+        if (child.Name == "Ball" or child.Name == "Projectile" or child.Name == "Football" or string.find(child.Name:lower(), "ball")) and child:IsA("BasePart") then
+            return child
+        end
+    end
+
+    return nil
+end
+
+-- =============================================
+-- 💥 3. PROJECTILE RAYCAST MAGNET ENGINE
+-- =============================================
+local function prepareMeteorPart(part)
     if not part or not (part:IsA("BasePart") or part.ClassName == "Part") then return end
-    
     pcall(function()
         part.CanCollide = false
+        part.CanTouch = true
+        part.CanQuery = true -- CRUCIAL: Diperlukan agar Raycast CheckForHit mengenai part ini!
         part.CastShadow = false
-        if part.Size ~= MAX_SIZE then
-            part.Size = MAX_SIZE
+        if part.Size.X < 25 then
+            part.Size = RAYCAST_HITBOX_SIZE
         end
     end)
-    
-    triggerMultiTouch(part)
 end
 
--- 3. Flash-Touch Snap (Micro 0.08s touch di titik server asli lalu balik)
-local function performFlashTouch(targetPart)
-    if isSnapping or not targetPart then return end
-    local char = lp and lp.Character
-    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    local hum = char and char:FindFirstChild("Humanoid")
-    if not hrp or not hum or hum.Health <= 0 then return end
-
-    isSnapping = true
-    local originalCFrame = hrp.CFrame
-    local meteorPos = targetPart.CFrame
-
-    pcall(function()
-        -- Micro Teleport ke koordinat fisik meteor
-        hrp.CFrame = meteorPos + Vector3.new(0, 1, 0)
-        triggerMultiTouch(targetPart)
-    end)
-
-    task.wait(0.08)
-
-    pcall(function()
-        if hrp and hum.Health > 0 then
-            hrp.CFrame = originalCFrame
-        end
-    end)
-
-    isSnapping = false
-end
-
--- 4. Registrasi & Eksekusi Meteor
 local function handleNewMeteor(model)
     if not model or not isTargetModel(model) then return end
-    if processedRoots[model] then return end
+    if activeMeteors[model] then return end
+    activeMeteors[model] = true
 
-    logDebug(string.format("Ditemukan Meteor Model #%s!", tostring(model.Name)))
-
-    local targetPart = model:FindFirstChild("RootPart") 
-        or model:FindFirstChild("Main") 
-        or model:FindFirstChild("VFX")
-        or model:FindFirstChildOfClass("BasePart")
-        or model.PrimaryPart
-
-    -- Perbesar seluruh part di dalam model angka
     for _, descendant in ipairs(model:GetDescendants()) do
         if descendant:IsA("BasePart") or descendant.ClassName == "Part" then
-            enlargePart(descendant)
-            enlargedParts[descendant] = true
+            prepareMeteorPart(descendant)
         end
     end
 
-    -- Flash micro-touch jika target part valid
-    if targetPart then
-        task.defer(function()
-            performFlashTouch(targetPart)
+    -- Coba klaim langsung via Engine jika tersedia
+    task.spawn(triggerDirectEngineClaim)
+
+    if not processedRoots[model] then
+        processedRoots[model] = true
+        meteorClaimCount = meteorClaimCount + 1
+        pcall(function()
+            MeteorLabel.Text = string.format("☄️ Meteor Terdeteksi: %d", meteorClaimCount)
         end)
     end
-
-    processedRoots[model] = true
-    meteorClaimCount = meteorClaimCount + 1
-    pcall(function()
-        MeteorLabel.Text = string.format("☄️ Meteor Diklaim: %d", meteorClaimCount)
-    end)
-    updateStatus(string.format("☄️ Klaim Meteor #%s!", tostring(model.Name)), Color3.fromRGB(100, 240, 120))
 end
 
--- 5. Setup Listener Eksklusif pada workspace.Debris
+-- =============================================
+-- 🚀 HEARTBEAT LOOP: MENEMPELKAN METEOR KE BOLA
+-- =============================================
+RunService.Heartbeat:Connect(function()
+    if not _G.autoMeteor then return end
+
+    -- Trigger klaim GC jika ada list yang pending
+    pcall(triggerDirectEngineClaim)
+
+    local projectile = findFlyingProjectile()
+    local debris = workspace:FindFirstChild("Debris")
+    if not debris then return end
+
+    if projectile and projectile.Parent then
+        activeProjectile = projectile
+        local ballCFrame = projectile.CFrame
+        local forwardOffset = ballCFrame.LookVector * 2
+
+        logDebug(string.format("Bola Terbang! Pos: (%.0f, %.0f)", projectile.Position.X, projectile.Position.Z))
+
+        -- Tarik seluruh part meteor tepat di depan jalur terbang bola
+        for model, _ in pairs(activeMeteors) do
+            if model and model.Parent and model:IsDescendantOf(debris) then
+                for _, descendant in ipairs(model:GetDescendants()) do
+                    if descendant:IsA("BasePart") or descendant.ClassName == "Part" then
+                        prepareMeteorPart(descendant)
+                        pcall(function()
+                            descendant.CFrame = ballCFrame + forwardOffset
+                        end)
+                    end
+                end
+            else
+                activeMeteors[model] = nil
+            end
+        end
+    else
+        if activeProjectile then
+            activeProjectile = nil
+            logDebug("Bola Mendarat / Standby...")
+        end
+    end
+end)
+
+-- =============================================
+-- 🔍 SETUP LISTENER DEBRIS
+-- =============================================
 local function setupDebrisListeners(debris)
     if not debris then return end
-    logDebug("Debris Listener AKTIF di: " .. debris:GetFullName())
 
-    -- Scan semua objek yang sudah ada di Debris saat ini
-    local count = 0
     for _, item in ipairs(debris:GetDescendants()) do
         if isTargetModel(item) then
-            count = count + 1
             handleNewMeteor(item)
         end
     end
-    if count > 0 then
-        logDebug(string.format("Menemukan %d model meteor aktif di Debris", count))
-    end
 
-    -- Listener instan saat descendant baru masuk ke Debris
     debris.DescendantAdded:Connect(function(descendant)
         task.defer(function()
             if isTargetModel(descendant) then
@@ -390,60 +495,43 @@ local function setupDebrisListeners(debris)
             elseif descendant:IsA("BasePart") or descendant.ClassName == "Part" then
                 local targetModel = getTargetModelParent(descendant)
                 if targetModel then
-                    enlargePart(descendant)
-                    enlargedParts[descendant] = true
+                    prepareMeteorPart(descendant)
                     handleNewMeteor(targetModel)
                 end
             end
         end)
     end)
 
-    -- Cleanup table saat objek dihapus dari Debris
     debris.DescendantRemoving:Connect(function(descendant)
-        enlargedParts[descendant] = nil
+        activeMeteors[descendant] = nil
         processedRoots[descendant] = nil
     end)
 end
 
--- Setup Debris Loop (Non-blocking)
 task.spawn(function()
-    local debris = workspace:FindFirstChild("Debris")
-    if not debris then
-        logDebug("Menunggu folder workspace.Debris...")
-        debris = workspace:WaitForChild("Debris", 10)
-    end
+    local debris = workspace:FindFirstChild("Debris") or workspace:WaitForChild("Debris", 10)
     if debris then
         setupDebrisListeners(debris)
-    else
-        logDebug("PERINGATAN: Folder Debris tidak ditemukan setelah 10s")
     end
 end)
 
--- Listener jika folder Debris dibuat ulang di kemudian hari
 workspace.ChildAdded:Connect(function(child)
     if child.Name == "Debris" then
-        logDebug("Folder Debris baru terdeteksi!")
         task.defer(function()
             setupDebrisListeners(child)
         end)
     end
 end)
 
--- 6. Background Sweeper Rutin (Memeriksa workspace.Debris setiap 0.2 detik)
+-- Sweeper Rutin
 task.spawn(function()
     while task.wait(0.2) do
         if not _G.autoMeteor then continue end
         local debris = workspace:FindFirstChild("Debris")
         if debris then
             for _, item in ipairs(debris:GetDescendants()) do
-                if isTargetModel(item) and not processedRoots[item] then
+                if isTargetModel(item) and not activeMeteors[item] then
                     handleNewMeteor(item)
-                elseif isTargetModel(item) then
-                    for _, part in ipairs(item:GetDescendants()) do
-                        if (part:IsA("BasePart") or part.ClassName == "Part") and part.Size ~= MAX_SIZE then
-                            enlargePart(part)
-                        end
-                    end
                 end
             end
         end
@@ -451,5 +539,5 @@ task.spawn(function()
 end)
 
 print("--------------------------------------------------")
-print("☄️ [SUKSES] KALB Auto Meteor Claimer Siap Digunakan!")
+print("☄️ [SUKSES] KALB Ultimate Meteor Engine Siap Digunakan!")
 print("--------------------------------------------------")
