@@ -1,9 +1,9 @@
 -- ==============================================================================
--- 💥 KALB AUTO METEOR CLAIMER (WITH DETAILED CONSOLE & ON-SCREEN DEBUG)
+-- 💥 KALB AUTO METEOR CLAIMER (ENLARGE HITBOX + MULTI-TOUCH + FLASH-SNAP)
 -- ==============================================================================
 -- Fitur:
 -- 1. 🎯 Khusus mendeteksi Model bernama Angka (1, 2, 3...) di dalam folder workspace.Debris
--- 2. 💥 Ultimate Combo Claim: Max Hitbox (2048) + CFrame Magnet + Multi-Limb Touch + Micro Flash Snap
+-- 2. 💥 Enlarge Max Hitbox (2048) + Multi-Limb Touch + Micro Flash Snap
 -- 3. 🐞 Real-Time Console & On-Screen Debugger (Tekan F9 / Buka Console Executor)
 -- ==============================================================================
 
@@ -35,7 +35,7 @@ local meteorClaimCount = 0
 local isMeteorShowerActive = false
 local MAX_SIZE = Vector3.new(2048, 2048, 2048)
 
-local activeMeteors = {}
+local enlargedParts = {}
 local processedRoots = {}
 local isSnapping = false
 
@@ -230,7 +230,7 @@ if rev_RemovedWeather then
 end
 
 -- =============================================
--- 💥 ULTIMATE COMBO METEOR ENGINE (KHUSUS DEBRIS + ANGKA)
+-- 💥 METEOR ENGINE (KHUSUS DEBRIS + ANGKA)
 -- =============================================
 
 -- Mendeteksi HANYA model di dalam workspace.Debris yang namanya berupa angka (1, 2, 3, dst.)
@@ -285,8 +285,8 @@ local function triggerMultiTouch(part)
     end
 end
 
--- 2. Enlarge & Magnet Part
-local function processMeteorPart(part, targetCFrame)
+-- 2. Enlarge Part Hitbox (2048 Studs)
+local function enlargePart(part)
     if not part or not (part:IsA("BasePart") or part.ClassName == "Part") then return end
     
     pcall(function()
@@ -295,15 +295,12 @@ local function processMeteorPart(part, targetCFrame)
         if part.Size ~= MAX_SIZE then
             part.Size = MAX_SIZE
         end
-        if targetCFrame then
-            part.CFrame = targetCFrame
-        end
     end)
     
     triggerMultiTouch(part)
 end
 
--- 3. Flash-Touch Snap (Micro 0.08s touch di titik server asli)
+-- 3. Flash-Touch Snap (Micro 0.08s touch di titik server asli lalu balik)
 local function performFlashTouch(targetPart)
     if isSnapping or not targetPart then return end
     local char = lp and lp.Character
@@ -316,6 +313,7 @@ local function performFlashTouch(targetPart)
     local meteorPos = targetPart.CFrame
 
     pcall(function()
+        -- Micro Teleport ke koordinat fisik meteor
         hrp.CFrame = meteorPos + Vector3.new(0, 1, 0)
         triggerMultiTouch(targetPart)
     end)
@@ -331,72 +329,43 @@ local function performFlashTouch(targetPart)
     isSnapping = false
 end
 
--- 4. Registrasi & Eksekusi Combo Meteor
+-- 4. Registrasi & Eksekusi Meteor
 local function handleNewMeteor(model)
     if not model or not isTargetModel(model) then return end
-    if activeMeteors[model] then return end
-    activeMeteors[model] = true
+    if processedRoots[model] then return end
 
     logDebug(string.format("Ditemukan Meteor Model #%s!", tostring(model.Name)))
 
-    local char = lp and lp.Character
-    local hrp = char and char:FindFirstChild("HumanoidRootPart")
     local targetPart = model:FindFirstChild("RootPart") 
         or model:FindFirstChild("Main") 
         or model:FindFirstChild("VFX")
         or model:FindFirstChildOfClass("BasePart")
         or model.PrimaryPart
 
-    -- Combo A: Perbesar seluruh part + Magnet ke Karakter
+    -- Perbesar seluruh part di dalam model angka
     for _, descendant in ipairs(model:GetDescendants()) do
         if descendant:IsA("BasePart") or descendant.ClassName == "Part" then
-            processMeteorPart(descendant, hrp and hrp.CFrame)
+            enlargePart(descendant)
+            enlargedParts[descendant] = true
         end
     end
 
-    -- Combo B: Flash micro-touch jika target part valid
+    -- Flash micro-touch jika target part valid
     if targetPart then
         task.defer(function()
             performFlashTouch(targetPart)
         end)
     end
 
-    if not processedRoots[model] then
-        processedRoots[model] = true
-        meteorClaimCount = meteorClaimCount + 1
-        pcall(function()
-            MeteorLabel.Text = string.format("☄️ Meteor Diklaim: %d", meteorClaimCount)
-        end)
-        updateStatus(string.format("💥 Combo Claim Meteor #%s!", tostring(model.Name)), Color3.fromRGB(100, 240, 120))
-    end
+    processedRoots[model] = true
+    meteorClaimCount = meteorClaimCount + 1
+    pcall(function()
+        MeteorLabel.Text = string.format("☄️ Meteor Diklaim: %d", meteorClaimCount)
+    end)
+    updateStatus(string.format("☄️ Klaim Meteor #%s!", tostring(model.Name)), Color3.fromRGB(100, 240, 120))
 end
 
--- 5. Real-Time Heartbeat Loop: Mempertahankan Magnet & Touch berkala
-RunService.Heartbeat:Connect(function()
-    if not _G.autoMeteor then return end
-    local char = lp and lp.Character
-    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    local hum = char and char:FindFirstChild("Humanoid")
-    if not hrp or not hum or hum.Health <= 0 then return end
-
-    local currentCFrame = hrp.CFrame
-    local debris = workspace:FindFirstChild("Debris")
-    if not debris then return end
-
-    for model, _ in pairs(activeMeteors) do
-        if model and model.Parent and model:IsDescendantOf(debris) then
-            for _, descendant in ipairs(model:GetDescendants()) do
-                if descendant:IsA("BasePart") or descendant.ClassName == "Part" then
-                    processMeteorPart(descendant, currentCFrame)
-                end
-            end
-        else
-            activeMeteors[model] = nil
-        end
-    end
-end)
-
--- 6. Setup Listener Eksklusif pada workspace.Debris
+-- 5. Setup Listener Eksklusif pada workspace.Debris
 local function setupDebrisListeners(debris)
     if not debris then return end
     logDebug("Debris Listener AKTIF di: " .. debris:GetFullName())
@@ -421,9 +390,8 @@ local function setupDebrisListeners(debris)
             elseif descendant:IsA("BasePart") or descendant.ClassName == "Part" then
                 local targetModel = getTargetModelParent(descendant)
                 if targetModel then
-                    local char = lp and lp.Character
-                    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-                    processMeteorPart(descendant, hrp and hrp.CFrame)
+                    enlargePart(descendant)
+                    enlargedParts[descendant] = true
                     handleNewMeteor(targetModel)
                 end
             end
@@ -432,7 +400,7 @@ local function setupDebrisListeners(debris)
 
     -- Cleanup table saat objek dihapus dari Debris
     debris.DescendantRemoving:Connect(function(descendant)
-        activeMeteors[descendant] = nil
+        enlargedParts[descendant] = nil
         processedRoots[descendant] = nil
     end)
 end
@@ -461,15 +429,21 @@ workspace.ChildAdded:Connect(function(child)
     end
 end)
 
--- 7. Background Sweeper Rutin (Memeriksa workspace.Debris setiap 0.2 detik)
+-- 6. Background Sweeper Rutin (Memeriksa workspace.Debris setiap 0.2 detik)
 task.spawn(function()
     while task.wait(0.2) do
         if not _G.autoMeteor then continue end
         local debris = workspace:FindFirstChild("Debris")
         if debris then
             for _, item in ipairs(debris:GetDescendants()) do
-                if isTargetModel(item) and not activeMeteors[item] then
+                if isTargetModel(item) and not processedRoots[item] then
                     handleNewMeteor(item)
+                elseif isTargetModel(item) then
+                    for _, part in ipairs(item:GetDescendants()) do
+                        if (part:IsA("BasePart") or part.ClassName == "Part") and part.Size ~= MAX_SIZE then
+                            enlargePart(part)
+                        end
+                    end
                 end
             end
         end
