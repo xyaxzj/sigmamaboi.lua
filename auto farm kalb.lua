@@ -129,36 +129,93 @@ if plotsFolder then
     end)
 end
 
--- 3. Hapus Total Player Lain & Data-Datanya (Character, Leaderstats, Instance)
-local function purgePlayerTotal(player)
-    if player and player ~= lp then
-        pcall(function()
-            if player.Character then
-                player.Character:ClearAllChildren()
-                player.Character:Destroy()
+-- 3. Hapus Karakter Player Lain Secara Total & Bersih
+local function purgeOtherCharacter(char)
+    if not char or not char:IsA("Model") then return end
+    if char == lp.Character or char.Name == lpName or (lpDisplayName and char.Name == lpDisplayName) then
+        return
+    end
+
+    pcall(function()
+        -- Buat transparan & nonaktifkan collision terlebih dahulu
+        for _, v in ipairs(char:GetDescendants()) do
+            if v:IsA("BasePart") then
+                v.Transparency = 1
+                v.CanCollide = false
+            elseif v:IsA("Decal") or v:IsA("Texture") or v:IsA("Clothing") then
+                v:Destroy()
             end
-        end)
-        pcall(function()
-            player:ClearAllChildren()
-            player:Destroy()
+        end
+        char:ClearAllChildren()
+        char:Destroy()
+    end)
+end
+
+-- Deteksi dan musnahkan model karakter yang memiliki Humanoid di Workspace
+local function scanAndPurgeHumanoids()
+    for _, child in ipairs(workspace:GetChildren()) do
+        if child:IsA("Model") and child ~= lp.Character and child.Name ~= lpName and (not lpDisplayName or child.Name ~= lpDisplayName) then
+            if child:FindFirstChildOfClass("Humanoid") or child:FindFirstChild("HumanoidRootPart") or Players:GetPlayerFromCharacter(child) then
+                purgeOtherCharacter(child)
+            end
+        end
+    end
+end
+
+-- 1. Eksekusi ke karakter pemain lain yang sudah ada saat ini
+for _, player in ipairs(Players:GetPlayers()) do
+    if player ~= lp then
+        if player.Character then
+            purgeOtherCharacter(player.Character)
+        end
+        player.CharacterAdded:Connect(function(char)
+            task.defer(function()
+                task.wait(0.02)
+                purgeOtherCharacter(char)
+            end)
         end)
     end
 end
 
-for _, player in ipairs(Players:GetPlayers()) do purgePlayerTotal(player) end
+-- 2. Pasang listener untuk pemain baru yang bergabung
 Players.PlayerAdded:Connect(function(player)
     if player ~= lp then
-        task.defer(function()
-            purgePlayerTotal(player)
-        end)
         player.CharacterAdded:Connect(function(char)
             task.defer(function()
-                pcall(function()
-                    char:ClearAllChildren()
-                    char:Destroy()
-                end)
+                task.wait(0.02)
+                purgeOtherCharacter(char)
             end)
         end)
+    end
+end)
+
+-- 3. Listener langsung di Workspace saat model/humanoid baru muncul
+workspace.ChildAdded:Connect(function(child)
+    task.defer(function()
+        if child:IsA("Model") and child ~= lp.Character and child.Name ~= lpName and (not lpDisplayName or child.Name ~= lpDisplayName) then
+            if child:FindFirstChildOfClass("Humanoid") or child:FindFirstChild("HumanoidRootPart") or Players:GetPlayerFromCharacter(child) then
+                purgeOtherCharacter(child)
+            end
+        end
+    end)
+end)
+
+workspace.DescendantAdded:Connect(function(descendant)
+    if descendant:IsA("Humanoid") then
+        local parentModel = descendant.Parent
+        if parentModel and parentModel:IsA("Model") and parentModel ~= lp.Character and parentModel.Name ~= lpName then
+            task.defer(function()
+                purgeOtherCharacter(parentModel)
+            end)
+        end
+    end
+end)
+
+-- 4. Background Sweeper Rutin (Memastikan Workspace Bersih dari Player Lain Setiap 0.2s)
+task.spawn(function()
+    while task.wait(0.2) do
+        if not _G.autoFarm then continue end
+        pcall(scanAndPurgeHumanoids)
     end
 end)
 
