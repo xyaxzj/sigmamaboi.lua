@@ -8,13 +8,17 @@
 -- 4. 📊 Floating Status HUD Real-Time
 -- ==============================================================================
 
-if not game:IsLoaded() then game.Loaded:Wait() end
+pcall(function()
+    if not game:IsLoaded() then
+        game.Loaded:Wait()
+    end
+end)
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local CoreGui = game:GetService("CoreGui")
+local StarterGui = game:GetService("StarterGui")
 local RunService = game:GetService("RunService")
-local lp = Players.LocalPlayer
+local lp = Players.LocalPlayer or Players.PlayerAdded:Wait()
 
 -- =============================================
 -- ⚙️ KONFIGURASI 
@@ -29,39 +33,46 @@ local processedRoots = {}
 local isSnapping = false
 
 -- =============================================
--- 🛡️ GUI PARENT AMAN (ANTI-CRASH SEMUA EXECUTOR)
+-- 📊 FLOATING STATUS HUD (PASTI MUNCUL)
 -- =============================================
-local function getSafeGuiParent()
+local function getGuiContainer()
     if gethui then
-        local ok, res = pcall(gethui)
-        if ok and res then return res end
+        local ok, h = pcall(gethui)
+        if ok and h then return h end
     end
-    local okCore, core = pcall(function()
-        local test = Instance.new("Folder")
-        test.Parent = CoreGui
-        test:Destroy()
-        return CoreGui
-    end)
-    if okCore and core then return core end
-    return lp:WaitForChild("PlayerGui", 10) or lp.PlayerGui
+    local pg = lp:FindFirstChildOfClass("PlayerGui") or lp:WaitForChild("PlayerGui", 10)
+    return pg
 end
 
-local guiParent = getSafeGuiParent()
-local oldHud = guiParent:FindFirstChild("KalbMeteorStatusGui")
-if oldHud then pcall(function() oldHud:Destroy() end) end
+local targetGuiParent = getGuiContainer()
+
+-- Hapus GUI lama jika ada
+pcall(function()
+    local pg = lp:FindFirstChildOfClass("PlayerGui")
+    if pg and pg:FindFirstChild("KalbMeteorStatusGui") then
+        pg.KalbMeteorStatusGui:Destroy()
+    end
+    if targetGuiParent and targetGuiParent:FindFirstChild("KalbMeteorStatusGui") then
+        targetGuiParent.KalbMeteorStatusGui:Destroy()
+    end
+end)
 
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "KalbMeteorStatusGui"
 ScreenGui.ResetOnSpawn = false
-pcall(function() ScreenGui.Parent = guiParent end)
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.DisplayOrder = 99999
+ScreenGui.Enabled = true
 
 local StatusFrame = Instance.new("Frame")
-StatusFrame.Size = UDim2.new(0, 260, 0, 110)
-StatusFrame.Position = UDim2.new(0, 15, 0, 15)
+StatusFrame.Name = "MainFrame"
+StatusFrame.Size = UDim2.new(0, 270, 0, 115)
+StatusFrame.Position = UDim2.new(0, 20, 0, 80) -- Di bawah topbar agar tidak tertutup
 StatusFrame.BackgroundColor3 = Color3.fromRGB(15, 18, 26)
 StatusFrame.BorderSizePixel = 0
 StatusFrame.Active = true
 StatusFrame.Draggable = true
+StatusFrame.Visible = true
 StatusFrame.Parent = ScreenGui
 
 local Corner = Instance.new("UICorner")
@@ -70,26 +81,26 @@ Corner.Parent = StatusFrame
 
 local Stroke = Instance.new("UIStroke")
 Stroke.Color = Color3.fromRGB(255, 160, 40)
-Stroke.Thickness = 1.2
+Stroke.Thickness = 1.5
 Stroke.Parent = StatusFrame
 
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, -10, 0, 22)
-Title.Position = UDim2.new(0, 8, 0, 4)
+Title.Position = UDim2.new(0, 8, 0, 5)
 Title.BackgroundTransparency = 1
 Title.Font = Enum.Font.GothamBold
 Title.Text = "☄️ KALB METEOR CLAIMER"
 Title.TextColor3 = Color3.fromRGB(255, 180, 50)
-Title.TextSize = 11
+Title.TextSize = 12
 Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.Parent = StatusFrame
 
 local StatusLabel = Instance.new("TextLabel")
 StatusLabel.Size = UDim2.new(1, -10, 0, 20)
-StatusLabel.Position = UDim2.new(0, 8, 0, 28)
+StatusLabel.Position = UDim2.new(0, 8, 0, 30)
 StatusLabel.BackgroundTransparency = 1
 StatusLabel.Font = Enum.Font.GothamMedium
-StatusLabel.Text = "Status: Menunggu Meteor Shower..."
+StatusLabel.Text = "Status: Menunggu Meteor..."
 StatusLabel.TextColor3 = Color3.fromRGB(200, 210, 230)
 StatusLabel.TextSize = 11
 StatusLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -97,7 +108,7 @@ StatusLabel.Parent = StatusFrame
 
 local MeteorLabel = Instance.new("TextLabel")
 MeteorLabel.Size = UDim2.new(1, -10, 0, 20)
-MeteorLabel.Position = UDim2.new(0, 8, 0, 50)
+MeteorLabel.Position = UDim2.new(0, 8, 0, 55)
 MeteorLabel.BackgroundTransparency = 1
 MeteorLabel.Font = Enum.Font.GothamBold
 MeteorLabel.Text = "☄️ Meteor Diklaim: 0"
@@ -108,7 +119,7 @@ MeteorLabel.Parent = StatusFrame
 
 local RewardLabel = Instance.new("TextLabel")
 RewardLabel.Size = UDim2.new(1, -10, 0, 20)
-RewardLabel.Position = UDim2.new(0, 8, 0, 72)
+RewardLabel.Position = UDim2.new(0, 8, 0, 80)
 RewardLabel.BackgroundTransparency = 1
 RewardLabel.Font = Enum.Font.GothamBold
 RewardLabel.Text = "Total Brainrots: 0"
@@ -116,6 +127,25 @@ RewardLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
 RewardLabel.TextSize = 11
 RewardLabel.TextXAlignment = Enum.TextXAlignment.Left
 RewardLabel.Parent = StatusFrame
+
+-- Pasang ScreenGui ke Parent
+pcall(function()
+    ScreenGui.Parent = targetGuiParent
+end)
+if ScreenGui.Parent == nil then
+    pcall(function()
+        ScreenGui.Parent = lp:WaitForChild("PlayerGui", 5)
+    end)
+end
+
+-- Notifikasi bahwa GUI berhasil dimuat
+pcall(function()
+    StarterGui:SetCore("SendNotification", {
+        Title = "☄️ Kalb Meteor Claimer",
+        Text = "Script & HUD Berhasil Dimuat!",
+        Duration = 4
+    })
+end)
 
 local function updateStatus(text, color)
     pcall(function()
