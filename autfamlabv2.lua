@@ -1,24 +1,31 @@
 -- ==============================================================================
--- 💥 KALB AUTO METEOR CLAIMER (ULTIMATE COMBO ENGINE)
+-- 💥 KALB AUTO METEOR CLAIMER (WITH DETAILED CONSOLE & ON-SCREEN DEBUG)
 -- ==============================================================================
 -- Fitur:
 -- 1. 🎯 Khusus mendeteksi Model bernama Angka (1, 2, 3...) di dalam folder workspace.Debris
 -- 2. 💥 Ultimate Combo Claim: Max Hitbox (2048) + CFrame Magnet + Multi-Limb Touch + Micro Flash Snap
--- 3. 🛡️ Crash-Proof & Multi-Executor Compatibility (Delta, Codex, Arceus, Fluxus, Solara, Wave, PC)
--- 4. 📊 Floating Status HUD Real-Time
+-- 3. 🐞 Real-Time Console & On-Screen Debugger (Tekan F9 / Buka Console Executor)
 -- ==============================================================================
 
-pcall(function()
-    if not game:IsLoaded() then
-        game.Loaded:Wait()
-    end
-end)
+print("--------------------------------------------------")
+print("☄️ [DEBUG 1] Script auto meteor kalb.lua dieksekusi...")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StarterGui = game:GetService("StarterGui")
 local RunService = game:GetService("RunService")
-local lp = Players.LocalPlayer or Players.PlayerAdded:Wait()
+
+local lp = Players.LocalPlayer
+if not lp then
+    local count = 0
+    repeat
+        task.wait(0.05)
+        lp = Players.LocalPlayer
+        count = count + 1
+    until lp or count > 50
+end
+
+print("☄️ [DEBUG 2] LocalPlayer:", lp and lp.Name or "TIDAK DITEMUKAN")
 
 -- =============================================
 -- ⚙️ KONFIGURASI 
@@ -33,24 +40,24 @@ local processedRoots = {}
 local isSnapping = false
 
 -- =============================================
--- 📊 FLOATING STATUS HUD (PASTI MUNCUL)
+-- 📊 FLOATING STATUS HUD ON-SCREEN
 -- =============================================
 local function getGuiContainer()
     if gethui then
         local ok, h = pcall(gethui)
         if ok and h then return h end
     end
-    local pg = lp:FindFirstChildOfClass("PlayerGui") or lp:WaitForChild("PlayerGui", 10)
+    local pg = lp and (lp:FindFirstChildOfClass("PlayerGui") or lp:WaitForChild("PlayerGui", 5))
     return pg
 end
 
 local targetGuiParent = getGuiContainer()
+print("☄️ [DEBUG 3] Target GUI Container:", targetGuiParent and targetGuiParent:GetFullName() or "NIL (PlayerGui belum siap)")
 
 -- Hapus GUI lama jika ada
 pcall(function()
-    local pg = lp:FindFirstChildOfClass("PlayerGui")
-    if pg and pg:FindFirstChild("KalbMeteorStatusGui") then
-        pg.KalbMeteorStatusGui:Destroy()
+    if lp and lp:FindFirstChild("PlayerGui") and lp.PlayerGui:FindFirstChild("KalbMeteorStatusGui") then
+        lp.PlayerGui.KalbMeteorStatusGui:Destroy()
     end
     if targetGuiParent and targetGuiParent:FindFirstChild("KalbMeteorStatusGui") then
         targetGuiParent.KalbMeteorStatusGui:Destroy()
@@ -66,8 +73,8 @@ ScreenGui.Enabled = true
 
 local StatusFrame = Instance.new("Frame")
 StatusFrame.Name = "MainFrame"
-StatusFrame.Size = UDim2.new(0, 270, 0, 115)
-StatusFrame.Position = UDim2.new(0, 20, 0, 80) -- Di bawah topbar agar tidak tertutup
+StatusFrame.Size = UDim2.new(0, 280, 0, 135)
+StatusFrame.Position = UDim2.new(0, 20, 0, 70)
 StatusFrame.BackgroundColor3 = Color3.fromRGB(15, 18, 26)
 StatusFrame.BorderSizePixel = 0
 StatusFrame.Active = true
@@ -97,7 +104,7 @@ Title.Parent = StatusFrame
 
 local StatusLabel = Instance.new("TextLabel")
 StatusLabel.Size = UDim2.new(1, -10, 0, 20)
-StatusLabel.Position = UDim2.new(0, 8, 0, 30)
+StatusLabel.Position = UDim2.new(0, 8, 0, 28)
 StatusLabel.BackgroundTransparency = 1
 StatusLabel.Font = Enum.Font.GothamMedium
 StatusLabel.Text = "Status: Menunggu Meteor..."
@@ -108,7 +115,7 @@ StatusLabel.Parent = StatusFrame
 
 local MeteorLabel = Instance.new("TextLabel")
 MeteorLabel.Size = UDim2.new(1, -10, 0, 20)
-MeteorLabel.Position = UDim2.new(0, 8, 0, 55)
+MeteorLabel.Position = UDim2.new(0, 8, 0, 50)
 MeteorLabel.BackgroundTransparency = 1
 MeteorLabel.Font = Enum.Font.GothamBold
 MeteorLabel.Text = "☄️ Meteor Diklaim: 0"
@@ -119,7 +126,7 @@ MeteorLabel.Parent = StatusFrame
 
 local RewardLabel = Instance.new("TextLabel")
 RewardLabel.Size = UDim2.new(1, -10, 0, 20)
-RewardLabel.Position = UDim2.new(0, 8, 0, 80)
+RewardLabel.Position = UDim2.new(0, 8, 0, 72)
 RewardLabel.BackgroundTransparency = 1
 RewardLabel.Font = Enum.Font.GothamBold
 RewardLabel.Text = "Total Brainrots: 0"
@@ -128,24 +135,23 @@ RewardLabel.TextSize = 11
 RewardLabel.TextXAlignment = Enum.TextXAlignment.Left
 RewardLabel.Parent = StatusFrame
 
--- Pasang ScreenGui ke Parent
-pcall(function()
-    ScreenGui.Parent = targetGuiParent
-end)
-if ScreenGui.Parent == nil then
-    pcall(function()
-        ScreenGui.Parent = lp:WaitForChild("PlayerGui", 5)
-    end)
-end
+local DebugLabel = Instance.new("TextLabel")
+DebugLabel.Size = UDim2.new(1, -10, 0, 20)
+DebugLabel.Position = UDim2.new(0, 8, 0, 96)
+DebugLabel.BackgroundTransparency = 1
+DebugLabel.Font = Enum.Font.Code
+DebugLabel.Text = "Debug: Initialized"
+DebugLabel.TextColor3 = Color3.fromRGB(150, 220, 255)
+DebugLabel.TextSize = 10
+DebugLabel.TextXAlignment = Enum.TextXAlignment.Left
+DebugLabel.Parent = StatusFrame
 
--- Notifikasi bahwa GUI berhasil dimuat
+-- Pasang ScreenGui
 pcall(function()
-    StarterGui:SetCore("SendNotification", {
-        Title = "☄️ Kalb Meteor Claimer",
-        Text = "Script & HUD Berhasil Dimuat!",
-        Duration = 4
-    })
+    ScreenGui.Parent = targetGuiParent or lp:WaitForChild("PlayerGui", 5)
 end)
+
+print("☄️ [DEBUG 4] ScreenGui terpasang pada:", ScreenGui.Parent and ScreenGui.Parent:GetFullName() or "GAGAL TERPASANG")
 
 local function updateStatus(text, color)
     pcall(function()
@@ -154,14 +160,23 @@ local function updateStatus(text, color)
     end)
 end
 
+local function logDebug(text)
+    print("☄️ [DEBUG]", text)
+    pcall(function()
+        DebugLabel.Text = "Debug: " .. tostring(text)
+    end)
+end
+
+logDebug("HUD Siap! Mencari folder Debris...")
+
 -- =============================================
 -- 📡 CARI REMOTE NETWORK (SAFE DISCOVERY)
 -- =============================================
 local networkFolder = nil
 pcall(function()
-    local shared = ReplicatedStorage:FindFirstChild("Shared") or ReplicatedStorage:WaitForChild("Shared", 3)
-    local packages = shared and (shared:FindFirstChild("Packages") or shared:WaitForChild("Packages", 3))
-    networkFolder = packages and (packages:FindFirstChild("Network") or packages:WaitForChild("Network", 3))
+    local shared = ReplicatedStorage:FindFirstChild("Shared") or ReplicatedStorage:WaitForChild("Shared", 2)
+    local packages = shared and (shared:FindFirstChild("Packages") or shared:WaitForChild("Packages", 2))
+    networkFolder = packages and (packages:FindFirstChild("Network") or packages:WaitForChild("Network", 2))
 end)
 
 local rev_kickPhase2 = networkFolder and networkFolder:FindFirstChild("rev_kickPhase2")
@@ -199,6 +214,7 @@ if rev_AddedWeather then
         if weatherType == "MeteorShower" then
             isMeteorShowerActive = true
             updateStatus("☄️ Meteor Shower Dimulai! Scanning Aktif...", Color3.fromRGB(255, 170, 50))
+            logDebug("Weather: MeteorShower Aktif!")
         end
     end)
 end
@@ -208,6 +224,7 @@ if rev_RemovedWeather then
         if weatherType == "MeteorShower" then
             isMeteorShowerActive = false
             updateStatus("☁️ Meteor Shower Selesai. Standby...", Color3.fromRGB(180, 190, 210))
+            logDebug("Weather: Selesai")
         end
     end)
 end
@@ -242,7 +259,7 @@ end
 -- 1. Multi-Limb Touch Simulator
 local function triggerMultiTouch(part)
     if not part or not firetouchinterest then return end
-    local char = lp.Character
+    local char = lp and lp.Character
     if not char then return end
 
     local limbs = {
@@ -289,7 +306,7 @@ end
 -- 3. Flash-Touch Snap (Micro 0.08s touch di titik server asli)
 local function performFlashTouch(targetPart)
     if isSnapping or not targetPart then return end
-    local char = lp.Character
+    local char = lp and lp.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
     local hum = char and char:FindFirstChild("Humanoid")
     if not hrp or not hum or hum.Health <= 0 then return end
@@ -320,7 +337,9 @@ local function handleNewMeteor(model)
     if activeMeteors[model] then return end
     activeMeteors[model] = true
 
-    local char = lp.Character
+    logDebug(string.format("Ditemukan Meteor Model #%s!", tostring(model.Name)))
+
+    local char = lp and lp.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
     local targetPart = model:FindFirstChild("RootPart") 
         or model:FindFirstChild("Main") 
@@ -355,7 +374,7 @@ end
 -- 5. Real-Time Heartbeat Loop: Mempertahankan Magnet & Touch berkala
 RunService.Heartbeat:Connect(function()
     if not _G.autoMeteor then return end
-    local char = lp.Character
+    local char = lp and lp.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
     local hum = char and char:FindFirstChild("Humanoid")
     if not hrp or not hum or hum.Health <= 0 then return end
@@ -380,12 +399,18 @@ end)
 -- 6. Setup Listener Eksklusif pada workspace.Debris
 local function setupDebrisListeners(debris)
     if not debris then return end
+    logDebug("Debris Listener AKTIF di: " .. debris:GetFullName())
 
     -- Scan semua objek yang sudah ada di Debris saat ini
+    local count = 0
     for _, item in ipairs(debris:GetDescendants()) do
         if isTargetModel(item) then
+            count = count + 1
             handleNewMeteor(item)
         end
+    end
+    if count > 0 then
+        logDebug(string.format("Menemukan %d model meteor aktif di Debris", count))
     end
 
     -- Listener instan saat descendant baru masuk ke Debris
@@ -396,7 +421,7 @@ local function setupDebrisListeners(debris)
             elseif descendant:IsA("BasePart") or descendant.ClassName == "Part" then
                 local targetModel = getTargetModelParent(descendant)
                 if targetModel then
-                    local char = lp.Character
+                    local char = lp and lp.Character
                     local hrp = char and char:FindFirstChild("HumanoidRootPart")
                     processMeteorPart(descendant, hrp and hrp.CFrame)
                     handleNewMeteor(targetModel)
@@ -414,15 +439,22 @@ end
 
 -- Setup Debris Loop (Non-blocking)
 task.spawn(function()
-    local debris = workspace:FindFirstChild("Debris") or workspace:WaitForChild("Debris", 5)
+    local debris = workspace:FindFirstChild("Debris")
+    if not debris then
+        logDebug("Menunggu folder workspace.Debris...")
+        debris = workspace:WaitForChild("Debris", 10)
+    end
     if debris then
         setupDebrisListeners(debris)
+    else
+        logDebug("PERINGATAN: Folder Debris tidak ditemukan setelah 10s")
     end
 end)
 
 -- Listener jika folder Debris dibuat ulang di kemudian hari
 workspace.ChildAdded:Connect(function(child)
     if child.Name == "Debris" then
+        logDebug("Folder Debris baru terdeteksi!")
         task.defer(function()
             setupDebrisListeners(child)
         end)
@@ -443,3 +475,7 @@ task.spawn(function()
         end
     end
 end)
+
+print("--------------------------------------------------")
+print("☄️ [SUKSES] KALB Auto Meteor Claimer Siap Digunakan!")
+print("--------------------------------------------------")
