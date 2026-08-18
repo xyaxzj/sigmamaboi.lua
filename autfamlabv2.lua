@@ -1,477 +1,393 @@
+-- ==============================================================================
+-- ☄️ KALB AUTO METEOR EVENT CLAIMER (ENLARGE DEBRIS ONLY)
+-- ==============================================================================
+-- Fitur:
+-- 1. ☄️ Memperbesar SEMUA part di dalam folder workspace.Debris (termasuk ClassName "Part")
+-- 2. ⚡ Auto Claim instan saat meteor menyentuh hitbox besar (2048 studs)
+-- 3. 📊 Floating Status HUD Real-Time
+-- ==============================================================================
+
 if not game:IsLoaded() then game.Loaded:Wait() end
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local VirtualUser = game:GetService("VirtualUser")
 local CoreGui = game:GetService("CoreGui")
-local RunService = game:GetService("RunService")
-local Lighting = game:GetService("Lighting")
 local lp = Players.LocalPlayer
-local playerGui = lp:WaitForChild("PlayerGui", 10)
 
 -- =============================================
--- ⚙️ KONFIGURASI AWAL
+-- ⚙️ KONFIGURASI 
 -- =============================================
-_G.autoFarm = false -- Mematikan V1 script jika sedang berjalan
-local autoFarmActive = false              
-local animDelay = 5              
-
--- =============================================
--- 🚀 SYSTEM ANTI-LAG & OPTIMISASI EKSTREM
--- =============================================
--- 1. UBAH MAP JADI POTATO (PUTIH & PLASTIC)
-for _, v in ipairs(workspace:GetDescendants()) do
-    pcall(function()
-        if v:IsA("BasePart") then
-            v.Material = Enum.Material.Plastic
-            v.Reflectance = 0
-            v.CastShadow = false
-            v.Color = Color3.new(1, 1, 1) -- Mengubah warna map jadi putih bersih
-            
-            if v:IsA("MeshPart") then
-                v.TextureID = ""
-            end
-        elseif v:IsA("Decal") or v:IsA("Texture") or v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Beam") or v:IsA("Fire") or v:IsA("Smoke") or v:IsA("Sparkles") or v:IsA("SpecialMesh") then
-            v:Destroy()
-        end
-    end)
-end
-
--- 2. MUSNAHKAN EFEK LIGHTING & LANGIT
-Lighting.GlobalShadows = false
-Lighting.FogEnd = 9e9
-for _, v in ipairs(Lighting:GetDescendants()) do
-    if v:IsA("PostEffect") or v:IsA("BlurEffect") or v:IsA("SunRaysEffect") or v:IsA("ColorCorrectionEffect") or v:IsA("BloomEffect") or v:IsA("DepthOfFieldEffect") or v:IsA("Sky") then
-        pcall(function() v:Destroy() end)
-    end
-end
-
--- 3. HAPUS FOLDER PLOT 1 SAMPAI 5
-local plotsFolder = workspace:FindFirstChild("Plots")
-if plotsFolder then
-    for i = 1, 5 do
-        local plot = plotsFolder:FindFirstChild("Plot" .. tostring(i))
-        if plot then
-            pcall(function() plot:Destroy() end)
-        end
-    end
-end
-
--- 4. PEMBANTAIAN PLAYER (REMOVE PLAYER LAIN)
-local function musnahkanPlayer(player)
-    if player ~= lp then
-        -- 1. Hapus jika wujud karakternya saat ini sudah ada di map
-        if player.Character then
-            pcall(function() player.Character:Destroy() end)
-        end
-        
-        -- 2. Hapus objek Player fisik beserta datanya dari game.Players di sisi client
-        pcall(function() player:Destroy() end)
-    end
-end
-
--- Eksekusi ke player yang sudah ada di server sekarang
-for _, player in ipairs(Players:GetPlayers()) do
-    musnahkanPlayer(player)
-end
-
--- Eksekusi ke player yang baru join ke server nanti
-Players.PlayerAdded:Connect(function(player)
-    task.defer(function()
-        musnahkanPlayer(player)
-    end)
-end)
-
--- Perangkap Ekstrem & Pembersihan Karakter (Mendeteksi Humanoid secara rekursif)
-local function periksaDanHapus(descendant)
-    if descendant:IsA("Humanoid") then
-        local charModel = descendant.Parent
-        if charModel and charModel:IsA("Model") and charModel.Name ~= lp.Name then
-            pcall(function() charModel:Destroy() end)
-        end
-    end
-end
-
--- Bersihkan karakter player lain yang sudah terlanjur ada di workspace (Direct children agar tidak timeout/lag)
-for _, child in ipairs(workspace:GetChildren()) do
-    if child:IsA("Model") and child.Name ~= lp.Name and child:FindFirstChildOfClass("Humanoid") then
-        pcall(function() child:Destroy() end)
-    end
-end
-
--- Pasang listener real-time untuk mendeteksi humanoid baru yang di-load
-workspace.DescendantAdded:Connect(function(descendant)
-    task.defer(periksaDanHapus, descendant)
-end)
+_G.autoMeteor = true
+local meteorClaimCount = 0
+local isMeteorShowerActive = false
 
 -- =============================================
--- 🎨 LOAD SIGMA UI LIBRARY V4
+-- 📡 CARI REMOTE NETWORK
 -- =============================================
-local Library = nil
-local getSuccess, getErr = pcall(function()
-    Library = loadstring(game:HttpGet("https://github.com/xyaxzj/sigmamaboi.lua/raw/main/NcHO.lua"))()
-end)
-
-if not getSuccess or not Library then
-    pcall(function()
-        if readfile and isfile and isfile("UI sigma.lua") then
-            Library = loadstring(readfile("UI sigma.lua"))()
-        end
-    end)
-end
-
-if not Library then
-    error("Gagal memuat Sigma UI Library! Pastikan executor Anda terhubung ke internet.")
-end
-
-local Window = Library:CreateWindow({
-    Name       = 'Sigma Hub | Auto Farm Kalb 2',
-    Footer     = 'discord.gg/sigma | v4.0',
-    LogoText   = 'S',
-    ConfigName = 'SigmaHub_Kalb2',
-    ToggleKey  = Enum.KeyCode.RightShift,
-    Watermark  = true,
-})
-
--- TAB 1: MAIN FUNCTION (Menggunakan emoji string tunggal seperti di auto trade)
-local MainTab = Window:MakeTab("⚙️")
-local FarmSec = MainTab:AddSection("Auto Farm Settings")
-
-FarmSec:AddLabel("Aktifkan saklar di bawah untuk memulai/menghentikan bot:")
-
-FarmSec:AddToggle({ Name = "ON / OFF Auto Farm", Default = autoFarmActive }, function(v)
-    autoFarmActive = v
-end)
-
-FarmSec:AddSlider({ Name = "Anim Delay (Seconds)", Min = 1, Max = 15, Default = animDelay, Step = 1 }, function(v)
-    animDelay = v
-end)
-
--- SECTION: STATS MONITOR
-local StatsSec = MainTab:AddSection("Stats Monitor")
-local statusPara = StatsSec:AddParagraph("Status: Idle", "User: " .. lp.Name .. "\nMutation Count: 0\nAFK Time: 0 Detik\nFps: 0")
-
--- TAB 2: CONFIG MANAGER
-local CfgTab = Window:MakeTab("💾")
-CfgTab:AddConfigManager()
-
--- NOTIFICATION SUCCESS LOAD
-Library:Notify({ Title = 'Sigma UI Loaded', Content = 'Auto Farm Kalb 2 ready!', Type = 'Success' })
-
--- =============================================
--- 🧠 VARIABEL OTAK UTAMA (STATE MACHINE - LOCAL)
--- =============================================
-local targetAction = "Idle"
-local lastAction = "Idle"
-local nextAction = "Idle"          
-local stateTimer = 0               
-local globalStuckTimer = 0         
-local mutationCount = 0            
-local targetItemPos = nil          
-local safeZone = Vector3.new(698.030701, 3.298559, 233.707077)
-local safeZoneCFrame = CFrame.new(698.030701, 3.298559, 233.707077, -0.061024, -0.000000, 0.998136, -0.000000, 1.000000, 0.000000, -0.998136, -0.000000, -0.061024)
-local startTime = os.time()
-
--- =============================================
--- 🛡️ ANTI AFK
--- =============================================
-lp.Idled:Connect(function()
-    VirtualUser:CaptureController()
-    VirtualUser:ClickButton2(Vector2.new())
-end)
-
--- =============================================
--- 📡 CARI REMOTE
--- =============================================
-local kickRemote = nil
 local networkFolder = ReplicatedStorage:WaitForChild("Shared", 10):WaitForChild("Packages", 10):WaitForChild("Network", 10)
-if networkFolder then
-    kickRemote = networkFolder:FindFirstChild("rev_KickEvent")
-end
-
-if not kickRemote then
-    for _, r in pairs(ReplicatedStorage:GetDescendants()) do
-        if r:IsA("RemoteEvent") and string.find(r.Name, "rev_KickEvent") and not string.find(r.Name, "Ended") then
-            kickRemote = r; break
-        end
-    end
-end
-
 local rev_kickPhase2 = networkFolder and networkFolder:WaitForChild("rev_kickPhase2", 15)
-local rev_Collected = networkFolder and networkFolder:WaitForChild("rev_Collected", 15)
-local rev_KickEventEnded = networkFolder and networkFolder:WaitForChild("rev_KickEventEnded", 15)
+local rev_KickData = networkFolder and networkFolder:WaitForChild("rev_KickData", 15)
 local rev_AddedWeather = networkFolder and networkFolder:WaitForChild("rev_AddedWeather", 15)
-local rev_PlayMessage = networkFolder and networkFolder:WaitForChild("rev_PlayMessage", 15)
+local rev_RemovedWeather = networkFolder and networkFolder:WaitForChild("rev_RemovedWeather", 15)
+
+-- =============================================
+-- 📊 FLOATING STATUS HUD ON-SCREEN
+-- =============================================
+local guiParent = pcall(function() return CoreGui end) and CoreGui or lp:WaitForChild("PlayerGui")
+local oldHud = guiParent:FindFirstChild("KalbMeteorStatusGui")
+if oldHud then oldHud:Destroy() end
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "KalbMeteorStatusGui"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = guiParent
+
+local StatusFrame = Instance.new("Frame")
+StatusFrame.Size = UDim2.new(0, 260, 0, 110)
+StatusFrame.Position = UDim2.new(0, 15, 0, 15)
+StatusFrame.BackgroundColor3 = Color3.fromRGB(15, 18, 26)
+StatusFrame.BorderSizePixel = 0
+StatusFrame.Active = true
+StatusFrame.Draggable = true
+StatusFrame.Parent = ScreenGui
+
+local Corner = Instance.new("UICorner")
+Corner.CornerRadius = UDim.new(0, 8)
+Corner.Parent = StatusFrame
+
+local Stroke = Instance.new("UIStroke")
+Stroke.Color = Color3.fromRGB(255, 160, 40)
+Stroke.Thickness = 1.2
+Stroke.Parent = StatusFrame
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, -10, 0, 22)
+Title.Position = UDim2.new(0, 8, 0, 4)
+Title.BackgroundTransparency = 1
+Title.Font = Enum.Font.GothamBold
+Title.Text = "☄️ KALB METEOR CLAIMER"
+Title.TextColor3 = Color3.fromRGB(255, 180, 50)
+Title.TextSize = 11
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = StatusFrame
+
+local StatusLabel = Instance.new("TextLabel")
+StatusLabel.Size = UDim2.new(1, -10, 0, 20)
+StatusLabel.Position = UDim2.new(0, 8, 0, 28)
+StatusLabel.BackgroundTransparency = 1
+StatusLabel.Font = Enum.Font.GothamMedium
+StatusLabel.Text = "Status: Menunggu Meteor Shower..."
+StatusLabel.TextColor3 = Color3.fromRGB(200, 210, 230)
+StatusLabel.TextSize = 11
+StatusLabel.TextXAlignment = Enum.TextXAlignment.Left
+StatusLabel.Parent = StatusFrame
+
+local MeteorLabel = Instance.new("TextLabel")
+MeteorLabel.Size = UDim2.new(1, -10, 0, 20)
+MeteorLabel.Position = UDim2.new(0, 8, 0, 50)
+MeteorLabel.BackgroundTransparency = 1
+MeteorLabel.Font = Enum.Font.GothamBold
+MeteorLabel.Text = "☄️ Meteor Diklaim: 0"
+MeteorLabel.TextColor3 = Color3.fromRGB(255, 150, 0)
+MeteorLabel.TextSize = 11
+MeteorLabel.TextXAlignment = Enum.TextXAlignment.Left
+MeteorLabel.Parent = StatusFrame
+
+local RewardLabel = Instance.new("TextLabel")
+RewardLabel.Size = UDim2.new(1, -10, 0, 20)
+RewardLabel.Position = UDim2.new(0, 8, 0, 72)
+RewardLabel.BackgroundTransparency = 1
+RewardLabel.Font = Enum.Font.GothamBold
+RewardLabel.Text = "Total Brainrots: 0"
+RewardLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
+RewardLabel.TextSize = 11
+RewardLabel.TextXAlignment = Enum.TextXAlignment.Left
+RewardLabel.Parent = StatusFrame
+
+local function updateStatus(text, color)
+    StatusLabel.Text = "Status: " .. tostring(text)
+    if color then StatusLabel.TextColor3 = color end
+end
 
 -- =============================================
 -- 📡 DAFTAR EVENT LISTENER
 -- =============================================
-local phase2Fired = false
-local collectedFired = false
-local kickEndedFired = false
-local weatherEventPending = false
-local luckBuffObtained = false
-
+local mutationCount = 0
 if rev_kickPhase2 then
-    rev_kickPhase2.OnClientEvent:Connect(function(...)
-        phase2Fired = true
+    rev_kickPhase2.OnClientEvent:Connect(function(rewardTable, ...)
+        mutationCount = mutationCount + 1
+        
+        local rewardName = "Brainrot"
+        local mutationType = "Normal"
+        pcall(function()
+            if type(rewardTable) == "table" and rewardTable[1] then
+                rewardName = tostring(rewardTable[1].Name or "Brainrot")
+                mutationType = tostring(rewardTable[1].Mutation or "Normal")
+            end
+        end)
+        
+        RewardLabel.Text = string.format("Brainrot: %s (%s) | %d", rewardName, mutationType, mutationCount)
+        updateStatus(string.format("🎉 Didapat: %s [%s]!", rewardName, mutationType), Color3.fromRGB(100, 240, 120))
     end)
 end
 
-if rev_Collected then
-    rev_Collected.OnClientEvent:Connect(function(...)
-        collectedFired = true
-    end)
-end
-
-if rev_KickEventEnded then
-    rev_KickEventEnded.OnClientEvent:Connect(function(...)
-        kickEndedFired = true
+if rev_KickData then
+    rev_KickData.OnClientEvent:Connect(function(powerVal, distVal)
+        updateStatus(string.format("🚀 Bola Melayang (%sm)", tostring(distVal)), Color3.fromRGB(255, 200, 80))
     end)
 end
 
 if rev_AddedWeather then
     rev_AddedWeather.OnClientEvent:Connect(function(weatherType, ...)
-        if weatherType == "LuckMachine" then
-            weatherEventPending = true
+        if weatherType == "MeteorShower" then
+            isMeteorShowerActive = true
+            updateStatus("☄️ Meteor Shower Dimulai! Scanning Aktif...", Color3.fromRGB(255, 170, 50))
         end
     end)
 end
 
-if rev_PlayMessage then
-    rev_PlayMessage.OnClientEvent:Connect(function(msg, msgType)
-        if tostring(msg) == "Luck has been increased to x8" then
-            luckBuffObtained = true
+if rev_RemovedWeather then
+    rev_RemovedWeather.OnClientEvent:Connect(function(weatherType, ...)
+        if weatherType == "MeteorShower" then
+            isMeteorShowerActive = false
+            updateStatus("☁️ Meteor Shower Selesai. Standby...", Color3.fromRGB(180, 190, 210))
         end
     end)
 end
 
 -- =============================================
--- 📊 SYSTEM PENGHITUNG FPS
+-- 💥 ULTIMATE COMBO METEOR CLAIMER (ENLARGE + MAGNET + MULTI-TOUCH + FLASH-SNAP)
 -- =============================================
-local fps = 0
-local frameCount = 0
-local nextFpsUpdate = os.clock() + 1
+local RunService = game:GetService("RunService")
+local MAX_SIZE = Vector3.new(2048, 2048, 2048) -- Ukuran hitbox maksimal
 
+local activeMeteors = {}
+local processedRoots = {}
+local isSnapping = false
+
+-- Mendeteksi HANYA model di dalam workspace.Debris yang namanya berupa angka (1, 2, 3, dst.)
+local function isTargetModel(model)
+    if not model or not model:IsA("Model") then return false end
+    local debris = workspace:FindFirstChild("Debris")
+    if not debris or not model:IsDescendantOf(debris) then return false end
+    return tonumber(model.Name) ~= nil
+end
+
+local function getTargetModelParent(instance)
+    if not instance then return nil end
+    local debris = workspace:FindFirstChild("Debris")
+    if not debris or not instance:IsDescendantOf(debris) then return nil end
+
+    local curr = instance
+    while curr and curr ~= debris and curr ~= workspace do
+        if curr:IsA("Model") and tonumber(curr.Name) ~= nil then
+            return curr
+        end
+        curr = curr.Parent
+    end
+    return nil
+end
+
+-- 1. Multi-Limb Touch Simulator (Menyentuhkan seluruh bagian tubuh ke part meteor)
+local function triggerMultiTouch(part)
+    if not part or not firetouchinterest then return end
+    local char = lp.Character
+    if not char then return end
+
+    local limbs = {
+        char:FindFirstChild("HumanoidRootPart"),
+        char:FindFirstChild("Right Leg"),
+        char:FindFirstChild("Left Leg"),
+        char:FindFirstChild("RightFoot"),
+        char:FindFirstChild("LeftFoot"),
+        char:FindFirstChild("RightLowerLeg"),
+        char:FindFirstChild("LeftLowerLeg"),
+        char:FindFirstChild("Torso"),
+        char:FindFirstChild("UpperTorso"),
+        char:FindFirstChild("LowerTorso"),
+    }
+
+    for _, limb in ipairs(limbs) do
+        if limb then
+            pcall(function()
+                firetouchinterest(limb, part, 0)
+                firetouchinterest(limb, part, 1)
+            end)
+        end
+    end
+end
+
+-- 2. Enlarge & Magnet Part
+local function processMeteorPart(part, targetCFrame)
+    if not part or not (part:IsA("BasePart") or part.ClassName == "Part") then return end
+    
+    pcall(function()
+        part.CanCollide = false
+        part.CastShadow = false
+        if part.Size ~= MAX_SIZE then
+            part.Size = MAX_SIZE
+        end
+        if targetCFrame then
+            part.CFrame = targetCFrame
+        end
+    end)
+    
+    triggerMultiTouch(part)
+end
+
+-- 3. Flash-Touch Snap (Micro 0.08s touch di titik server asli lalu balik ke posisi awal)
+local function performFlashTouch(targetPart)
+    if isSnapping or not targetPart then return end
+    local char = lp.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    local hum = char and char:FindFirstChild("Humanoid")
+    if not hrp or not hum or hum.Health <= 0 then return end
+
+    isSnapping = true
+    local originalCFrame = hrp.CFrame
+    local meteorPos = targetPart.CFrame
+
+    pcall(function()
+        -- Micro Teleport ke koordinat fisik meteor
+        hrp.CFrame = meteorPos + Vector3.new(0, 1, 0)
+        triggerMultiTouch(targetPart)
+    end)
+
+    task.wait(0.08)
+
+    pcall(function()
+        if hrp and hum.Health > 0 then
+            hrp.CFrame = originalCFrame
+        end
+    end)
+
+    isSnapping = false
+end
+
+-- 4. Registrasi & Eksekusi Combo Meteor
+local function handleNewMeteor(model)
+    if not model or not isTargetModel(model) then return end
+    if activeMeteors[model] then return end
+    activeMeteors[model] = true
+
+    local char = lp.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    local targetPart = model:FindFirstChild("RootPart") 
+        or model:FindFirstChild("Main") 
+        or model:FindFirstChild("VFX")
+        or model:FindFirstChildOfClass("BasePart")
+        or model.PrimaryPart
+
+    -- Combo A: Perbesar seluruh part + Magnet ke Karakter
+    for _, descendant in ipairs(model:GetDescendants()) do
+        if descendant:IsA("BasePart") or descendant.ClassName == "Part" then
+            processMeteorPart(descendant, hrp and hrp.CFrame)
+        end
+    end
+
+    -- Combo B: Flash micro-touch jika target part valid
+    if targetPart then
+        task.defer(function()
+            performFlashTouch(targetPart)
+        end)
+    end
+
+    if not processedRoots[model] then
+        processedRoots[model] = true
+        meteorClaimCount = meteorClaimCount + 1
+        MeteorLabel.Text = string.format("☄️ Meteor Diklaim: %d", meteorClaimCount)
+        updateStatus(string.format("💥 Combo Claim Meteor #%s!", tostring(model.Name)), Color3.fromRGB(100, 240, 120))
+    end
+end
+
+-- 5. Real-Time Heartbeat Loop: Mempertahankan Magnet & Touch berkala
 RunService.Heartbeat:Connect(function()
-    frameCount = frameCount + 1
-    local now = os.clock()
-    if now >= nextFpsUpdate then
-        fps = frameCount
-        frameCount = 0
-        nextFpsUpdate = now + 1
+    if not _G.autoMeteor then return end
+    local char = lp.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    local hum = char and char:FindFirstChild("Humanoid")
+    if not hrp or not hum or hum.Health <= 0 then return end
+
+    local currentCFrame = hrp.CFrame
+
+    local debris = workspace:FindFirstChild("Debris")
+    if not debris then return end
+
+    for model, _ in pairs(activeMeteors) do
+        if model and model.Parent and model:IsDescendantOf(debris) then
+            for _, descendant in ipairs(model:GetDescendants()) do
+                if descendant:IsA("BasePart") or descendant.ClassName == "Part" then
+                    processMeteorPart(descendant, currentCFrame)
+                end
+            end
+        else
+            activeMeteors[model] = nil
+        end
     end
 end)
 
--- =============================================
--- ⚙️ MAIN LOOP (STATE MACHINE - OPTIMIZED)
--- =============================================
-task.spawn(function()
-    while task.wait(0.05) do
-        -- Update UI Sigma secara dynamic
-        pcall(function()
-            local elapsedSeconds = os.time() - startTime
-            statusPara:Set(
-                "Status: " .. tostring(targetAction),
-                string.format(
-                    "User: %s\n" ..
-                    "Mutation Count: %d\n" ..
-                    "AFK Time: %d Detik\n" ..
-                    "Fps: %d",
-                    lp.Name,
-                    mutationCount,
-                    elapsedSeconds,
-                    fps
-                )
-            )
+-- 6. Setup Listener Eksklusif pada workspace.Debris
+local function setupDebrisListeners(debris)
+    if not debris then return end
+
+    -- Scan semua objek yang sudah ada di Debris saat ini
+    for _, item in ipairs(debris:GetDescendants()) do
+        if isTargetModel(item) then
+            handleNewMeteor(item)
+        end
+    end
+
+    -- Listener instan saat descendant baru masuk ke Debris
+    debris.DescendantAdded:Connect(function(descendant)
+        task.defer(function()
+            if isTargetModel(descendant) then
+                handleNewMeteor(descendant)
+            elseif descendant:IsA("BasePart") or descendant.ClassName == "Part" then
+                local targetModel = getTargetModelParent(descendant)
+                if targetModel then
+                    local char = lp.Character
+                    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                    processMeteorPart(descendant, hrp and hrp.CFrame)
+                    handleNewMeteor(targetModel)
+                end
+            end
         end)
+    end)
 
-        if not autoFarmActive then continue end
+    -- Cleanup table saat objek dihapus dari Debris
+    debris.DescendantRemoving:Connect(function(descendant)
+        activeMeteors[descendant] = nil
+        processedRoots[descendant] = nil
+    end)
+end
 
-        local char = lp.Character
-        local hum = char and char:FindFirstChild("Humanoid")
-        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+-- Jalankan setup Debris
+pcall(function()
+    local debris = workspace:FindFirstChild("Debris") or workspace:WaitForChild("Debris", 10)
+    if debris then
+        setupDebrisListeners(debris)
+    end
+end)
 
-        if not hum or not hrp then 
-            -- Coba wait jika character belum dimuat
-            continue 
-        end 
+-- Listener jika folder Debris dibuat ulang di kemudian hari
+workspace.ChildAdded:Connect(function(child)
+    if child.Name == "Debris" then
+        task.defer(function()
+            setupDebrisListeners(child)
+        end)
+    end
+end)
 
-        -- [ PENDETEKSI MATI ]
-        if hum.Health <= 0 then
-            targetAction = "WaitingRespawn"
-            lastAction = "WaitingRespawn"
-            globalStuckTimer = 0
-            continue 
-        end
-
-        -- [ PENDETEKSI HIDUP KEMBALI ]
-        if targetAction == "WaitingRespawn" and hum.Health > 0 then
-            targetAction = "Idle"
-            lastAction = "Idle"
-        end
-
-        -- ==========================================
-        -- 🚨 PENGATUR WAKTU OTOMATIS & FAILSAFE 25s
-        -- ==========================================
-        if targetAction ~= lastAction then
-            globalStuckTimer = 0
-            stateTimer = 0 
-            lastAction = targetAction
-        else
-            globalStuckTimer = globalStuckTimer + 0.05
-            stateTimer = stateTimer + 0.05 
-            
-            -- Failsafe 25 detik dinonaktifkan saat sedang berada di Luck Machine agar tidak mati prematur
-            if globalStuckTimer >= 25 and targetAction ~= "LuckMachineTraining" and targetAction ~= "LuckMachineTeleport" then
-                globalStuckTimer = 0
-                targetAction = "WaitingRespawn"
-                hum.Health = 0 
-                continue
-            end
-        end
-
-        -- [ INTERUPSI EVENT CUACA (PAUSE AUTO FARM KECUALI SEDANG PULANG KE SAFE ZONE) ]
-        if weatherEventPending then
-            if targetAction ~= "WalkToSafeZone" then
-                weatherEventPending = false
-                luckBuffObtained = false
-                pcall(function()
-                    hum:UnequipTools()
-                end)
-                targetAction = "LuckMachineTeleport"
-            end
-        end
-
-        local distToSafeZone = (hrp.Position - safeZone).Magnitude
-
-        -- [ FASE 1: IDLE / NENDANG (JEDA HANYA DI SPAWN) ]
-        if targetAction == "Idle" then
-            if distToSafeZone > 10 then
-                -- Jeda 1 detik setelah hidup di spawn sebelum teleport agar cepat aktif
-                if stateTimer >= 1 then
-                    hrp.CFrame = safeZoneCFrame
-                    stateTimer = 0 
+-- 7. Background Sweeper Rutin (Memeriksa workspace.Debris setiap 0.2 detik)
+task.spawn(function()
+    while task.wait(0.2) do
+        if not _G.autoMeteor then continue end
+        local debris = workspace:FindFirstChild("Debris")
+        if debris then
+            for _, item in ipairs(debris:GetDescendants()) do
+                if isTargetModel(item) and not activeMeteors[item] then
+                    handleNewMeteor(item)
                 end
-            else
-                -- Jeda 0.5 detik setelah teleport agar server mereplikasi posisi baru sebelum kick
-                if stateTimer >= 0.5 then
-                    phase2Fired = false
-                    collectedFired = false
-                    kickEndedFired = false
-                    if kickRemote then 
-                        kickRemote:FireServer(1, 1) 
-                    end
-                    targetAction = "WaitingForPhase2"
-                end
-            end
-
-        -- [ FASE 2: NUNGGU PHASE 2 ]
-        elseif targetAction == "WaitingForPhase2" then
-            if phase2Fired then
-                phase2Fired = false
-                targetAction = "PlayingAnim"
-            elseif stateTimer > 5 then
-                targetAction = "Idle"
-            end
-
-        -- [ FASE 3: NUNGGU ANIMASI GACHA (5 DETIK) ]
-        elseif targetAction == "PlayingAnim" then
-            if stateTimer >= animDelay then
-                targetAction = "WalkToSafeZone"
-            end
-
-        -- [ FASE 4: JALAN BALIK KE SAFE ZONE ]
-        elseif targetAction == "WalkToSafeZone" then
-            hum:MoveTo(safeZone)
-            if distToSafeZone < 8 then
-                targetAction = "WaitingForCollected"
-            end
-
-        -- [ FASE 5: NUNGGU COLLECTED ATAU KICKENDED (LANGSUNG KICK KEMBALI) ]
-        elseif targetAction == "WaitingForCollected" then
-            if collectedFired or kickEndedFired then
-                collectedFired = false
-                kickEndedFired = false
-                mutationCount = mutationCount + 1
-                
-                -- Langsung lakukan kick kembali tanpa delay
-                phase2Fired = false
-                if kickRemote then 
-                    kickRemote:FireServer(1, 1) 
-                end
-                targetAction = "WaitingForPhase2"
-            elseif stateTimer > 5 then
-                targetAction = "Idle"
-            end
-
-        -- [ FASE EX-1: TELEPORT KE LUCK MACHINE ]
-        elseif targetAction == "LuckMachineTeleport" then
-            local targetPart = nil
-            pcall(function()
-                local debris = workspace:FindFirstChild("Debris")
-                local luckMachine = debris and debris:FindFirstChild("LuckMachine")
-                local standingPlatforms = luckMachine and luckMachine:FindFirstChild("StandingPlatforms")
-                if standingPlatforms then
-                    targetPart = standingPlatforms:FindFirstChild("1") 
-                        or standingPlatforms:FindFirstChild("2") 
-                        or standingPlatforms:FindFirstChild("3")
-                end
-            end)
-            
-            if targetPart then
-                hrp.CFrame = targetPart.CFrame + Vector3.new(0, 3, 0)
-                task.wait(0.5)
-                targetAction = "LuckMachineTraining"
-            else
-                if stateTimer >= 3 then
-                    targetAction = "Idle"
-                end
-            end
-
-        -- [ FASE EX-2: AUTO USE BARBELL DI LUCK MACHINE SAMPAI DAPAT LUCK BUFF ]
-        elseif targetAction == "LuckMachineTraining" then
-            local targetPart = nil
-            pcall(function()
-                local debris = workspace:FindFirstChild("Debris")
-                local luckMachine = debris and debris:FindFirstChild("LuckMachine")
-                local standingPlatforms = luckMachine and luckMachine:FindFirstChild("StandingPlatforms")
-                if standingPlatforms then
-                    targetPart = standingPlatforms:FindFirstChild("1") 
-                        or standingPlatforms:FindFirstChild("2") 
-                        or standingPlatforms:FindFirstChild("3")
-                end
-            end)
-            
-            if targetPart and (hrp.Position - targetPart.Position).Magnitude > 8 then
-                hrp.CFrame = targetPart.CFrame + Vector3.new(0, 3, 0)
-            end
-            
-            -- Mekanik memegang & memakai Barbell
-            local currentTool = char:FindFirstChildOfClass("Tool")
-            if currentTool and string.match(currentTool.Name, "Barbell$") then
-                currentTool:Activate()
-            else
-                local backpack = lp:FindFirstChild("Backpack")
-                if backpack then
-                    for _, tool in ipairs(backpack:GetChildren()) do
-                        if tool:IsA("Tool") and string.match(tool.Name, "Barbell$") then
-                            hum:EquipTool(tool)
-                            task.wait(0.1)
-                            tool:Activate()
-                            break
-                        end
-                    end
-                end
-            end
-            
-            -- Jika buff keberuntungan sudah tercapai atau failsafe 240 detik terpenuhi
-            if luckBuffObtained or stateTimer >= 240 then
-                pcall(function()
-                    hum:UnequipTools()
-                end)
-                luckBuffObtained = false
-                targetAction = "Idle" -- Restart auto farm (Idle akan teleport balik ke safe zone)
             end
         end
     end
