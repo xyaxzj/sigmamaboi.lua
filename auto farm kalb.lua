@@ -1,13 +1,15 @@
 -- ==============================================================================
--- 🥔 KALB ULTRA LIGHTWEIGHT AUTO FARM & ANTI-LAG (ZERO MEMORY LEAK)
+-- 🥔 KALB ANTI-LAG, AUTO PURGE, AUTO SELL & METEOR SHOP AUTO BUY
 -- ==============================================================================
--- Fitur & Evaluasi:
--- 1. 🥔 Potato Mode Ekstrem: Hapus semua texture, PBR, bayangan, partikel, & efek Lighting
--- 2. 🚫 Total Player & Data Purger: Hapus karakter, data, & instance player lain dari workspace & game.Players
--- 3. 🛡️ Anti-AFK (VirtualUser) & Auto Garbage Collector (RAM tetap enteng berjam-jam)
--- 4. 💰 Auto Sell All (Setiap 5 detik via ref_B_SellAll)
--- 5. 🛒 Meteor Shop Auto Buy Frigorex (Cek stock setiap 5 menit)
--- 6. 🧪 Meteor Shop Auto Buy Farm Potion (Beli 1x setiap pergantian jam ganjil WIB)
+-- Fitur:
+-- 1. 🥔 Anti-Lag Ekstrem & Potato Map (Plastic, White, No Shadows, Plot & Player Removed)
+-- 2. 🛡️ Anti-AFK (Mencegah disconnect 20 menit)
+-- 3. 💰 Auto Sell All (Setiap 5 detik via remote ref_B_SellAll)
+-- 4. 🛒 Meteor Shop Auto Buy:
+--    - 🦖 Patagotitan (⚡ON)
+--    - ⚡ Speed (+1) (⚡ON)
+--    - 👑 Frigorex (⚡ON)
+--    - 🧪 Farm Potion (I) (Khusus Jam Ganjil WIB & Max Menit :10)
 -- ==============================================================================
 
 pcall(function()
@@ -39,12 +41,12 @@ local myUidStr = lp and tostring(lp.UserId) or ""
 -- ⚙️ KONFIGURASI 
 -- =============================================
 _G.autoFarm = true
-_G.autoBuyFrigorex = true
-_G.autoBuyFarmPotion = true
-
-local autoBuyItems = {
-    ["Frigorex"] = true,
-}
+_G.autoBuyPatagotitan = true  -- 🦖 Patagotitan
+_G.autoBuySpeed = true        -- ⚡ Speed (+1)
+_G.autoBuyFrigorex = true     -- 👑 Frigorex
+_G.autoBuyFarmPotion = true   -- 🧪 Farm Potion (I) (Khusus jam ganjil WIB max menit :10)
+_G.autoSellAll = true         -- 💰 Auto Sell All tiap 5s
+_G.autoRemovePlayer = true    -- 🚫 Hapus player lain dari game.Players & workspace.Players
 
 -- =============================================
 -- 🚀 1. OPTIMISASI LIGHTING & SETTINGS GLOBAL (SUPER ENTENG)
@@ -62,14 +64,14 @@ pcall(function()
 end)
 
 pcall(function()
-    if setfpscap then setfpscap(30) end -- Batasi FPS saat AFK agar hemat daya & dingin
+    if setfpscap then setfpscap(30) end
     if settings and settings().Rendering then
         settings().Rendering.QualityLevel = 1
     end
 end)
 
 -- =============================================
--- 🥔 2. SYSTEM HAPUS TEKSTUR & MATERIAL (CLEAN & NO MEMORY LEAK)
+-- 🥔 2. SYSTEM HAPUS TEKSTUR & MATERIAL (POTATO MAP)
 -- =============================================
 local function stripTexture(v)
     if not v then return end
@@ -96,26 +98,48 @@ local function stripTexture(v)
     end)
 end
 
--- Bersihkan objek yang ada di workspace saat awal
 for _, v in ipairs(workspace:GetDescendants()) do
     stripTexture(v)
 end
 
+workspace.DescendantAdded:Connect(function(v)
+    task.defer(stripTexture, v)
+end)
+
 -- =============================================
 -- 🚫 3. TOTAL PURGER (HAPUS OTHER PLAYER & DATA DI WORKSPACE + PLAYERS)
 -- =============================================
-local function purgePlayerCompletely(player)
-    if not player or player == lp then return end
+local function isLocalPlayerEntity(entity)
+    if not entity then return false end
+    if entity == lp then return true end
+    if lp and lp.Character and entity == lp.Character then return true end
+    if entity.Name == lpName or (lpDisplayName ~= "" and entity.Name == lpDisplayName) then return true end
+    return false
+end
 
-    -- 1. Hapus Karakter di Workspace
+local function purgeOtherCharacter(char)
+    if not char or not char:IsA("Model") or isLocalPlayerEntity(char) then return end
+    pcall(function()
+        for _, part in ipairs(char:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.Transparency = 1
+                part.CanCollide = false
+            elseif part:IsA("Decal") or part:IsA("Texture") or part:IsA("Clothing") then
+                part:Destroy()
+            end
+        end
+        char:ClearAllChildren()
+        char:Destroy()
+    end)
+end
+
+local function purgeOtherPlayer(player)
+    if not player or player == lp then return end
     pcall(function()
         if player.Character then
-            player.Character:ClearAllChildren()
-            player.Character:Destroy()
+            purgeOtherCharacter(player.Character)
         end
     end)
-
-    -- 2. Hapus Data & Instance Player dari game.Players
     pcall(function()
         player:ClearAllChildren()
         player:Destroy()
@@ -123,43 +147,90 @@ local function purgePlayerCompletely(player)
 end
 
 local function scanAndPurgeAllOtherPlayers()
-    -- Hapus dari game.Players
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= lp then
-            purgePlayerCompletely(player)
+            purgeOtherPlayer(player)
+        end
+    end
+    for _, child in ipairs(Players:GetChildren()) do
+        if child ~= lp and child:IsA("Player") then
+            purgeOtherPlayer(child)
         end
     end
 
-    -- Hapus sisa model karakter yang tercecer di Workspace
+    local wsPlayers = workspace:FindFirstChild("Players")
+    if wsPlayers then
+        for _, child in ipairs(wsPlayers:GetChildren()) do
+            if child.Name ~= "Plots" and not isLocalPlayerEntity(child) then
+                purgeOtherCharacter(child)
+            end
+        end
+    end
+
     for _, child in ipairs(workspace:GetChildren()) do
-        if child:IsA("Model") and child ~= (lp and lp.Character) and child.Name ~= lpName and (lpDisplayName == "" or child.Name ~= lpDisplayName) then
-            if child:FindFirstChildOfClass("Humanoid") or child:FindFirstChild("HumanoidRootPart") then
-                pcall(function()
-                    child:ClearAllChildren()
-                    child:Destroy()
-                end)
+        if child:IsA("Model") and not isLocalPlayerEntity(child) and child.Name ~= "Plots" and child.Name ~= "Debris" and child.Name ~= "NPCs" and child.Name ~= "Players" then
+            if child:FindFirstChildOfClass("Humanoid") or child:FindFirstChild("HumanoidRootPart") or child:FindFirstChild("Head") then
+                purgeOtherCharacter(child)
             end
         end
     end
 end
 
--- Eksekusi awal pembersihan player
 scanAndPurgeAllOtherPlayers()
 
--- Event saat pemain baru join
 Players.PlayerAdded:Connect(function(player)
+    if not _G.autoRemovePlayer then return end
     if player ~= lp then
         task.defer(function()
-            task.wait(0.05)
-            purgePlayerCompletely(player)
+            purgeOtherPlayer(player)
         end)
         player.CharacterAdded:Connect(function(char)
             task.defer(function()
-                pcall(function()
-                    char:ClearAllChildren()
-                    char:Destroy()
-                end)
+                purgeOtherCharacter(char)
             end)
+        end)
+    end
+end)
+
+Players.ChildAdded:Connect(function(child)
+    if not _G.autoRemovePlayer then return end
+    if child ~= lp and child:IsA("Player") then
+        task.defer(function()
+            purgeOtherPlayer(child)
+        end)
+    end
+end)
+
+local function setupWsPlayersListener(folder)
+    if not folder then return end
+    for _, child in ipairs(folder:GetChildren()) do
+        if child.Name ~= "Plots" and not isLocalPlayerEntity(child) then
+            purgeOtherCharacter(child)
+        end
+    end
+    folder.ChildAdded:Connect(function(child)
+        if not _G.autoRemovePlayer then return end
+        task.defer(function()
+            if child.Name ~= "Plots" and not isLocalPlayerEntity(child) then
+                purgeOtherCharacter(child)
+            end
+        end)
+    end)
+end
+
+local wsPlayers = workspace:FindFirstChild("Players")
+if wsPlayers then
+    setupWsPlayersListener(wsPlayers)
+end
+
+workspace.ChildAdded:Connect(function(child)
+    if child.Name == "Players" then
+        task.defer(function() setupWsPlayersListener(child) end)
+    elseif child:IsA("Model") and not isLocalPlayerEntity(child) and child.Name ~= "Plots" and child.Name ~= "Debris" and child.Name ~= "NPCs" then
+        task.defer(function()
+            if child:FindFirstChildOfClass("Humanoid") or child:FindFirstChild("HumanoidRootPart") or child:FindFirstChild("Head") then
+                purgeOtherCharacter(child)
+            end
         end)
     end
 end)
@@ -212,9 +283,8 @@ local function isMyPlot(plotModel)
     return false
 end
 
--- Bersihkan Plot Orang Lain
-local plotsFolder = workspace:FindFirstChild("Plots")
-if plotsFolder then
+local function cleanPlots(plotsFolder)
+    if not plotsFolder then return end
     for _, plot in ipairs(plotsFolder:GetChildren()) do
         if plot:IsA("Model") and not isMyPlot(plot) then
             pcall(function() plot:Destroy() end)
@@ -228,21 +298,23 @@ if plotsFolder then
     end)
 end
 
+local plotsFolder = workspace:FindFirstChild("Plots") or (workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild("Plots"))
+if plotsFolder then
+    cleanPlots(plotsFolder)
+end
+
 -- =============================================
--- 🧹 5. PERIODIC SWEEPER & GARBAGE COLLECTOR (ANTI-LAG AFK LAMA)
+-- 🧹 5. PERIODIC SWEEPER & GARBAGE COLLECTOR
 -- =============================================
--- Sweeper berjalan setiap 1 detik (tidak membebani CPU, RAM selalu bersih)
 task.spawn(function()
     local cleanCounter = 0
-    while task.wait(1) do
-        if not _G.autoFarm then continue end
-        
-        -- Hapus pemain lain & karakter liar
-        pcall(scanAndPurgeAllOtherPlayers)
+    while task.wait(0.25) do
+        if _G.autoRemovePlayer then
+            pcall(scanAndPurgeAllOtherPlayers)
+        end
 
         cleanCounter = cleanCounter + 1
-        -- Setiap 30 detik: Bersihkan RAM & jalankan Garbage Collector
-        if cleanCounter >= 30 then
+        if cleanCounter >= 120 then
             cleanCounter = 0
             pcall(function()
                 if gcinfo then gcinfo() end
@@ -250,23 +322,6 @@ task.spawn(function()
             end)
         end
     end
-end)
-
--- Listener hemat CPU untuk part baru yang masuk ke workspace
-workspace.ChildAdded:Connect(function(child)
-    if not child then return end
-    task.defer(function()
-        if child:IsA("Model") and child ~= (lp and lp.Character) and child.Name ~= lpName and (lpDisplayName == "" or child.Name ~= lpDisplayName) then
-            if child:FindFirstChildOfClass("Humanoid") or child:FindFirstChild("HumanoidRootPart") then
-                pcall(function()
-                    child:ClearAllChildren()
-                    child:Destroy()
-                end)
-                return
-            end
-        end
-        stripTexture(child)
-    end)
 end)
 
 -- =============================================
@@ -296,67 +351,85 @@ local rev_MeteorShop_RequestSync = networkFolder and networkFolder:FindFirstChil
 local rev_MeteorShop_Stock = networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_Stock")
 local rev_MeteorShop_Buy = networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_Buy")
 
+if not rev_MeteorShop_Stock or not rev_MeteorShop_Buy or not rev_MeteorShop_RequestSync or not ref_B_SellAll then
+    for _, r in pairs(ReplicatedStorage:GetDescendants()) do
+        if r:IsA("RemoteEvent") then
+            if r.Name == "rev_MeteorShop_Stock" then rev_MeteorShop_Stock = r
+            elseif r.Name == "rev_MeteorShop_Buy" then rev_MeteorShop_Buy = r
+            elseif r.Name == "rev_MeteorShop_RequestSync" then rev_MeteorShop_RequestSync = r
+            end
+        elseif r:IsA("RemoteFunction") then
+            if r.Name == "ref_B_SellAll" then ref_B_SellAll = r
+            end
+        end
+    end
+end
+
 -- =============================================
--- 🛒 8. AUTO BUY METEOR SHOP (FRIGOREX VIA STOCK)
+-- 🛒 8. AUTO BUY METEOR SHOP (PATAGOTITAN, SPEED, FRIGOREX)
 -- =============================================
 if rev_MeteorShop_Stock then
     rev_MeteorShop_Stock.OnClientEvent:Connect(function(stockData, expiryTimestamp)
         if type(stockData) ~= "table" then return end
         
-        print("--------------------------------------------------")
-        print("🛒 [METEOR SHOP] Data Stock Diterima dari Server:")
-        
+        local buyRemote = rev_MeteorShop_Buy or (networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_Buy"))
+        if not buyRemote then return end
+
         for itemName, itemInfo in pairs(stockData) do
             if type(itemInfo) == "table" then
                 local stockCount = tonumber(itemInfo.Stock) or 0
-                local maxCount = tonumber(itemInfo.Max) or 0
                 
-                if autoBuyItems[itemName] then
-                    print(string.format("⭐ [TARGET] %s | Stock: %d / %d", tostring(itemName), stockCount, maxCount))
-                    
-                    if _G.autoBuyFrigorex and stockCount > 0 then
-                        for i = 1, stockCount do
-                            pcall(function()
-                                local buyRemote = rev_MeteorShop_Buy or (networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_Buy"))
-                                if buyRemote then
+                if stockCount > 0 then
+                    local shouldBuy = false
+
+                    if itemName == "Patagotitan" and _G.autoBuyPatagotitan then
+                        shouldBuy = true
+                    elseif itemName == "Speed" and _G.autoBuySpeed then
+                        shouldBuy = true
+                    elseif itemName == "Frigorex" and _G.autoBuyFrigorex then
+                        shouldBuy = true
+                    end
+
+                    if shouldBuy then
+                        task.spawn(function()
+                            for i = 1, stockCount do
+                                pcall(function()
                                     buyRemote:FireServer(itemName)
-                                    print(string.format("🔥 [AUTO BUY] Membeli %s (#%d/%d)...", tostring(itemName), i, stockCount))
-                                end
-                            end)
-                            task.wait(0.2)
-                        end
+                                    print(string.format("🛒 [METEOR AUTO BUY] Berhasil membeli %s (#%d/%d)!", itemName, i, stockCount))
+                                end)
+                                task.wait(0.2)
+                            end
+                        end)
                     end
                 end
             end
         end
-        print("--------------------------------------------------")
     end)
 end
 
--- Loop Request Stock setiap 5 Menit (300 Detik)
+-- Loop Request Sync Stock setiap 60 Detik
 task.spawn(function()
-    task.wait(2)
+    task.wait(3)
     while true do
-        if _G.autoFarm and _G.autoBuyFrigorex then
+        if _G.autoFarm and (_G.autoBuyPatagotitan or _G.autoBuySpeed or _G.autoBuyFrigorex) then
             pcall(function()
                 local syncRemote = rev_MeteorShop_RequestSync or (networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_RequestSync"))
                 if syncRemote then
                     syncRemote:FireServer()
-                    print("🛒 [METEOR SHOP] Mengirim RequestSync ke server (Loop 5 Menit)...")
                 end
             end)
         end
-        task.wait(300)
+        task.wait(60)
     end
 end)
 
 -- =============================================
--- 🧪 9. AUTO BUY FARM POTION (SETIAP JAM GANJIL WIB: 1, 3, 5... 23)
+-- 🧪 9. AUTO BUY FARM POTION (KHUSUS JAM GANJIL WIB: 1, 3, 5... 23 & MAX MENIT :10)
 -- =============================================
 local lastBoughtFarmPotionHour = -1
 
 task.spawn(function()
-    task.wait(1)
+    task.wait(2)
     while true do
         if _G.autoFarm and _G.autoBuyFarmPotion then
             pcall(function()
@@ -365,13 +438,14 @@ task.spawn(function()
                 local minWIB = wibTime.min
                 local secWIB = wibTime.sec
 
-                if (hourWIB % 2 == 1) and (lastBoughtFarmPotionHour ~= hourWIB) then
+                -- Hanya beli jika jam ganjil (1, 3, 5... 23) DAN menit masih <= 10
+                if (hourWIB % 2 == 1) and (minWIB <= 10) and (lastBoughtFarmPotionHour ~= hourWIB) then
                     lastBoughtFarmPotionHour = hourWIB
                     
                     local buyRemote = rev_MeteorShop_Buy or (networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_Buy"))
                     if buyRemote then
                         buyRemote:FireServer("Farm Potion")
-                        print(string.format("🧪 [AUTO BUY WIB] Berhasil membeli 1x Farm Potion pada jam %02d:%02d:%02d WIB!", hourWIB, minWIB, secWIB))
+                        print(string.format("🧪 [AUTO BUY WIB] Berhasil membeli 1x Farm Potion pada jam %02d:%02d:%02d WIB (Di bawah menit :10)!", hourWIB, minWIB, secWIB))
                     end
                 end
             end)
@@ -385,7 +459,7 @@ end)
 -- =============================================
 task.spawn(function()
     while task.wait(5) do
-        if not _G.autoFarm then continue end
+        if not _G.autoFarm or not _G.autoSellAll then continue end
         pcall(function()
             local sellRemote = ref_B_SellAll or (networkFolder and networkFolder:FindFirstChild("ref_B_SellAll"))
             if sellRemote then
@@ -395,4 +469,4 @@ task.spawn(function()
     end
 end)
 
-print("🥔 [KALB] Auto Farm (Ultra Lightweight, Total Purge, Frigorex & Farm Potion WIB) Siap!")
+print("🥔 [KALB] Auto Farm & Kick (Anti-Lag, Total Purge, Patago, Speed, Frigorex & Farm Potion WIB) Siap!")
