@@ -66,7 +66,6 @@ pcall(function()
 end)
 
 pcall(function()
-    if setfpscap then setfpscap(30) end
     if settings and settings().Rendering then
         settings().Rendering.QualityLevel = 1
     end
@@ -372,6 +371,54 @@ end
 -- =============================================
 local DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1539697793973756084/1oLTQDKSmutWJlPX91He00IEEAg_lsos8MWbxuXki8LKqO8WnZUX8kwurULVjdB8lOqb"
 
+local function getDirectRobloxAssetUrl(assetId)
+    local fallback = string.format("https://www.roblox.com/asset-thumbnail/image?assetId=%s&width=420&height=420&format=png", tostring(assetId))
+    local ok, res = pcall(function()
+        local httpReq = request or http_request or (delta and delta.request) or (syn and syn.request) or (Fluxus and Fluxus.request) or (http and http.request)
+        if httpReq then
+            local apiRes = httpReq({
+                Url = string.format("https://thumbnails.roblox.com/v1/assets?assetIds=%s&size=420x420&format=Png", tostring(assetId)),
+                Method = "GET"
+            })
+            if apiRes and apiRes.Body then
+                local HttpService = game:GetService("HttpService")
+                local data = HttpService:JSONDecode(apiRes.Body)
+                if data and data.data and data.data[1] and data.data[1].imageUrl then
+                    return data.data[1].imageUrl
+                end
+            end
+        end
+    end)
+    if ok and res and type(res) == "string" and string.find(res, "http") then
+        return res
+    end
+    return fallback
+end
+
+local function getDirectRobloxAvatarUrl(userId)
+    local fallback = string.format("https://www.roblox.com/headshot-thumbnail/image?userId=%s&width=150&height=150&format=png", tostring(userId))
+    local ok, res = pcall(function()
+        local httpReq = request or http_request or (delta and delta.request) or (syn and syn.request) or (Fluxus and Fluxus.request) or (http and http.request)
+        if httpReq then
+            local apiRes = httpReq({
+                Url = string.format("https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=%s&size=150x150&format=Png", tostring(userId)),
+                Method = "GET"
+            })
+            if apiRes and apiRes.Body then
+                local HttpService = game:GetService("HttpService")
+                local data = HttpService:JSONDecode(apiRes.Body)
+                if data and data.data and data.data[1] and data.data[1].imageUrl then
+                    return data.data[1].imageUrl
+                end
+            end
+        end
+    end)
+    if ok and res and type(res) == "string" and string.find(res, "http") then
+        return res
+    end
+    return fallback
+end
+
 local function sendDiscordWebhook(itemName, currentCount, maxStock)
     task.spawn(function()
         pcall(function()
@@ -383,8 +430,8 @@ local function sendDiscordWebhook(itemName, currentCount, maxStock)
             local userName = lp and lp.Name or "Unknown"
             local userDisplayName = lp and lp.DisplayName or userName
             local userId = lp and tostring(lp.UserId) or "0"
-            local playerAvatar = string.format("https://www.roblox.com/headshot-thumbnail/image?userId=%s&width=150&height=150&format=png", userId)
 
+            local playerAvatarCdn = getDirectRobloxAvatarUrl(userId)
             local itemImageUrl = ""
             local embedColor = 0x3498db
             local itemIcon = "🛒"
@@ -394,34 +441,34 @@ local function sendDiscordWebhook(itemName, currentCount, maxStock)
             if itemName == "Patagotitan" then
                 itemIcon = "🦖"
                 embedColor = 0x2ecc71 -- Hijau Emerald
-                itemImageUrl = "https://www.roblox.com/asset-thumbnail/image?assetId=95399484334874&width=420&height=420&format=png"
+                itemImageUrl = getDirectRobloxAssetUrl("95399484334874")
                 itemCost = 500
                 itemBuff = "+150% CP/s (Brainrot)"
             elseif itemName == "Frigorex" then
                 itemIcon = "👑"
                 embedColor = 0x9b59b6 -- Ungu Royal
-                itemImageUrl = "https://www.roblox.com/asset-thumbnail/image?assetId=140510107418430&width=420&height=420&format=png"
+                itemImageUrl = getDirectRobloxAssetUrl("140510107418430")
                 itemCost = 1250
                 itemBuff = "+250% CP/s (Brainrot)"
             end
 
             local payload = {
                 ["username"] = "KALB Meteor Shop Sniper (Delta)",
-                ["avatar_url"] = itemImageUrl ~= "" and itemImageUrl or playerAvatar,
+                ["avatar_url"] = itemImageUrl ~= "" and itemImageUrl or playerAvatarCdn,
                 ["embeds"] = {
                     {
                         ["title"] = string.format("%s BERHASIL MEMBELI %s!", itemIcon, string.upper(itemName)),
-                        ["description"] = string.format("🎉 Akun **%s** (@%s) berhasil memborong **%s** di Toko Meteor!", userDisplayName, userName, itemName),
+                        ["description"] = string.format("🎉 Akun **%s** (`@%s`) berhasil memborong **%s** di Toko Meteor!", userDisplayName, userName, itemName),
                         ["color"] = embedColor,
                         ["thumbnail"] = {
-                            ["url"] = itemImageUrl ~= "" and itemImageUrl or playerAvatar
+                            ["url"] = playerAvatarCdn
                         },
                         ["image"] = {
                             ["url"] = itemImageUrl
                         },
                         ["author"] = {
                             ["name"] = string.format("%s (@%s)", userDisplayName, userName),
-                            ["icon_url"] = playerAvatar
+                            ["icon_url"] = playerAvatarCdn
                         },
                         ["fields"] = {
                             {
@@ -457,7 +504,7 @@ local function sendDiscordWebhook(itemName, currentCount, maxStock)
                         },
                         ["footer"] = {
                             ["text"] = "KALB Auto Farm • Meteor Shop Sniper",
-                            ["icon_url"] = playerAvatar
+                            ["icon_url"] = playerAvatarCdn
                         },
                         ["timestamp"] = os.date("!%Y-%m-%dT%H:%M:%SZ")
                     }
