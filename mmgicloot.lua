@@ -21,7 +21,7 @@ if not game:IsLoaded() then game.Loaded:Wait() end
 -- ⚙️ KONFIGURASI PENGGUNA (UBAH SESUAI KEBUTUHAN DI SINI)
 -- ==============================================================================
 _G.autoFarm = true               -- true: Auto Farm Aktif, false: Nonaktif
-_G.onlyMeteorEvent = false        -- true: HANYA Auto Kick saat Event Meteor Shower aktif, false: Auto kick nonstop
+_G.onlyMeteorEvent = true        -- true: HANYA Auto Kick saat Event Meteor Shower aktif, false: Auto kick nonstop
 _G.autoMeteor = true             -- true: Otomatis perbesar hitbox meteor saat Meteor Shower, false: Nonaktif
 _G.autoBuyFrigorex = true        -- true: Cek stock Meteor Shop tiap 5 menit & auto beli Frigorex jika stock > 0
 _G.autoBuyFarmPotion = true      -- true: Auto beli 1x Farm Potion setiap jam ganjil (1, 3, 5... 23 WIB)
@@ -503,32 +503,13 @@ local function executeKick()
             end
         end)
 
-        -- 2. Virtual Input (Spacebar + GUI Button Dispatcher)
+        -- 2. Virtual Input Spacebar (Murni Input Tombol Tanpa Klik Layar/UI)
         pcall(function()
             if VirtualInputManager then
                 VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
                 task.wait(0.03)
                 VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
             end
-
-            local pg = lp:FindFirstChildOfClass("PlayerGui")
-            if pg then
-                for _, desc in ipairs(pg:GetDescendants()) do
-                    if desc:IsA("GuiButton") and desc.Visible and desc.Active then
-                        local n = desc.Name:lower()
-                        local t = (desc:IsA("TextButton") and desc.Text:lower()) or ""
-                        if n:find("kick") or t:find("kick") or n:find("shoot") or t:find("shoot") or n:find("tap") or t:find("tap") then
-                            if firesignal then
-                                firesignal(desc.MouseButton1Click)
-                                firesignal(desc.Activated)
-                            end
-                        end
-                    end
-                end
-            end
-
-            VirtualUser:CaptureController()
-            VirtualUser:ClickButton1(Vector2.new(100, 100))
         end)
 
         -- 3. Jaringan Remote Resmi
