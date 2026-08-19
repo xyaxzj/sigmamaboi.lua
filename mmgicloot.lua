@@ -27,8 +27,6 @@ _G.autoBuyPatagotitan = true      -- true: Auto beli Patagotitan saat ready di M
 _G.autoBuySpeed = true            -- true: Auto beli Speed (+1) saat ready di Meteor Shop
 _G.autoBuyFrigorex = true        -- true: Auto beli Frigorex jika stock > 0
 _G.autoBuyFarmPotion = true      -- true: Auto beli 1x Farm Potion setiap jam ganjil (1, 3, 5... 23 WIB)
-_G.autoBuyFarmPotion2 = true     -- true: Auto beli Farm Potion II saat ready di Meteor Shop
-_G.autoBuyLuckPotion2 = true     -- true: Auto beli Luck Potion II saat ready di Meteor Shop
 _G.autoSellAll = true            -- true: Auto Sell All setiap 5 detik via ref_B_SellAll
 _G.autoRemovePlayer = true       -- true: Hapus player lain dari game.Players & workspace.Players (100% Bersih & No Lag), false: Biarkan
 _G.debugConsoleLog = false        -- true: Cetak log status/fase ke console (F9), false: Senyap
@@ -554,7 +552,7 @@ if not kickRemote then
 end
 
 -- =============================================
--- 🛒 AUTO BUY METEOR SHOP (PATAGOTITAN, SPEED, FRIGOREX, POTIONS)
+-- 🛒 AUTO BUY METEOR SHOP (PATAGOTITAN, SPEED, FRIGOREX)
 -- =============================================
 if rev_MeteorShop_Stock then
     rev_MeteorShop_Stock.OnClientEvent:Connect(function(stockData, expiryTimestamp)
@@ -575,10 +573,6 @@ if rev_MeteorShop_Stock then
                     elseif itemName == "Speed" and _G.autoBuySpeed then
                         shouldBuy = true
                     elseif itemName == "Frigorex" and _G.autoBuyFrigorex then
-                        shouldBuy = true
-                    elseif itemName == "Farm Potion II" and _G.autoBuyFarmPotion2 then
-                        shouldBuy = true
-                    elseif itemName == "Luck Potion II" and _G.autoBuyLuckPotion2 then
                         shouldBuy = true
                     end
 
@@ -603,7 +597,7 @@ end
 task.spawn(function()
     task.wait(3)
     while true do
-        if _G.autoFarm and (_G.autoBuyPatagotitan or _G.autoBuySpeed or _G.autoBuyFrigorex or _G.autoBuyFarmPotion2 or _G.autoBuyLuckPotion2) then
+        if _G.autoFarm and (_G.autoBuyPatagotitan or _G.autoBuySpeed or _G.autoBuyFrigorex) then
             pcall(function()
                 local syncRemote = rev_MeteorShop_RequestSync or (networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_RequestSync"))
                 if syncRemote then
