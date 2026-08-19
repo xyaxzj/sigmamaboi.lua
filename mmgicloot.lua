@@ -537,7 +537,7 @@ task.spawn(function()
             logConsole("Karakter Respawn -> Kembali ke Idle")
         end
 
-        -- [ PENGATUR WAKTU & FAILSAFE RESET (TANPA MATI) ]
+        -- [ PENGATUR WAKTU & FAILSAFE RESET (MURNI JALAN TANPA TELEPORT) ]
         if targetAction ~= lastAction then
             globalStuckTimer = 0
             stateTimer = 0 
@@ -547,26 +547,23 @@ task.spawn(function()
             globalStuckTimer = globalStuckTimer + 0.05
             stateTimer = stateTimer + 0.05 
             
-            local maxTimeout = _G.failsafeTimeout or 25
-            if globalStuckTimer >= maxTimeout then
+            local maxTimeout = _G.failsafeTimeout or 45
+            if globalStuckTimer >= maxTimeout and targetAction ~= "WalkToSafeZone" then
                 globalStuckTimer = 0
                 stateTimer = 0
-                hrp.CFrame = safeZoneCFrame
                 targetAction = "Idle"
-                logConsole("🚨 Failsafe Triggered: Auto-TP Safe Zone (Reset Idle)")
+                logConsole("🚨 Failsafe Triggered: Reset ke Idle")
                 continue
             end
         end
 
         local distToSafeZone = (hrp.Position - safeZone).Magnitude
 
-        -- [ FASE 1: IDLE / NENDANG DI SAFE ZONE (HANYA KICK JIKA METEOR SHOWER AKTIF) ]
+        -- [ FASE 1: IDLE / NENDANG DI SAFE ZONE (MURNI JALAN KAKI - TANPA TELEPORT) ]
         if targetAction == "Idle" then
-            if distToSafeZone > 10 then
-                if stateTimer >= 0.5 then
-                    hrp.CFrame = safeZoneCFrame
-                    stateTimer = 0 
-                end
+            if distToSafeZone > 5 then
+                -- Jika belum persis di Safe Zone, jalan kaki terus sampai masuk zona (Tanpa Teleport)
+                hum:MoveTo(safeZone)
             else
                 if shouldKick() then
                     if stateTimer >= 0.5 then
@@ -588,7 +585,7 @@ task.spawn(function()
                 phase2Fired = false
                 targetAction = "WalkToSafeZone"
                 logConsole("Phase 2 Selesai -> Langsung Jalan ke Safe Zone")
-            elseif stateTimer >= 3.5 and not phase2Fired and not collectedFired and not kickEndedFired then
+            elseif stateTimer >= 5 and not phase2Fired and not collectedFired and not kickEndedFired then
                 -- Auto-Retry Failsafe: Jika respon server belum terdeteksi dalam 3.5s, coba kick ulang
                 logConsole("⚠️ [RETRY] Auto-Retry Kick (3.5s timeout)...")
                 stateTimer = 0
@@ -601,18 +598,18 @@ task.spawn(function()
         -- [ FASE 3: JALAN MURNI SAMPAI KE SAFE ZONE (TANPA TELEPORT) ]
         elseif targetAction == "WalkToSafeZone" then
             hum:MoveTo(safeZone)
-            if distToSafeZone < 8 then
+            if distToSafeZone < 5 then
                 targetAction = "WaitingForCollected"
                 logConsole("Tiba di Safe Zone -> Menunggu Reward Collected")
             end
 
         -- [ FASE 4: NUNGGU COLLECTED & RE-KICK INSTAN / STOP JIKA METEOR BERAKHIR ]
         elseif targetAction == "WaitingForCollected" then
-            if distToSafeZone >= 8 then
+            if distToSafeZone >= 5 then
                 hum:MoveTo(safeZone)
             end
 
-            if collectedFired or kickEndedFired or stateTimer >= 3 then
+            if collectedFired or kickEndedFired or stateTimer >= 2.5 then
                 collectedFired = false
                 kickEndedFired = false
                 mutationCount = mutationCount + 1
