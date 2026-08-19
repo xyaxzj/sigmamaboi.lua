@@ -21,14 +21,14 @@ if not game:IsLoaded() then game.Loaded:Wait() end
 -- ⚙️ KONFIGURASI PENGGUNA (UBAH SESUAI KEBUTUHAN DI SINI)
 -- ==============================================================================
 _G.autoFarm = true               -- true: Auto Farm Aktif, false: Nonaktif
-_G.onlyMeteorEvent = true        -- true: HANYA Auto Kick saat Event Meteor Shower aktif, false: Auto kick nonstop
+_G.onlyMeteorEvent = false        -- true: HANYA Auto Kick saat Event Meteor Shower aktif, false: Auto kick nonstop
 _G.autoMeteor = true             -- true: Otomatis perbesar hitbox meteor saat Meteor Shower, false: Nonaktif
 _G.autoBuyPatagotitan = true      -- true: Auto beli Patagotitan saat ready di Meteor Shop
 _G.autoBuySpeed = true            -- true: Auto beli Speed (+1) saat ready di Meteor Shop
 _G.autoBuyFrigorex = true        -- true: Auto beli Frigorex jika stock > 0
 _G.autoBuyFarmPotion = true      -- true: Auto beli 1x Farm Potion setiap jam ganjil (1, 3, 5... 23 WIB)
-_G.autoBuyFarmPotion2 = false     -- true: Auto beli Farm Potion II saat ready di Meteor Shop
-_G.autoBuyLuckPotion2 = false     -- true: Auto beli Luck Potion II saat ready di Meteor Shop
+_G.autoBuyFarmPotion2 = true     -- true: Auto beli Farm Potion II saat ready di Meteor Shop
+_G.autoBuyLuckPotion2 = true     -- true: Auto beli Luck Potion II saat ready di Meteor Shop
 _G.autoSellAll = true            -- true: Auto Sell All setiap 5 detik via ref_B_SellAll
 _G.autoRemovePlayer = true       -- true: Hapus player lain dari game.Players & workspace.Players (100% Bersih & No Lag), false: Biarkan
 _G.debugConsoleLog = false        -- true: Cetak log status/fase ke console (F9), false: Senyap
@@ -661,11 +661,14 @@ task.spawn(function()
 end)
 
 -- =============================================
--- 🎮 CLIENT CONTROLLER HOOK (GC MEMORY)
+-- 🎮 LAPIS 1: CLIENT CONTROLLER HOOK (GC MEMORY - REINFORCED)
 -- =============================================
 local cachedGameController = nil
+
 local function getGameController()
-    if cachedGameController then return cachedGameController end
+    if cachedGameController and type(cachedGameController.Kick) == "function" then
+        return cachedGameController
+    end
     if getgc then
         for _, item in ipairs(getgc(true)) do
             if type(item) == "table" then
@@ -754,43 +757,7 @@ local function shouldKick()
 end
 
 -- =============================================
--- 🖱️ TRIGGER VIRTUAL INPUT & UI KICK DISPATCHER
--- =============================================
-local function triggerGuiAndVirtualInput()
-    pcall(function()
-        local pg = lp:FindFirstChildOfClass("PlayerGui")
-        if pg then
-            for _, btn in ipairs(pg:GetDescendants()) do
-                if btn:IsA("GuiButton") and btn.Visible and btn.Active then
-                    local bName = btn.Name:lower()
-                    local bText = (btn:IsA("TextButton") and btn.Text:lower()) or ""
-                    if string.find(bName, "kick") or string.find(bText, "kick") or string.find(bName, "shoot") or string.find(bText, "shoot") or string.find(bName, "tap") or string.find(bText, "tap") then
-                        if firesignal then
-                            firesignal(btn.MouseButton1Click)
-                            firesignal(btn.Activated)
-                        end
-                    end
-                end
-            end
-        end
-    end)
-
-    pcall(function()
-        local VirtualInputManager = game:GetService("VirtualInputManager")
-        if VirtualInputManager then
-            VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
-            task.wait(0.02)
-            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
-        end
-        if VirtualUser then
-            VirtualUser:CaptureController()
-            VirtualUser:ClickButton1(Vector2.new(100, 100))
-        end
-    end)
-end
-
--- =============================================
--- 🚀 FUNGSI EKSEKUSI TENDANGAN TERPADU (TRI-LAYER REINFORCED)
+-- 🚀 FUNGSI EKSEKUSI TENDANGAN REINFORCED (LAPIS 1 + LAPIS 3)
 -- =============================================
 local function executeKick()
     local timestamp = nil
@@ -799,30 +766,44 @@ local function executeKick()
         timestamp = tick()
     end
 
-    logConsole("⚡ Mengeksekusi Kick Terpadu (Tri-Layer)...")
+    logConsole("⚡ Mengeksekusi Kick (Lapis 1 Controller Hook + Lapis 3 Network)...")
 
-    -- LAPIS 1: Direct GameController Client Hook
+    -- 🎮 LAPIS 1: Direct GameController Hook (Buka Kunci Cooldown & Panggil Kick Asli)
     pcall(function()
         local controller = getGameController()
         if controller then
             if controller.UnblockKick then
                 pcall(function() controller:UnblockKick() end)
             end
+            if controller.ResetCooldown then
+                pcall(function() controller:ResetCooldown() end)
+            end
             controller.CanKick = true
             pcall(function() controller:Kick(1, 1) end)
         end
     end)
 
-    -- LAPIS 2: Virtual Input & GUI Trigger
-    task.spawn(triggerGuiAndVirtualInput)
-
-    -- LAPIS 3: Remote Network Invocation (Async Non-Blocking)
+    -- 📡 LAPIS 3: Network Remote Invocation (Jalur Resmi Server Non-Blocking)
     task.spawn(function()
         pcall(function()
-            if ref_KickEvent and ref_KickEvent:IsA("RemoteFunction") then
-                ref_KickEvent:InvokeServer(1, 1, timestamp)
-            elseif kickRemote and kickRemote:IsA("RemoteEvent") then
-                kickRemote:FireServer(1, 1)
+            local targetRemote = ref_KickEvent or (networkFolder and networkFolder:FindFirstChild("ref_KickEvent"))
+            if not targetRemote then
+                for _, r in pairs(ReplicatedStorage:GetDescendants()) do
+                    if r:IsA("RemoteFunction") and r.Name == "ref_KickEvent" then
+                        targetRemote = r
+                        ref_KickEvent = r
+                        break
+                    end
+                end
+            end
+
+            if targetRemote and targetRemote:IsA("RemoteFunction") then
+                targetRemote:InvokeServer(1, 1, timestamp)
+            end
+
+            local fallbackEvent = kickRemote or (networkFolder and networkFolder:FindFirstChild("rev_KickEvent"))
+            if fallbackEvent and fallbackEvent:IsA("RemoteEvent") then
+                fallbackEvent:FireServer(1, 1, timestamp)
             end
         end)
     end)
