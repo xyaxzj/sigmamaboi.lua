@@ -1,18 +1,21 @@
 -- ==============================================================================
--- 🥔 KALB ULTRA LIGHTWEIGHT AUTO FARM V2 (REINFORCED AUTO KICK & METEOR EVENT)
+-- 🥔 KALB ULTRA LIGHTWEIGHT AUTO FARM V2 (NO-CLICK KICK ENGINE & SMOOTH WALK)
 -- ==============================================================================
 -- Fitur & Alur:
 -- 1. ⚙️ Full Config Mode: Semua pengaturan diatur via variabel _G di baris atas (Tanpa UI)
--- 2. ⚡ Reinforced Multi-Channel Kick:
---    - Direct GameController Unblock & Force CanKick=true
---    - Async non-blocking Remote Invocation (task.spawn)
---    - Virtual Input Spacebar + Auto Click Kick Button di PlayerGui
---    - 3.5s Auto-Retry Failsafe (Jika kick pertama belum terdaftar, kick ulang seketika)
--- 3. ☄️ Meteor Shower Auto Kick Only: Otomatis nendang jika Meteor Shower aktif ATAU ada meteor di Debris
---    - Saat event selesai di tengah jalan, selesaikan ronde & tiba di SafeZone lalu standby.
--- 4. ☄️ Auto Meteor Hitbox Expander: Ukuran 250x250x250 (CanQuery=true) agar raycast pasti kena
--- 5. 🛒 Auto Buy Frigorex (5 menit), 🧪 Farm Potion (WIB ganjil), 💰 Auto Sell All (5s)
--- 6. 🥔 Potato Mode Ekstrem & 🛡️ Anti-AFK (VirtualUser)
+-- 2. ⚡ Zero-Click Pure Remote/Hook Kick Engine:
+--    - Murni direct GameController:Kick(1, 1) + ref_KickEvent / rev_KickEvent
+--    - 100% BEBAS dari VirtualInputManager & VirtualUser Click (TIDAK AKAN PERNAH mengeklik UI/Menu lain)
+--    - Auto-Retry 3.5s jika kick belum terdaftar di server
+-- 3. 🚶 Smooth Continuous Walk:
+--    - Karakter DIJAMIN berjalan sampai tuntas ke Safe Zone (jarak <= 5 studs) tanpa berhenti di tengah jalan
+--    - Throttle MoveTo agar pathfinding Humanoid berjalan mulus tanpa stutter/freeze
+-- 4. ☄️ Meteor Shower Only Mode:
+--    - Menendang bola saat event Meteor Shower aktif / ada meteor di Debris
+--    - Saat event selesai di tengah jalan, karakter tetap berjalan sampai Safe Zone dan standby di titik Safe Zone
+-- 5. ☄️ Auto Meteor Hitbox Expander: Ukuran 250x250x250 (CanQuery=true)
+-- 6. 🛒 Auto Buy Frigorex (5 menit), 🧪 Farm Potion (WIB ganjil), 💰 Auto Sell All (5s)
+-- 7. 🥔 Potato Mode Ekstrem & 🛡️ Anti-AFK Anti-Disconnect (getconnections disable)
 -- ==============================================================================
 
 if not game:IsLoaded() then game.Loaded:Wait() end
@@ -21,7 +24,7 @@ if not game:IsLoaded() then game.Loaded:Wait() end
 -- ⚙️ KONFIGURASI PENGGUNA (UBAH SESUAI KEBUTUHAN DI SINI)
 -- ==============================================================================
 _G.autoFarm = true               -- true: Auto Farm Aktif, false: Nonaktif
-_G.onlyMeteorEvent = false        -- true: HANYA Auto Kick saat Event Meteor Shower aktif, false: Auto kick nonstop
+_G.onlyMeteorEvent = true        -- true: HANYA Auto Kick saat Event Meteor Shower aktif, false: Auto kick nonstop
 _G.autoMeteor = true             -- true: Otomatis perbesar hitbox meteor saat Meteor Shower, false: Nonaktif
 _G.autoBuyFrigorex = true        -- true: Cek stock Meteor Shop tiap 5 menit & auto beli Frigorex jika stock > 0
 _G.autoBuyFarmPotion = true      -- true: Auto beli 1x Farm Potion setiap jam ganjil (1, 3, 5... 23 WIB)
@@ -31,12 +34,10 @@ _G.debugConsoleLog = false       -- true: Cetak log status/fase ke console (F9),
 _G.failsafeTimeout = 25          -- Waktu maksimal (detik) sebelum auto-reset ke Safe Zone jika macet
 
 print("--------------------------------------------------")
-print("🚀 [INIT] Memuat KALB Auto Farm V2 (Reinforced Kick Engine)...")
+print("🚀 [INIT] Memuat KALB Auto Farm V2 (Zero-Click & Smooth Walk)...")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local VirtualUser = game:GetService("VirtualUser")
-local VirtualInputManager = game:GetService("VirtualInputManager")
 local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
 
@@ -110,7 +111,7 @@ end
 -- =============================================
 -- ☄️ AUTO METEOR EVENT ENGINE (HITBOX EXPANDER)
 -- =============================================
-local OPTIMAL_METEOR_SIZE = Vector3.new(200, 200, 200)
+local OPTIMAL_METEOR_SIZE = Vector3.new(250, 250, 250)
 local activeMeteors = {}
 local isMeteorShowerActive = false
 
@@ -264,13 +265,14 @@ local function shouldKick()
 end
 
 -- =============================================
--- 🛡️ ANTI AFK
+-- 🛡️ ANTI AFK (CLEAN SIGNAL DISABLE - NO CLICKS)
 -- =============================================
-lp.Idled:Connect(function()
-    pcall(function()
-        VirtualUser:CaptureController()
-        VirtualUser:ClickButton2(Vector2.new())
-    end)
+pcall(function()
+    if getconnections then
+        for _, conn in ipairs(getconnections(lp.Idled)) do
+            conn:Disable()
+        end
+    end
 end)
 
 -- =============================================
@@ -479,7 +481,7 @@ if rev_RemovedWeather then
 end
 
 -- =============================================
--- 🚀 FUNGSI EKSEKUSI TENDANGAN REINFORCED (ASYNC NON-BLOCKING)
+-- 🚀 FUNGSI EKSEKUSI TENDANGAN (100% BEBAS KLIK UI)
 -- =============================================
 local function executeKick()
     task.spawn(function()
@@ -489,9 +491,9 @@ local function executeKick()
             timestamp = tick()
         end
 
-        logConsole("⚡ [REINFORCED KICK] Memicu tendangan bola multi-channel...")
+        logConsole("⚡ [PURE KICK] Menendang bola via Client Controller & Remote...")
 
-        -- 1. Direct GameController Client Hook (Unblock & Force CanKick)
+        -- 1. Direct GameController Client Hook (Nyalakan animasi & projectile asli)
         pcall(function()
             local controller = getGameController()
             if controller then
@@ -503,16 +505,7 @@ local function executeKick()
             end
         end)
 
-        -- 2. Virtual Input Spacebar (Murni Input Tombol Tanpa Klik Layar/UI)
-        pcall(function()
-            if VirtualInputManager then
-                VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
-                task.wait(0.03)
-                VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
-            end
-        end)
-
-        -- 3. Jaringan Remote Resmi
+        -- 2. Jaringan Remote Resmi ke Server (InvokeServer / FireServer)
         pcall(function()
             if ref_KickEvent and ref_KickEvent:IsA("RemoteFunction") then
                 ref_KickEvent:InvokeServer(1, 1, timestamp)
@@ -526,6 +519,8 @@ end
 -- =============================================
 -- ⚙️ MAIN LOOP (STATE MACHINE AUTO FARM)
 -- =============================================
+local lastMoveToTick = 0
+
 task.spawn(function()
     while task.wait(0.05) do
         if not _G.autoFarm then continue end
@@ -573,16 +568,23 @@ task.spawn(function()
 
         local distToSafeZone = (hrp.Position - safeZone).Magnitude
 
+        -- Fungsi helper jalan kaki mulus (Throttle MoveTo setiap 0.25s agar tidak stutter)
+        local function smoothWalkToSafeZone()
+            local now = tick()
+            if now - lastMoveToTick >= 0.25 then
+                lastMoveToTick = now
+                hum:MoveTo(safeZone)
+            end
+        end
+
         -- [ FASE 1: IDLE / NENDANG DI SAFE ZONE (HANYA KICK JIKA METEOR SHOWER AKTIF) ]
         if targetAction == "Idle" then
-            if distToSafeZone > 10 then
-                if stateTimer >= 0.5 then
-                    hrp.CFrame = safeZoneCFrame
-                    stateTimer = 0 
-                end
+            if distToSafeZone > 5 then
+                -- Jika belum persis di Safe Zone, jalan terus sampai masuk zona
+                smoothWalkToSafeZone()
             else
                 if shouldKick() then
-                    if stateTimer >= 0.5 then
+                    if stateTimer >= 0.4 then
                         phase2Fired = false
                         collectedFired = false
                         kickEndedFired = false
@@ -590,8 +592,8 @@ task.spawn(function()
                         targetAction = "WaitingForPhase2"
                     end
                 else
-                    -- Jika event Meteor Shower tidak aktif, standby di Safe Zone
-                    task.wait(0.2)
+                    -- Jika event Meteor Shower tidak aktif, standby di titik Safe Zone
+                    task.wait(0.1)
                 end
             end
 
@@ -599,33 +601,38 @@ task.spawn(function()
         elseif targetAction == "WaitingForPhase2" then
             if phase2Fired or collectedFired or kickEndedFired then
                 phase2Fired = false
+                collectedFired = false
+                kickEndedFired = false
                 targetAction = "WalkToSafeZone"
-                logConsole("Phase 2 Selesai -> Langsung Jalan ke Safe Zone")
+                logConsole("Phase 2 Selesai -> Mulai Jalan Menuju Safe Zone")
             elseif stateTimer >= 3.5 and not phase2Fired and not collectedFired and not kickEndedFired then
-                -- Auto-Retry Failsafe jika kick belum terdaftar setelah 3.5s
+                -- Auto-Retry jika kick belum terdaftar di server
                 logConsole("⚠️ [RETRY] Belum ada respon kick dalam 3.5s, mencoba tendang ulang...")
                 stateTimer = 0
                 executeKick()
             elseif stateTimer > 18 then
                 targetAction = "WalkToSafeZone"
-                logConsole("Phase 2 Timeout (18s) -> Lanjut Jalan ke Safe Zone")
+                logConsole("Phase 2 Timeout (18s) -> Jalan ke Safe Zone")
             end
 
-        -- [ FASE 3: JALAN MURNI SAMPAI KE SAFE ZONE (TANPA TELEPORT) ]
+        -- [ FASE 3: JALAN MURNI SAMPAI TUNTAS DI SAFE ZONE (<= 5 STUDS) ]
         elseif targetAction == "WalkToSafeZone" then
-            hum:MoveTo(safeZone)
-            if distToSafeZone < 8 then
+            smoothWalkToSafeZone()
+            
+            -- DIJAMIN tidak berhenti di tengah jalan: hanya transisi saat jarak <= 5 studs
+            if distToSafeZone <= 5 then
                 targetAction = "WaitingForCollected"
-                logConsole("Tiba di Safe Zone -> Menunggu Reward Collected")
+                logConsole("Tiba Tuntas di Safe Zone -> Menunggu Reward Selesai")
             end
 
-        -- [ FASE 4: NUNGGU COLLECTED & RE-KICK INSTAN / STOP JIKA METEOR BERAKHIR ]
+        -- [ FASE 4: NUNGGU COLLECTED & RE-KICK INSTAN / STANDBY DI SAFE ZONE ]
         elseif targetAction == "WaitingForCollected" then
-            if distToSafeZone >= 8 then
-                hum:MoveTo(safeZone)
+            if distToSafeZone > 5 then
+                smoothWalkToSafeZone()
             end
 
-            if collectedFired or kickEndedFired or stateTimer >= 3 then
+            -- Tunggu konfirmasi collected atau jeda 1 detik setelah tiba di safe zone
+            if collectedFired or kickEndedFired or stateTimer >= 1.2 then
                 collectedFired = false
                 kickEndedFired = false
                 mutationCount = mutationCount + 1
@@ -637,7 +644,7 @@ task.spawn(function()
                     logConsole(string.format("🎉 Total Mutasi: %d | Re-Kick Langsung!", mutationCount))
                 else
                     targetAction = "Idle"
-                    logConsole(string.format("🎉 Total Mutasi: %d | Ronde Tuntas -> Standby di Safe Zone (Menunggu Event Meteor)", mutationCount))
+                    logConsole(string.format("🎉 Total Mutasi: %d | Ronde Tuntas -> Standby di Safe Zone (Menunggu Event)", mutationCount))
                 end
             end
         end
@@ -645,5 +652,5 @@ task.spawn(function()
 end)
 
 print("--------------------------------------------------")
-print("🚀 [SUKSES] KALB Reinforced Auto Farm Siap Berjalan!")
+print("🚀 [SUKSES] KALB Zero-Click & Smooth Walk Siap Berjalan!")
 print("--------------------------------------------------")
