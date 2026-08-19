@@ -1,11 +1,12 @@
 -- ==============================================================================
--- 🥔 KALB ANTI-LAG, AUTO PURGE, AUTO SELL & METEOR SHOP AUTO BUY
+-- 🥔 KALB ULTRA LIGHTWEIGHT AUTO FARM & ANTI-LAG (ZERO MEMORY LEAK)
 -- ==============================================================================
--- Fitur:
--- 1. 🥔 Anti-Lag Ekstrem & Potato Map (Plastic, White, No Shadows, Plot & Player Removed)
--- 2. 🛡️ Anti-AFK (Mencegah disconnect 20 menit)
--- 3. 💰 Auto Sell All (Setiap 5 detik via remote ref_B_SellAll)
--- 4. 🛒 Meteor Shop Auto Buy:
+-- Fitur & Evaluasi:
+-- 1. 🥔 Potato Mode Ekstrem: Hapus semua texture, PBR, bayangan, partikel, & efek Lighting
+-- 2. 🚫 Total Player & Character Purger: Hapus karakter & instance player lain dari game.Players & workspace.Players
+-- 3. 🛡️ Anti-AFK (VirtualUser) & Auto Garbage Collector (RAM tetap enteng berjam-jam)
+-- 4. 💰 Auto Sell All (Setiap 5 detik via ref_B_SellAll)
+-- 5. 🛒 Meteor Shop Auto Buy:
 --    - 🦖 Patagotitan (⚡ON)
 --    - ⚡ Speed (+1) (⚡ON)
 --    - 👑 Frigorex (⚡ON)
@@ -47,6 +48,7 @@ _G.autoBuyFrigorex = true     -- 👑 Frigorex
 _G.autoBuyFarmPotion = true   -- 🧪 Farm Potion (I) (Khusus jam ganjil WIB max menit :10)
 _G.autoSellAll = true         -- 💰 Auto Sell All tiap 5s
 _G.autoRemovePlayer = true    -- 🚫 Hapus player lain dari game.Players & workspace.Players
+_G.testWebhook = true        -- 📢 Ubah jadi true untuk langsung test kirim pesan Patagotitan & Frigorex ke Discord Webhook!
 
 -- =============================================
 -- 🚀 1. OPTIMISASI LIGHTING & SETTINGS GLOBAL (SUPER ENTENG)
@@ -366,6 +368,127 @@ if not rev_MeteorShop_Stock or not rev_MeteorShop_Buy or not rev_MeteorShop_Requ
 end
 
 -- =============================================
+-- 📢 DISCORD WEBHOOK NOTIFIER (PATAGOTITAN & FRIGOREX - DELTA COMPATIBLE)
+-- =============================================
+local DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1539697793973756084/1oLTQDKSmutWJlPX91He00IEEAg_lsos8MWbxuXki8LKqO8WnZUX8kwurULVjdB8lOqb"
+
+local function sendDiscordWebhook(itemName, currentCount, maxStock)
+    task.spawn(function()
+        pcall(function()
+            local httpReq = request or http_request or (delta and delta.request) or (syn and syn.request) or (Fluxus and Fluxus.request) or (http and http.request)
+            if not httpReq then return end
+            local HttpService = game:GetService("HttpService")
+
+            local wibTimeStr = os.date("!%d/%m/%Y - %H:%M:%S WIB", os.time() + (7 * 3600))
+            local userName = lp and lp.Name or "Unknown"
+            local userDisplayName = lp and lp.DisplayName or userName
+            local userId = lp and tostring(lp.UserId) or "0"
+            local playerAvatar = string.format("https://www.roblox.com/headshot-thumbnail/image?userId=%s&width=150&height=150&format=png", userId)
+
+            local itemImageUrl = ""
+            local embedColor = 0x3498db
+            local itemIcon = "🛒"
+            local itemCost = 0
+            local itemBuff = ""
+
+            if itemName == "Patagotitan" then
+                itemIcon = "🦖"
+                embedColor = 0x2ecc71 -- Hijau Emerald
+                itemImageUrl = "https://www.roblox.com/asset-thumbnail/image?assetId=95399484334874&width=420&height=420&format=png"
+                itemCost = 500
+                itemBuff = "+150% CP/s (Brainrot)"
+            elseif itemName == "Frigorex" then
+                itemIcon = "👑"
+                embedColor = 0x9b59b6 -- Ungu Royal
+                itemImageUrl = "https://www.roblox.com/asset-thumbnail/image?assetId=140510107418430&width=420&height=420&format=png"
+                itemCost = 1250
+                itemBuff = "+250% CP/s (Brainrot)"
+            end
+
+            local payload = {
+                ["username"] = "KALB Meteor Shop Sniper (Delta)",
+                ["avatar_url"] = itemImageUrl ~= "" and itemImageUrl or playerAvatar,
+                ["embeds"] = {
+                    {
+                        ["title"] = string.format("%s BERHASIL MEMBELI %s!", itemIcon, string.upper(itemName)),
+                        ["description"] = string.format("🎉 Akun **%s** (@%s) berhasil memborong **%s** di Toko Meteor!", userDisplayName, userName, itemName),
+                        ["color"] = embedColor,
+                        ["thumbnail"] = {
+                            ["url"] = itemImageUrl ~= "" and itemImageUrl or playerAvatar
+                        },
+                        ["image"] = {
+                            ["url"] = itemImageUrl
+                        },
+                        ["author"] = {
+                            ["name"] = string.format("%s (@%s)", userDisplayName, userName),
+                            ["icon_url"] = playerAvatar
+                        },
+                        ["fields"] = {
+                            {
+                                ["name"] = "🛒 Item Dibeli",
+                                ["value"] = string.format("**%s**\n`%s`", itemName, itemBuff),
+                                ["inline"] = true
+                            },
+                            {
+                                ["name"] = "📦 Jumlah Stock",
+                                ["value"] = string.format("`#%d / %d`", currentCount, maxStock),
+                                ["inline"] = true
+                            },
+                            {
+                                ["name"] = "💰 Biaya Item",
+                                ["value"] = string.format("`%d Meteor Tokens`", itemCost),
+                                ["inline"] = true
+                            },
+                            {
+                                ["name"] = "👤 Akun Pembeli",
+                                ["value"] = string.format("**%s** (@%s)\n`ID: %s`", userDisplayName, userName, userId),
+                                ["inline"] = true
+                            },
+                            {
+                                ["name"] = "⏰ Waktu Pembelian",
+                                ["value"] = string.format("`%s`", wibTimeStr),
+                                ["inline"] = true
+                            },
+                            {
+                                ["name"] = "📱 Executor",
+                                ["value"] = "`Delta Mobile / PC`",
+                                ["inline"] = true
+                            }
+                        },
+                        ["footer"] = {
+                            ["text"] = "KALB Auto Farm • Meteor Shop Sniper",
+                            ["icon_url"] = playerAvatar
+                        },
+                        ["timestamp"] = os.date("!%Y-%m-%dT%H:%M:%SZ")
+                    }
+                }
+            }
+
+            httpReq({
+                Url = DISCORD_WEBHOOK_URL,
+                Method = "POST",
+                Headers = {
+                    ["Content-Type"] = "application/json"
+                },
+                Body = HttpService:JSONEncode(payload)
+            })
+        end)
+    end)
+end
+
+-- Eksekusi Test Webhook jika diaktifkan di konfigurasi atas (_G.testWebhook = true)
+if _G.testWebhook then
+    task.spawn(function()
+        task.wait(1.5)
+        print("📢 [TEST WEBHOOK] Mengirim pesan simulasi pembelian Patagotitan & Frigorex ke Discord...")
+        sendDiscordWebhook("Patagotitan", 1, 3)
+        task.wait(1.5)
+        sendDiscordWebhook("Frigorex", 1, 1)
+        print("✅ [TEST WEBHOOK] Pesan test berhasil dikirim! Silakan periksa channel Discord Anda.")
+    end)
+end
+
+-- =============================================
 -- 🛒 8. AUTO BUY METEOR SHOP (PATAGOTITAN, SPEED, FRIGOREX)
 -- =============================================
 if rev_MeteorShop_Stock then
@@ -396,6 +519,9 @@ if rev_MeteorShop_Stock then
                                 pcall(function()
                                     buyRemote:FireServer(itemName)
                                     print(string.format("🛒 [METEOR AUTO BUY] Berhasil membeli %s (#%d/%d)!", itemName, i, stockCount))
+                                    if itemName == "Patagotitan" or itemName == "Frigorex" then
+                                        sendDiscordWebhook(itemName, i, stockCount)
+                                    end
                                 end)
                                 task.wait(0.2)
                             end
@@ -469,4 +595,4 @@ task.spawn(function()
     end
 end)
 
-print("🥔 [KALB] Auto Farm & Kick (Anti-Lag, Total Purge, Patago, Speed, Frigorex & Farm Potion WIB) Siap!")
+print("🥔 [KALB] Auto Farm (Anti-Lag, Total Purge, Auto Sell, Patago, Speed, Frigorex & Farm Potion WIB) Siap!")
