@@ -1,17 +1,16 @@
 -- ==============================================================================
--- 🥔 KALB ULTRA LIGHTWEIGHT AUTO FARM V2 (AUTO KICK + AUTO METEOR - FULL CONFIG)
+-- 🥔 KALB ULTRA LIGHTWEIGHT AUTO FARM V2 (METEOR SHOWER AUTO KICK & AUTO BUY)
 -- ==============================================================================
 -- Fitur & Alur:
--- 1. ⚙️ Full Config Mode: Semua pengaturan diatur via variabel _G di paling atas (Tanpa UI)
--- 2. 🥔 Potato Mode Ekstrem: Hapus texture, decal, bayangan, partikel, & efek Lighting
+-- 1. ⚙️ Full Config Mode: Semua pengaturan diatur via variabel _G di baris atas (Tanpa UI)
+-- 2. ☄️ Meteor Shower Auto Kick Only: Bot hanya menendang bola saat event Meteor Shower aktif!
+--    - Jika event Meteor Shower selesai di tengah ronde (saat jalan ke Safe Zone), bot akan
+--      menyelesaikan ronde tersebut sampai tiba di Safe Zone, lalu stop & standby di Safe Zone.
 -- 3. ☄️ Auto Meteor Event: Memperbesar hitbox meteor di Debris (80x80x80, CanQuery=true)
---    secara otomatis di latar belakang sehingga setiap tendangan 100% menabrak meteor!
--- 4. 🧠 Smart State Machine (Murni Jalan Kaki ke Safe Zone):
---    - Fase 1: Idle (Menjaga posisi Safe Zone & Eksekusi Kick)
---    - Fase 2: WaitingForPhase2 (Menunggu hasil server)
---    - Fase 3: WalkToSafeZone (Murni jalan kaki hum:MoveTo tanpa teleport)
---    - Fase 4: WaitingForCollected (Menunggu reward collected & langsung Re-kick)
--- 5. 🛡️ Anti-AFK (VirtualUser) & Failsafe Auto-Reset ke Safe Zone (Tanpa Bunuh Karakter)
+-- 4. 🛒 Auto Buy Frigorex: Request stock tiap 5 menit & auto beli jika stock > 0
+-- 5. 🧪 Auto Buy Farm Potion: Auto beli 1x setiap pergantian jam ganjil (1, 3, 5... 23 WIB)
+-- 6. 💰 Auto Sell All: Menjual semua brainrot tiap 5 detik (ref_B_SellAll)
+-- 7. 🥔 Potato Mode Ekstrem & 🛡️ Anti-AFK (VirtualUser)
 -- ==============================================================================
 
 if not game:IsLoaded() then game.Loaded:Wait() end
@@ -19,14 +18,18 @@ if not game:IsLoaded() then game.Loaded:Wait() end
 -- ==============================================================================
 -- ⚙️ KONFIGURASI PENGGUNA (UBAH SESUAI KEBUTUHAN DI SINI)
 -- ==============================================================================
-_G.autoFarm = true               -- true: Auto Farm & Auto Kick Aktif, false: Nonaktif
+_G.autoFarm = true               -- true: Auto Farm Aktif, false: Nonaktif
+_G.onlyMeteorEvent = true        -- true: HANYA Auto Kick saat Event Meteor Shower aktif, false: Auto kick nonstop
 _G.autoMeteor = true             -- true: Otomatis perbesar hitbox meteor saat Meteor Shower, false: Nonaktif
-_G.autoRemovePlayer = true      -- true: Hapus player lain dari client (FPS Boost), false: Biarkan
-_G.debugConsoleLog = true        -- true: Cetak log status/fase ke console (F9), false: Senyap
+_G.autoBuyFrigorex = true        -- true: Cek stock Meteor Shop tiap 5 menit & auto beli Frigorex jika stock > 0
+_G.autoBuyFarmPotion = true      -- true: Auto beli 1x Farm Potion setiap jam ganjil (1, 3, 5... 23 WIB)
+_G.autoSellAll = true            -- true: Auto Sell All setiap 5 detik via ref_B_SellAll
+_G.autoRemovePlayer = false      -- true: Hapus player lain dari client (FPS Boost), false: Biarkan
+_G.debugConsoleLog = false        -- true: Cetak log status/fase ke console (F9), false: Senyap
 _G.failsafeTimeout = 25          -- Waktu maksimal (detik) sebelum auto-reset ke Safe Zone jika macet
 
 print("--------------------------------------------------")
-print("🚀 [INIT] Memuat KALB Auto Farm V2 (Auto Kick + Auto Meteor)...")
+print("🚀 [INIT] Memuat KALB Auto Farm V2 (Meteor Shower Auto Kick Mode)...")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -105,8 +108,9 @@ end
 -- =============================================
 -- ☄️ AUTO METEOR EVENT ENGINE (HITBOX EXPANDER)
 -- =============================================
-local OPTIMAL_METEOR_SIZE = Vector3.new(80, 80, 80)
+local OPTIMAL_METEOR_SIZE = Vector3.new(250, 250, 250)
 local activeMeteors = {}
+local isMeteorShowerActive = false
 
 local function isTargetMeteorModel(model)
     if not model or not model:IsA("Model") then return false end
@@ -135,7 +139,7 @@ local function expandMeteorHitbox(part)
     pcall(function()
         part.CanCollide = false
         part.CanTouch = true
-        part.CanQuery = true -- Wajib true agar raycast CheckForHit mengenai part ini
+        part.CanQuery = true
         part.CastShadow = false
         if part.Size ~= OPTIMAL_METEOR_SIZE then
             part.Size = OPTIMAL_METEOR_SIZE
@@ -148,6 +152,7 @@ local function handleNewMeteor(model)
     if not model or not isTargetMeteorModel(model) then return end
     if activeMeteors[model] then return end
     activeMeteors[model] = true
+    isMeteorShowerActive = true
 
     for _, descendant in ipairs(model:GetDescendants()) do
         if descendant:IsA("BasePart") or descendant.ClassName == "Part" then
@@ -160,7 +165,6 @@ local function handleNewMeteor(model)
     end
 end
 
--- Listener Debris untuk Meteor Spawning
 local function setupMeteorListeners(debris)
     if not debris then return end
 
@@ -192,20 +196,15 @@ end
 
 task.spawn(function()
     local debris = workspace:FindFirstChild("Debris") or workspace:WaitForChild("Debris", 10)
-    if debris then
-        setupMeteorListeners(debris)
-    end
+    if debris then setupMeteorListeners(debris) end
 end)
 
 workspace.ChildAdded:Connect(function(child)
     if child.Name == "Debris" then
-        task.defer(function()
-            setupMeteorListeners(child)
-        end)
+        task.defer(function() setupMeteorListeners(child) end)
     end
 end)
 
--- Sweeper Berkala Hitbox Meteor
 task.spawn(function()
     while task.wait(0.25) do
         if not _G.autoMeteor then continue end
@@ -213,9 +212,7 @@ task.spawn(function()
         if debris then
             for _, item in ipairs(debris:GetDescendants()) do
                 if isTargetMeteorModel(item) then
-                    if not activeMeteors[item] then
-                        handleNewMeteor(item)
-                    end
+                    if not activeMeteors[item] then handleNewMeteor(item) end
                     for _, part in ipairs(item:GetDescendants()) do
                         if (part:IsA("BasePart") or part.ClassName == "Part") and (part.Size ~= OPTIMAL_METEOR_SIZE or not part.CanQuery) then
                             expandMeteorHitbox(part)
@@ -243,6 +240,14 @@ local function logConsole(msg)
     if _G.debugConsoleLog then
         print(string.format("🤖 [KALB-FARM] [%s] %s", tostring(targetAction), tostring(msg)))
     end
+end
+
+local function shouldKick()
+    if not _G.autoFarm then return false end
+    if _G.onlyMeteorEvent then
+        return isMeteorShowerActive
+    end
+    return true
 end
 
 -- =============================================
@@ -273,6 +278,11 @@ local rev_KickEventEnded = networkFolder and networkFolder:FindFirstChild("rev_K
 local rev_AddedWeather = networkFolder and networkFolder:FindFirstChild("rev_AddedWeather")
 local rev_RemovedWeather = networkFolder and networkFolder:FindFirstChild("rev_RemovedWeather")
 
+local ref_B_SellAll = networkFolder and networkFolder:FindFirstChild("ref_B_SellAll")
+local rev_MeteorShop_RequestSync = networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_RequestSync")
+local rev_MeteorShop_Stock = networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_Stock")
+local rev_MeteorShop_Buy = networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_Buy")
+
 if not ref_KickEvent then
     for _, r in pairs(ReplicatedStorage:GetDescendants()) do
         if r:IsA("RemoteFunction") and r.Name == "ref_KickEvent" then
@@ -289,6 +299,103 @@ if not kickRemote then
         end
     end
 end
+
+-- =============================================
+-- 🛒 AUTO BUY METEOR SHOP (FRIGOREX VIA STOCK)
+-- =============================================
+if rev_MeteorShop_Stock then
+    rev_MeteorShop_Stock.OnClientEvent:Connect(function(stockData, expiryTimestamp)
+        if type(stockData) ~= "table" then return end
+        
+        for itemName, itemInfo in pairs(stockData) do
+            if itemName == "Frigorex" and type(itemInfo) == "table" then
+                local stockCount = tonumber(itemInfo.Stock) or 0
+                local maxCount = tonumber(itemInfo.Max) or 0
+                
+                if _G.debugConsoleLog then
+                    print(string.format("🛒 [METEOR SHOP] Frigorex Stock: %d / %d", stockCount, maxCount))
+                end
+
+                if _G.autoBuyFrigorex and stockCount > 0 then
+                    for i = 1, stockCount do
+                        pcall(function()
+                            local buyRemote = rev_MeteorShop_Buy or (networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_Buy"))
+                            if buyRemote then
+                                buyRemote:FireServer("Frigorex")
+                                print(string.format("🔥 [AUTO BUY] Berhasil membeli Frigorex (#%d/%d)!", i, stockCount))
+                            end
+                        end)
+                        task.wait(0.2)
+                    end
+                end
+            end
+        end
+    end)
+end
+
+-- Loop Request Sync Stock setiap 5 Menit (300 Detik)
+task.spawn(function()
+    task.wait(3)
+    while true do
+        if _G.autoFarm and _G.autoBuyFrigorex then
+            pcall(function()
+                local syncRemote = rev_MeteorShop_RequestSync or (networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_RequestSync"))
+                if syncRemote then
+                    syncRemote:FireServer()
+                    if _G.debugConsoleLog then
+                        print("🛒 [METEOR SHOP] Mengirim RequestSync Stock ke server (Loop 5 Menit)...")
+                    end
+                end
+            end)
+        end
+        task.wait(300)
+    end
+end)
+
+-- =============================================
+-- 🧪 AUTO BUY FARM POTION (JAM GANJIL WIB: 1, 3, 5... 23)
+-- =============================================
+local lastBoughtFarmPotionHour = -1
+
+task.spawn(function()
+    task.wait(2)
+    while true do
+        if _G.autoFarm and _G.autoBuyFarmPotion then
+            pcall(function()
+                local wibTime = os.date("!*t", os.time() + (7 * 3600))
+                local hourWIB = wibTime.hour
+                local minWIB = wibTime.min
+                local secWIB = wibTime.sec
+
+                if (hourWIB % 2 == 1) and (lastBoughtFarmPotionHour ~= hourWIB) then
+                    lastBoughtFarmPotionHour = hourWIB
+                    
+                    local buyRemote = rev_MeteorShop_Buy or (networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_Buy"))
+                    if buyRemote then
+                        buyRemote:FireServer("Farm Potion")
+                        print(string.format("🧪 [AUTO BUY WIB] Berhasil membeli 1x Farm Potion pada jam %02d:%02d:%02d WIB!", hourWIB, minWIB, secWIB))
+                    end
+                end
+            end)
+        end
+        task.wait(5)
+    end
+end)
+
+-- =============================================
+-- 💰 AUTO SELL ALL (SETIAP 5 DETIK)
+-- =============================================
+task.spawn(function()
+    while task.wait(5) do
+        if not _G.autoFarm or not _G.autoSellAll then continue end
+        pcall(function()
+            local sellRemote = ref_B_SellAll or (networkFolder and networkFolder:FindFirstChild("ref_B_SellAll"))
+            if sellRemote then
+                sellRemote:InvokeServer()
+            end
+        end)
+    end
+end)
 
 -- =============================================
 -- 🎮 CLIENT CONTROLLER HOOK (GC MEMORY)
@@ -343,7 +450,8 @@ end
 if rev_AddedWeather then
     rev_AddedWeather.OnClientEvent:Connect(function(weatherType, ...)
         if weatherType == "MeteorShower" then
-            logConsole("☄️ Event Cuaca: METEOR SHOWER AKTIF! Memperbesar seluruh hitbox meteor...")
+            isMeteorShowerActive = true
+            logConsole("☄️ Event Cuaca: METEOR SHOWER AKTIF! Memulai Auto Kick & Farm...")
         end
     end)
 end
@@ -351,7 +459,8 @@ end
 if rev_RemovedWeather then
     rev_RemovedWeather.OnClientEvent:Connect(function(weatherType, ...)
         if weatherType == "MeteorShower" then
-            logConsole("☁️ Event Cuaca: Meteor Shower Selesai.")
+            isMeteorShowerActive = false
+            logConsole("☁️ Event Cuaca: Meteor Shower Selesai. Menyelesaikan ronde ini lalu standby di Safe Zone...")
         end
     end)
 end
@@ -445,7 +554,7 @@ task.spawn(function()
 
         local distToSafeZone = (hrp.Position - safeZone).Magnitude
 
-        -- [ FASE 1: IDLE / NENDANG DI SAFE ZONE ]
+        -- [ FASE 1: IDLE / NENDANG DI SAFE ZONE (HANYA KICK JIKA METEOR SHOWER AKTIF) ]
         if targetAction == "Idle" then
             if distToSafeZone > 10 then
                 if stateTimer >= 0.5 then
@@ -453,12 +562,17 @@ task.spawn(function()
                     stateTimer = 0 
                 end
             else
-                if stateTimer >= 0.5 then
-                    phase2Fired = false
-                    collectedFired = false
-                    kickEndedFired = false
-                    executeKick()
-                    targetAction = "WaitingForPhase2"
+                if shouldKick() then
+                    if stateTimer >= 0.5 then
+                        phase2Fired = false
+                        collectedFired = false
+                        kickEndedFired = false
+                        executeKick()
+                        targetAction = "WaitingForPhase2"
+                    end
+                else
+                    -- Jika event Meteor Shower tidak aktif, standby di Safe Zone
+                    task.wait(0.2)
                 end
             end
 
@@ -481,7 +595,7 @@ task.spawn(function()
                 logConsole("Tiba di Safe Zone -> Menunggu Reward Collected")
             end
 
-        -- [ FASE 4: NUNGGU COLLECTED & RE-KICK INSTAN ]
+        -- [ FASE 4: NUNGGU COLLECTED & RE-KICK INSTAN / STOP JIKA METEOR BERAKHIR ]
         elseif targetAction == "WaitingForCollected" then
             if distToSafeZone >= 8 then
                 hum:MoveTo(safeZone)
@@ -491,16 +605,21 @@ task.spawn(function()
                 collectedFired = false
                 kickEndedFired = false
                 mutationCount = mutationCount + 1
-                
                 phase2Fired = false
-                executeKick()
-                targetAction = "WaitingForPhase2"
-                logConsole(string.format("🎉 Total Mutasi: %d | Re-Kick Langsung!", mutationCount))
+
+                if shouldKick() then
+                    executeKick()
+                    targetAction = "WaitingForPhase2"
+                    logConsole(string.format("🎉 Total Mutasi: %d | Re-Kick Langsung!", mutationCount))
+                else
+                    targetAction = "Idle"
+                    logConsole(string.format("🎉 Total Mutasi: %d | Ronde Tuntas -> Standby di Safe Zone (Menunggu Event Meteor)", mutationCount))
+                end
             end
         end
     end
 end)
 
 print("--------------------------------------------------")
-print("🚀 [SUKSES] KALB Auto Farm + Auto Meteor (Pure Config) Siap Berjalan!")
+print("🚀 [SUKSES] KALB Meteor Shower Auto Farm Siap Berjalan!")
 print("--------------------------------------------------")
