@@ -37,7 +37,7 @@ local isMeteorShowerActive = false
 
 -- Ukuran hitbox optimal untuk Raycast (80x80x80 studs).
 -- JANGAN 2048 karena raycast yang mulai di dalam part 2048 akan tembus/miss!
-local OPTIMAL_HITBOX_SIZE = Vector3.new(150, 150, 150)
+local OPTIMAL_HITBOX_SIZE = Vector3.new(200, 200, 200)
 
 local activeMeteors = {}
 local processedRoots = {}
