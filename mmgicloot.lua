@@ -641,25 +641,18 @@ task.spawn(function()
                 end
             end
 
-        -- [ FASE 2: NUNGGU PHASE 2 DARI SERVER ]
+        -- [ FASE 2: NUNGGU PHASE 2 DARI SERVER -> LANGSUNG JALAN KE SAFEZONE ]
         elseif targetAction == "WaitingForPhase2" then
             if phase2Fired or collectedFired or kickEndedFired then
                 phase2Fired = false
-                targetAction = "PlayingAnim"
-                setDebugLog("Phase 2 Selesai -> PlayingAnim")
-            elseif stateTimer > 18 then
-                targetAction = "PlayingAnim"
-                setDebugLog("Phase 2 Timeout (18s) -> Lanjut PlayingAnim")
-            end
-
-        -- [ FASE 3: NUNGGU ANIMASI GACHA SELESAI ]
-        elseif targetAction == "PlayingAnim" then
-            if stateTimer >= animDelay then
                 targetAction = "WalkToSafeZone"
-                setDebugLog("Anim Selesai -> WalkToSafeZone")
+                setDebugLog("Phase 2 Selesai -> Langsung WalkToSafeZone")
+            elseif stateTimer > 18 then
+                targetAction = "WalkToSafeZone"
+                setDebugLog("Phase 2 Timeout (18s) -> Langsung WalkToSafeZone")
             end
 
-        -- [ FASE 4: JALAN MURNI KE SAFE ZONE (TANPA TELEPORT) ]
+        -- [ FASE 3: JALAN MURNI SAMPAI KE SAFE ZONE (TANPA TELEPORT) ]
         elseif targetAction == "WalkToSafeZone" then
             hum:MoveTo(safeZone)
             if distToSafeZone < 8 then
@@ -667,7 +660,7 @@ task.spawn(function()
                 setDebugLog("Tiba di Safe Zone -> WaitingForCollected")
             end
 
-        -- [ FASE 5: NUNGGU COLLECTED & RE-KICK INSTAN ]
+        -- [ FASE 4: NUNGGU COLLECTED & RE-KICK INSTAN ]
         elseif targetAction == "WaitingForCollected" then
             if distToSafeZone >= 8 then
                 hum:MoveTo(safeZone)
