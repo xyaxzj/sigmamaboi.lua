@@ -474,14 +474,15 @@ local function sendDiscordWebhook(itemName, currentCount, maxStock)
                 ["avatar_url"] = playerAvatarCdn,
                 ["embeds"] = {
                     {
-                        ["title"] = string.format("%s %s", itemIcon, itemName),
-                        ["color"] = embedColor,
-                        ["thumbnail"] = {
-                            ["url"] = itemImageUrl
-                        },
                         ["author"] = {
                             ["name"] = userDisplayName,
                             ["icon_url"] = playerAvatarCdn
+                        },
+                        ["title"] = "Berhasil Membeli",
+                        ["description"] = string.format("%s %s", itemIcon, itemName),
+                        ["color"] = embedColor,
+                        ["thumbnail"] = {
+                            ["url"] = itemImageUrl
                         },
                         ["fields"] = {
                             {
