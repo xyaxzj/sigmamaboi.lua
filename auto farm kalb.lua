@@ -48,7 +48,6 @@ _G.autoBuyFrigorex = true     -- 👑 Frigorex
 _G.autoBuyFarmPotion = true   -- 🧪 Farm Potion (I) (Khusus jam ganjil WIB max menit :10)
 _G.autoSellAll = true         -- 💰 Auto Sell All tiap 5s
 _G.autoRemovePlayer = true    -- 🚫 Hapus player lain dari game.Players & workspace.Players
-_G.testWebhook = true        -- 📢 Ubah jadi true untuk langsung test kirim pesan Patagotitan & Frigorex ke Discord Webhook!
 
 -- =============================================
 -- 🚀 1. OPTIMISASI LIGHTING & SETTINGS GLOBAL (SUPER ENTENG)
@@ -513,18 +512,6 @@ local function sendDiscordWebhook(itemName, currentCount, maxStock)
                 Body = HttpService:JSONEncode(payload)
             })
         end)
-    end)
-end
-
--- Eksekusi Test Webhook jika diaktifkan di konfigurasi atas (_G.testWebhook = true)
-if _G.testWebhook then
-    task.spawn(function()
-        task.wait(1.5)
-        print("📢 [TEST WEBHOOK] Mengirim pesan simulasi pembelian Patagotitan & Frigorex ke Discord...")
-        sendDiscordWebhook("Patagotitan", 1, 3)
-        task.wait(1.5)
-        sendDiscordWebhook("Frigorex", 1, 1)
-        print("✅ [TEST WEBHOOK] Pesan test berhasil dikirim! Silakan periksa channel Discord Anda.")
     end)
 end
 
