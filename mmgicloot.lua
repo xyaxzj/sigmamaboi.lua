@@ -26,7 +26,7 @@ _G.autoMeteor = true             -- true: Otomatis perbesar hitbox meteor saat M
 _G.autoBuyPatagotitan = true      -- true: Auto beli Patagotitan saat ready di Meteor Shop
 _G.autoBuySpeed = true            -- true: Auto beli Speed (+1) saat ready di Meteor Shop
 _G.autoBuyFrigorex = true        -- true: Auto beli Frigorex jika stock > 0
-_G.autoBuyFarmPotion = true      -- true: Auto beli 1x Farm Potion setiap jam ganjil (1, 3, 5... 23 WIB)
+_G.autoBuyFarmPotion = true      -- true: Auto beli 1x Farm Potion khusus jam ganjil (1, 3, 5... 23 WIB) maksimal menit :10
 _G.autoSellAll = true            -- true: Auto Sell All setiap 5 detik via ref_B_SellAll
 _G.autoRemovePlayer = true       -- true: Hapus player lain dari game.Players & workspace.Players (100% Bersih & No Lag), false: Biarkan
 _G.debugConsoleLog = false        -- true: Cetak log status/fase ke console (F9), false: Senyap
@@ -610,7 +610,7 @@ task.spawn(function()
 end)
 
 -- =============================================
--- 🧪 AUTO BUY FARM POTION (JAM GANJIL WIB: 1, 3, 5... 23)
+-- 🧪 AUTO BUY FARM POTION (KHUSUS JAM GANJIL WIB: 1, 3, 5... 23 & MAX MENIT :10)
 -- =============================================
 local lastBoughtFarmPotionHour = -1
 
@@ -624,13 +624,14 @@ task.spawn(function()
                 local minWIB = wibTime.min
                 local secWIB = wibTime.sec
 
-                if (hourWIB % 2 == 1) and (lastBoughtFarmPotionHour ~= hourWIB) then
+                -- Hanya beli jika jam ganjil (1, 3, 5... 23) DAN menit masih <= 10
+                if (hourWIB % 2 == 1) and (minWIB <= 10) and (lastBoughtFarmPotionHour ~= hourWIB) then
                     lastBoughtFarmPotionHour = hourWIB
                     
                     local buyRemote = rev_MeteorShop_Buy or (networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_Buy"))
                     if buyRemote then
                         buyRemote:FireServer("Farm Potion")
-                        print(string.format("🧪 [AUTO BUY WIB] Berhasil membeli 1x Farm Potion pada jam %02d:%02d:%02d WIB!", hourWIB, minWIB, secWIB))
+                        print(string.format("🧪 [AUTO BUY WIB] Berhasil membeli 1x Farm Potion pada jam %02d:%02d:%02d WIB (Di bawah menit :10)!", hourWIB, minWIB, secWIB))
                     end
                 end
             end)
