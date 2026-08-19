@@ -1,21 +1,32 @@
 -- ==============================================================================
--- 🚀 SIGMA HUB | KALB AUTO FARM V2 (FULL STATE MACHINE + REAL-TIME SCREEN DEBUG)
+-- 🥔 KALB ULTRA LIGHTWEIGHT AUTO FARM V2 (AUTO KICK + AUTO METEOR - FULL CONFIG)
 -- ==============================================================================
--- Fitur:
--- 1. 🖥️ Screen Debug HUD Real-Time: Memantau setiap transisi fase, timer, jarak, sinyal remote & stats
--- 2. 🥔 Potato Optimization & Safe Player Purger (Tanpa Lag / Memory Leak)
--- 3. 🎮 Sigma UI V4 (Main Tab, Auto Farm Toggle, Anim Delay Slider, Stats Monitor, Config)
--- 4. 🧠 Smart State Machine:
---    - [FASE 1] Idle (Auto Teleport ke Safe Zone & Eksekusi Kick)
---    - [FASE 2] WaitingForPhase2 (Menunggu hasil gacha & bola mendarat dari server)
---    - [FASE 3] PlayingAnim (Jeda animasi gacha sesuai slider animDelay)
---    - [FASE 4] WalkToSafeZone (Karakter bergerak kembali ke Safe Zone)
---    - [FASE 5] WaitingForCollected (Menunggu event reward collected & langsung Re-kick)
---    - [EVENT] LuckMachineTeleport & LuckMachineTraining (Auto Barbell sampai x8 Luck)
--- 5. 🛡️ Failsafe 25s Auto-Respawn Anti-Stuck & Anti-AFK VirtualUser
+-- Fitur & Alur:
+-- 1. ⚙️ Full Config Mode: Semua pengaturan diatur via variabel _G di paling atas (Tanpa UI)
+-- 2. 🥔 Potato Mode Ekstrem: Hapus texture, decal, bayangan, partikel, & efek Lighting
+-- 3. ☄️ Auto Meteor Event: Memperbesar hitbox meteor di Debris (80x80x80, CanQuery=true)
+--    secara otomatis di latar belakang sehingga setiap tendangan 100% menabrak meteor!
+-- 4. 🧠 Smart State Machine (Murni Jalan Kaki ke Safe Zone):
+--    - Fase 1: Idle (Menjaga posisi Safe Zone & Eksekusi Kick)
+--    - Fase 2: WaitingForPhase2 (Menunggu hasil server)
+--    - Fase 3: WalkToSafeZone (Murni jalan kaki hum:MoveTo tanpa teleport)
+--    - Fase 4: WaitingForCollected (Menunggu reward collected & langsung Re-kick)
+-- 5. 🛡️ Anti-AFK (VirtualUser) & Failsafe Auto-Reset ke Safe Zone (Tanpa Bunuh Karakter)
 -- ==============================================================================
 
 if not game:IsLoaded() then game.Loaded:Wait() end
+
+-- ==============================================================================
+-- ⚙️ KONFIGURASI PENGGUNA (UBAH SESUAI KEBUTUHAN DI SINI)
+-- ==============================================================================
+_G.autoFarm = true               -- true: Auto Farm & Auto Kick Aktif, false: Nonaktif
+_G.autoMeteor = true             -- true: Otomatis perbesar hitbox meteor saat Meteor Shower, false: Nonaktif
+_G.autoRemovePlayer = true      -- true: Hapus player lain dari client (FPS Boost), false: Biarkan
+_G.debugConsoleLog = true        -- true: Cetak log status/fase ke console (F9), false: Senyap
+_G.failsafeTimeout = 25          -- Waktu maksimal (detik) sebelum auto-reset ke Safe Zone jika macet
+
+print("--------------------------------------------------")
+print("🚀 [INIT] Memuat KALB Auto Farm V2 (Auto Kick + Auto Meteor)...")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -33,14 +44,6 @@ if not lp then
         count = count + 1
     until lp or count > 50
 end
-
--- =============================================
--- ⚙️ KONFIGURASI AWAL
--- =============================================
-_G.autoFarm = false
-local autoFarmActive = false              
-local animDelay = 5              
-_G.autoRemovePlayer = false
 
 -- =============================================
 -- 🚀 SYSTEM ANTI-LAG & POTATO MODE
@@ -77,8 +80,8 @@ pcall(function()
     end
 end)
 
--- Player Purger (Opsional jika diaktifkan)
-if _G.autoRemovePlayer or _G.removePlayer or _G.removePlayers then
+-- Player Purger (Opsional jika diaktifkan di config)
+if _G.autoRemovePlayer then
     local function musnahkanPlayer(player)
         if player ~= lp then
             if player.Character then pcall(function() player.Character:Destroy() end) end
@@ -92,7 +95,7 @@ if _G.autoRemovePlayer or _G.removePlayer or _G.removePlayers then
 
     Players.PlayerAdded:Connect(function(player)
         task.defer(function()
-            if _G.autoRemovePlayer or _G.removePlayer or _G.removePlayers then
+            if _G.autoRemovePlayer then
                 musnahkanPlayer(player)
             end
         end)
@@ -100,224 +103,129 @@ if _G.autoRemovePlayer or _G.removePlayer or _G.removePlayers then
 end
 
 -- =============================================
--- 🖥️ REAL-TIME SCREEN DEBUG HUD
+-- ☄️ AUTO METEOR EVENT ENGINE (HITBOX EXPANDER)
 -- =============================================
-local function getGuiContainer()
-    if gethui then
-        local ok, h = pcall(gethui)
-        if ok and h then return h end
-    end
-    local pg = lp and (lp:FindFirstChildOfClass("PlayerGui") or lp:WaitForChild("PlayerGui", 5))
-    return pg
+local OPTIMAL_METEOR_SIZE = Vector3.new(80, 80, 80)
+local activeMeteors = {}
+
+local function isTargetMeteorModel(model)
+    if not model or not model:IsA("Model") then return false end
+    local debris = workspace:FindFirstChild("Debris")
+    if not debris or not model:IsDescendantOf(debris) then return false end
+    return tonumber(model.Name) ~= nil
 end
 
-local targetGuiParent = getGuiContainer()
+local function getTargetMeteorParent(instance)
+    if not instance then return nil end
+    local debris = workspace:FindFirstChild("Debris")
+    if not debris or not instance:IsDescendantOf(debris) then return nil end
 
-pcall(function()
-    if lp and lp:FindFirstChild("PlayerGui") and lp.PlayerGui:FindFirstChild("KalbFarmDebugGui") then
-        lp.PlayerGui.KalbFarmDebugGui:Destroy()
+    local curr = instance
+    while curr and curr ~= debris and curr ~= workspace do
+        if curr:IsA("Model") and tonumber(curr.Name) ~= nil then
+            return curr
+        end
+        curr = curr.Parent
     end
-    if targetGuiParent and targetGuiParent:FindFirstChild("KalbFarmDebugGui") then
-        targetGuiParent.KalbFarmDebugGui:Destroy()
-    end
-end)
+    return nil
+end
 
-local DebugScreenGui = Instance.new("ScreenGui")
-DebugScreenGui.Name = "KalbFarmDebugGui"
-DebugScreenGui.ResetOnSpawn = false
-DebugScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-DebugScreenGui.DisplayOrder = 99998
-DebugScreenGui.Enabled = true
-
-local DebugFrame = Instance.new("Frame")
-DebugFrame.Name = "DebugFrame"
-DebugFrame.Size = UDim2.new(0, 310, 0, 210)
-DebugFrame.Position = UDim2.new(1, -325, 0, 30)
-DebugFrame.BackgroundColor3 = Color3.fromRGB(12, 14, 22)
-DebugFrame.BorderSizePixel = 0
-DebugFrame.Active = true
-DebugFrame.Draggable = true
-DebugFrame.Visible = true
-DebugFrame.Parent = DebugScreenGui
-
-local DebugCorner = Instance.new("UICorner")
-DebugCorner.CornerRadius = UDim.new(0, 8)
-DebugCorner.Parent = DebugFrame
-
-local DebugStroke = Instance.new("UIStroke")
-DebugStroke.Color = Color3.fromRGB(0, 200, 255)
-DebugStroke.Thickness = 1.5
-DebugStroke.Parent = DebugFrame
-
-local DTitle = Instance.new("TextLabel")
-DTitle.Size = UDim2.new(1, -10, 0, 22)
-DTitle.Position = UDim2.new(0, 8, 0, 4)
-DTitle.BackgroundTransparency = 1
-DTitle.Font = Enum.Font.GothamBold
-DTitle.Text = "🔍 KALB AUTO FARM - PHASE DEBUG"
-DTitle.TextColor3 = Color3.fromRGB(80, 220, 255)
-DTitle.TextSize = 11
-DTitle.TextXAlignment = Enum.TextXAlignment.Left
-DTitle.Parent = DebugFrame
-
-local DPhaseLabel = Instance.new("TextLabel")
-DPhaseLabel.Size = UDim2.new(1, -10, 0, 22)
-DPhaseLabel.Position = UDim2.new(0, 8, 0, 26)
-DPhaseLabel.BackgroundTransparency = 1
-DPhaseLabel.Font = Enum.Font.GothamBold
-DPhaseLabel.Text = "📌 Fase: [FASE 1] Idle"
-DPhaseLabel.TextColor3 = Color3.fromRGB(100, 255, 120)
-DPhaseLabel.TextSize = 12
-DPhaseLabel.TextXAlignment = Enum.TextXAlignment.Left
-DPhaseLabel.Parent = DebugFrame
-
-local DTimerLabel = Instance.new("TextLabel")
-DTimerLabel.Size = UDim2.new(1, -10, 0, 18)
-DTimerLabel.Position = UDim2.new(0, 8, 0, 48)
-DTimerLabel.BackgroundTransparency = 1
-DTimerLabel.Font = Enum.Font.Code
-DTimerLabel.Text = "⏱️ Phase Timer: 0.0s | Stuck: 0.0s / 25s"
-DTimerLabel.TextColor3 = Color3.fromRGB(240, 220, 100)
-DTimerLabel.TextSize = 10
-DTimerLabel.TextXAlignment = Enum.TextXAlignment.Left
-DTimerLabel.Parent = DebugFrame
-
-local DPosLabel = Instance.new("TextLabel")
-DPosLabel.Size = UDim2.new(1, -10, 0, 18)
-DPosLabel.Position = UDim2.new(0, 8, 0, 68)
-DPosLabel.BackgroundTransparency = 1
-DPosLabel.Font = Enum.Font.Code
-DPosLabel.Text = "📍 Jarak SafeZone: 0.0 studs (Di Zona: YA)"
-DPosLabel.TextColor3 = Color3.fromRGB(180, 210, 255)
-DPosLabel.TextSize = 10
-DPosLabel.TextXAlignment = Enum.TextXAlignment.Left
-DPosLabel.Parent = DebugFrame
-
-local DSignalsLabel = Instance.new("TextLabel")
-DSignalsLabel.Size = UDim2.new(1, -10, 0, 18)
-DSignalsLabel.Position = UDim2.new(0, 8, 0, 88)
-DSignalsLabel.BackgroundTransparency = 1
-DSignalsLabel.Font = Enum.Font.Code
-DSignalsLabel.Text = "📡 Sinyal: P2: [X] | Collect: [X] | End: [X]"
-DSignalsLabel.TextColor3 = Color3.fromRGB(255, 170, 80)
-DSignalsLabel.TextSize = 10
-DSignalsLabel.TextXAlignment = Enum.TextXAlignment.Left
-DSignalsLabel.Parent = DebugFrame
-
-local DEventLabel = Instance.new("TextLabel")
-DEventLabel.Size = UDim2.new(1, -10, 0, 18)
-DEventLabel.Position = UDim2.new(0, 8, 0, 108)
-DEventLabel.BackgroundTransparency = 1
-DEventLabel.Font = Enum.Font.Code
-DEventLabel.Text = "☁️ Event Cuaca: None | Luck Buff x8: [X]"
-DEventLabel.TextColor3 = Color3.fromRGB(200, 160, 255)
-DEventLabel.TextSize = 10
-DEventLabel.TextXAlignment = Enum.TextXAlignment.Left
-DEventLabel.Parent = DebugFrame
-
-local DMutationLabel = Instance.new("TextLabel")
-DMutationLabel.Size = UDim2.new(1, -10, 0, 18)
-DMutationLabel.Position = UDim2.new(0, 8, 0, 128)
-DMutationLabel.BackgroundTransparency = 1
-DMutationLabel.Font = Enum.Font.GothamBold
-DMutationLabel.Text = "🧬 Total Mutasi: 0 | Gacha: None"
-DMutationLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
-DMutationLabel.TextSize = 10
-DMutationLabel.TextXAlignment = Enum.TextXAlignment.Left
-DMutationLabel.Parent = DebugFrame
-
-local DPerfLabel = Instance.new("TextLabel")
-DPerfLabel.Size = UDim2.new(1, -10, 0, 18)
-DPerfLabel.Position = UDim2.new(0, 8, 0, 148)
-DPerfLabel.BackgroundTransparency = 1
-DPerfLabel.Font = Enum.Font.Code
-DPerfLabel.Text = "⚡ FPS: 60 | AFK: 0s | Saklar: OFF"
-DPerfLabel.TextColor3 = Color3.fromRGB(150, 240, 200)
-DPerfLabel.TextSize = 10
-DPerfLabel.TextXAlignment = Enum.TextXAlignment.Left
-DPerfLabel.Parent = DebugFrame
-
-local DLogLabel = Instance.new("TextLabel")
-DLogLabel.Size = UDim2.new(1, -10, 0, 32)
-DLogLabel.Position = UDim2.new(0, 8, 0, 170)
-DLogLabel.BackgroundTransparency = 1
-DLogLabel.Font = Enum.Font.Code
-DLogLabel.Text = "📝 Log: Bot Standby..."
-DLogLabel.TextColor3 = Color3.fromRGB(160, 170, 190)
-DLogLabel.TextSize = 9
-DLogLabel.TextXAlignment = Enum.TextXAlignment.Left
-DLogLabel.TextYAlignment = Enum.TextYAlignment.Top
-DLogLabel.TextWrapped = true
-DLogLabel.Parent = DebugFrame
-
-pcall(function()
-    DebugScreenGui.Parent = targetGuiParent or lp:WaitForChild("PlayerGui", 5)
-end)
-
--- Warna fase untuk HUD
-local phaseColors = {
-    ["Idle"] = Color3.fromRGB(100, 255, 120),
-    ["WaitingForPhase2"] = Color3.fromRGB(255, 210, 60),
-    ["PlayingAnim"] = Color3.fromRGB(200, 130, 255),
-    ["WalkToSafeZone"] = Color3.fromRGB(80, 200, 255),
-    ["WaitingForCollected"] = Color3.fromRGB(255, 140, 60),
-    ["LuckMachineTeleport"] = Color3.fromRGB(255, 180, 50),
-    ["LuckMachineTraining"] = Color3.fromRGB(255, 225, 80),
-    ["WaitingRespawn"] = Color3.fromRGB(255, 70, 70),
-}
-
--- =============================================
--- 🎨 LOAD SIGMA UI LIBRARY V4
--- =============================================
-local Library = nil
-local getSuccess = pcall(function()
-    Library = loadstring(game:HttpGet("https://github.com/xyaxzj/sigmamaboi.lua/raw/main/NcHO.lua"))()
-end)
-
-if not getSuccess or not Library then
+local function expandMeteorHitbox(part)
+    if not part or not (part:IsA("BasePart") or part.ClassName == "Part") then return end
     pcall(function()
-        if readfile and isfile and isfile("UI sigma.lua") then
-            Library = loadstring(readfile("UI sigma.lua"))()
+        part.CanCollide = false
+        part.CanTouch = true
+        part.CanQuery = true -- Wajib true agar raycast CheckForHit mengenai part ini
+        part.CastShadow = false
+        if part.Size ~= OPTIMAL_METEOR_SIZE then
+            part.Size = OPTIMAL_METEOR_SIZE
         end
     end)
 end
 
-if not Library then
-    error("Gagal memuat Sigma UI Library! Pastikan executor Anda terhubung ke internet.")
+local function handleNewMeteor(model)
+    if not _G.autoMeteor then return end
+    if not model or not isTargetMeteorModel(model) then return end
+    if activeMeteors[model] then return end
+    activeMeteors[model] = true
+
+    for _, descendant in ipairs(model:GetDescendants()) do
+        if descendant:IsA("BasePart") or descendant.ClassName == "Part" then
+            expandMeteorHitbox(descendant)
+        end
+    end
+
+    if _G.debugConsoleLog then
+        print(string.format("☄️ [METEOR] Hitbox Model #%s diperbesar (80 studs, CanQuery=true)!", tostring(model.Name)))
+    end
 end
 
-local Window = Library:CreateWindow({
-    Name       = 'Sigma Hub | Auto Farm Kalb 2',
-    Footer     = 'discord.gg/sigma | v4.0',
-    LogoText   = 'S',
-    ConfigName = 'SigmaHub_Kalb2',
-    ToggleKey  = Enum.KeyCode.RightShift,
-    Watermark  = true,
-})
+-- Listener Debris untuk Meteor Spawning
+local function setupMeteorListeners(debris)
+    if not debris then return end
 
--- TAB 1: MAIN FUNCTION
-local MainTab = Window:MakeTab("⚙️")
-local FarmSec = MainTab:AddSection("Auto Farm Settings")
+    for _, item in ipairs(debris:GetDescendants()) do
+        if isTargetMeteorModel(item) then
+            handleNewMeteor(item)
+        end
+    end
 
-FarmSec:AddLabel("Aktifkan saklar di bawah untuk memulai/menghentikan bot:")
+    debris.DescendantAdded:Connect(function(descendant)
+        task.defer(function()
+            if not _G.autoMeteor then return end
+            if isTargetMeteorModel(descendant) then
+                handleNewMeteor(descendant)
+            elseif descendant:IsA("BasePart") or descendant.ClassName == "Part" then
+                local targetModel = getTargetMeteorParent(descendant)
+                if targetModel then
+                    expandMeteorHitbox(descendant)
+                    handleNewMeteor(targetModel)
+                end
+            end
+        end)
+    end)
 
-FarmSec:AddToggle({ Name = "ON / OFF Auto Farm", Default = autoFarmActive }, function(v)
-    autoFarmActive = v
+    debris.DescendantRemoving:Connect(function(descendant)
+        activeMeteors[descendant] = nil
+    end)
+end
+
+task.spawn(function()
+    local debris = workspace:FindFirstChild("Debris") or workspace:WaitForChild("Debris", 10)
+    if debris then
+        setupMeteorListeners(debris)
+    end
 end)
 
-FarmSec:AddSlider({ Name = "Anim Delay (Seconds)", Min = 1, Max = 15, Default = animDelay, Step = 1 }, function(v)
-    animDelay = v
+workspace.ChildAdded:Connect(function(child)
+    if child.Name == "Debris" then
+        task.defer(function()
+            setupMeteorListeners(child)
+        end)
+    end
 end)
 
--- SECTION: STATS MONITOR
-local StatsSec = MainTab:AddSection("Stats Monitor")
-local statusPara = StatsSec:AddParagraph("Status: Idle", "User: " .. lp.Name .. "\nMutation Count: 0\nAFK Time: 0 Detik\nFps: 0")
-
--- TAB 2: CONFIG MANAGER
-local CfgTab = Window:MakeTab("💾")
-CfgTab:AddConfigManager()
-
-Library:Notify({ Title = 'Sigma UI Loaded', Content = 'Auto Farm Kalb 2 ready!', Type = 'Success' })
+-- Sweeper Berkala Hitbox Meteor
+task.spawn(function()
+    while task.wait(0.25) do
+        if not _G.autoMeteor then continue end
+        local debris = workspace:FindFirstChild("Debris")
+        if debris then
+            for _, item in ipairs(debris:GetDescendants()) do
+                if isTargetMeteorModel(item) then
+                    if not activeMeteors[item] then
+                        handleNewMeteor(item)
+                    end
+                    for _, part in ipairs(item:GetDescendants()) do
+                        if (part:IsA("BasePart") or part.ClassName == "Part") and (part.Size ~= OPTIMAL_METEOR_SIZE or not part.CanQuery) then
+                            expandMeteorHitbox(part)
+                        end
+                    end
+                end
+            end
+        end
+    end
+end)
 
 -- =============================================
 -- 🧠 VARIABEL STATE MACHINE & POSISI
@@ -328,16 +236,13 @@ local stateTimer = 0
 local globalStuckTimer = 0         
 local mutationCount = 0            
 local lastRewardDesc = "None"
-local lastLogMessage = "Bot Standby..."
 local safeZone = Vector3.new(698.030701, 3.298559, 233.707077)
 local safeZoneCFrame = CFrame.new(698.030701, 3.298559, 233.707077, -0.061024, -0.000000, 0.998136, -0.000000, 1.000000, 0.000000, -0.998136, -0.000000, -0.061024)
-local startTime = os.time()
 
-local function setDebugLog(msg)
-    lastLogMessage = tostring(msg)
-    pcall(function()
-        DLogLabel.Text = "📝 Log: " .. lastLogMessage
-    end)
+local function logConsole(msg)
+    if _G.debugConsoleLog then
+        print(string.format("🤖 [KALB-FARM] [%s] %s", tostring(targetAction), tostring(msg)))
+    end
 end
 
 -- =============================================
@@ -366,7 +271,7 @@ local rev_kickPhase2 = networkFolder and networkFolder:FindFirstChild("rev_kickP
 local rev_Collected = networkFolder and networkFolder:FindFirstChild("rev_Collected")
 local rev_KickEventEnded = networkFolder and networkFolder:FindFirstChild("rev_KickEventEnded")
 local rev_AddedWeather = networkFolder and networkFolder:FindFirstChild("rev_AddedWeather")
-local rev_PlayMessage = networkFolder and networkFolder:FindFirstChild("rev_PlayMessage")
+local rev_RemovedWeather = networkFolder and networkFolder:FindFirstChild("rev_RemovedWeather")
 
 if not ref_KickEvent then
     for _, r in pairs(ReplicatedStorage:GetDescendants()) do
@@ -410,8 +315,6 @@ end
 local phase2Fired = false
 local collectedFired = false
 local kickEndedFired = false
-local weatherEventPending = false
-local luckBuffObtained = false
 
 if rev_kickPhase2 then
     rev_kickPhase2.OnClientEvent:Connect(function(rewardTable, ...)
@@ -419,7 +322,7 @@ if rev_kickPhase2 then
         pcall(function()
             if type(rewardTable) == "table" and rewardTable[1] then
                 lastRewardDesc = string.format("%s [%s]", tostring(rewardTable[1].Name or "Brainrot"), tostring(rewardTable[1].Mutation or "Normal"))
-                setDebugLog(string.format("Reward Masuk: %s", lastRewardDesc))
+                logConsole(string.format("🎉 Gacha Reward Masuk: %s", lastRewardDesc))
             end
         end)
     end)
@@ -428,31 +331,27 @@ end
 if rev_Collected then
     rev_Collected.OnClientEvent:Connect(function(...)
         collectedFired = true
-        setDebugLog("Event rev_Collected Diterima")
     end)
 end
 
 if rev_KickEventEnded then
     rev_KickEventEnded.OnClientEvent:Connect(function(...)
         kickEndedFired = true
-        setDebugLog("Event rev_KickEventEnded Diterima")
     end)
 end
 
 if rev_AddedWeather then
     rev_AddedWeather.OnClientEvent:Connect(function(weatherType, ...)
-        if weatherType == "LuckMachine" then
-            weatherEventPending = true
-            setDebugLog("Event Cuaca: LuckMachine Aktif!")
+        if weatherType == "MeteorShower" then
+            logConsole("☄️ Event Cuaca: METEOR SHOWER AKTIF! Memperbesar seluruh hitbox meteor...")
         end
     end)
 end
 
-if rev_PlayMessage then
-    rev_PlayMessage.OnClientEvent:Connect(function(msg, msgType)
-        if tostring(msg) == "Luck has been increased to x8" then
-            luckBuffObtained = true
-            setDebugLog("Buff x8 Luck Sukses Didapat!")
+if rev_RemovedWeather then
+    rev_RemovedWeather.OnClientEvent:Connect(function(weatherType, ...)
+        if weatherType == "MeteorShower" then
+            logConsole("☁️ Event Cuaca: Meteor Shower Selesai.")
         end
     end)
 end
@@ -467,9 +366,9 @@ local function executeKick()
         timestamp = tick()
     end
 
-    setDebugLog("Mengeksekusi Kick (Tri-Layer)...")
+    logConsole("⚡ Menendang Bola...")
 
-    -- 1. Direct GameController Client Hook
+    -- 1. Direct GameController Client Hook (Animasi & Visual Asli)
     pcall(function()
         local controller = getGameController()
         if controller and type(controller.Kick) == "function" then
@@ -497,82 +396,16 @@ local function executeKick()
 end
 
 -- =============================================
--- 📊 SYSTEM PENGHITUNG FPS
--- =============================================
-local fps = 0
-local frameCount = 0
-local nextFpsUpdate = os.clock() + 1
-
-RunService.Heartbeat:Connect(function()
-    frameCount = frameCount + 1
-    local now = os.clock()
-    if now >= nextFpsUpdate then
-        fps = frameCount
-        frameCount = 0
-        nextFpsUpdate = now + 1
-    end
-end)
-
--- =============================================
--- ⚙️ MAIN LOOP (STATE MACHINE + SCREEN DEBUG UPDATE)
+-- ⚙️ MAIN LOOP (STATE MACHINE AUTO FARM)
 -- =============================================
 task.spawn(function()
     while task.wait(0.05) do
-        local elapsedSeconds = os.time() - startTime
+        if not _G.autoFarm then continue end
+
         local char = lp.Character
         local hum = char and char:FindFirstChild("Humanoid")
         local hrp = char and char:FindFirstChild("HumanoidRootPart")
-        local distToSafeZone = hrp and (hrp.Position - safeZone).Magnitude or 999
-        local inSafeZone = distToSafeZone <= 10
 
-        -- 1. UPDATE SCREEN DEBUG HUD
-        pcall(function()
-            local phaseColor = phaseColors[targetAction] or Color3.fromRGB(200, 200, 200)
-            DPhaseLabel.Text = string.format("📌 Fase: [%s]", tostring(targetAction))
-            DPhaseLabel.TextColor3 = phaseColor
-            DebugStroke.Color = phaseColor
-
-            DTimerLabel.Text = string.format("⏱️ State: %.1fs | Stuck: %.1fs/25s", stateTimer, globalStuckTimer)
-            DPosLabel.Text = string.format("📍 Jarak SafeZone: %.1f studs (Di Zona: %s)", distToSafeZone, inSafeZone and "YA" or "TIDAK")
-            
-            DSignalsLabel.Text = string.format(
-                "📡 Sinyal: P2: [%s] | Collect: [%s] | End: [%s]",
-                phase2Fired and "✓" or "X",
-                collectedFired and "✓" or "X",
-                kickEndedFired and "✓" or "X"
-            )
-
-            DEventLabel.Text = string.format(
-                "☁️ Event: %s | Buff x8: [%s]",
-                weatherEventPending and "LuckMachine" or (targetAction:find("LuckMachine") and "Training" or "None"),
-                luckBuffObtained and "✓" or "X"
-            )
-
-            DMutationLabel.Text = string.format("🧬 Total Mutasi: %d | Gacha: %s", mutationCount, lastRewardDesc)
-            DPerfLabel.Text = string.format("⚡ FPS: %d | AFK: %ds | Saklar: %s", fps, elapsedSeconds, autoFarmActive and "ON" or "OFF")
-            DLogLabel.Text = "📝 Log: " .. tostring(lastLogMessage)
-        end)
-
-        -- 2. UPDATE SIGMA UI MONITOR
-        pcall(function()
-            statusPara:Set(
-                "Status: " .. tostring(targetAction),
-                string.format(
-                    "User: %s\n" ..
-                    "Mutation Count: %d\n" ..
-                    "Last Reward: %s\n" ..
-                    "AFK Time: %d Detik\n" ..
-                    "Fps: %d",
-                    lp.Name,
-                    mutationCount,
-                    lastRewardDesc,
-                    elapsedSeconds,
-                    fps
-                )
-            )
-        end)
-
-        if not autoFarmActive then continue end
         if not hum or not hrp then continue end 
 
         -- [ PENDETEKSI MATI & RESPAWN ]
@@ -580,47 +413,37 @@ task.spawn(function()
             targetAction = "WaitingRespawn"
             lastAction = "WaitingRespawn"
             globalStuckTimer = 0
-            setDebugLog("Karakter Mati -> Menunggu Respawn")
             continue 
         end
 
         if targetAction == "WaitingRespawn" and hum.Health > 0 then
             targetAction = "Idle"
             lastAction = "Idle"
-            setDebugLog("Karakter Hidup -> Kembali ke Idle")
+            logConsole("Karakter Respawn -> Kembali ke Idle")
         end
 
-        -- [ PENGATUR WAKTU OTOMATIS & FAILSAFE 25 DETIK (TANPA MATI / RESPAWN) ]
+        -- [ PENGATUR WAKTU & FAILSAFE RESET (TANPA MATI) ]
         if targetAction ~= lastAction then
             globalStuckTimer = 0
             stateTimer = 0 
             lastAction = targetAction
-            setDebugLog("Transisi Fase -> " .. tostring(targetAction))
+            logConsole("Transisi Fase -> " .. tostring(targetAction))
         else
             globalStuckTimer = globalStuckTimer + 0.05
             stateTimer = stateTimer + 0.05 
             
-            -- Failsafe 25 detik: Cukup teleport balik ke Safe Zone, JANGAN bunuh karakter!
-            if globalStuckTimer >= 25 and targetAction ~= "LuckMachineTraining" and targetAction ~= "LuckMachineTeleport" then
+            local maxTimeout = _G.failsafeTimeout or 25
+            if globalStuckTimer >= maxTimeout then
                 globalStuckTimer = 0
                 stateTimer = 0
                 hrp.CFrame = safeZoneCFrame
                 targetAction = "Idle"
-                setDebugLog("🚨 Failsafe 25s: Auto-TP ke SafeZone (Reset Idle)")
+                logConsole("🚨 Failsafe Triggered: Auto-TP Safe Zone (Reset Idle)")
                 continue
             end
         end
 
-        -- [ INTERUPSI EVENT LUCK MACHINE ]
-        if weatherEventPending then
-            if targetAction ~= "WalkToSafeZone" then
-                weatherEventPending = false
-                luckBuffObtained = false
-                pcall(function() hum:UnequipTools() end)
-                targetAction = "LuckMachineTeleport"
-                setDebugLog("Event Cuaca Terdeteksi -> Teleport Luck Machine")
-            end
-        end
+        local distToSafeZone = (hrp.Position - safeZone).Magnitude
 
         -- [ FASE 1: IDLE / NENDANG DI SAFE ZONE ]
         if targetAction == "Idle" then
@@ -628,7 +451,6 @@ task.spawn(function()
                 if stateTimer >= 0.5 then
                     hrp.CFrame = safeZoneCFrame
                     stateTimer = 0 
-                    setDebugLog("Teleport ke Safe Zone")
                 end
             else
                 if stateTimer >= 0.5 then
@@ -637,7 +459,6 @@ task.spawn(function()
                     kickEndedFired = false
                     executeKick()
                     targetAction = "WaitingForPhase2"
-                    setDebugLog("Kick Dieksekusi -> Menunggu Phase 2")
                 end
             end
 
@@ -646,10 +467,10 @@ task.spawn(function()
             if phase2Fired or collectedFired or kickEndedFired then
                 phase2Fired = false
                 targetAction = "WalkToSafeZone"
-                setDebugLog("Phase 2 Selesai -> Langsung WalkToSafeZone")
+                logConsole("Phase 2 Selesai -> Langsung Jalan ke Safe Zone")
             elseif stateTimer > 18 then
                 targetAction = "WalkToSafeZone"
-                setDebugLog("Phase 2 Timeout (18s) -> Langsung WalkToSafeZone")
+                logConsole("Phase 2 Timeout (18s) -> Lanjut Jalan ke Safe Zone")
             end
 
         -- [ FASE 3: JALAN MURNI SAMPAI KE SAFE ZONE (TANPA TELEPORT) ]
@@ -657,7 +478,7 @@ task.spawn(function()
             hum:MoveTo(safeZone)
             if distToSafeZone < 8 then
                 targetAction = "WaitingForCollected"
-                setDebugLog("Tiba di Safe Zone -> WaitingForCollected")
+                logConsole("Tiba di Safe Zone -> Menunggu Reward Collected")
             end
 
         -- [ FASE 4: NUNGGU COLLECTED & RE-KICK INSTAN ]
@@ -674,80 +495,12 @@ task.spawn(function()
                 phase2Fired = false
                 executeKick()
                 targetAction = "WaitingForPhase2"
-                setDebugLog("Reward Terkumpul -> Re-Kick Langsung!")
-            end
-
-        -- [ FASE EX-1: TELEPORT KE LUCK MACHINE ]
-        elseif targetAction == "LuckMachineTeleport" then
-            local targetPart = nil
-            pcall(function()
-                local debris = workspace:FindFirstChild("Debris")
-                local luckMachine = debris and debris:FindFirstChild("LuckMachine")
-                local standingPlatforms = luckMachine and luckMachine:FindFirstChild("StandingPlatforms")
-                if standingPlatforms then
-                    targetPart = standingPlatforms:FindFirstChild("1") 
-                        or standingPlatforms:FindFirstChild("2") 
-                        or standingPlatforms:FindFirstChild("3")
-                end
-            end)
-            
-            if targetPart then
-                hrp.CFrame = targetPart.CFrame + Vector3.new(0, 3, 0)
-                task.wait(0.5)
-                targetAction = "LuckMachineTraining"
-                setDebugLog("Tiba di Platform -> Training Barbell")
-            else
-                if stateTimer >= 3 then
-                    targetAction = "Idle"
-                    setDebugLog("Platform tidak ditemukan -> Idle")
-                end
-            end
-
-        -- [ FASE EX-2: AUTO BARBELL DI LUCK MACHINE SAMPAI BUFF x8 ]
-        elseif targetAction == "LuckMachineTraining" then
-            local targetPart = nil
-            pcall(function()
-                local debris = workspace:FindFirstChild("Debris")
-                local luckMachine = debris and debris:FindFirstChild("LuckMachine")
-                local standingPlatforms = luckMachine and luckMachine:FindFirstChild("StandingPlatforms")
-                if standingPlatforms then
-                    targetPart = standingPlatforms:FindFirstChild("1") 
-                        or standingPlatforms:FindFirstChild("2") 
-                        or standingPlatforms:FindFirstChild("3")
-                end
-            end)
-            
-            if targetPart and (hrp.Position - targetPart.Position).Magnitude > 8 then
-                hrp.CFrame = targetPart.CFrame + Vector3.new(0, 3, 0)
-            end
-            
-            local currentTool = char:FindFirstChildOfClass("Tool")
-            if currentTool and string.match(currentTool.Name, "Barbell$") then
-                currentTool:Activate()
-            else
-                local backpack = lp:FindFirstChild("Backpack")
-                if backpack then
-                    for _, tool in ipairs(backpack:GetChildren()) do
-                        if tool:IsA("Tool") and string.match(tool.Name, "Barbell$") then
-                            hum:EquipTool(tool)
-                            task.wait(0.1)
-                            tool:Activate()
-                            break
-                        end
-                    end
-                end
-            end
-            
-            if luckBuffObtained or stateTimer >= 240 then
-                pcall(function() hum:UnequipTools() end)
-                luckBuffObtained = false
-                targetAction = "Idle"
-                setDebugLog("Selesai Training Luck -> Kembali Idle")
+                logConsole(string.format("🎉 Total Mutasi: %d | Re-Kick Langsung!", mutationCount))
             end
         end
     end
 end)
 
 print("--------------------------------------------------")
-print("🚀 [SUKSES] KALB Auto Farm V2 (With Screen Debugger) Siap!")
+print("🚀 [SUKSES] KALB Auto Farm + Auto Meteor (Pure Config) Siap Berjalan!")
 print("--------------------------------------------------")
