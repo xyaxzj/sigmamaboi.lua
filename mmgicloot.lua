@@ -3,14 +3,16 @@
 -- ==============================================================================
 -- Fitur & Alur:
 -- 1. ⚙️ Full Config Mode: Semua pengaturan diatur via variabel _G di baris atas (Tanpa UI)
--- 2. ☄️ Meteor Shower Auto Kick Only: Bot hanya menendang bola saat event Meteor Shower aktif!
---    - Jika event Meteor Shower selesai di tengah ronde (saat jalan ke Safe Zone), bot akan
---      menyelesaikan ronde tersebut sampai tiba di Safe Zone, lalu stop & standby di Safe Zone.
--- 3. ☄️ Auto Meteor Event: Memperbesar hitbox meteor di Debris (80x80x80, CanQuery=true)
--- 4. 🛒 Auto Buy Frigorex: Request stock tiap 5 menit & auto beli jika stock > 0
--- 5. 🧪 Auto Buy Farm Potion: Auto beli 1x setiap pergantian jam ganjil (1, 3, 5... 23 WIB)
--- 6. 💰 Auto Sell All: Menjual semua brainrot tiap 5 detik (ref_B_SellAll)
--- 7. 🥔 Potato Mode Ekstrem & 🛡️ Anti-AFK (VirtualUser)
+-- 2. 🚫 Total Player & Character Purger (100% Bersih):
+--    - Menghapus & memusnahkan SEMUA player lain dari game.Players
+--    - Menghapus SEMUA karakter player lain dari folder workspace.Players & workspace root
+--    - Real-time listener + Background loop anti-bocor (tidak ada lagi yang lolos)
+-- 3. ☄️ Meteor Shower Auto Kick: Bot menendang bola (nonstop / saat event)
+-- 4. ☄️ Auto Meteor Event: Memperbesar hitbox meteor di Debris (200x200x200, CanQuery=true)
+-- 5. 🛒 Auto Buy Frigorex: Request stock tiap 5 menit & auto beli jika stock > 0
+-- 6. 🧪 Auto Buy Farm Potion: Auto beli 1x setiap pergantian jam ganjil (1, 3, 5... 23 WIB)
+-- 7. 💰 Auto Sell All: Menjual semua brainrot tiap 5 detik (ref_B_SellAll)
+-- 8. 🥔 Potato Mode Ekstrem & 🛡️ Anti-AFK
 -- ==============================================================================
 
 if not game:IsLoaded() then game.Loaded:Wait() end
@@ -24,17 +26,18 @@ _G.autoMeteor = true             -- true: Otomatis perbesar hitbox meteor saat M
 _G.autoBuyFrigorex = true        -- true: Cek stock Meteor Shop tiap 5 menit & auto beli Frigorex jika stock > 0
 _G.autoBuyFarmPotion = true      -- true: Auto beli 1x Farm Potion setiap jam ganjil (1, 3, 5... 23 WIB)
 _G.autoSellAll = true            -- true: Auto Sell All setiap 5 detik via ref_B_SellAll
-_G.autoRemovePlayer = true      -- true: Hapus player lain dari client (FPS Boost), false: Biarkan
+_G.autoRemovePlayer = true       -- true: Hapus player lain dari game.Players & workspace.Players (100% Bersih & No Lag), false: Biarkan
 _G.debugConsoleLog = false        -- true: Cetak log status/fase ke console (F9), false: Senyap
 _G.failsafeTimeout = 25          -- Waktu maksimal (detik) sebelum auto-reset ke Safe Zone jika macet
 
 print("--------------------------------------------------")
-print("🚀 [INIT] Memuat KALB Auto Farm V2 (Meteor Shower Auto Kick Mode)...")
+print("🚀 [INIT] Memuat KALB Auto Farm V2 (Ultra Lightweight & Total Player Purger)...")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
+local VirtualUser = game:GetService("VirtualUser")
 
 local lp = Players.LocalPlayer
 if not lp then
@@ -46,11 +49,18 @@ if not lp then
     until lp or count > 50
 end
 
+local lpName = lp and lp.Name or ""
+local lpDisplayName = lp and lp.DisplayName or ""
+local myUidStr = lp and tostring(lp.UserId) or ""
+
 -- =============================================
 -- 🚀 SYSTEM ANTI-LAG & POTATO MODE
 -- =============================================
-pcall(function()
-    for _, v in ipairs(workspace:GetDescendants()) do
+local function stripTexture(v)
+    if not v then return end
+    if lp and lp.Character and (v == lp.Character or v:IsDescendantOf(lp.Character)) then return end
+
+    pcall(function()
         if v:IsA("BasePart") then
             v.Material = Enum.Material.Plastic
             v.Reflectance = 0
@@ -59,9 +69,17 @@ pcall(function()
             if v:IsA("MeshPart") then
                 v.TextureID = ""
             end
-        elseif v:IsA("Decal") or v:IsA("Texture") or v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Beam") or v:IsA("Fire") or v:IsA("Smoke") or v:IsA("Sparkles") or v:IsA("SpecialMesh") then
+        elseif v:IsA("SpecialMesh") then
+            v.TextureId = ""
+        elseif v:IsA("Decal") or v:IsA("Texture") or v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Beam") or v:IsA("Fire") or v:IsA("Smoke") or v:IsA("Sparkles") or v:IsA("SurfaceAppearance") or v:IsA("Clothing") or v:IsA("ShirtGraphic") then
             v:Destroy()
         end
+    end)
+end
+
+pcall(function()
+    for _, v in ipairs(workspace:GetDescendants()) do
+        stripTexture(v)
     end
 
     Lighting.GlobalShadows = false
@@ -71,36 +89,240 @@ pcall(function()
             v:Destroy()
         end
     end
+end)
 
-    local plotsFolder = workspace:FindFirstChild("Plots")
-    if plotsFolder then
-        for i = 1, 5 do
-            local plot = plotsFolder:FindFirstChild("Plot" .. tostring(i))
-            if plot then plot:Destroy() end
+-- =============================================
+-- 🚫 TOTAL PLAYER & CHARACTER PURGER (100% BERSIH)
+-- =============================================
+local function isLocalPlayerEntity(inst)
+    if not inst then return false end
+    if lp and inst == lp then return true end
+    if lp and lp.Character and (inst == lp.Character or inst:IsDescendantOf(lp.Character)) then return true end
+    local name = inst.Name
+    if name == lpName or (lpDisplayName ~= "" and name == lpDisplayName) then return true end
+    return false
+end
+
+local function purgeOtherPlayer(player)
+    if not _G.autoRemovePlayer or not player or player == lp or player.Name == lpName then return end
+    
+    pcall(function()
+        if player.Character then
+            player.Character:ClearAllChildren()
+            player.Character:Destroy()
+        end
+    end)
+    pcall(function()
+        player:ClearAllChildren()
+        player:Destroy()
+    end)
+end
+
+local function purgeOtherCharacter(charModel)
+    if not _G.autoRemovePlayer or not charModel then return end
+    if isLocalPlayerEntity(charModel) then return end
+    if charModel.Name == "Plots" or charModel.Name == "Debris" or charModel.Name == "NPCs" then return end
+
+    pcall(function()
+        for _, v in ipairs(charModel:GetDescendants()) do
+            if v:IsA("BasePart") then
+                v.Transparency = 1
+                v.CanCollide = false
+                v.CanTouch = false
+                v.CanQuery = false
+            elseif v:IsA("Decal") or v:IsA("Texture") or v:IsA("BillboardGui") or v:IsA("SurfaceGui") or v:IsA("Highlight") then
+                v.Enabled = false
+                v:Destroy()
+            end
+        end
+        charModel:ClearAllChildren()
+        charModel:Destroy()
+    end)
+end
+
+local function scanAndPurgeAllOtherPlayers()
+    if not _G.autoRemovePlayer then return end
+
+    -- 1. Bersihkan dari game:GetService("Players")
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= lp then
+            purgeOtherPlayer(p)
+        end
+    end
+    for _, child in ipairs(Players:GetChildren()) do
+        if child ~= lp and child:IsA("Player") then
+            purgeOtherPlayer(child)
+        end
+    end
+
+    -- 2. Bersihkan dari workspace.Players folder
+    local wsPlayers = workspace:FindFirstChild("Players")
+    if wsPlayers then
+        for _, child in ipairs(wsPlayers:GetChildren()) do
+            if child.Name ~= "Plots" and not isLocalPlayerEntity(child) then
+                purgeOtherCharacter(child)
+            end
+        end
+    end
+
+    -- 3. Bersihkan dari workspace root (karakter liar)
+    for _, child in ipairs(workspace:GetChildren()) do
+        if child:IsA("Model") and not isLocalPlayerEntity(child) and child.Name ~= "Plots" and child.Name ~= "Debris" and child.Name ~= "NPCs" and child.Name ~= "Players" then
+            if child:FindFirstChildOfClass("Humanoid") or child:FindFirstChild("HumanoidRootPart") or child:FindFirstChild("Head") then
+                purgeOtherCharacter(child)
+            end
+        end
+    end
+end
+
+-- Eksekusi awal pembersihan player & karakter
+scanAndPurgeAllOtherPlayers()
+
+-- Event Listener saat ada Player baru join
+Players.PlayerAdded:Connect(function(player)
+    if not _G.autoRemovePlayer then return end
+    if player ~= lp then
+        task.defer(function()
+            purgeOtherPlayer(player)
+        end)
+        player.CharacterAdded:Connect(function(char)
+            task.defer(function()
+                purgeOtherCharacter(char)
+            end)
+        end)
+    end
+end)
+
+Players.ChildAdded:Connect(function(child)
+    if not _G.autoRemovePlayer then return end
+    if child ~= lp and child:IsA("Player") then
+        task.defer(function()
+            purgeOtherPlayer(child)
+        end)
+    end
+end)
+
+-- Listener khusus untuk workspace.Players
+local function setupWsPlayersListener(folder)
+    if not folder then return end
+    for _, child in ipairs(folder:GetChildren()) do
+        if child.Name ~= "Plots" and not isLocalPlayerEntity(child) then
+            purgeOtherCharacter(child)
+        end
+    end
+    folder.ChildAdded:Connect(function(child)
+        if not _G.autoRemovePlayer then return end
+        task.defer(function()
+            if child.Name ~= "Plots" and not isLocalPlayerEntity(child) then
+                purgeOtherCharacter(child)
+            end
+        end)
+    end)
+end
+
+local wsPlayers = workspace:FindFirstChild("Players")
+if wsPlayers then
+    setupWsPlayersListener(wsPlayers)
+end
+
+workspace.ChildAdded:Connect(function(child)
+    if child.Name == "Players" then
+        task.defer(function() setupWsPlayersListener(child) end)
+    elseif child:IsA("Model") and not isLocalPlayerEntity(child) and child.Name ~= "Plots" and child.Name ~= "Debris" and child.Name ~= "NPCs" then
+        task.defer(function()
+            if child:FindFirstChildOfClass("Humanoid") or child:FindFirstChild("HumanoidRootPart") or child:FindFirstChild("Head") then
+                purgeOtherCharacter(child)
+            end
+        end)
+    end
+end)
+
+-- Background Sweeper Loop (Menjamin 0% Player Lolos & Bersihkan RAM)
+task.spawn(function()
+    local cleanCounter = 0
+    while task.wait(0.25) do
+        if _G.autoRemovePlayer then
+            pcall(scanAndPurgeAllOtherPlayers)
+        end
+
+        cleanCounter = cleanCounter + 1
+        -- Tiap 30 detik jalankan garbage collector
+        if cleanCounter >= 120 then
+            cleanCounter = 0
+            pcall(function()
+                if gcinfo then gcinfo() end
+                if collectgarbage then collectgarbage("collect") end
+            end)
         end
     end
 end)
 
--- Player Purger (Opsional jika diaktifkan di config)
-if _G.autoRemovePlayer then
-    local function musnahkanPlayer(player)
-        if player ~= lp then
-            if player.Character then pcall(function() player.Character:Destroy() end) end
-            pcall(function() player:Destroy() end)
+-- =============================================
+-- 🎯 DETEKTOR PLOT SENDIRI & REMOVER PLOT LAIN
+-- =============================================
+local function isMyPlot(plotModel)
+    if not plotModel or not plotModel:IsA("Model") then return false end
+
+    local sign = plotModel:FindFirstChild("PlotSign", true)
+    if sign then
+        local pps = sign:FindFirstChild("PlayerPlotSign", true)
+        if pps then
+            local nameLabel = pps:FindFirstChild("PlayerName", true)
+            if nameLabel and nameLabel:IsA("TextLabel") then
+                local t = nameLabel.Text
+                if t and (t == lpName or t:find(lpName, 1, true) or (lpDisplayName ~= "" and (t == lpDisplayName or t:find(lpDisplayName, 1, true)))) then
+                    return true
+                end
+            end
+            local icon = pps:FindFirstChild("PlayerIcon", true)
+            if icon and (icon:IsA("ImageLabel") or icon:IsA("ImageButton")) then
+                local img = icon.Image
+                if img and img:find(myUidStr, 1, true) then
+                    return true
+                end
+            end
         end
     end
 
-    for _, player in ipairs(Players:GetPlayers()) do
-        musnahkanPlayer(player)
+    for _, item in ipairs(plotModel:GetDescendants()) do
+        local ok, result = pcall(function()
+            if item:IsA("TextLabel") then
+                local t = item.Text
+                if t and (t == lpName or (lpDisplayName ~= "" and t == lpDisplayName)) then
+                    return true
+                end
+            elseif item:IsA("StringValue") or item:IsA("ObjectValue") or item:IsA("IntValue") or item:IsA("NumberValue") then
+                local v = item.Value
+                if v == lpName or v == lp or tostring(v) == myUidStr then
+                    return true
+                end
+            end
+            return false
+        end)
+        if ok and result then return true end
     end
 
-    Players.PlayerAdded:Connect(function(player)
-        task.defer(function()
-            if _G.autoRemovePlayer then
-                musnahkanPlayer(player)
-            end
-        end)
+    return false
+end
+
+local function cleanPlots(plotsFolder)
+    if not plotsFolder then return end
+    for _, plot in ipairs(plotsFolder:GetChildren()) do
+        if plot:IsA("Model") and not isMyPlot(plot) then
+            pcall(function() plot:Destroy() end)
+        end
+    end
+    plotsFolder.ChildAdded:Connect(function(plot)
+        task.wait(0.2)
+        if plot:IsA("Model") and not isMyPlot(plot) then
+            pcall(function() plot:Destroy() end)
+        end
     end)
+end
+
+local plotsFolder = workspace:FindFirstChild("Plots") or (workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild("Plots"))
+if plotsFolder then
+    cleanPlots(plotsFolder)
 end
 
 -- =============================================
@@ -159,7 +381,7 @@ local function handleNewMeteor(model)
     end
 
     if _G.debugConsoleLog then
-        print(string.format("☄️ [METEOR] Hitbox Model #%s diperbesar (80 studs, CanQuery=true)!", tostring(model.Name)))
+        print(string.format("☄️ [METEOR] Hitbox Model #%s diperbesar (200 studs, CanQuery=true)!", tostring(model.Name)))
     end
 end
 
@@ -265,6 +487,10 @@ lp.Idled:Connect(function()
             for _, conn in ipairs(getconnections(lp.Idled)) do
                 conn:Disable()
             end
+        end
+        if VirtualUser then
+            VirtualUser:CaptureController()
+            VirtualUser:ClickButton2(Vector2.new())
         end
     end)
 end)
