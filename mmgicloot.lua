@@ -24,7 +24,7 @@ if not game:IsLoaded() then game.Loaded:Wait() end
 -- ⚙️ KONFIGURASI PENGGUNA (UBAH SESUAI KEBUTUHAN DI SINI)
 -- ==============================================================================
 _G.autoFarm = true               -- true: Auto Farm Aktif, false: Nonaktif
-_G.onlyMeteorEvent = true        -- true: HANYA Auto Kick saat Event Meteor Shower aktif, false: Auto kick nonstop
+_G.onlyMeteorEvent = false        -- true: HANYA Auto Kick saat Event Meteor Shower aktif, false: Auto kick nonstop
 _G.autoMeteor = true             -- true: Otomatis perbesar hitbox meteor saat Meteor Shower, false: Nonaktif
 _G.autoBuyFrigorex = true        -- true: Cek stock Meteor Shop tiap 5 menit & auto beli Frigorex jika stock > 0
 _G.autoBuyFarmPotion = true      -- true: Auto beli 1x Farm Potion setiap jam ganjil (1, 3, 5... 23 WIB)
