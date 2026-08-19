@@ -33,8 +33,6 @@ print("🚀 [INIT] Memuat KALB Auto Farm V2 (Meteor Shower Auto Kick Mode)...")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local VirtualUser = game:GetService("VirtualUser")
-local VirtualInputManager = game:GetService("VirtualInputManager")
 local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
 
@@ -251,12 +249,23 @@ local function shouldKick()
 end
 
 -- =============================================
--- 🛡️ ANTI AFK
+-- 🛡️ ANTI AFK (MURNI TANPA KLIK APAPUN)
 -- =============================================
+pcall(function()
+    if getconnections then
+        for _, conn in ipairs(getconnections(lp.Idled)) do
+            conn:Disable()
+        end
+    end
+end)
+
 lp.Idled:Connect(function()
     pcall(function()
-        VirtualUser:CaptureController()
-        VirtualUser:ClickButton2(Vector2.new())
+        if getconnections then
+            for _, conn in ipairs(getconnections(lp.Idled)) do
+                conn:Disable()
+            end
+        end
     end)
 end)
 
@@ -466,7 +475,7 @@ if rev_RemovedWeather then
 end
 
 -- =============================================
--- 🚀 FUNGSI EKSEKUSI TENDANGAN (KICK)
+-- 🚀 FUNGSI EKSEKUSI TENDANGAN (100% ZERO-CLICK & REINFORCED)
 -- =============================================
 local function executeKick()
     local timestamp = nil
@@ -477,30 +486,27 @@ local function executeKick()
 
     logConsole("⚡ Menendang Bola...")
 
-    -- 1. Direct GameController Client Hook (Animasi & Visual Asli)
+    -- 1. Direct GameController Client Hook (Animasi, Visual Asli & Unlock Cooldown)
     pcall(function()
         local controller = getGameController()
-        if controller and type(controller.Kick) == "function" then
-            controller:Kick(1, 1)
+        if controller then
+            if controller.UnblockKick then
+                pcall(function() controller:UnblockKick() end)
+            end
+            controller.CanKick = true
+            pcall(function() controller:Kick(1, 1) end)
         end
     end)
 
-    -- 2. Virtual Input Spacebar
-    pcall(function()
-        if VirtualInputManager then
-            VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
-            task.wait(0.02)
-            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
-        end
-    end)
-
-    -- 3. Jaringan Remote Resmi
-    pcall(function()
-        if ref_KickEvent and ref_KickEvent:IsA("RemoteFunction") then
-            ref_KickEvent:InvokeServer(1, 1, timestamp)
-        elseif kickRemote and kickRemote:IsA("RemoteEvent") then
-            kickRemote:FireServer(1, 1)
-        end
+    -- 2. Jaringan Remote Resmi ke Server (Async Non-Blocking)
+    task.spawn(function()
+        pcall(function()
+            if ref_KickEvent and ref_KickEvent:IsA("RemoteFunction") then
+                ref_KickEvent:InvokeServer(1, 1, timestamp)
+            elseif kickRemote and kickRemote:IsA("RemoteEvent") then
+                kickRemote:FireServer(1, 1)
+            end
+        end)
     end)
 end
 
@@ -582,6 +588,11 @@ task.spawn(function()
                 phase2Fired = false
                 targetAction = "WalkToSafeZone"
                 logConsole("Phase 2 Selesai -> Langsung Jalan ke Safe Zone")
+            elseif stateTimer >= 3.5 and not phase2Fired and not collectedFired and not kickEndedFired then
+                -- Auto-Retry Failsafe: Jika respon server belum terdeteksi dalam 3.5s, coba kick ulang
+                logConsole("⚠️ [RETRY] Auto-Retry Kick (3.5s timeout)...")
+                stateTimer = 0
+                executeKick()
             elseif stateTimer > 18 then
                 targetAction = "WalkToSafeZone"
                 logConsole("Phase 2 Timeout (18s) -> Lanjut Jalan ke Safe Zone")
