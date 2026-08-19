@@ -2,12 +2,13 @@
 -- ☄️ KALB METEOR SHOP - LIVE STOCK MONITOR & FUTURE PREDICTOR PRO (MOBILE & PC)
 -- ==============================================================================
 -- Fitur & Inovasi:
--- 1. 📱 Ultra Compact & Super Ringan (Khusus HP): Ukuran mungil (270x290px), muat di semua layar HP!
--- 2. 👆 100% Touch Responsive (Button.Activated): Sentuhan responsif di Android & iOS.
--- 3. 🔮 Future Stock Predictor (+30m s/d +3h): Prediksi stok langsung muncul detik pertama!
--- 4. 📦 Live Stock Tracker: Sinkronisasi realtime dari server (Stok / Max).
--- 5. 🛒 Instant Buy & Auto-Buy: Tombol beli 1-tap dan toggle auto-buy per item.
--- 6. 🎈 Floating Mini Bubble: Perkecil menjadi tombol kapsul kecil kapan saja.
+-- 1. 📱 Ultra Compact & Mobile Friendly: Ukuran ramping (280x310px), nyaman di HP!
+-- 2. 🎯 NEW: Tab "TARGET PREDICT" (Pilih item & cari tahu kapan saja stoknya muncul dalam 48 jam ke depan)!
+-- 3. 🔮 Tab "ALL PREDICT": Jadwal lengkap semua item untuk 6 restock mendatang.
+-- 4. 📦 Tab "LIVE SHOP": Live stock monitor realtime dari server + Instant Buy & Auto-Buy.
+-- 5. 📜 Tab "LOG": Pencatat riwayat restock server.
+-- 6. 👆 100% Touch Responsive: Menggunakan Button.Activated untuk Android & iOS.
+-- 7. 🎈 Floating Mini Bubble: Mode kapsul kecil melayang (95x26px).
 -- ==============================================================================
 
 if not game:IsLoaded() then game.Loaded:Wait() end
@@ -298,9 +299,10 @@ end
 -- ==============================================================================
 local currentStockData = {}
 local autoBuySettings = {}
-local nextExpiryTimestamp = os.time() + 1800 -- Default estimasi langsung aktif
+local nextExpiryTimestamp = os.time() + 1800
 local lastSyncTimestamp = 0
-local currentViewMode = "Live" -- "Live", "Future", "History"
+local currentViewMode = "Live" -- "Live", "Future", "Target", "History"
+local selectedTargetItem = "Frigorex"
 local restockHistoryLog = {}
 
 for itemName, itemInfo in pairs(SHOP_ITEMS) do
@@ -343,12 +345,12 @@ ScreenGui.Enabled = true
 ScreenGui.Parent = targetParent
 
 -- ==============================================================================
--- 🖼️ 6. DESAIN UI UTAMA (SUPER COMPACT 270 x 290 px)
+-- 🖼️ 6. DESAIN UI UTAMA (COMPACT: 280 x 310 px)
 -- ==============================================================================
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 270, 0, 290)
-MainFrame.Position = UDim2.new(0, 15, 0.5, -145)
+MainFrame.Size = UDim2.new(0, 280, 0, 310)
+MainFrame.Position = UDim2.new(0, 15, 0.5, -155)
 MainFrame.BackgroundColor3 = Color3.fromRGB(14, 17, 24)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
@@ -377,11 +379,11 @@ TopBarCorner.CornerRadius = UDim.new(0, 8)
 TopBarCorner.Parent = TopBar
 
 local TitleLabel = Instance.new("TextLabel")
-TitleLabel.Size = UDim2.new(0, 130, 1, 0)
+TitleLabel.Size = UDim2.new(0, 140, 1, 0)
 TitleLabel.Position = UDim2.new(0, 8, 0, 0)
 TitleLabel.BackgroundTransparency = 1
 TitleLabel.Font = Enum.Font.GothamBold
-TitleLabel.Text = "☄️ METEOR SHOP"
+TitleLabel.Text = "☄️ METEOR PREDICTOR"
 TitleLabel.TextColor3 = Color3.fromRGB(255, 170, 50)
 TitleLabel.TextSize = 11
 TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -433,7 +435,7 @@ SyncBtnCorner.CornerRadius = UDim.new(0, 4)
 SyncBtnCorner.Parent = SyncBtn
 
 -- ==============================================================================
--- 🧭 7. JELAS & BESAR: TAB SWITCHER BAR (LIVE | PREDICT | LOG)
+-- 🧭 7. 4 TAB NAVIGATION (LIVE | ALL PREDICT | TARGET ITEM | LOG)
 -- ==============================================================================
 local TabBar = Instance.new("Frame")
 TabBar.Name = "TabBar"
@@ -448,21 +450,22 @@ TabBarCorner.Parent = TabBar
 
 local tabButtons = {}
 local tabList = {
-    { Id = "Live", Name = "📦 LIVE" },
-    { Id = "Future", Name = "🔮 PREDICT" },
-    { Id = "History", Name = "📜 LOG" }
+    { Id = "Live", Name = "📦 Live" },
+    { Id = "Future", Name = "🔮 All" },
+    { Id = "Target", Name = "🎯 Target" },
+    { Id = "History", Name = "📜 Log" }
 }
 
 for i, tData in ipairs(tabList) do
     local tBtn = Instance.new("TextButton")
     tBtn.Name = "Tab_" .. tData.Id
-    tBtn.Size = UDim2.new(0.333, -2, 1, -2)
-    tBtn.Position = UDim2.new((i - 1) * 0.333, 1, 0, 1)
+    tBtn.Size = UDim2.new(0.25, -2, 1, -2)
+    tBtn.Position = UDim2.new((i - 1) * 0.25, 1, 0, 1)
     tBtn.BackgroundColor3 = (tData.Id == "Live") and Color3.fromRGB(255, 145, 30) or Color3.fromRGB(26, 32, 44)
     tBtn.Font = Enum.Font.GothamBold
     tBtn.Text = tData.Name
     tBtn.TextColor3 = (tData.Id == "Live") and Color3.fromRGB(15, 20, 30) or Color3.fromRGB(190, 205, 230)
-    tBtn.TextSize = 10
+    tBtn.TextSize = 9
     tBtn.BorderSizePixel = 0
     tBtn.Parent = TabBar
 
@@ -580,7 +583,7 @@ local function createLiveCard(itemName, itemData)
     Thumbnail.Parent = IconBg
 
     local NameLabel = Instance.new("TextLabel")
-    NameLabel.Size = UDim2.new(0, 110, 0, 14)
+    NameLabel.Size = UDim2.new(0, 115, 0, 14)
     NameLabel.Position = UDim2.new(0, 42, 0, 5)
     NameLabel.BackgroundTransparency = 1
     NameLabel.Font = Enum.Font.GothamBold
@@ -591,7 +594,7 @@ local function createLiveCard(itemName, itemData)
     NameLabel.Parent = Card
 
     local CostLabel = Instance.new("TextLabel")
-    CostLabel.Size = UDim2.new(0, 110, 0, 12)
+    CostLabel.Size = UDim2.new(0, 115, 0, 12)
     CostLabel.Position = UDim2.new(0, 42, 0, 22)
     CostLabel.BackgroundTransparency = 1
     CostLabel.Font = Enum.Font.Gotham
@@ -622,7 +625,6 @@ local function createLiveCard(itemName, itemData)
     StockLabel.TextSize = 8
     StockLabel.Parent = StockBadge
 
-    -- Action Buttons (Touch Friendly via Activated)
     local BuyBtn = Instance.new("TextButton")
     BuyBtn.Name = "BuyBtn"
     BuyBtn.Size = UDim2.new(0, 22, 0, 16)
@@ -685,7 +687,7 @@ for _, itemObj in ipairs(ORDERED_ITEMS) do
 end
 
 -- ==============================================================================
--- 🔮 11. FUTURE PREDICTIONS CONTAINER
+-- 🔮 11. ALL PREDICTIONS CONTAINER
 -- ==============================================================================
 local futureContainer = Instance.new("Frame")
 futureContainer.Name = "FutureContainer"
@@ -816,7 +818,222 @@ local function renderFuturePredictions()
 end
 
 -- ==============================================================================
--- 📜 12. HISTORY LOG CONTAINER
+-- 🎯 12. TARGET ITEM PREDICTOR CONTAINER (PILIH ITEM & CARI JADWAL 48 JAM)
+-- ==============================================================================
+local targetContainer = Instance.new("Frame")
+targetContainer.Name = "TargetContainer"
+targetContainer.Size = UDim2.new(1, 0, 0, 0)
+targetContainer.BackgroundTransparency = 1
+targetContainer.AutomaticSize = Enum.AutomaticSize.Y
+targetContainer.Visible = false
+targetContainer.Parent = ScrollList
+
+local targetLayout = Instance.new("UIListLayout")
+targetLayout.Padding = UDim.new(0, 5)
+targetLayout.SortOrder = Enum.SortOrder.LayoutOrder
+targetLayout.Parent = targetContainer
+
+local function renderTargetItemPredictions()
+    targetContainer:ClearAllChildren()
+
+    -- 1. Selector Bar (Pilih Item yang ingin diprediksi)
+    local SelectorFrame = Instance.new("Frame")
+    SelectorFrame.Size = UDim2.new(1, 0, 0, 26)
+    SelectorFrame.BackgroundColor3 = Color3.fromRGB(20, 26, 36)
+    SelectorFrame.BorderSizePixel = 0
+    SelectorFrame.LayoutOrder = 1
+    SelectorFrame.Parent = targetContainer
+
+    local SCorner = Instance.new("UICorner")
+    SCorner.CornerRadius = UDim.new(0, 4)
+    SCorner.Parent = SelectorFrame
+
+    local SelectTitle = Instance.new("TextLabel")
+    SelectTitle.Size = UDim2.new(0.35, 0, 1, 0)
+    SelectTitle.Position = UDim2.new(0, 6, 0, 0)
+    SelectTitle.BackgroundTransparency = 1
+    SelectTitle.Font = Enum.Font.GothamBold
+    SelectTitle.Text = "🎯 Target Item:"
+    SelectTitle.TextColor3 = Color3.fromRGB(255, 185, 60)
+    SelectTitle.TextSize = 9
+    SelectTitle.TextXAlignment = Enum.TextXAlignment.Left
+    SelectTitle.Parent = SelectorFrame
+
+    local ItemPickerBtn = Instance.new("TextButton")
+    ItemPickerBtn.Name = "ItemPickerBtn"
+    ItemPickerBtn.Size = UDim2.new(0.65, -10, 1, -4)
+    ItemPickerBtn.Position = UDim2.new(0.35, 4, 0, 2)
+    ItemPickerBtn.BackgroundColor3 = Color3.fromRGB(35, 45, 65)
+    ItemPickerBtn.Font = Enum.Font.GothamBold
+    ItemPickerBtn.Text = selectedTargetItem .. " ▼"
+    ItemPickerBtn.TextColor3 = Color3.fromRGB(130, 220, 255)
+    ItemPickerBtn.TextSize = 9
+    ItemPickerBtn.BorderSizePixel = 0
+    ItemPickerBtn.Parent = SelectorFrame
+    local IPCorner = Instance.new("UICorner")
+    IPCorner.CornerRadius = UDim.new(0, 4)
+    IPCorner.Parent = ItemPickerBtn
+
+    -- Quick Selector Grid (Dropdown pengganti ramah HP)
+    local QuickGrid = Instance.new("Frame")
+    QuickGrid.Name = "QuickGrid"
+    QuickGrid.Size = UDim2.new(1, 0, 0, 0)
+    QuickGrid.BackgroundTransparency = 1
+    QuickGrid.AutomaticSize = Enum.AutomaticSize.Y
+    QuickGrid.Visible = false
+    QuickGrid.LayoutOrder = 2
+    QuickGrid.Parent = targetContainer
+
+    local QLayout = Instance.new("UIGridStyleLayout", QuickGrid)
+    local UIGrid = Instance.new("UIGridLayout")
+    UIGrid.CellSize = UDim2.new(0.48, 0, 0, 20)
+    UIGrid.CellPadding = UDim2.new(0.04, 0, 0, 3)
+    UIGrid.Parent = QuickGrid
+
+    for _, it in ipairs(ORDERED_ITEMS) do
+        local itBtn = Instance.new("TextButton")
+        itBtn.Size = UDim2.new(1, 0, 1, 0)
+        itBtn.BackgroundColor3 = (it.Name == selectedTargetItem) and Color3.fromRGB(255, 145, 30) or Color3.fromRGB(24, 30, 42)
+        itBtn.Font = Enum.Font.GothamBold
+        itBtn.Text = it.Name
+        itBtn.TextColor3 = (it.Name == selectedTargetItem) and Color3.fromRGB(15, 20, 30) or Color3.fromRGB(200, 215, 240)
+        itBtn.TextSize = 8
+        itBtn.BorderSizePixel = 0
+        itBtn.Parent = QuickGrid
+        local itCorner = Instance.new("UICorner")
+        itCorner.CornerRadius = UDim.new(0, 3)
+        itCorner.Parent = itBtn
+
+        itBtn.Activated:Connect(function()
+            selectedTargetItem = it.Name
+            renderTargetItemPredictions()
+        end)
+    end
+
+    ItemPickerBtn.Activated:Connect(function()
+        QuickGrid.Visible = not QuickGrid.Visible
+        ItemPickerBtn.Text = selectedTargetItem .. (QuickGrid.Visible and " ▲" or " ▼")
+    end)
+
+    -- 2. Scan Jadwal Stok 48 Jam (96 Interval Restock)
+    local targetData = SHOP_ITEMS[selectedTargetItem]
+    local baseTs = (nextExpiryTimestamp > 0) and nextExpiryTimestamp or (os.time() + 1800)
+    local now = os.time()
+
+    local foundSchedules = {}
+    local maxCycles = 96 -- 48 Jam ke depan
+
+    for cycle = 0, maxCycles do
+        local simTs = baseTs + (cycle * RESTOCK_INTERVAL)
+        local simStock = simulateStockForTimestamp(simTs)
+        local stockWon = simStock[selectedTargetItem] and simStock[selectedTargetItem].Stock or 0
+
+        if stockWon > 0 then
+            local diffSec = math.max(0, simTs - now)
+            local diffHours = math.floor(diffSec / 3600)
+            local diffMins = math.floor((diffSec % 3600) / 60)
+            local wibTime = os.date("!*t", simTs + (7 * 3600))
+            local nowWib = os.date("!*t", now + (7 * 3600))
+
+            local dayTag = "Hari Ini"
+            if wibTime.yday > nowWib.yday or (wibTime.year > nowWib.year) then
+                if wibTime.yday == nowWib.yday + 1 then
+                    dayTag = "Besok"
+                else
+                    dayTag = string.format("%02d/%02d", wibTime.day, wibTime.month)
+                end
+            end
+
+            table.insert(foundSchedules, {
+                Timestamp = simTs,
+                TimeStr = string.format("%02d:%02d WIB (%s)", wibTime.hour, wibTime.min, dayTag),
+                RelStr = (diffHours > 0) and string.format("dlm %dj %dm", diffHours, diffMins) or string.format("dlm %dm", diffMins),
+                Stock = stockWon
+            })
+
+            -- Tampilkan maksimal 12 kemunculan terdekat agar tidak lag
+            if #foundSchedules >= 12 then break end
+        end
+    end
+
+    -- 3. Header Info Hasil
+    local ResultHeader = Instance.new("Frame")
+    ResultHeader.Size = UDim2.new(1, 0, 0, 24)
+    ResultHeader.BackgroundColor3 = Color3.fromRGB(25, 32, 46)
+    ResultHeader.BorderSizePixel = 0
+    ResultHeader.LayoutOrder = 3
+    ResultHeader.Parent = targetContainer
+    local RCorner = Instance.new("UICorner")
+    RCorner.CornerRadius = UDim.new(0, 4)
+    RCorner.Parent = ResultHeader
+
+    local RLabel = Instance.new("TextLabel")
+    RLabel.Size = UDim2.new(1, -10, 1, 0)
+    RLabel.Position = UDim2.new(0, 5, 0, 0)
+    RLabel.BackgroundTransparency = 1
+    RLabel.Font = Enum.Font.GothamBold
+    RLabel.Text = string.format("⏰ Jadwal Stok %s (48 Jam):", selectedTargetItem)
+    RLabel.TextColor3 = Color3.fromRGB(120, 220, 255)
+    RLabel.TextSize = 9
+    RLabel.TextXAlignment = Enum.TextXAlignment.Left
+    RLabel.Parent = ResultHeader
+
+    -- 4. Render List Jadwal
+    if #foundSchedules == 0 then
+        local EmptyBox = Instance.new("TextLabel")
+        EmptyBox.Size = UDim2.new(1, 0, 0, 30)
+        EmptyBox.BackgroundTransparency = 1
+        EmptyBox.Font = Enum.Font.GothamMedium
+        EmptyBox.Text = "Belum terprediksi dalam 48 jam ke depan."
+        EmptyBox.TextColor3 = Color3.fromRGB(150, 165, 185)
+        EmptyBox.TextSize = 9
+        EmptyBox.LayoutOrder = 4
+        EmptyBox.Parent = targetContainer
+    else
+        for idx, sched in ipairs(foundSchedules) do
+            local Row = Instance.new("Frame")
+            Row.Size = UDim2.new(1, 0, 0, 24)
+            Row.BackgroundColor3 = (idx == 1) and Color3.fromRGB(36, 48, 36) or Color3.fromRGB(22, 28, 38)
+            Row.BorderSizePixel = 0
+            Row.LayoutOrder = 10 + idx
+            Row.Parent = targetContainer
+
+            local RowCorner = Instance.new("UICorner")
+            RowCorner.CornerRadius = UDim.new(0, 4)
+            RowCorner.Parent = Row
+
+            local RowStroke = Instance.new("UIStroke")
+            RowStroke.Color = (idx == 1) and Color3.fromRGB(80, 220, 120) or Color3.fromRGB(45, 55, 75)
+            RowStroke.Thickness = (idx == 1) and 1 or 0.6
+            RowStroke.Parent = Row
+
+            local TimeTxt = Instance.new("TextLabel")
+            TimeTxt.Size = UDim2.new(0.65, 0, 1, 0)
+            TimeTxt.Position = UDim2.new(0, 6, 0, 0)
+            TimeTxt.BackgroundTransparency = 1
+            TimeTxt.Font = Enum.Font.GothamBold
+            TimeTxt.Text = string.format("#%d. %s", idx, sched.TimeStr)
+            TimeTxt.TextColor3 = (idx == 1) and Color3.fromRGB(100, 255, 140) or Color3.fromRGB(240, 245, 255)
+            TimeTxt.TextSize = 8
+            TimeTxt.TextXAlignment = Enum.TextXAlignment.Left
+            TimeTxt.Parent = Row
+
+            local StockTxt = Instance.new("TextLabel")
+            StockTxt.Size = UDim2.new(0.35, -6, 1, 0)
+            StockTxt.Position = UDim2.new(0.65, 0, 0, 0)
+            StockTxt.BackgroundTransparency = 1
+            StockTxt.Font = Enum.Font.GothamBold
+            StockTxt.Text = string.format("🔥 %dx (%s)", sched.Stock, sched.RelStr)
+            StockTxt.TextColor3 = (idx == 1) and Color3.fromRGB(255, 180, 50) or Color3.fromRGB(180, 200, 230)
+            StockTxt.TextSize = 8
+            StockTxt.TextXAlignment = Enum.TextXAlignment.Right
+            StockTxt.Parent = Row
+        end
+    end
+end
+
+-- ==============================================================================
+-- 📜 13. HISTORY LOG CONTAINER
 -- ==============================================================================
 local historyContainer = Instance.new("Frame")
 historyContainer.Name = "HistoryContainer"
@@ -882,7 +1099,7 @@ local function renderHistoryLog()
 end
 
 -- ==============================================================================
--- 🔍 13. VIEW & TAB SWITCHING (TOUCH ENABLED VIA ACTIVATED)
+-- 🔍 14. VIEW & TAB SWITCHING (TOUCH ENABLED VIA ACTIVATED)
 -- ==============================================================================
 local function switchView(targetMode)
     currentViewMode = targetMode
@@ -895,6 +1112,7 @@ local function switchView(targetMode)
 
     if currentViewMode == "Live" then
         futureContainer.Visible = false
+        targetContainer.Visible = false
         historyContainer.Visible = false
         for _, elem in pairs(liveCardElements) do
             elem.Card.Visible = true
@@ -903,14 +1121,24 @@ local function switchView(targetMode)
         for _, elem in pairs(liveCardElements) do
             elem.Card.Visible = false
         end
+        targetContainer.Visible = false
         historyContainer.Visible = false
         futureContainer.Visible = true
         renderFuturePredictions()
+    elseif currentViewMode == "Target" then
+        for _, elem in pairs(liveCardElements) do
+            elem.Card.Visible = false
+        end
+        futureContainer.Visible = false
+        historyContainer.Visible = false
+        targetContainer.Visible = true
+        renderTargetItemPredictions()
     elseif currentViewMode == "History" then
         for _, elem in pairs(liveCardElements) do
             elem.Card.Visible = false
         end
         futureContainer.Visible = false
+        targetContainer.Visible = false
         historyContainer.Visible = true
         renderHistoryLog()
     end
@@ -923,7 +1151,7 @@ for tId, tBtn in pairs(tabButtons) do
 end
 
 -- ==============================================================================
--- 📡 14. STOCK SYNC & AUTO-BUY
+-- 📡 15. STOCK SYNC & AUTO-BUY
 -- ==============================================================================
 local function updateStockFromData(stockData, expiryTimestamp)
     if type(stockData) ~= "table" then return end
@@ -983,6 +1211,8 @@ local function updateStockFromData(stockData, expiryTimestamp)
 
     if currentViewMode == "Future" then
         renderFuturePredictions()
+    elseif currentViewMode == "Target" then
+        renderTargetItemPredictions()
     elseif currentViewMode == "History" then
         renderHistoryLog()
     end
@@ -1011,7 +1241,7 @@ task.defer(function()
 end)
 
 -- ==============================================================================
--- ⏱️ 15. COUNTDOWN & REALTIME LOOP
+-- ⏱️ 16. COUNTDOWN & REALTIME LOOP
 -- ==============================================================================
 task.spawn(function()
     while task.wait(1) do
@@ -1045,7 +1275,7 @@ task.spawn(function()
 end)
 
 -- ==============================================================================
--- 🖱️ 16. DRAGGABLE & MINI-BUBBLE (TOUCH COMPATIBLE)
+-- 🖱️ 17. DRAGGABLE & MINI-BUBBLE (TOUCH COMPATIBLE)
 -- ==============================================================================
 local dragging = false
 local dragInput, dragStart, startPos
@@ -1142,5 +1372,5 @@ CloseBtn.Activated:Connect(function()
 end)
 
 print("--------------------------------------------------")
-print("☄️ [SUKSES] Meteor Predictor Ultra Compact Siap!")
+print("☄️ [SUKSES] Meteor Predictor Pro + Target Finder Siap!")
 print("--------------------------------------------------")
