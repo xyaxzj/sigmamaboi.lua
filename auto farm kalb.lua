@@ -367,23 +367,40 @@ if not rev_MeteorShop_Stock or not rev_MeteorShop_Buy or not rev_MeteorShop_Requ
 end
 
 -- =============================================
--- 📢 DISCORD WEBHOOK NOTIFIER (PATAGOTITAN & FRIGOREX - DELTA COMPATIBLE)
+-- 📢 DISCORD WEBHOOK NOTIFIER (PATAGOTITAN & FRIGOREX - COMPACT & CLEAN)
 -- =============================================
 local DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1539697793973756084/1oLTQDKSmutWJlPX91He00IEEAg_lsos8MWbxuXki8LKqO8WnZUX8kwurULVjdB8lOqb"
 
-local function getDirectRobloxAssetUrl(assetId)
+local function getDirectRobloxImageUrl(assetId, productId)
     local fallback = string.format("https://www.roblox.com/asset-thumbnail/image?assetId=%s&width=420&height=420&format=png", tostring(assetId))
     local ok, res = pcall(function()
         local httpReq = request or http_request or (delta and delta.request) or (syn and syn.request) or (Fluxus and Fluxus.request) or (http and http.request)
-        if httpReq then
-            local apiRes = httpReq({
+        if not httpReq then return nil end
+        local HttpService = game:GetService("HttpService")
+
+        -- 1. Coba Developer Product Icon API jika ada productId
+        if productId then
+            local pRes = httpReq({
+                Url = string.format("https://thumbnails.roblox.com/v1/developer-products/icons?developerProductIds=%s&size=420x420&format=Png", tostring(productId)),
+                Method = "GET"
+            })
+            if pRes and pRes.Body then
+                local data = HttpService:JSONDecode(pRes.Body)
+                if data and data.data and data.data[1] and data.data[1].imageUrl and data.data[1].imageUrl ~= "" then
+                    return data.data[1].imageUrl
+                end
+            end
+        end
+
+        -- 2. Coba Asset Thumbnail API
+        if assetId then
+            local aRes = httpReq({
                 Url = string.format("https://thumbnails.roblox.com/v1/assets?assetIds=%s&size=420x420&format=Png", tostring(assetId)),
                 Method = "GET"
             })
-            if apiRes and apiRes.Body then
-                local HttpService = game:GetService("HttpService")
-                local data = HttpService:JSONDecode(apiRes.Body)
-                if data and data.data and data.data[1] and data.data[1].imageUrl then
+            if aRes and aRes.Body then
+                local data = HttpService:JSONDecode(aRes.Body)
+                if data and data.data and data.data[1] and data.data[1].imageUrl and data.data[1].imageUrl ~= "" then
                     return data.data[1].imageUrl
                 end
             end
@@ -441,70 +458,50 @@ local function sendDiscordWebhook(itemName, currentCount, maxStock)
             if itemName == "Patagotitan" then
                 itemIcon = "🦖"
                 embedColor = 0x2ecc71 -- Hijau Emerald
-                itemImageUrl = getDirectRobloxAssetUrl("95399484334874")
+                itemImageUrl = getDirectRobloxImageUrl("95399484334874", "3708138558")
                 itemCost = 500
                 itemBuff = "+150% CP/s (Brainrot)"
             elseif itemName == "Frigorex" then
                 itemIcon = "👑"
                 embedColor = 0x9b59b6 -- Ungu Royal
-                itemImageUrl = getDirectRobloxAssetUrl("140510107418430")
+                itemImageUrl = getDirectRobloxImageUrl("140510107418430", "3708174931")
                 itemCost = 1250
                 itemBuff = "+250% CP/s (Brainrot)"
             end
 
             local payload = {
-                ["username"] = "KALB Meteor Shop Sniper (Delta)",
-                ["avatar_url"] = itemImageUrl ~= "" and itemImageUrl or playerAvatarCdn,
+                ["username"] = "KALB Meteor Shop",
+                ["avatar_url"] = playerAvatarCdn,
                 ["embeds"] = {
                     {
-                        ["title"] = string.format("%s BERHASIL MEMBELI %s!", itemIcon, string.upper(itemName)),
-                        ["description"] = string.format("🎉 Akun **%s** (`@%s`) berhasil memborong **%s** di Toko Meteor!", userDisplayName, userName, itemName),
+                        ["title"] = string.format("%s %s", itemIcon, itemName),
                         ["color"] = embedColor,
                         ["thumbnail"] = {
-                            ["url"] = playerAvatarCdn
-                        },
-                        ["image"] = {
                             ["url"] = itemImageUrl
                         },
                         ["author"] = {
-                            ["name"] = string.format("%s (@%s)", userDisplayName, userName),
+                            ["name"] = userDisplayName,
                             ["icon_url"] = playerAvatarCdn
                         },
                         ["fields"] = {
                             {
-                                ["name"] = "🛒 Item Dibeli",
-                                ["value"] = string.format("**%s**\n`%s`", itemName, itemBuff),
+                                ["name"] = "Rarity / Buff",
+                                ["value"] = string.format("`%s`", itemBuff),
+                                ["inline"] = false
+                            },
+                            {
+                                ["name"] = "Stock Dibeli",
+                                ["value"] = string.format("`#%d / %d` (%d Tokens)", currentCount, maxStock, itemCost),
                                 ["inline"] = true
                             },
                             {
-                                ["name"] = "📦 Jumlah Stock",
-                                ["value"] = string.format("`#%d / %d`", currentCount, maxStock),
-                                ["inline"] = true
-                            },
-                            {
-                                ["name"] = "💰 Biaya Item",
-                                ["value"] = string.format("`%d Meteor Tokens`", itemCost),
-                                ["inline"] = true
-                            },
-                            {
-                                ["name"] = "👤 Akun Pembeli",
-                                ["value"] = string.format("**%s** (@%s)\n`ID: %s`", userDisplayName, userName, userId),
-                                ["inline"] = true
-                            },
-                            {
-                                ["name"] = "⏰ Waktu Pembelian",
-                                ["value"] = string.format("`%s`", wibTimeStr),
-                                ["inline"] = true
-                            },
-                            {
-                                ["name"] = "📱 Executor",
-                                ["value"] = "`Delta Mobile / PC`",
+                                ["name"] = "Akun Pembeli",
+                                ["value"] = string.format("%s (`%s`)", userName, userId),
                                 ["inline"] = true
                             }
                         },
                         ["footer"] = {
-                            ["text"] = "KALB Auto Farm • Meteor Shop Sniper",
-                            ["icon_url"] = playerAvatarCdn
+                            ["text"] = string.format("KALB - Meteor Shop | %s", wibTimeStr)
                         },
                         ["timestamp"] = os.date("!%Y-%m-%dT%H:%M:%SZ")
                     }
