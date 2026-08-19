@@ -31,7 +31,6 @@ _G.autoSellAll = true            -- true: Auto Sell All setiap 5 detik via ref_B
 _G.autoRemovePlayer = true       -- true: Hapus player lain dari game.Players & workspace.Players (100% Bersih & No Lag), false: Biarkan
 _G.debugConsoleLog = false        -- true: Cetak log status/fase ke console (F9), false: Senyap
 _G.failsafeTimeout = 25          -- Waktu maksimal (detik) sebelum auto-reset ke Safe Zone jika macet
-_G.testWebhook = false           -- 📢 Ubah jadi true untuk langsung test kirim pesan Patagotitan & Frigorex ke Discord Webhook!
 
 print("--------------------------------------------------")
 print("🚀 [INIT] Memuat KALB Auto Farm V2 (Ultra Lightweight & Total Player Purger)...")
@@ -699,18 +698,6 @@ local function sendDiscordWebhook(itemName, currentCount, maxStock)
                 Body = HttpService:JSONEncode(payload)
             })
         end)
-    end)
-end
-
--- Eksekusi Test Webhook jika diaktifkan di konfigurasi atas (_G.testWebhook = true)
-if _G.testWebhook then
-    task.spawn(function()
-        task.wait(1.5)
-        print("📢 [TEST WEBHOOK] Mengirim pesan simulasi pembelian Patagotitan & Frigorex ke Discord...")
-        sendDiscordWebhook("Patagotitan", 1, 3)
-        task.wait(1.5)
-        sendDiscordWebhook("Frigorex", 1, 1)
-        print("✅ [TEST WEBHOOK] Pesan test berhasil dikirim! Silakan periksa channel Discord Anda.")
     end)
 end
 
