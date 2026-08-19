@@ -460,13 +460,13 @@ local function sendDiscordWebhook(itemName, currentCount, maxStock)
                 embedColor = 0x2ecc71 -- Hijau Emerald
                 itemImageUrl = getDirectRobloxImageUrl("95399484334874", "3708138558")
                 itemCost = 500
-                itemBuff = "+150% CP/s (Brainrot)"
+                itemBuff = "150% CP/s"
             elseif itemName == "Frigorex" then
                 itemIcon = "👑"
                 embedColor = 0x9b59b6 -- Ungu Royal
                 itemImageUrl = getDirectRobloxImageUrl("140510107418430", "3708174931")
                 itemCost = 1250
-                itemBuff = "+250% CP/s (Brainrot)"
+                itemBuff = "250% CP/s"
             end
 
             local payload = {
@@ -485,23 +485,18 @@ local function sendDiscordWebhook(itemName, currentCount, maxStock)
                         },
                         ["fields"] = {
                             {
-                                ["name"] = "Rarity / Buff",
-                                ["value"] = string.format("`%s`", itemBuff),
+                                ["name"] = "Exclusive",
+                                ["value"] = itemBuff,
                                 ["inline"] = false
                             },
                             {
-                                ["name"] = "Stock Dibeli",
-                                ["value"] = string.format("`#%d / %d` (%d Tokens)", currentCount, maxStock, itemCost),
-                                ["inline"] = true
-                            },
-                            {
-                                ["name"] = "Akun Pembeli",
-                                ["value"] = string.format("%s (`%s`)", userName, userId),
-                                ["inline"] = true
+                                ["name"] = "Harga",
+                                ["value"] = string.format("%d Tokens", itemCost),
+                                ["inline"] = false
                             }
                         },
                         ["footer"] = {
-                            ["text"] = string.format("KALB - Meteor Shop | %s", wibTimeStr)
+                            ["text"] = "KALB - Meteor Shop"
                         },
                         ["timestamp"] = os.date("!%Y-%m-%dT%H:%M:%SZ")
                     }
