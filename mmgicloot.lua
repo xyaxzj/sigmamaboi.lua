@@ -1,17 +1,18 @@
 -- ==============================================================================
--- 🚀 SIGMA HUB | KALB AUTO FARM V2 (FULL COMPLETE STATE MACHINE FLOW)
+-- 🚀 SIGMA HUB | KALB AUTO FARM V2 (FULL STATE MACHINE + REAL-TIME SCREEN DEBUG)
 -- ==============================================================================
--- Flow Lengkap:
--- 1. 🥔 Potato Optimization & Safe Player Purger (Tanpa Lag / Memory Leak)
--- 2. 🎮 Sigma UI V4 (Main Tab, Auto Farm Toggle, Anim Delay Slider, Stats Monitor, Config)
--- 3. 🧠 Smart State Machine:
---    - Fase 1: Idle (Auto Teleport ke Safe Zone & Eksekusi Kick)
---    - Fase 2: WaitingForPhase2 (Menunggu hasil gacha & bola mendarat dari server)
---    - Fase 3: PlayingAnim (Jeda animasi gacha sesuai slider animDelay)
---    - Fase 4: WalkToSafeZone (Karakter bergerak kembali ke Safe Zone)
---    - Fase 5: WaitingForCollected (Menunggu event reward collected & langsung Re-kick)
---    - Fase Event: LuckMachineTeleport & LuckMachineTraining (Auto Barbell sampai x8 Luck)
--- 4. 🛡️ Failsafe 25s Auto-Respawn Anti-Stuck & Anti-AFK VirtualUser
+-- Fitur:
+-- 1. 🖥️ Screen Debug HUD Real-Time: Memantau setiap transisi fase, timer, jarak, sinyal remote & stats
+-- 2. 🥔 Potato Optimization & Safe Player Purger (Tanpa Lag / Memory Leak)
+-- 3. 🎮 Sigma UI V4 (Main Tab, Auto Farm Toggle, Anim Delay Slider, Stats Monitor, Config)
+-- 4. 🧠 Smart State Machine:
+--    - [FASE 1] Idle (Auto Teleport ke Safe Zone & Eksekusi Kick)
+--    - [FASE 2] WaitingForPhase2 (Menunggu hasil gacha & bola mendarat dari server)
+--    - [FASE 3] PlayingAnim (Jeda animasi gacha sesuai slider animDelay)
+--    - [FASE 4] WalkToSafeZone (Karakter bergerak kembali ke Safe Zone)
+--    - [FASE 5] WaitingForCollected (Menunggu event reward collected & langsung Re-kick)
+--    - [EVENT] LuckMachineTeleport & LuckMachineTraining (Auto Barbell sampai x8 Luck)
+-- 5. 🛡️ Failsafe 25s Auto-Respawn Anti-Stuck & Anti-AFK VirtualUser
 -- ==============================================================================
 
 if not game:IsLoaded() then game.Loaded:Wait() end
@@ -99,6 +100,173 @@ if _G.autoRemovePlayer or _G.removePlayer or _G.removePlayers then
 end
 
 -- =============================================
+-- 🖥️ REAL-TIME SCREEN DEBUG HUD
+-- =============================================
+local function getGuiContainer()
+    if gethui then
+        local ok, h = pcall(gethui)
+        if ok and h then return h end
+    end
+    local pg = lp and (lp:FindFirstChildOfClass("PlayerGui") or lp:WaitForChild("PlayerGui", 5))
+    return pg
+end
+
+local targetGuiParent = getGuiContainer()
+
+pcall(function()
+    if lp and lp:FindFirstChild("PlayerGui") and lp.PlayerGui:FindFirstChild("KalbFarmDebugGui") then
+        lp.PlayerGui.KalbFarmDebugGui:Destroy()
+    end
+    if targetGuiParent and targetGuiParent:FindFirstChild("KalbFarmDebugGui") then
+        targetGuiParent.KalbFarmDebugGui:Destroy()
+    end
+end)
+
+local DebugScreenGui = Instance.new("ScreenGui")
+DebugScreenGui.Name = "KalbFarmDebugGui"
+DebugScreenGui.ResetOnSpawn = false
+DebugScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+DebugScreenGui.DisplayOrder = 99998
+DebugScreenGui.Enabled = true
+
+local DebugFrame = Instance.new("Frame")
+DebugFrame.Name = "DebugFrame"
+DebugFrame.Size = UDim2.new(0, 310, 0, 210)
+DebugFrame.Position = UDim2.new(1, -325, 0, 30)
+DebugFrame.BackgroundColor3 = Color3.fromRGB(12, 14, 22)
+DebugFrame.BorderSizePixel = 0
+DebugFrame.Active = true
+DebugFrame.Draggable = true
+DebugFrame.Visible = true
+DebugFrame.Parent = DebugScreenGui
+
+local DebugCorner = Instance.new("UICorner")
+DebugCorner.CornerRadius = UDim.new(0, 8)
+DebugCorner.Parent = DebugFrame
+
+local DebugStroke = Instance.new("UIStroke")
+DebugStroke.Color = Color3.fromRGB(0, 200, 255)
+DebugStroke.Thickness = 1.5
+DebugStroke.Parent = DebugFrame
+
+local DTitle = Instance.new("TextLabel")
+DTitle.Size = UDim2.new(1, -10, 0, 22)
+DTitle.Position = UDim2.new(0, 8, 0, 4)
+DTitle.BackgroundTransparency = 1
+DTitle.Font = Enum.Font.GothamBold
+DTitle.Text = "🔍 KALB AUTO FARM - PHASE DEBUG"
+DTitle.TextColor3 = Color3.fromRGB(80, 220, 255)
+DTitle.TextSize = 11
+DTitle.TextXAlignment = Enum.TextXAlignment.Left
+DTitle.Parent = DebugFrame
+
+local DPhaseLabel = Instance.new("TextLabel")
+DPhaseLabel.Size = UDim2.new(1, -10, 0, 22)
+DPhaseLabel.Position = UDim2.new(0, 8, 0, 26)
+DPhaseLabel.BackgroundTransparency = 1
+DPhaseLabel.Font = Enum.Font.GothamBold
+DPhaseLabel.Text = "📌 Fase: [FASE 1] Idle"
+DPhaseLabel.TextColor3 = Color3.fromRGB(100, 255, 120)
+DPhaseLabel.TextSize = 12
+DPhaseLabel.TextXAlignment = Enum.TextXAlignment.Left
+DPhaseLabel.Parent = DebugFrame
+
+local DTimerLabel = Instance.new("TextLabel")
+DTimerLabel.Size = UDim2.new(1, -10, 0, 18)
+DTimerLabel.Position = UDim2.new(0, 8, 0, 48)
+DTimerLabel.BackgroundTransparency = 1
+DTimerLabel.Font = Enum.Font.Code
+DTimerLabel.Text = "⏱️ Phase Timer: 0.0s | Stuck: 0.0s / 25s"
+DTimerLabel.TextColor3 = Color3.fromRGB(240, 220, 100)
+DTimerLabel.TextSize = 10
+DTimerLabel.TextXAlignment = Enum.TextXAlignment.Left
+DTimerLabel.Parent = DebugFrame
+
+local DPosLabel = Instance.new("TextLabel")
+DPosLabel.Size = UDim2.new(1, -10, 0, 18)
+DPosLabel.Position = UDim2.new(0, 8, 0, 68)
+DPosLabel.BackgroundTransparency = 1
+DPosLabel.Font = Enum.Font.Code
+DPosLabel.Text = "📍 Jarak SafeZone: 0.0 studs (Di Zona: YA)"
+DPosLabel.TextColor3 = Color3.fromRGB(180, 210, 255)
+DPosLabel.TextSize = 10
+DPosLabel.TextXAlignment = Enum.TextXAlignment.Left
+DPosLabel.Parent = DebugFrame
+
+local DSignalsLabel = Instance.new("TextLabel")
+DSignalsLabel.Size = UDim2.new(1, -10, 0, 18)
+DSignalsLabel.Position = UDim2.new(0, 8, 0, 88)
+DSignalsLabel.BackgroundTransparency = 1
+DSignalsLabel.Font = Enum.Font.Code
+DSignalsLabel.Text = "📡 Sinyal: P2: [X] | Collect: [X] | End: [X]"
+DSignalsLabel.TextColor3 = Color3.fromRGB(255, 170, 80)
+DSignalsLabel.TextSize = 10
+DSignalsLabel.TextXAlignment = Enum.TextXAlignment.Left
+DSignalsLabel.Parent = DebugFrame
+
+local DEventLabel = Instance.new("TextLabel")
+DEventLabel.Size = UDim2.new(1, -10, 0, 18)
+DEventLabel.Position = UDim2.new(0, 8, 0, 108)
+DEventLabel.BackgroundTransparency = 1
+DEventLabel.Font = Enum.Font.Code
+DEventLabel.Text = "☁️ Event Cuaca: None | Luck Buff x8: [X]"
+DEventLabel.TextColor3 = Color3.fromRGB(200, 160, 255)
+DEventLabel.TextSize = 10
+DEventLabel.TextXAlignment = Enum.TextXAlignment.Left
+DEventLabel.Parent = DebugFrame
+
+local DMutationLabel = Instance.new("TextLabel")
+DMutationLabel.Size = UDim2.new(1, -10, 0, 18)
+DMutationLabel.Position = UDim2.new(0, 8, 0, 128)
+DMutationLabel.BackgroundTransparency = 1
+DMutationLabel.Font = Enum.Font.GothamBold
+DMutationLabel.Text = "🧬 Total Mutasi: 0 | Gacha: None"
+DMutationLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
+DMutationLabel.TextSize = 10
+DMutationLabel.TextXAlignment = Enum.TextXAlignment.Left
+DMutationLabel.Parent = DebugFrame
+
+local DPerfLabel = Instance.new("TextLabel")
+DPerfLabel.Size = UDim2.new(1, -10, 0, 18)
+DPerfLabel.Position = UDim2.new(0, 8, 0, 148)
+DPerfLabel.BackgroundTransparency = 1
+DPerfLabel.Font = Enum.Font.Code
+DPerfLabel.Text = "⚡ FPS: 60 | AFK: 0s | Saklar: OFF"
+DPerfLabel.TextColor3 = Color3.fromRGB(150, 240, 200)
+DPerfLabel.TextSize = 10
+DPerfLabel.TextXAlignment = Enum.TextXAlignment.Left
+DPerfLabel.Parent = DebugFrame
+
+local DLogLabel = Instance.new("TextLabel")
+DLogLabel.Size = UDim2.new(1, -10, 0, 32)
+DLogLabel.Position = UDim2.new(0, 8, 0, 170)
+DLogLabel.BackgroundTransparency = 1
+DLogLabel.Font = Enum.Font.Code
+DLogLabel.Text = "📝 Log: Bot Standby..."
+DLogLabel.TextColor3 = Color3.fromRGB(160, 170, 190)
+DLogLabel.TextSize = 9
+DLogLabel.TextXAlignment = Enum.TextXAlignment.Left
+DLogLabel.TextYAlignment = Enum.TextYAlignment.Top
+DLogLabel.TextWrapped = true
+DLogLabel.Parent = DebugFrame
+
+pcall(function()
+    DebugScreenGui.Parent = targetGuiParent or lp:WaitForChild("PlayerGui", 5)
+end)
+
+-- Warna fase untuk HUD
+local phaseColors = {
+    ["Idle"] = Color3.fromRGB(100, 255, 120),
+    ["WaitingForPhase2"] = Color3.fromRGB(255, 210, 60),
+    ["PlayingAnim"] = Color3.fromRGB(200, 130, 255),
+    ["WalkToSafeZone"] = Color3.fromRGB(80, 200, 255),
+    ["WaitingForCollected"] = Color3.fromRGB(255, 140, 60),
+    ["LuckMachineTeleport"] = Color3.fromRGB(255, 180, 50),
+    ["LuckMachineTraining"] = Color3.fromRGB(255, 225, 80),
+    ["WaitingRespawn"] = Color3.fromRGB(255, 70, 70),
+}
+
+-- =============================================
 -- 🎨 LOAD SIGMA UI LIBRARY V4
 -- =============================================
 local Library = nil
@@ -160,9 +328,17 @@ local stateTimer = 0
 local globalStuckTimer = 0         
 local mutationCount = 0            
 local lastRewardDesc = "None"
+local lastLogMessage = "Bot Standby..."
 local safeZone = Vector3.new(698.030701, 3.298559, 233.707077)
 local safeZoneCFrame = CFrame.new(698.030701, 3.298559, 233.707077, -0.061024, -0.000000, 0.998136, -0.000000, 1.000000, 0.000000, -0.998136, -0.000000, -0.061024)
 local startTime = os.time()
+
+local function setDebugLog(msg)
+    lastLogMessage = tostring(msg)
+    pcall(function()
+        DLogLabel.Text = "📝 Log: " .. lastLogMessage
+    end)
+end
 
 -- =============================================
 -- 🛡️ ANTI AFK
@@ -192,7 +368,6 @@ local rev_KickEventEnded = networkFolder and networkFolder:FindFirstChild("rev_K
 local rev_AddedWeather = networkFolder and networkFolder:FindFirstChild("rev_AddedWeather")
 local rev_PlayMessage = networkFolder and networkFolder:FindFirstChild("rev_PlayMessage")
 
--- Fallback pencarian remote
 if not ref_KickEvent then
     for _, r in pairs(ReplicatedStorage:GetDescendants()) do
         if r:IsA("RemoteFunction") and r.Name == "ref_KickEvent" then
@@ -244,6 +419,7 @@ if rev_kickPhase2 then
         pcall(function()
             if type(rewardTable) == "table" and rewardTable[1] then
                 lastRewardDesc = string.format("%s [%s]", tostring(rewardTable[1].Name or "Brainrot"), tostring(rewardTable[1].Mutation or "Normal"))
+                setDebugLog(string.format("Reward Masuk: %s", lastRewardDesc))
             end
         end)
     end)
@@ -252,12 +428,14 @@ end
 if rev_Collected then
     rev_Collected.OnClientEvent:Connect(function(...)
         collectedFired = true
+        setDebugLog("Event rev_Collected Diterima")
     end)
 end
 
 if rev_KickEventEnded then
     rev_KickEventEnded.OnClientEvent:Connect(function(...)
         kickEndedFired = true
+        setDebugLog("Event rev_KickEventEnded Diterima")
     end)
 end
 
@@ -265,6 +443,7 @@ if rev_AddedWeather then
     rev_AddedWeather.OnClientEvent:Connect(function(weatherType, ...)
         if weatherType == "LuckMachine" then
             weatherEventPending = true
+            setDebugLog("Event Cuaca: LuckMachine Aktif!")
         end
     end)
 end
@@ -273,6 +452,7 @@ if rev_PlayMessage then
     rev_PlayMessage.OnClientEvent:Connect(function(msg, msgType)
         if tostring(msg) == "Luck has been increased to x8" then
             luckBuffObtained = true
+            setDebugLog("Buff x8 Luck Sukses Didapat!")
         end
     end)
 end
@@ -286,6 +466,8 @@ local function executeKick()
     if not timestamp or type(timestamp) ~= "number" or timestamp <= 0 then
         timestamp = tick()
     end
+
+    setDebugLog("Mengeksekusi Kick (Tri-Layer)...")
 
     -- 1. Direct GameController Client Hook
     pcall(function()
@@ -332,13 +514,47 @@ RunService.Heartbeat:Connect(function()
 end)
 
 -- =============================================
--- ⚙️ MAIN LOOP (STATE MACHINE - AUTO FARM FLOW)
+-- ⚙️ MAIN LOOP (STATE MACHINE + SCREEN DEBUG UPDATE)
 -- =============================================
 task.spawn(function()
     while task.wait(0.05) do
-        -- Update UI Sigma Monitor
+        local elapsedSeconds = os.time() - startTime
+        local char = lp.Character
+        local hum = char and char:FindFirstChild("Humanoid")
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        local distToSafeZone = hrp and (hrp.Position - safeZone).Magnitude or 999
+        local inSafeZone = distToSafeZone <= 10
+
+        -- 1. UPDATE SCREEN DEBUG HUD
         pcall(function()
-            local elapsedSeconds = os.time() - startTime
+            local phaseColor = phaseColors[targetAction] or Color3.fromRGB(200, 200, 200)
+            DPhaseLabel.Text = string.format("📌 Fase: [%s]", tostring(targetAction))
+            DPhaseLabel.TextColor3 = phaseColor
+            DebugStroke.Color = phaseColor
+
+            DTimerLabel.Text = string.format("⏱️ State: %.1fs | Stuck: %.1fs/25s", stateTimer, globalStuckTimer)
+            DPosLabel.Text = string.format("📍 Jarak SafeZone: %.1f studs (Di Zona: %s)", distToSafeZone, inSafeZone and "YA" or "TIDAK")
+            
+            DSignalsLabel.Text = string.format(
+                "📡 Sinyal: P2: [%s] | Collect: [%s] | End: [%s]",
+                phase2Fired and "✓" or "X",
+                collectedFired and "✓" or "X",
+                kickEndedFired and "✓" or "X"
+            )
+
+            DEventLabel.Text = string.format(
+                "☁️ Event: %s | Buff x8: [%s]",
+                weatherEventPending and "LuckMachine" or (targetAction:find("LuckMachine") and "Training" or "None"),
+                luckBuffObtained and "✓" or "X"
+            )
+
+            DMutationLabel.Text = string.format("🧬 Total Mutasi: %d | Gacha: %s", mutationCount, lastRewardDesc)
+            DPerfLabel.Text = string.format("⚡ FPS: %d | AFK: %ds | Saklar: %s", fps, elapsedSeconds, autoFarmActive and "ON" or "OFF")
+            DLogLabel.Text = "📝 Log: " .. tostring(lastLogMessage)
+        end)
+
+        -- 2. UPDATE SIGMA UI MONITOR
+        pcall(function()
             statusPara:Set(
                 "Status: " .. tostring(targetAction),
                 string.format(
@@ -357,11 +573,6 @@ task.spawn(function()
         end)
 
         if not autoFarmActive then continue end
-
-        local char = lp.Character
-        local hum = char and char:FindFirstChild("Humanoid")
-        local hrp = char and char:FindFirstChild("HumanoidRootPart")
-
         if not hum or not hrp then continue end 
 
         -- [ PENDETEKSI MATI & RESPAWN ]
@@ -369,12 +580,14 @@ task.spawn(function()
             targetAction = "WaitingRespawn"
             lastAction = "WaitingRespawn"
             globalStuckTimer = 0
+            setDebugLog("Karakter Mati -> WaitingRespawn")
             continue 
         end
 
         if targetAction == "WaitingRespawn" and hum.Health > 0 then
             targetAction = "Idle"
             lastAction = "Idle"
+            setDebugLog("Karakter Hidup -> Kembali ke Idle")
         end
 
         -- [ PENGATUR WAKTU OTOMATIS & FAILSAFE 25 DETIK ]
@@ -382,6 +595,7 @@ task.spawn(function()
             globalStuckTimer = 0
             stateTimer = 0 
             lastAction = targetAction
+            setDebugLog("Transisi Fase -> " .. tostring(targetAction))
         else
             globalStuckTimer = globalStuckTimer + 0.05
             stateTimer = stateTimer + 0.05 
@@ -389,6 +603,7 @@ task.spawn(function()
             if globalStuckTimer >= 25 and targetAction ~= "LuckMachineTraining" and targetAction ~= "LuckMachineTeleport" then
                 globalStuckTimer = 0
                 targetAction = "WaitingRespawn"
+                setDebugLog("🚨 Failsafe 25s Triggered! Reset karakter...")
                 hum.Health = 0 
                 continue
             end
@@ -401,10 +616,9 @@ task.spawn(function()
                 luckBuffObtained = false
                 pcall(function() hum:UnequipTools() end)
                 targetAction = "LuckMachineTeleport"
+                setDebugLog("Event Cuaca Terdeteksi -> Teleport Luck Machine")
             end
         end
-
-        local distToSafeZone = (hrp.Position - safeZone).Magnitude
 
         -- [ FASE 1: IDLE / NENDANG DI SAFE ZONE ]
         if targetAction == "Idle" then
@@ -412,6 +626,7 @@ task.spawn(function()
                 if stateTimer >= 0.5 then
                     hrp.CFrame = safeZoneCFrame
                     stateTimer = 0 
+                    setDebugLog("Teleport ke Safe Zone")
                 end
             else
                 if stateTimer >= 0.5 then
@@ -420,6 +635,7 @@ task.spawn(function()
                     kickEndedFired = false
                     executeKick()
                     targetAction = "WaitingForPhase2"
+                    setDebugLog("Kick Dieksekusi -> Menunggu Phase 2")
                 end
             end
 
@@ -428,14 +644,17 @@ task.spawn(function()
             if phase2Fired then
                 phase2Fired = false
                 targetAction = "PlayingAnim"
+                setDebugLog("Phase 2 Selesai -> PlayingAnim")
             elseif stateTimer > 20 then
                 targetAction = "Idle"
+                setDebugLog("Timeout Phase 2 (20s) -> Re-Idle")
             end
 
         -- [ FASE 3: NUNGGU ANIMASI GACHA SELESAI ]
         elseif targetAction == "PlayingAnim" then
             if stateTimer >= animDelay then
                 targetAction = "WalkToSafeZone"
+                setDebugLog("Anim Selesai -> WalkToSafeZone")
             end
 
         -- [ FASE 4: JALAN / KEMBALI KE SAFE ZONE ]
@@ -443,9 +662,11 @@ task.spawn(function()
             hum:MoveTo(safeZone)
             if distToSafeZone < 8 then
                 targetAction = "WaitingForCollected"
+                setDebugLog("Tiba di Safe Zone -> WaitingForCollected")
             elseif stateTimer > 8 then
                 hrp.CFrame = safeZoneCFrame
                 targetAction = "WaitingForCollected"
+                setDebugLog("Teleport Safe Zone (8s) -> WaitingForCollected")
             end
 
         -- [ FASE 5: NUNGGU COLLECTED & RE-KICK INSTAN ]
@@ -458,8 +679,10 @@ task.spawn(function()
                 phase2Fired = false
                 executeKick()
                 targetAction = "WaitingForPhase2"
+                setDebugLog("Reward Terkumpul -> Re-Kick Langsung!")
             elseif stateTimer > 6 then
                 targetAction = "Idle"
+                setDebugLog("Timeout Collected (6s) -> Idle")
             end
 
         -- [ FASE EX-1: TELEPORT KE LUCK MACHINE ]
@@ -480,9 +703,11 @@ task.spawn(function()
                 hrp.CFrame = targetPart.CFrame + Vector3.new(0, 3, 0)
                 task.wait(0.5)
                 targetAction = "LuckMachineTraining"
+                setDebugLog("Tiba di Platform -> Training Barbell")
             else
                 if stateTimer >= 3 then
                     targetAction = "Idle"
+                    setDebugLog("Platform tidak ditemukan -> Idle")
                 end
             end
 
@@ -525,11 +750,12 @@ task.spawn(function()
                 pcall(function() hum:UnequipTools() end)
                 luckBuffObtained = false
                 targetAction = "Idle"
+                setDebugLog("Selesai Training Luck -> Kembali Idle")
             end
         end
     end
 end)
 
 print("--------------------------------------------------")
-print("🚀 [SUKSES] KALB Auto Farm V2 State Machine Siap Digunakan!")
+print("🚀 [SUKSES] KALB Auto Farm V2 (With Screen Debugger) Siap!")
 print("--------------------------------------------------")
