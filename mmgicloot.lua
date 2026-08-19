@@ -108,7 +108,7 @@ end
 -- =============================================
 -- ☄️ AUTO METEOR EVENT ENGINE (HITBOX EXPANDER)
 -- =============================================
-local OPTIMAL_METEOR_SIZE = Vector3.new(250, 250, 250)
+local OPTIMAL_METEOR_SIZE = Vector3.new(200, 200, 200)
 local activeMeteors = {}
 local isMeteorShowerActive = false
 
