@@ -580,7 +580,7 @@ task.spawn(function()
             targetAction = "WaitingRespawn"
             lastAction = "WaitingRespawn"
             globalStuckTimer = 0
-            setDebugLog("Karakter Mati -> WaitingRespawn")
+            setDebugLog("Karakter Mati -> Menunggu Respawn")
             continue 
         end
 
@@ -590,7 +590,7 @@ task.spawn(function()
             setDebugLog("Karakter Hidup -> Kembali ke Idle")
         end
 
-        -- [ PENGATUR WAKTU OTOMATIS & FAILSAFE 25 DETIK ]
+        -- [ PENGATUR WAKTU OTOMATIS & FAILSAFE 25 DETIK (TANPA MATI / RESPAWN) ]
         if targetAction ~= lastAction then
             globalStuckTimer = 0
             stateTimer = 0 
@@ -600,11 +600,13 @@ task.spawn(function()
             globalStuckTimer = globalStuckTimer + 0.05
             stateTimer = stateTimer + 0.05 
             
+            -- Failsafe 25 detik: Cukup teleport balik ke Safe Zone, JANGAN bunuh karakter!
             if globalStuckTimer >= 25 and targetAction ~= "LuckMachineTraining" and targetAction ~= "LuckMachineTeleport" then
                 globalStuckTimer = 0
-                targetAction = "WaitingRespawn"
-                setDebugLog("🚨 Failsafe 25s Triggered! Reset karakter...")
-                hum.Health = 0 
+                stateTimer = 0
+                hrp.CFrame = safeZoneCFrame
+                targetAction = "Idle"
+                setDebugLog("🚨 Failsafe 25s: Auto-TP ke SafeZone (Reset Idle)")
                 continue
             end
         end
@@ -641,13 +643,13 @@ task.spawn(function()
 
         -- [ FASE 2: NUNGGU PHASE 2 DARI SERVER ]
         elseif targetAction == "WaitingForPhase2" then
-            if phase2Fired then
+            if phase2Fired or collectedFired or kickEndedFired then
                 phase2Fired = false
                 targetAction = "PlayingAnim"
                 setDebugLog("Phase 2 Selesai -> PlayingAnim")
-            elseif stateTimer > 20 then
-                targetAction = "Idle"
-                setDebugLog("Timeout Phase 2 (20s) -> Re-Idle")
+            elseif stateTimer > 18 then
+                targetAction = "PlayingAnim"
+                setDebugLog("Phase 2 Timeout (18s) -> Lanjut PlayingAnim")
             end
 
         -- [ FASE 3: NUNGGU ANIMASI GACHA SELESAI ]
@@ -657,21 +659,21 @@ task.spawn(function()
                 setDebugLog("Anim Selesai -> WalkToSafeZone")
             end
 
-        -- [ FASE 4: JALAN / KEMBALI KE SAFE ZONE ]
+        -- [ FASE 4: JALAN MURNI KE SAFE ZONE (TANPA TELEPORT) ]
         elseif targetAction == "WalkToSafeZone" then
             hum:MoveTo(safeZone)
             if distToSafeZone < 8 then
                 targetAction = "WaitingForCollected"
                 setDebugLog("Tiba di Safe Zone -> WaitingForCollected")
-            elseif stateTimer > 8 then
-                hrp.CFrame = safeZoneCFrame
-                targetAction = "WaitingForCollected"
-                setDebugLog("Teleport Safe Zone (8s) -> WaitingForCollected")
             end
 
         -- [ FASE 5: NUNGGU COLLECTED & RE-KICK INSTAN ]
         elseif targetAction == "WaitingForCollected" then
-            if collectedFired or kickEndedFired then
+            if distToSafeZone >= 8 then
+                hum:MoveTo(safeZone)
+            end
+
+            if collectedFired or kickEndedFired or stateTimer >= 3 then
                 collectedFired = false
                 kickEndedFired = false
                 mutationCount = mutationCount + 1
@@ -680,9 +682,6 @@ task.spawn(function()
                 executeKick()
                 targetAction = "WaitingForPhase2"
                 setDebugLog("Reward Terkumpul -> Re-Kick Langsung!")
-            elseif stateTimer > 6 then
-                targetAction = "Idle"
-                setDebugLog("Timeout Collected (6s) -> Idle")
             end
 
         -- [ FASE EX-1: TELEPORT KE LUCK MACHINE ]
