@@ -188,7 +188,7 @@ local SHOP_ITEMS = {
         TagColor = Color3.fromRGB(255, 210, 60),
         Info = "+1 Perm Speed",
         Image = "rbxassetid://86964499984867",
-        DefaultAutoBuy = false
+        DefaultAutoBuy = true
     },
     ["Kick Mastery"] = {
         Category = "Upgrade",
@@ -230,7 +230,7 @@ local SHOP_ITEMS = {
         TagColor = Color3.fromRGB(255, 110, 80),
         Info = "+150% CP/s",
         Image = "rbxassetid://95399484334874",
-        DefaultAutoBuy = false
+        DefaultAutoBuy = true
     },
     ["Frigorex"] = {
         Category = "Brainrot",
