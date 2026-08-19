@@ -23,8 +23,12 @@ if not game:IsLoaded() then game.Loaded:Wait() end
 _G.autoFarm = true               -- true: Auto Farm Aktif, false: Nonaktif
 _G.onlyMeteorEvent = true        -- true: HANYA Auto Kick saat Event Meteor Shower aktif, false: Auto kick nonstop
 _G.autoMeteor = true             -- true: Otomatis perbesar hitbox meteor saat Meteor Shower, false: Nonaktif
-_G.autoBuyFrigorex = true        -- true: Cek stock Meteor Shop tiap 5 menit & auto beli Frigorex jika stock > 0
+_G.autoBuyPatagotitan = true      -- true: Auto beli Patagotitan saat ready di Meteor Shop
+_G.autoBuySpeed = true            -- true: Auto beli Speed (+1) saat ready di Meteor Shop
+_G.autoBuyFrigorex = true        -- true: Auto beli Frigorex jika stock > 0
 _G.autoBuyFarmPotion = true      -- true: Auto beli 1x Farm Potion setiap jam ganjil (1, 3, 5... 23 WIB)
+_G.autoBuyFarmPotion2 = false     -- true: Auto beli Farm Potion II saat ready di Meteor Shop
+_G.autoBuyLuckPotion2 = false     -- true: Auto beli Luck Potion II saat ready di Meteor Shop
 _G.autoSellAll = true            -- true: Auto Sell All setiap 5 detik via ref_B_SellAll
 _G.autoRemovePlayer = true       -- true: Hapus player lain dari game.Players & workspace.Players (100% Bersih & No Lag), false: Biarkan
 _G.debugConsoleLog = false        -- true: Cetak log status/fase ke console (F9), false: Senyap
@@ -462,10 +466,24 @@ local function logConsole(msg)
     end
 end
 
+local function checkMeteorShowerActive()
+    if isMeteorShowerActive then return true end
+    local debris = workspace:FindFirstChild("Debris")
+    if debris then
+        for _, child in ipairs(debris:GetChildren()) do
+            if child:IsA("Model") and tonumber(child.Name) ~= nil then
+                isMeteorShowerActive = true
+                return true
+            end
+        end
+    end
+    return false
+end
+
 local function shouldKick()
     if not _G.autoFarm then return false end
     if _G.onlyMeteorEvent then
-        return isMeteorShowerActive
+        return checkMeteorShowerActive()
     end
     return true
 end
@@ -536,31 +554,44 @@ if not kickRemote then
 end
 
 -- =============================================
--- 🛒 AUTO BUY METEOR SHOP (FRIGOREX VIA STOCK)
+-- 🛒 AUTO BUY METEOR SHOP (PATAGOTITAN, SPEED, FRIGOREX, POTIONS)
 -- =============================================
 if rev_MeteorShop_Stock then
     rev_MeteorShop_Stock.OnClientEvent:Connect(function(stockData, expiryTimestamp)
         if type(stockData) ~= "table" then return end
         
-        for itemName, itemInfo in pairs(stockData) do
-            if itemName == "Frigorex" and type(itemInfo) == "table" then
-                local stockCount = tonumber(itemInfo.Stock) or 0
-                local maxCount = tonumber(itemInfo.Max) or 0
-                
-                if _G.debugConsoleLog then
-                    print(string.format("🛒 [METEOR SHOP] Frigorex Stock: %d / %d", stockCount, maxCount))
-                end
+        local buyRemote = rev_MeteorShop_Buy or (networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_Buy"))
+        if not buyRemote then return end
 
-                if _G.autoBuyFrigorex and stockCount > 0 then
-                    for i = 1, stockCount do
-                        pcall(function()
-                            local buyRemote = rev_MeteorShop_Buy or (networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_Buy"))
-                            if buyRemote then
-                                buyRemote:FireServer("Frigorex")
-                                print(string.format("🔥 [AUTO BUY] Berhasil membeli Frigorex (#%d/%d)!", i, stockCount))
+        for itemName, itemInfo in pairs(stockData) do
+            if type(itemInfo) == "table" then
+                local stockCount = tonumber(itemInfo.Stock) or 0
+                
+                if stockCount > 0 then
+                    local shouldBuy = false
+
+                    if itemName == "Patagotitan" and _G.autoBuyPatagotitan then
+                        shouldBuy = true
+                    elseif itemName == "Speed" and _G.autoBuySpeed then
+                        shouldBuy = true
+                    elseif itemName == "Frigorex" and _G.autoBuyFrigorex then
+                        shouldBuy = true
+                    elseif itemName == "Farm Potion II" and _G.autoBuyFarmPotion2 then
+                        shouldBuy = true
+                    elseif itemName == "Luck Potion II" and _G.autoBuyLuckPotion2 then
+                        shouldBuy = true
+                    end
+
+                    if shouldBuy then
+                        task.spawn(function()
+                            for i = 1, stockCount do
+                                pcall(function()
+                                    buyRemote:FireServer(itemName)
+                                    print(string.format("🛒 [METEOR AUTO BUY] Berhasil membeli %s (#%d/%d)!", itemName, i, stockCount))
+                                end)
+                                task.wait(0.2)
                             end
                         end)
-                        task.wait(0.2)
                     end
                 end
             end
@@ -568,22 +599,19 @@ if rev_MeteorShop_Stock then
     end)
 end
 
--- Loop Request Sync Stock setiap 5 Menit (300 Detik)
+-- Loop Request Sync Stock setiap 60 Detik
 task.spawn(function()
     task.wait(3)
     while true do
-        if _G.autoFarm and _G.autoBuyFrigorex then
+        if _G.autoFarm and (_G.autoBuyPatagotitan or _G.autoBuySpeed or _G.autoBuyFrigorex or _G.autoBuyFarmPotion2 or _G.autoBuyLuckPotion2) then
             pcall(function()
                 local syncRemote = rev_MeteorShop_RequestSync or (networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_RequestSync"))
                 if syncRemote then
                     syncRemote:FireServer()
-                    if _G.debugConsoleLog then
-                        print("🛒 [METEOR SHOP] Mengirim RequestSync Stock ke server (Loop 5 Menit)...")
-                    end
                 end
             end)
         end
-        task.wait(300)
+        task.wait(60)
     end
 end)
 
@@ -701,7 +729,68 @@ if rev_RemovedWeather then
 end
 
 -- =============================================
--- 🚀 FUNGSI EKSEKUSI TENDANGAN (100% ZERO-CLICK & REINFORCED)
+-- ☄️ DETEKSI METEOR SHOWER REAL-TIME (MULTI-SOURCE)
+-- =============================================
+local function checkMeteorShowerActive()
+    if isMeteorShowerActive then return true end
+    local debris = workspace:FindFirstChild("Debris")
+    if debris then
+        for _, child in ipairs(debris:GetChildren()) do
+            if child:IsA("Model") and tonumber(child.Name) ~= nil then
+                isMeteorShowerActive = true
+                return true
+            end
+        end
+    end
+    return false
+end
+
+local function shouldKick()
+    if not _G.autoFarm then return false end
+    if _G.onlyMeteorEvent then
+        return checkMeteorShowerActive()
+    end
+    return true
+end
+
+-- =============================================
+-- 🖱️ TRIGGER VIRTUAL INPUT & UI KICK DISPATCHER
+-- =============================================
+local function triggerGuiAndVirtualInput()
+    pcall(function()
+        local pg = lp:FindFirstChildOfClass("PlayerGui")
+        if pg then
+            for _, btn in ipairs(pg:GetDescendants()) do
+                if btn:IsA("GuiButton") and btn.Visible and btn.Active then
+                    local bName = btn.Name:lower()
+                    local bText = (btn:IsA("TextButton") and btn.Text:lower()) or ""
+                    if string.find(bName, "kick") or string.find(bText, "kick") or string.find(bName, "shoot") or string.find(bText, "shoot") or string.find(bName, "tap") or string.find(bText, "tap") then
+                        if firesignal then
+                            firesignal(btn.MouseButton1Click)
+                            firesignal(btn.Activated)
+                        end
+                    end
+                end
+            end
+        end
+    end)
+
+    pcall(function()
+        local VirtualInputManager = game:GetService("VirtualInputManager")
+        if VirtualInputManager then
+            VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
+            task.wait(0.02)
+            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
+        end
+        if VirtualUser then
+            VirtualUser:CaptureController()
+            VirtualUser:ClickButton1(Vector2.new(100, 100))
+        end
+    end)
+end
+
+-- =============================================
+-- 🚀 FUNGSI EKSEKUSI TENDANGAN TERPADU (TRI-LAYER REINFORCED)
 -- =============================================
 local function executeKick()
     local timestamp = nil
@@ -710,9 +799,9 @@ local function executeKick()
         timestamp = tick()
     end
 
-    logConsole("⚡ Menendang Bola...")
+    logConsole("⚡ Mengeksekusi Kick Terpadu (Tri-Layer)...")
 
-    -- 1. Direct GameController Client Hook (Animasi, Visual Asli & Unlock Cooldown)
+    -- LAPIS 1: Direct GameController Client Hook
     pcall(function()
         local controller = getGameController()
         if controller then
@@ -724,7 +813,10 @@ local function executeKick()
         end
     end)
 
-    -- 2. Jaringan Remote Resmi ke Server (Async Non-Blocking)
+    -- LAPIS 2: Virtual Input & GUI Trigger
+    task.spawn(triggerGuiAndVirtualInput)
+
+    -- LAPIS 3: Remote Network Invocation (Async Non-Blocking)
     task.spawn(function()
         pcall(function()
             if ref_KickEvent and ref_KickEvent:IsA("RemoteFunction") then
@@ -788,11 +880,10 @@ task.spawn(function()
         -- [ FASE 1: IDLE / NENDANG DI SAFE ZONE (MURNI JALAN KAKI - TANPA TELEPORT) ]
         if targetAction == "Idle" then
             if distToSafeZone > 5 then
-                -- Jika belum persis di Safe Zone, jalan kaki terus sampai masuk zona (Tanpa Teleport)
                 hum:MoveTo(safeZone)
             else
                 if shouldKick() then
-                    if stateTimer >= 0.5 then
+                    if stateTimer >= 0.1 then
                         phase2Fired = false
                         collectedFired = false
                         kickEndedFired = false
@@ -800,8 +891,7 @@ task.spawn(function()
                         targetAction = "WaitingForPhase2"
                     end
                 else
-                    -- Jika event Meteor Shower tidak aktif, standby di Safe Zone
-                    task.wait(0.2)
+                    task.wait(0.1)
                 end
             end
 
@@ -811,14 +901,14 @@ task.spawn(function()
                 phase2Fired = false
                 targetAction = "WalkToSafeZone"
                 logConsole("Phase 2 Selesai -> Langsung Jalan ke Safe Zone")
-            elseif stateTimer >= 5 and not phase2Fired and not collectedFired and not kickEndedFired then
-                -- Auto-Retry Failsafe: Jika respon server belum terdeteksi dalam 3.5s, coba kick ulang
-                logConsole("⚠️ [RETRY] Auto-Retry Kick (3.5s timeout)...")
+            elseif stateTimer >= 3.0 and not phase2Fired and not collectedFired and not kickEndedFired then
+                -- Auto-Retry Failsafe: Jika respon server belum terdeteksi dalam 3.0s, coba kick ulang
+                logConsole("⚠️ [RETRY] Auto-Retry Kick (3.0s timeout)...")
                 stateTimer = 0
                 executeKick()
-            elseif stateTimer > 18 then
+            elseif stateTimer > 15 then
                 targetAction = "WalkToSafeZone"
-                logConsole("Phase 2 Timeout (18s) -> Lanjut Jalan ke Safe Zone")
+                logConsole("Phase 2 Timeout (15s) -> Lanjut Jalan ke Safe Zone")
             end
 
         -- [ FASE 3: JALAN MURNI SAMPAI KE SAFE ZONE (TANPA TELEPORT) ]
