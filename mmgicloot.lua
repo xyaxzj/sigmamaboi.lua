@@ -31,6 +31,7 @@ _G.autoSellAll = true            -- true: Auto Sell All setiap 5 detik via ref_B
 _G.autoRemovePlayer = true       -- true: Hapus player lain dari game.Players & workspace.Players (100% Bersih & No Lag), false: Biarkan
 _G.debugConsoleLog = false        -- true: Cetak log status/fase ke console (F9), false: Senyap
 _G.failsafeTimeout = 25          -- Waktu maksimal (detik) sebelum auto-reset ke Safe Zone jika macet
+_G.testWebhook = false           -- 📢 Ubah jadi true untuk langsung test kirim pesan Patagotitan & Frigorex ke Discord Webhook!
 
 print("--------------------------------------------------")
 print("🚀 [INIT] Memuat KALB Auto Farm V2 (Ultra Lightweight & Total Player Purger)...")
@@ -552,6 +553,168 @@ if not kickRemote then
 end
 
 -- =============================================
+-- 📢 DISCORD WEBHOOK NOTIFIER (PATAGOTITAN & FRIGOREX - COMPACT & CLEAN)
+-- =============================================
+local DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1539697793973756084/1oLTQDKSmutWJlPX91He00IEEAg_lsos8MWbxuXki8LKqO8WnZUX8kwurULVjdB8lOqb"
+
+local function getDirectRobloxImageUrl(assetId, productId)
+    local fallback = string.format("https://www.roblox.com/asset-thumbnail/image?assetId=%s&width=420&height=420&format=png", tostring(assetId))
+    local ok, res = pcall(function()
+        local httpReq = request or http_request or (delta and delta.request) or (syn and syn.request) or (Fluxus and Fluxus.request) or (http and http.request)
+        if not httpReq then return nil end
+        local HttpService = game:GetService("HttpService")
+
+        -- 1. Coba Developer Product Icon API jika ada productId
+        if productId then
+            local pRes = httpReq({
+                Url = string.format("https://thumbnails.roblox.com/v1/developer-products/icons?developerProductIds=%s&size=420x420&format=Png", tostring(productId)),
+                Method = "GET"
+            })
+            if pRes and pRes.Body then
+                local data = HttpService:JSONDecode(pRes.Body)
+                if data and data.data and data.data[1] and data.data[1].imageUrl and data.data[1].imageUrl ~= "" then
+                    return data.data[1].imageUrl
+                end
+            end
+        end
+
+        -- 2. Coba Asset Thumbnail API
+        if assetId then
+            local aRes = httpReq({
+                Url = string.format("https://thumbnails.roblox.com/v1/assets?assetIds=%s&size=420x420&format=Png", tostring(assetId)),
+                Method = "GET"
+            })
+            if aRes and aRes.Body then
+                local data = HttpService:JSONDecode(aRes.Body)
+                if data and data.data and data.data[1] and data.data[1].imageUrl and data.data[1].imageUrl ~= "" then
+                    return data.data[1].imageUrl
+                end
+            end
+        end
+    end)
+    if ok and res and type(res) == "string" and string.find(res, "http") then
+        return res
+    end
+    return fallback
+end
+
+local function getDirectRobloxAvatarUrl(userId)
+    local fallback = string.format("https://www.roblox.com/headshot-thumbnail/image?userId=%s&width=150&height=150&format=png", tostring(userId))
+    local ok, res = pcall(function()
+        local httpReq = request or http_request or (delta and delta.request) or (syn and syn.request) or (Fluxus and Fluxus.request) or (http and http.request)
+        if httpReq then
+            local apiRes = httpReq({
+                Url = string.format("https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=%s&size=150x150&format=Png", tostring(userId)),
+                Method = "GET"
+            })
+            if apiRes and apiRes.Body then
+                local HttpService = game:GetService("HttpService")
+                local data = HttpService:JSONDecode(apiRes.Body)
+                if data and data.data and data.data[1] and data.data[1].imageUrl then
+                    return data.data[1].imageUrl
+                end
+            end
+        end
+    end)
+    if ok and res and type(res) == "string" and string.find(res, "http") then
+        return res
+    end
+    return fallback
+end
+
+local function sendDiscordWebhook(itemName, currentCount, maxStock)
+    task.spawn(function()
+        pcall(function()
+            local httpReq = request or http_request or (delta and delta.request) or (syn and syn.request) or (Fluxus and Fluxus.request) or (http and http.request)
+            if not httpReq then return end
+            local HttpService = game:GetService("HttpService")
+
+            local wibTimeStr = os.date("!%d/%m/%Y - %H:%M:%S WIB", os.time() + (7 * 3600))
+            local userName = lp and lp.Name or "Unknown"
+            local userDisplayName = lp and lp.DisplayName or userName
+            local userId = lp and tostring(lp.UserId) or "0"
+
+            local playerAvatarCdn = getDirectRobloxAvatarUrl(userId)
+            local itemImageUrl = ""
+            local embedColor = 0x3498db
+            local itemIcon = "🛒"
+            local itemCost = 0
+            local itemBuff = ""
+
+            if itemName == "Patagotitan" then
+                itemIcon = "🦖"
+                embedColor = 0x2ecc71 -- Hijau Emerald
+                itemImageUrl = getDirectRobloxImageUrl("95399484334874", "3708138558")
+                itemCost = 500
+                itemBuff = "150% CP/s"
+            elseif itemName == "Frigorex" then
+                itemIcon = "👑"
+                embedColor = 0x9b59b6 -- Ungu Royal
+                itemImageUrl = getDirectRobloxImageUrl("140510107418430", "3708174931")
+                itemCost = 1250
+                itemBuff = "250% CP/s"
+            end
+
+            local payload = {
+                ["username"] = "KALB Meteor Shop",
+                ["avatar_url"] = playerAvatarCdn,
+                ["embeds"] = {
+                    {
+                        ["author"] = {
+                            ["name"] = userDisplayName,
+                            ["icon_url"] = playerAvatarCdn
+                        },
+                        ["title"] = "Berhasil Membeli",
+                        ["description"] = string.format("%s %s", itemIcon, itemName),
+                        ["color"] = embedColor,
+                        ["thumbnail"] = {
+                            ["url"] = itemImageUrl
+                        },
+                        ["fields"] = {
+                            {
+                                ["name"] = "Exclusive",
+                                ["value"] = itemBuff,
+                                ["inline"] = false
+                            },
+                            {
+                                ["name"] = "Harga",
+                                ["value"] = string.format("%d Tokens", itemCost),
+                                ["inline"] = false
+                            }
+                        },
+                        ["footer"] = {
+                            ["text"] = "KALB - Meteor Shop"
+                        },
+                        ["timestamp"] = os.date("!%Y-%m-%dT%H:%M:%SZ")
+                    }
+                }
+            }
+
+            httpReq({
+                Url = DISCORD_WEBHOOK_URL,
+                Method = "POST",
+                Headers = {
+                    ["Content-Type"] = "application/json"
+                },
+                Body = HttpService:JSONEncode(payload)
+            })
+        end)
+    end)
+end
+
+-- Eksekusi Test Webhook jika diaktifkan di konfigurasi atas (_G.testWebhook = true)
+if _G.testWebhook then
+    task.spawn(function()
+        task.wait(1.5)
+        print("📢 [TEST WEBHOOK] Mengirim pesan simulasi pembelian Patagotitan & Frigorex ke Discord...")
+        sendDiscordWebhook("Patagotitan", 1, 3)
+        task.wait(1.5)
+        sendDiscordWebhook("Frigorex", 1, 1)
+        print("✅ [TEST WEBHOOK] Pesan test berhasil dikirim! Silakan periksa channel Discord Anda.")
+    end)
+end
+
+-- =============================================
 -- 🛒 AUTO BUY METEOR SHOP (PATAGOTITAN, SPEED, FRIGOREX)
 -- =============================================
 if rev_MeteorShop_Stock then
@@ -582,6 +745,9 @@ if rev_MeteorShop_Stock then
                                 pcall(function()
                                     buyRemote:FireServer(itemName)
                                     print(string.format("🛒 [METEOR AUTO BUY] Berhasil membeli %s (#%d/%d)!", itemName, i, stockCount))
+                                    if itemName == "Patagotitan" or itemName == "Frigorex" then
+                                        sendDiscordWebhook(itemName, i, stockCount)
+                                    end
                                 end)
                                 task.wait(0.2)
                             end
