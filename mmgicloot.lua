@@ -963,15 +963,16 @@ task.spawn(function()
                 phase2Fired = false
                 kickRetryCount = 0
                 targetAction = "WalkToSafeZone"
-                logConsole("Phase 2 Selesai -> Langsung Jalan ke Safe Zone")
-            elseif stateTimer >= 3.0 and not phase2Fired and not collectedFired and not kickEndedFired then
+                logConsole("Phase 2 Selesai / Lucky Block Kena -> Langsung Jalan ke Safe Zone")
+            elseif stateTimer >= 20.0 and not phase2Fired and not collectedFired and not kickEndedFired then
+                -- Failsafe: Jika bola terbang melebihi batas wajar (20s) tanpa respon sama sekali
                 if kickRetryCount < MAX_KICK_RETRIES then
                     kickRetryCount = kickRetryCount + 1
                     stateTimer = 0
-                    logConsole(string.format("⚠️ [RETRY] Auto-Retry Kick #%d/%d (3.0s timeout)...", kickRetryCount, MAX_KICK_RETRIES))
+                    logConsole(string.format("⚠️ [RETRY] Tidak ada respon setelah 20s, mencoba re-kick #%d/%d...", kickRetryCount, MAX_KICK_RETRIES))
                     executeKick()
                 else
-                    logConsole(string.format("🚨 [FAILSAFE] Gagal respon setelah %d kali retry! Memaksa Respawn/Reset Karakter...", MAX_KICK_RETRIES))
+                    logConsole(string.format("🚨 [FAILSAFE] Macet total setelah %d kali percobaan (40s+) -> Reset/Respawn Karakter...", MAX_KICK_RETRIES))
                     kickRetryCount = 0
                     stateTimer = 0
                     targetAction = "WaitingRespawn"
@@ -980,9 +981,6 @@ task.spawn(function()
                         if char then char:BreakJoints() end
                     end)
                 end
-            elseif stateTimer > 15 then
-                targetAction = "WalkToSafeZone"
-                logConsole("Phase 2 Timeout (15s) -> Lanjut Jalan ke Safe Zone")
             end
 
         -- [ FASE 3: JALAN MURNI SAMPAI KE SAFE ZONE (TANPA TELEPORT) ]
