@@ -455,6 +455,8 @@ local stateTimer = 0
 local globalStuckTimer = 0         
 local mutationCount = 0            
 local lastRewardDesc = "None"
+local kickRetryCount = 0
+local MAX_KICK_RETRIES = 2
 local safeZone = Vector3.new(698.030701, 3.298559, 233.707077)
 local safeZoneCFrame = CFrame.new(698.030701, 3.298559, 233.707077, -0.061024, -0.000000, 0.998136, -0.000000, 1.000000, 0.000000, -0.998136, -0.000000, -0.061024)
 
@@ -975,13 +977,16 @@ task.spawn(function()
             targetAction = "WaitingRespawn"
             lastAction = "WaitingRespawn"
             globalStuckTimer = 0
+            kickRetryCount = 0
             continue 
         end
 
         if targetAction == "WaitingRespawn" and hum.Health > 0 then
             targetAction = "Idle"
             lastAction = "Idle"
-            logConsole("Karakter Respawn -> Kembali ke Idle")
+            kickRetryCount = 0
+            stateTimer = 0
+            logConsole("Karakter Respawn -> Berjalan ke Safe Zone sebelum Kick...")
         end
 
         -- [ PENGATUR WAKTU & FAILSAFE RESET (MURNI JALAN TANPA TELEPORT) ]
@@ -1013,6 +1018,7 @@ task.spawn(function()
             else
                 if shouldKick() then
                     if stateTimer >= 0.1 then
+                        kickRetryCount = 0
                         phase2Fired = false
                         collectedFired = false
                         kickEndedFired = false
@@ -1028,13 +1034,25 @@ task.spawn(function()
         elseif targetAction == "WaitingForPhase2" then
             if phase2Fired or collectedFired or kickEndedFired then
                 phase2Fired = false
+                kickRetryCount = 0
                 targetAction = "WalkToSafeZone"
                 logConsole("Phase 2 Selesai -> Langsung Jalan ke Safe Zone")
             elseif stateTimer >= 3.0 and not phase2Fired and not collectedFired and not kickEndedFired then
-                -- Auto-Retry Failsafe: Jika respon server belum terdeteksi dalam 3.0s, coba kick ulang
-                logConsole("⚠️ [RETRY] Auto-Retry Kick (3.0s timeout)...")
-                stateTimer = 0
-                executeKick()
+                if kickRetryCount < MAX_KICK_RETRIES then
+                    kickRetryCount = kickRetryCount + 1
+                    stateTimer = 0
+                    logConsole(string.format("⚠️ [RETRY] Auto-Retry Kick #%d/%d (3.0s timeout)...", kickRetryCount, MAX_KICK_RETRIES))
+                    executeKick()
+                else
+                    logConsole(string.format("🚨 [FAILSAFE] Gagal respon setelah %d kali retry! Memaksa Respawn/Reset Karakter...", MAX_KICK_RETRIES))
+                    kickRetryCount = 0
+                    stateTimer = 0
+                    targetAction = "WaitingRespawn"
+                    pcall(function()
+                        if hum then hum.Health = 0 end
+                        if char then char:BreakJoints() end
+                    end)
+                end
             elseif stateTimer > 15 then
                 targetAction = "WalkToSafeZone"
                 logConsole("Phase 2 Timeout (15s) -> Lanjut Jalan ke Safe Zone")
@@ -1059,6 +1077,7 @@ task.spawn(function()
                 kickEndedFired = false
                 mutationCount = mutationCount + 1
                 phase2Fired = false
+                kickRetryCount = 0
 
                 if shouldKick() then
                     executeKick()
