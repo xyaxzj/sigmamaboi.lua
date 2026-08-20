@@ -457,6 +457,7 @@ local mutationCount = 0
 local lastRewardDesc = "None"
 local kickRetryCount = 0
 local MAX_KICK_RETRIES = 2
+local kickAcceptedByServer = false
 local safeZone = Vector3.new(698.030701, 3.298559, 233.707077)
 local safeZoneCFrame = CFrame.new(698.030701, 3.298559, 233.707077, -0.061024, -0.000000, 0.998136, -0.000000, 1.000000, 0.000000, -0.998136, -0.000000, -0.061024)
 
@@ -868,19 +869,53 @@ local function shouldKick()
 end
 
 -- =============================================
--- 🚀 FUNGSI EKSEKUSI TENDANGAN (NON-BLOCKING & ASYNC)
+-- 🚀 FUNGSI EKSEKUSI TENDANGAN REINFORCED (LAPIS 1 + LAPIS 3 NETWORK)
 -- =============================================
 local function executeKick()
-    logConsole("⚡ Mengeksekusi Kick...")
+    local timestamp = nil
+    pcall(function() timestamp = workspace:GetServerTimeNow() end)
+    if not timestamp or type(timestamp) ~= "number" or timestamp <= 0 then
+        timestamp = tick()
+    end
 
+    logConsole("⚡ Mengeksekusi Kick (Lapis 1 Controller Hook + Lapis 3 Network)...")
+
+    -- 🎮 LAPIS 1: Direct GameController Hook (Buka Kunci Cooldown & Panggil Kick Asli di Game)
+    pcall(function()
+        local controller = getGameController()
+        if controller then
+            if controller.UnblockKick then pcall(function() controller:UnblockKick() end) end
+            if controller.ResetCooldown then pcall(function() controller:ResetCooldown() end) end
+            controller.CanKick = true
+            pcall(function() controller:Kick(1, 1) end)
+        end
+    end)
+
+    -- 📡 LAPIS 3: Network Remote Invocation (Jalur Resmi Server Non-Blocking & Konfirmasi Sukses)
     task.spawn(function()
         pcall(function()
-            local controller = getGameController()
-            if controller then
-                if controller.UnblockKick then pcall(function() controller:UnblockKick() end) end
-                if controller.ResetCooldown then pcall(function() controller:ResetCooldown() end) end
-                controller.CanKick = true
-                pcall(function() controller:Kick(1, 1) end)
+            local targetRemote = ref_KickEvent or (networkFolder and networkFolder:FindFirstChild("ref_KickEvent"))
+            if not targetRemote then
+                for _, r in pairs(ReplicatedStorage:GetDescendants()) do
+                    if r:IsA("RemoteFunction") and r.Name == "ref_KickEvent" then
+                        targetRemote = r
+                        ref_KickEvent = r
+                        break
+                    end
+                end
+            end
+
+            if targetRemote and targetRemote:IsA("RemoteFunction") then
+                local res = targetRemote:InvokeServer(1, 1, timestamp)
+                if res == true or (type(res) == "table" and res[1] == true) then
+                    kickAcceptedByServer = true
+                    logConsole("✅ [SERVER CONFIRMED] Tendangan resmi terdaftar di server! Bola sedang terbang...")
+                end
+            end
+
+            local fallbackEvent = kickRemote or (networkFolder and networkFolder:FindFirstChild("rev_KickEvent"))
+            if fallbackEvent and fallbackEvent:IsA("RemoteEvent") then
+                fallbackEvent:FireServer(1, 1, timestamp)
             end
         end)
     end)
@@ -905,6 +940,7 @@ task.spawn(function()
             lastAction = "WaitingRespawn"
             globalStuckTimer = 0
             kickRetryCount = 0
+            kickAcceptedByServer = false
             continue 
         end
 
@@ -912,6 +948,7 @@ task.spawn(function()
             targetAction = "Idle"
             lastAction = "Idle"
             kickRetryCount = 0
+            kickAcceptedByServer = false
             stateTimer = 0
             logConsole("Karakter Respawn -> Berjalan ke Safe Zone sebelum Kick...")
         end
@@ -946,6 +983,7 @@ task.spawn(function()
                 if shouldKick() then
                     if stateTimer >= 0.1 then
                         kickRetryCount = 0
+                        kickAcceptedByServer = false
                         phase2Fired = false
                         collectedFired = false
                         kickEndedFired = false
@@ -962,18 +1000,21 @@ task.spawn(function()
             if phase2Fired or collectedFired or kickEndedFired then
                 phase2Fired = false
                 kickRetryCount = 0
+                kickAcceptedByServer = false
                 targetAction = "WalkToSafeZone"
                 logConsole("Phase 2 Selesai / Lucky Block Kena -> Langsung Jalan ke Safe Zone")
-            elseif stateTimer >= 20.0 and not phase2Fired and not collectedFired and not kickEndedFired then
-                -- Failsafe: Jika bola terbang melebihi batas wajar (20s) tanpa respon sama sekali
+
+            -- Kondisi 1: Kick belum terdaftar sama sekali di server setelah 3 detik -> Retry
+            elseif not kickAcceptedByServer and stateTimer >= 3.0 and not phase2Fired and not collectedFired and not kickEndedFired then
                 if kickRetryCount < MAX_KICK_RETRIES then
                     kickRetryCount = kickRetryCount + 1
                     stateTimer = 0
-                    logConsole(string.format("⚠️ [RETRY] Tidak ada respon setelah 20s, mencoba re-kick #%d/%d...", kickRetryCount, MAX_KICK_RETRIES))
+                    logConsole(string.format("⚠️ [RETRY] Kick belum terdaftar di server, mencoba kick ulang #%d/%d...", kickRetryCount, MAX_KICK_RETRIES))
                     executeKick()
                 else
-                    logConsole(string.format("🚨 [FAILSAFE] Macet total setelah %d kali percobaan (40s+) -> Reset/Respawn Karakter...", MAX_KICK_RETRIES))
+                    logConsole(string.format("🚨 [FAILSAFE] Gagal respon setelah %d kali retry! Memaksa Respawn/Reset Karakter...", MAX_KICK_RETRIES))
                     kickRetryCount = 0
+                    kickAcceptedByServer = false
                     stateTimer = 0
                     targetAction = "WaitingRespawn"
                     pcall(function()
@@ -981,6 +1022,12 @@ task.spawn(function()
                         if char then char:BreakJoints() end
                     end)
                 end
+
+            -- Kondisi 2: Kick sudah diterima server (bola sedang terbang), tunggu hingga maksimal 20 detik
+            elseif stateTimer >= 20.0 then
+                kickAcceptedByServer = false
+                targetAction = "WalkToSafeZone"
+                logConsole("Phase 2 Timeout (20s) -> Lanjut Jalan ke Safe Zone")
             end
 
         -- [ FASE 3: JALAN MURNI SAMPAI KE SAFE ZONE (TANPA TELEPORT) ]
@@ -1003,6 +1050,7 @@ task.spawn(function()
                 mutationCount = mutationCount + 1
                 phase2Fired = false
                 kickRetryCount = 0
+                kickAcceptedByServer = false
 
                 if shouldKick() then
                     executeKick()
