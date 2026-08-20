@@ -822,7 +822,7 @@ local function getGameController()
     if getgc then
         for _, item in ipairs(getgc(true)) do
             if type(item) == "table" then
-                if (rawget(item, "CanKick") ~= nil or rawget(item, "UnblockKick") ~= nil or rawget(item, "BlockKick") ~= nil) and type(rawget(item, "Kick")) == "function" then
+                if rawget(item, "CanKick") ~= nil and type(rawget(item, "Kick")) == "function" and rawget(item, "Status") ~= nil then
                     cachedGameController = item
                     return item
                 end
@@ -918,7 +918,7 @@ local function executeKick()
 
     logConsole("⚡ Mengeksekusi Kick (Lapis 1 Controller Hook + Lapis 3 Network)...")
 
-    -- 🎮 LAPIS 1: Direct GameController Hook (Buka Kunci Cooldown & Panggil Kick Asli di Game)
+    -- 🎮 LAPIS 1: Direct GameController Hook (Buka Kunci Cooldown & Panggil Kick Asli)
     pcall(function()
         local controller = getGameController()
         if controller then
