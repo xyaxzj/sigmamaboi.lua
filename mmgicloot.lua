@@ -891,6 +891,8 @@ local function executeKick()
             if controller.UnblockKick then pcall(function() controller:UnblockKick() end) end
             if controller.ResetCooldown then pcall(function() controller:ResetCooldown() end) end
             controller.CanKick = true
+            if controller.InGame ~= nil then controller.InGame = false end
+            if controller.Status ~= nil and controller.Status == "InKick" then controller.Status = "Lobby" end
             pcall(function() controller:Kick(1, 1) end)
         end
     end)
@@ -985,7 +987,11 @@ task.spawn(function()
                 hum:MoveTo(safeZone)
             else
                 if shouldKick() then
-                    if stateTimer >= 0.1 then
+                    if stateTimer >= 0.15 then
+                        pcall(function()
+                            hrp.AssemblyLinearVelocity = Vector3.zero
+                            hrp.AssemblyAngularVelocity = Vector3.zero
+                        end)
                         kickRetryCount = 0
                         kickAcceptedByServer = false
                         phase2Fired = false
