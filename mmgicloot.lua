@@ -515,7 +515,7 @@ lp.Idled:Connect(function()
 end)
 
 -- =============================================
--- 📡 DAFTAR REMOTE NETWORK RESMI
+-- 📡 DAFTAR REMOTE NETWORK RESMI & AUTO-RESOLVER
 -- =============================================
 local networkFolder = nil
 pcall(function()
@@ -524,35 +524,31 @@ pcall(function()
     networkFolder = packages and (packages:FindFirstChild("Network") or packages:WaitForChild("Network", 3))
 end)
 
-local ref_KickEvent = networkFolder and networkFolder:FindFirstChild("ref_KickEvent")
-local kickRemote = networkFolder and networkFolder:FindFirstChild("rev_KickEvent")
-local rev_kickPhase2 = networkFolder and networkFolder:FindFirstChild("rev_kickPhase2")
-local rev_Collected = networkFolder and networkFolder:FindFirstChild("rev_Collected")
-local rev_KickEventEnded = networkFolder and networkFolder:FindFirstChild("rev_KickEventEnded")
-local rev_AddedWeather = networkFolder and networkFolder:FindFirstChild("rev_AddedWeather")
-local rev_RemovedWeather = networkFolder and networkFolder:FindFirstChild("rev_RemovedWeather")
-
-local ref_B_SellAll = networkFolder and networkFolder:FindFirstChild("ref_B_SellAll")
-local rev_MeteorShop_RequestSync = networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_RequestSync")
-local rev_MeteorShop_Stock = networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_Stock")
-local rev_MeteorShop_Buy = networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_Buy")
-
-if not ref_KickEvent then
-    for _, r in pairs(ReplicatedStorage:GetDescendants()) do
-        if r:IsA("RemoteFunction") and r.Name == "ref_KickEvent" then
-            ref_KickEvent = r
-            break
+local function findRemote(name, className)
+    if networkFolder then
+        local r = networkFolder:FindFirstChild(name)
+        if r and (not className or r:IsA(className)) then return r end
+    end
+    for _, r in ipairs(ReplicatedStorage:GetDescendants()) do
+        if r.Name == name and (not className or r:IsA(className)) then
+            return r
         end
     end
+    return nil
 end
-if not kickRemote then
-    for _, r in pairs(ReplicatedStorage:GetDescendants()) do
-        if r:IsA("RemoteEvent") and string.find(r.Name, "rev_KickEvent") and not string.find(r.Name, "Ended") then
-            kickRemote = r
-            break
-        end
-    end
-end
+
+local ref_KickEvent = findRemote("ref_KickEvent", "RemoteFunction")
+local kickRemote = findRemote("rev_KickEvent", "RemoteEvent")
+local rev_kickPhase2 = findRemote("rev_kickPhase2", "RemoteEvent")
+local rev_Collected = findRemote("rev_Collected", "RemoteEvent")
+local rev_KickEventEnded = findRemote("rev_KickEventEnded", "RemoteEvent")
+local rev_AddedWeather = findRemote("rev_AddedWeather", "RemoteEvent")
+local rev_RemovedWeather = findRemote("rev_RemovedWeather", "RemoteEvent")
+
+local ref_B_SellAll = findRemote("ref_B_SellAll", "RemoteFunction")
+local rev_MeteorShop_RequestSync = findRemote("rev_MeteorShop_RequestSync", "RemoteEvent")
+local rev_MeteorShop_Stock = findRemote("rev_MeteorShop_Stock", "RemoteEvent")
+local rev_MeteorShop_Buy = findRemote("rev_MeteorShop_Buy", "RemoteEvent")
 
 -- =============================================
 -- 📢 DISCORD WEBHOOK NOTIFIER (PATAGOTITAN & FRIGOREX - ZERO LAG & INSTANT)
@@ -795,53 +791,61 @@ task.spawn(function()
 end)
 
 -- =============================================
--- 📡 LISTENER EVENT SERVER
+-- 📡 LISTENER EVENT SERVER (REAL-TIME RECEPTOR)
 -- =============================================
 local phase2Fired = false
 local collectedFired = false
 local kickEndedFired = false
 
-if rev_kickPhase2 then
-    rev_kickPhase2.OnClientEvent:Connect(function(rewardTable, ...)
-        phase2Fired = true
-        pcall(function()
-            if type(rewardTable) == "table" and rewardTable[1] then
-                lastRewardDesc = string.format("%s [%s]", tostring(rewardTable[1].Name or "Brainrot"), tostring(rewardTable[1].Mutation or "Normal"))
-                logConsole(string.format("🎉 Gacha Reward Masuk: %s", lastRewardDesc))
+local function setupServerEventListeners()
+    local p2 = rev_kickPhase2 or findRemote("rev_kickPhase2", "RemoteEvent")
+    if p2 then
+        p2.OnClientEvent:Connect(function(rewardTable, ...)
+            phase2Fired = true
+            pcall(function()
+                if type(rewardTable) == "table" and rewardTable[1] then
+                    lastRewardDesc = string.format("%s [%s]", tostring(rewardTable[1].Name or "Brainrot"), tostring(rewardTable[1].Mutation or "Normal"))
+                    logConsole(string.format("🎉 Gacha Reward Masuk: %s", lastRewardDesc))
+                end
+            end)
+        end)
+    end
+
+    local col = rev_Collected or findRemote("rev_Collected", "RemoteEvent")
+    if col then
+        col.OnClientEvent:Connect(function(...)
+            collectedFired = true
+        end)
+    end
+
+    local ended = rev_KickEventEnded or findRemote("rev_KickEventEnded", "RemoteEvent")
+    if ended then
+        ended.OnClientEvent:Connect(function(...)
+            kickEndedFired = true
+        end)
+    end
+
+    local addW = rev_AddedWeather or findRemote("rev_AddedWeather", "RemoteEvent")
+    if addW then
+        addW.OnClientEvent:Connect(function(weatherType, ...)
+            if weatherType == "MeteorShower" then
+                isMeteorShowerActive = true
+                logConsole("☄️ Event Cuaca: METEOR SHOWER AKTIF! Memulai Auto Kick & Farm...")
             end
         end)
-    end)
-end
+    end
 
-if rev_Collected then
-    rev_Collected.OnClientEvent:Connect(function(...)
-        collectedFired = true
-    end)
+    local remW = rev_RemovedWeather or findRemote("rev_RemovedWeather", "RemoteEvent")
+    if remW then
+        remW.OnClientEvent:Connect(function(weatherType, ...)
+            if weatherType == "MeteorShower" then
+                isMeteorShowerActive = false
+                logConsole("☁️ Event Cuaca: Meteor Shower Selesai. Menyelesaikan ronde ini lalu standby di Safe Zone...")
+            end
+        end)
+    end
 end
-
-if rev_KickEventEnded then
-    rev_KickEventEnded.OnClientEvent:Connect(function(...)
-        kickEndedFired = true
-    end)
-end
-
-if rev_AddedWeather then
-    rev_AddedWeather.OnClientEvent:Connect(function(weatherType, ...)
-        if weatherType == "MeteorShower" then
-            isMeteorShowerActive = true
-            logConsole("☄️ Event Cuaca: METEOR SHOWER AKTIF! Memulai Auto Kick & Farm...")
-        end
-    end)
-end
-
-if rev_RemovedWeather then
-    rev_RemovedWeather.OnClientEvent:Connect(function(weatherType, ...)
-        if weatherType == "MeteorShower" then
-            isMeteorShowerActive = false
-            logConsole("☁️ Event Cuaca: Meteor Shower Selesai. Menyelesaikan ronde ini lalu standby di Safe Zone...")
-        end
-    end)
-end
+setupServerEventListeners()
 
 -- =============================================
 -- ☄️ DETEKSI METEOR SHOWER REAL-TIME (MULTI-SOURCE)
@@ -1032,6 +1036,10 @@ task.spawn(function()
 
         -- [ FASE 3: JALAN MURNI SAMPAI KE SAFE ZONE (TANPA TELEPORT) ]
         elseif targetAction == "WalkToSafeZone" then
+            pcall(function()
+                if hum.WalkSpeed < 16 then hum.WalkSpeed = 16 end
+                if hrp.Anchored then hrp.Anchored = false end
+            end)
             hum:MoveTo(safeZone)
             if distToSafeZone < 5 then
                 targetAction = "WaitingForCollected"
