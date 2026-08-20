@@ -822,7 +822,7 @@ local function getGameController()
     if getgc then
         for _, item in ipairs(getgc(true)) do
             if type(item) == "table" then
-                if rawget(item, "CanKick") ~= nil and type(rawget(item, "Kick")) == "function" and rawget(item, "Status") ~= nil then
+                if (rawget(item, "CanKick") ~= nil or rawget(item, "UnblockKick") ~= nil or rawget(item, "BlockKick") ~= nil) and type(rawget(item, "Kick")) == "function" then
                     cachedGameController = item
                     return item
                 end
@@ -907,65 +907,56 @@ local function shouldKick()
 end
 
 -- =============================================
--- 🚀 FUNGSI EKSEKUSI TENDANGAN ZERO-FAIL (DIRECT AUTHORITY & INSTANT CONFIRMATION)
+-- 🚀 FUNGSI EKSEKUSI TENDANGAN REINFORCED (LAPIS 1 + LAPIS 3)
 -- =============================================
 local function executeKick()
-    -- 1. Buka Kunci Client Controller Bersih (Tanpa memanggil controller:Kick agar tidak tabrakan)
-    pcall(function()
-        local controller = getGameController()
-        if controller then
-            if controller.UnblockKick then pcall(function() controller:UnblockKick() end) end
-            if controller.ResetCooldown then pcall(function() controller:ResetCooldown() end) end
-            controller.CanKick = true
-        end
-    end)
-
-    -- 2. Dapatkan Timestamp Server Presisi
     local timestamp = nil
     pcall(function() timestamp = workspace:GetServerTimeNow() end)
     if not timestamp or type(timestamp) ~= "number" or timestamp <= 0 then
         timestamp = tick()
     end
 
-    -- 3. Cari ref_KickEvent (RemoteFunction Resmi)
-    local targetRemote = ref_KickEvent or (networkFolder and networkFolder:FindFirstChild("ref_KickEvent"))
-    if not targetRemote then
-        for _, r in pairs(ReplicatedStorage:GetDescendants()) do
-            if r:IsA("RemoteFunction") and r.Name == "ref_KickEvent" then
-                targetRemote = r
-                ref_KickEvent = r
-                break
+    logConsole("⚡ Mengeksekusi Kick (Lapis 1 Controller Hook + Lapis 3 Network)...")
+
+    -- 🎮 LAPIS 1: Direct GameController Hook (Buka Kunci Cooldown & Panggil Kick Asli di Game)
+    pcall(function()
+        local controller = getGameController()
+        if controller then
+            if controller.UnblockKick then
+                pcall(function() controller:UnblockKick() end)
             end
+            if controller.ResetCooldown then
+                pcall(function() controller:ResetCooldown() end)
+            end
+            controller.CanKick = true
+            pcall(function() controller:Kick(1, 1) end)
         end
-    end
-
-    if not targetRemote then
-        logConsole("❌ Error: ref_KickEvent tidak ditemukan!")
-        return false
-    end
-
-    logConsole("⚡ Mengeksekusi Kick 100% Perfect Bar (ref_KickEvent Direct Authority)...")
-
-    -- 4. Eksekusi Sinkron & Tangkap Respon Server (1.0 = Perfect Accuracy, 1 = Power/Style)
-    local ok, resSuccess, resDistance, resMultiplier, resTimeTable = pcall(function()
-        return targetRemote:InvokeServer(1.0, 1, timestamp)
     end)
 
-    if ok and resSuccess == true then
-        local distStr = (type(resDistance) == "number") and string.format("%.1f", resDistance) or tostring(resDistance)
-        logConsole(string.format("✅ [KICK SUKSES 100%%] Diterima Server! Score: %s | Menunggu Fase Mutasi...", distStr))
-        return true, resTimeTable
-    else
-        -- Jika RemoteFunction gagal/pending, gunakan fallback RemoteEvent
+    -- 📡 LAPIS 3: Network Remote Invocation (Jalur Resmi Server Non-Blocking)
+    task.spawn(function()
         pcall(function()
+            local targetRemote = ref_KickEvent or (networkFolder and networkFolder:FindFirstChild("ref_KickEvent"))
+            if not targetRemote then
+                for _, r in pairs(ReplicatedStorage:GetDescendants()) do
+                    if r:IsA("RemoteFunction") and r.Name == "ref_KickEvent" then
+                        targetRemote = r
+                        ref_KickEvent = r
+                        break
+                    end
+                end
+            end
+
+            if targetRemote and targetRemote:IsA("RemoteFunction") then
+                targetRemote:InvokeServer(1, 1, timestamp)
+            end
+
             local fallbackEvent = kickRemote or (networkFolder and networkFolder:FindFirstChild("rev_KickEvent"))
             if fallbackEvent and fallbackEvent:IsA("RemoteEvent") then
-                fallbackEvent:FireServer(1.0, 1, timestamp)
+                fallbackEvent:FireServer(1, 1, timestamp)
             end
         end)
-        logConsole(string.format("⚠️ [KICK RETRY-READY] Status return: %s (Fallback remote fired)", tostring(resSuccess)))
-        return false
-    end
+    end)
 end
 
 -- =============================================
