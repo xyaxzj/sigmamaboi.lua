@@ -761,51 +761,23 @@ task.spawn(function()
 end)
 
 -- =============================================
--- 🎮 LAPIS 1: REINFORCED CLIENT CONTROLLER HOOK (MULTI-SOURCE DISCOVERY & AUTO-UNBLOCK)
+-- 🎮 LAPIS 1: ULTRA-LIGHTWEIGHT CONTROLLER HOOK (ZERO-FREEZE & NON-BLOCKING)
 -- =============================================
 local cachedGameController = nil
 
-local function isHealthyController(t)
-    if not t or type(t) ~= "table" then return false end
-    local ok, res = pcall(function()
-        local hasKick = type(rawget(t, "Kick") or t.Kick) == "function"
-        local hasAttr = (rawget(t, "CanKick") ~= nil or t.CanKick ~= nil) or
-                         (rawget(t, "UnblockKick") ~= nil or t.UnblockKick ~= nil) or
-                         (rawget(t, "BlockKick") ~= nil or t.BlockKick ~= nil) or
-                         (rawget(t, "Status") ~= nil or t.Status ~= nil)
-        return hasKick and hasAttr
-    end)
-    return ok and res
-end
-
-local function scanGCForController()
-    if not getgc then return nil end
-
-    -- Jalur 1: Scan Semua Tabel di GC
-    local ok1, tables = pcall(function() return getgc(true) end)
-    if not ok1 or not tables then
-        ok1, tables = pcall(function() return getgc() end)
+local function getGameController()
+    if cachedGameController and type(cachedGameController.Kick) == "function" then
+        return cachedGameController
     end
 
-    if ok1 and type(tables) == "table" then
-        for _, item in ipairs(tables) do
-            if isHealthyController(item) then
-                return item
-            end
-        end
-    end
-
-    -- Jalur 2: Scan Upvalues Fungsi di GC (Deep Recovery)
-    local getUpvals = getupvalues or (debug and debug.getupvalues)
-    if getUpvals and tables and type(tables) == "table" then
-        for _, item in ipairs(tables) do
-            if type(item) == "function" then
-                local okUv, uvs = pcall(getUpvals, item)
-                if okUv and type(uvs) == "table" then
-                    for _, uv in pairs(uvs) do
-                        if isHealthyController(uv) then
-                            return uv
-                        end
+    if getgc then
+        local ok, tables = pcall(function() return getgc(true) end)
+        if ok and type(tables) == "table" then
+            for _, item in ipairs(tables) do
+                if type(item) == "table" then
+                    if rawget(item, "CanKick") ~= nil and type(rawget(item, "Kick")) == "function" then
+                        cachedGameController = item
+                        return item
                     end
                 end
             end
@@ -815,17 +787,11 @@ local function scanGCForController()
     return nil
 end
 
-local function getGameController()
-    if cachedGameController and isHealthyController(cachedGameController) then
-        return cachedGameController
-    end
-
-    cachedGameController = scanGCForController()
-    if cachedGameController then
-        logConsole("🎯 [CONTROLLER DITEMUKAN] Hook GameController terhubung dan aktif!")
-    end
-    return cachedGameController
-end
+-- Pre-fetch controller saat script pertama kali dimuat
+task.spawn(function()
+    task.wait(1)
+    getGameController()
+end)
 
 -- =============================================
 -- 📡 LISTENER EVENT SERVER
@@ -902,82 +868,22 @@ local function shouldKick()
 end
 
 -- =============================================
--- 🚀 FUNGSI EKSEKUSI TENDANGAN REINFORCED (LAPIS 1 FORCE-UNBLOCK & MULTI-CALL)
+-- 🚀 FUNGSI EKSEKUSI TENDANGAN (NON-BLOCKING & ASYNC)
 -- =============================================
 local function executeKick()
-    logConsole("⚡ Mengeksekusi Kick (Reinforced Lapis 1 Client Controller)...")
+    logConsole("⚡ Mengeksekusi Kick...")
 
-    local controller = getGameController()
-    if not controller then
-        logConsole("⚠️ [CONTROLLER TIDAK DITEMUKAN] Mencoba re-scan GC...")
-        cachedGameController = nil
-        controller = getGameController()
-    end
-
-    if not controller then
-        logConsole("❌ [FATAL] Gagal menemukan GameController di memory GC!")
-        return false
-    end
-
-    -- 1. Force Unblock & Reset State Lengkap
-    pcall(function()
-        if type(controller.UnblockKick) == "function" then
-            controller:UnblockKick()
-        end
-        if type(controller.ResetCooldown) == "function" then
-            controller:ResetCooldown()
-        end
-        controller.CanKick = true
-        if controller.InGame ~= nil then
-            controller.InGame = false
-        end
-        if controller.Status ~= nil and controller.Status == "InKick" then
-            controller.Status = "Lobby"
-        end
-    end)
-
-    -- 2. Eksekusi Tendangan dengan Berbagai Variasi Signature
-    local kickCalled = false
-    local errList = {}
-
-    -- Signature Utama: controller:Kick(1, 1)
-    local ok1, err1 = pcall(function()
-        controller:Kick(1, 1)
-    end)
-    if ok1 then
-        kickCalled = true
-    else
-        table.insert(errList, string.format("Sig1: %s", tostring(err1)))
-        
-        -- Signature Fallback A: controller.Kick(controller, 1, 1)
-        local ok2, err2 = pcall(function()
-            controller.Kick(controller, 1, 1)
-        end)
-        if ok2 then
-            kickCalled = true
-        else
-            table.insert(errList, string.format("Sig2: %s", tostring(err2)))
-            
-            -- Signature Fallback B: controller:Kick(1)
-            local ok3, err3 = pcall(function()
-                controller:Kick(1)
-            end)
-            if ok3 then
-                kickCalled = true
-            else
-                table.insert(errList, string.format("Sig3: %s", tostring(err3)))
+    task.spawn(function()
+        pcall(function()
+            local controller = getGameController()
+            if controller then
+                if controller.UnblockKick then pcall(function() controller:UnblockKick() end) end
+                if controller.ResetCooldown then pcall(function() controller:ResetCooldown() end) end
+                controller.CanKick = true
+                pcall(function() controller:Kick(1, 1) end)
             end
-        end
-    end
-
-    if kickCalled then
-        logConsole("✅ [KICK DIPANGGIL] controller:Kick berhasil dieksekusi di game!")
-        return true
-    else
-        logConsole(string.format("❌ [KICK GAGAL] Semua signature error: %s", table.concat(errList, " | ")))
-        cachedGameController = nil
-        return false
-    end
+        end)
+    end)
 end
 
 -- =============================================
