@@ -28,7 +28,7 @@ _G.autoBuySpeed = true            -- true: Auto beli Speed (+1) saat ready di Me
 _G.autoBuyFrigorex = true        -- true: Auto beli Frigorex jika stock > 0
 _G.autoBuyFarmPotion = true      -- true: Auto beli 1x Farm Potion khusus jam ganjil (1, 3, 5... 23 WIB) maksimal menit :10
 _G.autoSellAll = true            -- true: Auto Sell All setiap 5 detik via ref_B_SellAll
-_G.autoRemovePlayer = false       -- true: Hapus player lain dari game.Players & workspace.Players (100% Bersih & No Lag), false: Biarkan
+_G.autoRemovePlayer = true       -- true: Hapus player lain dari game.Players & workspace.Players (100% Bersih & No Lag), false: Biarkan
 _G.debugConsoleLog = false        -- true: Cetak log status/fase ke console (F9), false: Senyap
 _G.failsafeTimeout = 25          -- Waktu maksimal (detik) sebelum auto-reset ke Safe Zone jika macet
 
