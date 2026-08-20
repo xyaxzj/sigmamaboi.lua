@@ -822,7 +822,10 @@ local function getGameController()
     if getgc then
         for _, item in ipairs(getgc(true)) do
             if type(item) == "table" then
-                if rawget(item, "CanKick") ~= nil and type(rawget(item, "Kick")) == "function" and rawget(item, "Status") ~= nil then
+                local ok, isController = pcall(function()
+                    return (item.CanKick ~= nil or item.UnblockKick ~= nil or item.BlockKick ~= nil) and type(item.Kick) == "function"
+                end)
+                if ok and isController then
                     cachedGameController = item
                     return item
                 end
@@ -907,19 +910,12 @@ local function shouldKick()
 end
 
 -- =============================================
--- 🚀 FUNGSI EKSEKUSI TENDANGAN REINFORCED (LAPIS 1 + LAPIS 3)
+-- 🚀 FUNGSI EKSEKUSI TENDANGAN (MURNI LAPIS 1 CLIENT CONTROLLER HOOK)
 -- =============================================
 local function executeKick()
-    local timestamp = nil
-    pcall(function() timestamp = workspace:GetServerTimeNow() end)
-    if not timestamp or type(timestamp) ~= "number" or timestamp <= 0 then
-        timestamp = tick()
-    end
+    logConsole("⚡ Mengeksekusi Kick (Murni Lapis 1 Client GameController)...")
 
-    logConsole("⚡ Mengeksekusi Kick (Lapis 1 Controller Hook + Lapis 3 Network)...")
-
-    -- 🎮 LAPIS 1: Direct GameController Hook (Buka Kunci Cooldown & Panggil Kick Asli)
-    pcall(function()
+    local ok, err = pcall(function()
         local controller = getGameController()
         if controller then
             if controller.UnblockKick then
@@ -929,34 +925,17 @@ local function executeKick()
                 pcall(function() controller:ResetCooldown() end)
             end
             controller.CanKick = true
-            pcall(function() controller:Kick(1, 1) end)
+            controller:Kick(1, 1)
+            return true
+        else
+            logConsole("⚠️ [CONTROLLER TIDAK DITEMUKAN] GameController nil di GC")
+            return false
         end
     end)
 
-    -- 📡 LAPIS 3: Network Remote Invocation (Jalur Resmi Server Non-Blocking)
-    task.spawn(function()
-        pcall(function()
-            local targetRemote = ref_KickEvent or (networkFolder and networkFolder:FindFirstChild("ref_KickEvent"))
-            if not targetRemote then
-                for _, r in pairs(ReplicatedStorage:GetDescendants()) do
-                    if r:IsA("RemoteFunction") and r.Name == "ref_KickEvent" then
-                        targetRemote = r
-                        ref_KickEvent = r
-                        break
-                    end
-                end
-            end
-
-            if targetRemote and targetRemote:IsA("RemoteFunction") then
-                targetRemote:InvokeServer(1, 1, timestamp)
-            end
-
-            local fallbackEvent = kickRemote or (networkFolder and networkFolder:FindFirstChild("rev_KickEvent"))
-            if fallbackEvent and fallbackEvent:IsA("RemoteEvent") then
-                fallbackEvent:FireServer(1, 1, timestamp)
-            end
-        end)
-    end)
+    if not ok then
+        logConsole(string.format("❌ Error saat memanggil controller:Kick: %s", tostring(err)))
+    end
 end
 
 -- =============================================
