@@ -47,7 +47,7 @@ _G.autoBuySpeed = true        -- ⚡ Speed (+1)
 _G.autoBuyFrigorex = true     -- 👑 Frigorex
 _G.autoBuyFarmPotion = true   -- 🧪 Farm Potion (I) (Khusus jam ganjil WIB max menit :10)
 _G.autoSellAll = true         -- 💰 Auto Sell All tiap 5s
-_G.autoRemovePlayer = true    -- 🚫 Hapus player lain dari game.Players & workspace.Players
+_G.autoRemovePlayer = false    -- 🚫 Hapus player lain dari game.Players & workspace.Players
 
 -- =============================================
 -- 🚀 1. OPTIMISASI LIGHTING & SETTINGS GLOBAL (SUPER ENTENG)
