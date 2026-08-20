@@ -554,151 +554,99 @@ if not kickRemote then
 end
 
 -- =============================================
--- 📢 DISCORD WEBHOOK NOTIFIER (PATAGOTITAN & FRIGOREX - COMPACT & CLEAN)
+-- 📢 DISCORD WEBHOOK NOTIFIER (PATAGOTITAN & FRIGOREX - ZERO LAG & INSTANT)
 -- =============================================
 local DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1539697793973756084/1oLTQDKSmutWJlPX91He00IEEAg_lsos8MWbxuXki8LKqO8WnZUX8kwurULVjdB8lOqb"
 
-local function getDirectRobloxImageUrl(assetId, productId)
-    local fallback = string.format("https://www.roblox.com/asset-thumbnail/image?assetId=%s&width=420&height=420&format=png", tostring(assetId))
-    local ok, res = pcall(function()
-        local httpReq = request or http_request or (delta and delta.request) or (syn and syn.request) or (Fluxus and Fluxus.request) or (http and http.request)
-        if not httpReq then return nil end
-        local HttpService = game:GetService("HttpService")
+-- URL CDN Langsung (0x Request HTTP Ekstra, 100% Bebas Freeze/Lag)
+local PATAGO_IMAGE_URL = "https://www.roblox.com/asset-thumbnail/image?assetId=95399484334874&width=420&height=420&format=png"
+local FRIGOREX_IMAGE_URL = "https://www.roblox.com/asset-thumbnail/image?assetId=140510107418430&width=420&height=420&format=png"
 
-        -- 1. Coba Developer Product Icon API jika ada productId
-        if productId then
-            local pRes = httpReq({
-                Url = string.format("https://thumbnails.roblox.com/v1/developer-products/icons?developerProductIds=%s&size=420x420&format=Png", tostring(productId)),
-                Method = "GET"
-            })
-            if pRes and pRes.Body then
-                local data = HttpService:JSONDecode(pRes.Body)
-                if data and data.data and data.data[1] and data.data[1].imageUrl and data.data[1].imageUrl ~= "" then
-                    return data.data[1].imageUrl
-                end
-            end
-        end
-
-        -- 2. Coba Asset Thumbnail API
-        if assetId then
-            local aRes = httpReq({
-                Url = string.format("https://thumbnails.roblox.com/v1/assets?assetIds=%s&size=420x420&format=Png", tostring(assetId)),
-                Method = "GET"
-            })
-            if aRes and aRes.Body then
-                local data = HttpService:JSONDecode(aRes.Body)
-                if data and data.data and data.data[1] and data.data[1].imageUrl and data.data[1].imageUrl ~= "" then
-                    return data.data[1].imageUrl
-                end
-            end
-        end
-    end)
-    if ok and res and type(res) == "string" and string.find(res, "http") then
-        return res
-    end
-    return fallback
-end
-
-local function getDirectRobloxAvatarUrl(userId)
-    local fallback = string.format("https://www.roblox.com/headshot-thumbnail/image?userId=%s&width=150&height=150&format=png", tostring(userId))
-    local ok, res = pcall(function()
-        local httpReq = request or http_request or (delta and delta.request) or (syn and syn.request) or (Fluxus and Fluxus.request) or (http and http.request)
-        if httpReq then
-            local apiRes = httpReq({
-                Url = string.format("https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=%s&size=150x150&format=Png", tostring(userId)),
-                Method = "GET"
-            })
-            if apiRes and apiRes.Body then
+local function sendDiscordWebhook(itemName, totalBought)
+    totalBought = totalBought or 1
+    task.defer(function()
+        task.spawn(function()
+            pcall(function()
+                local httpReq = request or http_request or (delta and delta.request) or (syn and syn.request) or (Fluxus and Fluxus.request) or (http and http.request)
+                if not httpReq then return end
                 local HttpService = game:GetService("HttpService")
-                local data = HttpService:JSONDecode(apiRes.Body)
-                if data and data.data and data.data[1] and data.data[1].imageUrl then
-                    return data.data[1].imageUrl
+
+                local userDisplayName = lp and lp.DisplayName or (lp and lp.Name or "Unknown")
+                local userId = lp and tostring(lp.UserId) or "0"
+                local playerAvatarCdn = string.format("https://www.roblox.com/headshot-thumbnail/image?userId=%s&width=150&height=150&format=png", userId)
+
+                local itemImageUrl = ""
+                local embedColor = 0x3498db
+                local itemIcon = "🛒"
+                local unitCost = 0
+                local itemBuff = ""
+
+                if itemName == "Patagotitan" then
+                    itemIcon = "🦖"
+                    embedColor = 0x2ecc71 -- Hijau Emerald
+                    itemImageUrl = PATAGO_IMAGE_URL
+                    unitCost = 500
+                    itemBuff = "150% CP/s"
+                elseif itemName == "Frigorex" then
+                    itemIcon = "👑"
+                    embedColor = 0x9b59b6 -- Ungu Royal
+                    itemImageUrl = FRIGOREX_IMAGE_URL
+                    unitCost = 1250
+                    itemBuff = "250% CP/s"
                 end
-            end
-        end
-    end)
-    if ok and res and type(res) == "string" and string.find(res, "http") then
-        return res
-    end
-    return fallback
-end
 
-local function sendDiscordWebhook(itemName, currentCount, maxStock)
-    task.spawn(function()
-        pcall(function()
-            local httpReq = request or http_request or (delta and delta.request) or (syn and syn.request) or (Fluxus and Fluxus.request) or (http and http.request)
-            if not httpReq then return end
-            local HttpService = game:GetService("HttpService")
+                local totalCost = unitCost * totalBought
+                local titleDesc = (totalBought > 1) and string.format("%s %dx %s", itemIcon, totalBought, itemName) or string.format("%s %s", itemIcon, itemName)
 
-            local wibTimeStr = os.date("!%d/%m/%Y - %H:%M:%S WIB", os.time() + (7 * 3600))
-            local userName = lp and lp.Name or "Unknown"
-            local userDisplayName = lp and lp.DisplayName or userName
-            local userId = lp and tostring(lp.UserId) or "0"
-
-            local playerAvatarCdn = getDirectRobloxAvatarUrl(userId)
-            local itemImageUrl = ""
-            local embedColor = 0x3498db
-            local itemIcon = "🛒"
-            local itemCost = 0
-            local itemBuff = ""
-
-            if itemName == "Patagotitan" then
-                itemIcon = "🦖"
-                embedColor = 0x2ecc71 -- Hijau Emerald
-                itemImageUrl = getDirectRobloxImageUrl("95399484334874", "3708138558")
-                itemCost = 500
-                itemBuff = "150% CP/s"
-            elseif itemName == "Frigorex" then
-                itemIcon = "👑"
-                embedColor = 0x9b59b6 -- Ungu Royal
-                itemImageUrl = getDirectRobloxImageUrl("140510107418430", "3708174931")
-                itemCost = 1250
-                itemBuff = "250% CP/s"
-            end
-
-            local payload = {
-                ["username"] = "KALB Meteor Shop",
-                ["avatar_url"] = playerAvatarCdn,
-                ["embeds"] = {
-                    {
-                        ["author"] = {
-                            ["name"] = userDisplayName,
-                            ["icon_url"] = playerAvatarCdn
-                        },
-                        ["title"] = "Berhasil Membeli",
-                        ["description"] = string.format("%s %s", itemIcon, itemName),
-                        ["color"] = embedColor,
-                        ["thumbnail"] = {
-                            ["url"] = itemImageUrl
-                        },
-                        ["fields"] = {
-                            {
-                                ["name"] = "Exclusive",
-                                ["value"] = itemBuff,
-                                ["inline"] = false
+                local payload = {
+                    ["username"] = "KALB Meteor Shop",
+                    ["avatar_url"] = playerAvatarCdn,
+                    ["embeds"] = {
+                        {
+                            ["author"] = {
+                                ["name"] = userDisplayName,
+                                ["icon_url"] = playerAvatarCdn
                             },
-                            {
-                                ["name"] = "Harga",
-                                ["value"] = string.format("%d Tokens", itemCost),
-                                ["inline"] = false
-                            }
-                        },
-                        ["footer"] = {
-                            ["text"] = "KALB - Meteor Shop"
-                        },
-                        ["timestamp"] = os.date("!%Y-%m-%dT%H:%M:%SZ")
+                            ["title"] = "Berhasil Membeli",
+                            ["description"] = titleDesc,
+                            ["color"] = embedColor,
+                            ["thumbnail"] = {
+                                ["url"] = itemImageUrl
+                            },
+                            ["fields"] = {
+                                {
+                                    ["name"] = "Exclusive",
+                                    ["value"] = itemBuff,
+                                    ["inline"] = false
+                                },
+                                {
+                                    ["name"] = "Jumlah",
+                                    ["value"] = string.format("%d Unit", totalBought),
+                                    ["inline"] = true
+                                },
+                                {
+                                    ["name"] = "Total Harga",
+                                    ["value"] = string.format("%d Tokens", totalCost),
+                                    ["inline"] = true
+                                }
+                            },
+                            ["footer"] = {
+                                ["text"] = "KALB - Meteor Shop"
+                            },
+                            ["timestamp"] = os.date("!%Y-%m-%dT%H:%M:%SZ")
+                        }
                     }
                 }
-            }
 
-            httpReq({
-                Url = DISCORD_WEBHOOK_URL,
-                Method = "POST",
-                Headers = {
-                    ["Content-Type"] = "application/json"
-                },
-                Body = HttpService:JSONEncode(payload)
-            })
+                httpReq({
+                    Url = DISCORD_WEBHOOK_URL,
+                    Method = "POST",
+                    Headers = {
+                        ["Content-Type"] = "application/json"
+                    },
+                    Body = HttpService:JSONEncode(payload)
+                })
+            end)
         end)
     end)
 end
@@ -730,15 +678,17 @@ if rev_MeteorShop_Stock then
 
                     if shouldBuy then
                         task.spawn(function()
+                            local boughtCount = 0
                             for i = 1, stockCount do
                                 pcall(function()
                                     buyRemote:FireServer(itemName)
+                                    boughtCount = boughtCount + 1
                                     print(string.format("🛒 [METEOR AUTO BUY] Berhasil membeli %s (#%d/%d)!", itemName, i, stockCount))
-                                    if itemName == "Patagotitan" or itemName == "Frigorex" then
-                                        sendDiscordWebhook(itemName, i, stockCount)
-                                    end
                                 end)
-                                task.wait(0.2)
+                                task.wait(0.15)
+                            end
+                            if boughtCount > 0 and (itemName == "Patagotitan" or itemName == "Frigorex") then
+                                sendDiscordWebhook(itemName, boughtCount)
                             end
                         end)
                     end
@@ -811,28 +761,70 @@ task.spawn(function()
 end)
 
 -- =============================================
--- 🎮 LAPIS 1: CLIENT CONTROLLER HOOK (GC MEMORY - REINFORCED)
+-- 🎮 LAPIS 1: REINFORCED CLIENT CONTROLLER HOOK (MULTI-SOURCE DISCOVERY & AUTO-UNBLOCK)
 -- =============================================
 local cachedGameController = nil
 
-local function getGameController()
-    if cachedGameController and type(cachedGameController.Kick) == "function" then
-        return cachedGameController
+local function isHealthyController(t)
+    if not t or type(t) ~= "table" then return false end
+    local ok, res = pcall(function()
+        local hasKick = type(rawget(t, "Kick") or t.Kick) == "function"
+        local hasAttr = (rawget(t, "CanKick") ~= nil or t.CanKick ~= nil) or
+                         (rawget(t, "UnblockKick") ~= nil or t.UnblockKick ~= nil) or
+                         (rawget(t, "BlockKick") ~= nil or t.BlockKick ~= nil) or
+                         (rawget(t, "Status") ~= nil or t.Status ~= nil)
+        return hasKick and hasAttr
+    end)
+    return ok and res
+end
+
+local function scanGCForController()
+    if not getgc then return nil end
+
+    -- Jalur 1: Scan Semua Tabel di GC
+    local ok1, tables = pcall(function() return getgc(true) end)
+    if not ok1 or not tables then
+        ok1, tables = pcall(function() return getgc() end)
     end
-    if getgc then
-        for _, item in ipairs(getgc(true)) do
-            if type(item) == "table" then
-                local ok, isController = pcall(function()
-                    return (item.CanKick ~= nil or item.UnblockKick ~= nil or item.BlockKick ~= nil) and type(item.Kick) == "function"
-                end)
-                if ok and isController then
-                    cachedGameController = item
-                    return item
+
+    if ok1 and type(tables) == "table" then
+        for _, item in ipairs(tables) do
+            if isHealthyController(item) then
+                return item
+            end
+        end
+    end
+
+    -- Jalur 2: Scan Upvalues Fungsi di GC (Deep Recovery)
+    local getUpvals = getupvalues or (debug and debug.getupvalues)
+    if getUpvals and tables and type(tables) == "table" then
+        for _, item in ipairs(tables) do
+            if type(item) == "function" then
+                local okUv, uvs = pcall(getUpvals, item)
+                if okUv and type(uvs) == "table" then
+                    for _, uv in pairs(uvs) do
+                        if isHealthyController(uv) then
+                            return uv
+                        end
+                    end
                 end
             end
         end
     end
+
     return nil
+end
+
+local function getGameController()
+    if cachedGameController and isHealthyController(cachedGameController) then
+        return cachedGameController
+    end
+
+    cachedGameController = scanGCForController()
+    if cachedGameController then
+        logConsole("🎯 [CONTROLLER DITEMUKAN] Hook GameController terhubung dan aktif!")
+    end
+    return cachedGameController
 end
 
 -- =============================================
@@ -910,31 +902,81 @@ local function shouldKick()
 end
 
 -- =============================================
--- 🚀 FUNGSI EKSEKUSI TENDANGAN (MURNI LAPIS 1 CLIENT CONTROLLER HOOK)
+-- 🚀 FUNGSI EKSEKUSI TENDANGAN REINFORCED (LAPIS 1 FORCE-UNBLOCK & MULTI-CALL)
 -- =============================================
 local function executeKick()
-    logConsole("⚡ Mengeksekusi Kick (Murni Lapis 1 Client GameController)...")
+    logConsole("⚡ Mengeksekusi Kick (Reinforced Lapis 1 Client Controller)...")
 
-    local ok, err = pcall(function()
-        local controller = getGameController()
-        if controller then
-            if controller.UnblockKick then
-                pcall(function() controller:UnblockKick() end)
-            end
-            if controller.ResetCooldown then
-                pcall(function() controller:ResetCooldown() end)
-            end
-            controller.CanKick = true
-            controller:Kick(1, 1)
-            return true
-        else
-            logConsole("⚠️ [CONTROLLER TIDAK DITEMUKAN] GameController nil di GC")
-            return false
+    local controller = getGameController()
+    if not controller then
+        logConsole("⚠️ [CONTROLLER TIDAK DITEMUKAN] Mencoba re-scan GC...")
+        cachedGameController = nil
+        controller = getGameController()
+    end
+
+    if not controller then
+        logConsole("❌ [FATAL] Gagal menemukan GameController di memory GC!")
+        return false
+    end
+
+    -- 1. Force Unblock & Reset State Lengkap
+    pcall(function()
+        if type(controller.UnblockKick) == "function" then
+            controller:UnblockKick()
+        end
+        if type(controller.ResetCooldown) == "function" then
+            controller:ResetCooldown()
+        end
+        controller.CanKick = true
+        if controller.InGame ~= nil then
+            controller.InGame = false
+        end
+        if controller.Status ~= nil and controller.Status == "InKick" then
+            controller.Status = "Lobby"
         end
     end)
 
-    if not ok then
-        logConsole(string.format("❌ Error saat memanggil controller:Kick: %s", tostring(err)))
+    -- 2. Eksekusi Tendangan dengan Berbagai Variasi Signature
+    local kickCalled = false
+    local errList = {}
+
+    -- Signature Utama: controller:Kick(1, 1)
+    local ok1, err1 = pcall(function()
+        controller:Kick(1, 1)
+    end)
+    if ok1 then
+        kickCalled = true
+    else
+        table.insert(errList, string.format("Sig1: %s", tostring(err1)))
+        
+        -- Signature Fallback A: controller.Kick(controller, 1, 1)
+        local ok2, err2 = pcall(function()
+            controller.Kick(controller, 1, 1)
+        end)
+        if ok2 then
+            kickCalled = true
+        else
+            table.insert(errList, string.format("Sig2: %s", tostring(err2)))
+            
+            -- Signature Fallback B: controller:Kick(1)
+            local ok3, err3 = pcall(function()
+                controller:Kick(1)
+            end)
+            if ok3 then
+                kickCalled = true
+            else
+                table.insert(errList, string.format("Sig3: %s", tostring(err3)))
+            end
+        end
+    end
+
+    if kickCalled then
+        logConsole("✅ [KICK DIPANGGIL] controller:Kick berhasil dieksekusi di game!")
+        return true
+    else
+        logConsole(string.format("❌ [KICK GAGAL] Semua signature error: %s", table.concat(errList, " | ")))
+        cachedGameController = nil
+        return false
     end
 end
 
