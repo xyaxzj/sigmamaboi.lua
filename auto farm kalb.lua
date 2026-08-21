@@ -73,13 +73,48 @@ pcall(function()
 end)
 
 -- =============================================
--- 🥔 2. SYSTEM HAPUS TEKSTUR & MATERIAL (POTATO MAP)
+-- 🥔 2. SYSTEM HAPUS TEKSTUR & VISUAL (SAFE ZERO-ERROR & ZERO-LAG)
 -- =============================================
+local PURGE_CLASSES = {
+    PointLight = true,
+    SpotLight = true,
+    SurfaceLight = true,
+    ParticleEmitter = true,
+    Trail = true,
+    Beam = true,
+    Fire = true,
+    Smoke = true,
+    Sparkles = true,
+    SurfaceAppearance = true,
+    Clothing = true,
+    ShirtGraphic = true,
+    SelectionBox = true,
+    SelectionSphere = true,
+}
+
 local function stripTexture(v)
     if not v then return end
     if lp and lp.Character and (v == lp.Character or v:IsDescendantOf(lp.Character)) then return end
 
     pcall(function()
+        local className = v.ClassName
+        if PURGE_CLASSES[className] then
+            v:Destroy()
+            return
+        end
+
+        if className == "Highlight" or v:IsA("Highlight") then
+            v.Enabled = false
+            v.FillTransparency = 1
+            v.OutlineTransparency = 1
+            return
+        end
+
+        if className == "Decal" or className == "Texture" or v:IsA("Decal") or v:IsA("Texture") then
+            v.Transparency = 1
+            return
+        end
+
         if v:IsA("BasePart") then
             v.Material = Enum.Material.SmoothPlastic
             v.Reflectance = 0
@@ -90,12 +125,6 @@ local function stripTexture(v)
             end
         elseif v:IsA("SpecialMesh") then
             v.TextureId = ""
-        elseif v:IsA("SurfaceAppearance") or v:IsA("Clothing") or v:IsA("ShirtGraphic") then
-            v:Destroy()
-        elseif v:IsA("Decal") or v:IsA("Texture") then
-            v.Transparency = 1
-        elseif v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Beam") or v:IsA("Fire") or v:IsA("Smoke") or v:IsA("Sparkles") then
-            v.Enabled = false
         end
     end)
 end
@@ -309,20 +338,18 @@ end
 -- 🧹 5. PERIODIC SWEEPER & GARBAGE COLLECTOR
 -- =============================================
 task.spawn(function()
-    local cleanCounter = 0
-    while task.wait(0.25) do
+    while task.wait(3) do
         if _G.autoRemovePlayer then
             pcall(scanAndPurgeAllOtherPlayers)
         end
 
-        cleanCounter = cleanCounter + 1
-        if cleanCounter >= 120 then
-            cleanCounter = 0
-            pcall(function()
-                if gcinfo then gcinfo() end
-                if collectgarbage then collectgarbage("collect") end
-            end)
-        end
+        pcall(function()
+            if collectgarbage then
+                collectgarbage("step", 50)
+            elseif gcinfo then
+                gcinfo()
+            end
+        end)
     end
 end)
 
