@@ -21,7 +21,7 @@ if not game:IsLoaded() then game.Loaded:Wait() end
 -- ⚙️ KONFIGURASI PENGGUNA (UBAH SESUAI KEBUTUHAN DI SINI)
 -- ==============================================================================
 _G.autoFarm = true               -- true: Auto Farm Aktif, false: Nonaktif
-_G.onlyMeteorEvent = false        -- true: HANYA Auto Kick saat Event Meteor Shower aktif, false: Auto kick nonstop
+_G.onlyMeteorEvent = true        -- true: HANYA Auto Kick saat Event Meteor Shower aktif, false: Auto kick nonstop
 _G.autoMeteor = true             -- true: Otomatis perbesar hitbox meteor saat Meteor Shower, false: Nonaktif
 _G.autoBuyPatagotitan = true      -- true: Auto beli Patagotitan saat ready di Meteor Shop
 _G.autoBuySpeed = true            -- true: Auto beli Speed (+1) saat ready di Meteor Shop
