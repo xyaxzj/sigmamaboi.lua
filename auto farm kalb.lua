@@ -10,6 +10,7 @@
 --    - 🦖 Patagotitan (⚡ON)
 --    - ⚡ Speed (+1) (⚡ON)
 --    - 👑 Frigorex (⚡ON)
+--    - 🦏 Tricerabob (⚡ON)
 --    - 🧪 Farm Potion (I) (Khusus Jam Ganjil WIB & Max Menit :10)
 -- ==============================================================================
 
@@ -45,6 +46,7 @@ _G.autoFarm = true
 _G.autoBuyPatagotitan = true  -- 🦖 Patagotitan
 _G.autoBuySpeed = true        -- ⚡ Speed (+1)
 _G.autoBuyFrigorex = true     -- 👑 Frigorex
+_G.autoBuyTricerabob = true   -- 🦏 Tricerabob
 _G.autoBuyFarmPotion = true   -- 🧪 Farm Potion (I) (Khusus jam ganjil WIB max menit :10)
 _G.autoSellAll = true         -- 💰 Auto Sell All tiap 5s
 _G.autoRemovePlayer = true    -- 🚫 Hapus player lain dari game.Players & workspace.Players
@@ -366,157 +368,110 @@ if not rev_MeteorShop_Stock or not rev_MeteorShop_Buy or not rev_MeteorShop_Requ
 end
 
 -- =============================================
--- 📢 DISCORD WEBHOOK NOTIFIER (PATAGOTITAN & FRIGOREX - COMPACT & CLEAN)
+-- 📢 DISCORD WEBHOOK NOTIFIER (PATAGOTITAN, FRIGOREX, TRICERABOB - ZERO LAG)
 -- =============================================
 local DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1539697793973756084/1oLTQDKSmutWJlPX91He00IEEAg_lsos8MWbxuXki8LKqO8WnZUX8kwurULVjdB8lOqb"
 
-local function getDirectRobloxImageUrl(assetId, productId)
-    local fallback = string.format("https://www.roblox.com/asset-thumbnail/image?assetId=%s&width=420&height=420&format=png", tostring(assetId))
-    local ok, res = pcall(function()
-        local httpReq = request or http_request or (delta and delta.request) or (syn and syn.request) or (Fluxus and Fluxus.request) or (http and http.request)
-        if not httpReq then return nil end
-        local HttpService = game:GetService("HttpService")
+local PATAGO_IMAGE_URL = "https://www.roblox.com/asset-thumbnail/image?assetId=95399484334874&width=420&height=420&format=png"
+local FRIGOREX_IMAGE_URL = "https://www.roblox.com/asset-thumbnail/image?assetId=140510107418430&width=420&height=420&format=png"
 
-        -- 1. Coba Developer Product Icon API jika ada productId
-        if productId then
-            local pRes = httpReq({
-                Url = string.format("https://thumbnails.roblox.com/v1/developer-products/icons?developerProductIds=%s&size=420x420&format=Png", tostring(productId)),
-                Method = "GET"
-            })
-            if pRes and pRes.Body then
-                local data = HttpService:JSONDecode(pRes.Body)
-                if data and data.data and data.data[1] and data.data[1].imageUrl and data.data[1].imageUrl ~= "" then
-                    return data.data[1].imageUrl
-                end
-            end
-        end
-
-        -- 2. Coba Asset Thumbnail API
-        if assetId then
-            local aRes = httpReq({
-                Url = string.format("https://thumbnails.roblox.com/v1/assets?assetIds=%s&size=420x420&format=Png", tostring(assetId)),
-                Method = "GET"
-            })
-            if aRes and aRes.Body then
-                local data = HttpService:JSONDecode(aRes.Body)
-                if data and data.data and data.data[1] and data.data[1].imageUrl and data.data[1].imageUrl ~= "" then
-                    return data.data[1].imageUrl
-                end
-            end
-        end
-    end)
-    if ok and res and type(res) == "string" and string.find(res, "http") then
-        return res
-    end
-    return fallback
-end
-
-local function getDirectRobloxAvatarUrl(userId)
-    local fallback = string.format("https://www.roblox.com/headshot-thumbnail/image?userId=%s&width=150&height=150&format=png", tostring(userId))
-    local ok, res = pcall(function()
-        local httpReq = request or http_request or (delta and delta.request) or (syn and syn.request) or (Fluxus and Fluxus.request) or (http and http.request)
-        if httpReq then
-            local apiRes = httpReq({
-                Url = string.format("https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=%s&size=150x150&format=Png", tostring(userId)),
-                Method = "GET"
-            })
-            if apiRes and apiRes.Body then
+local function sendDiscordWebhook(itemName, totalBought)
+    totalBought = totalBought or 1
+    task.defer(function()
+        task.spawn(function()
+            pcall(function()
+                local httpReq = request or http_request or (delta and delta.request) or (syn and syn.request) or (Fluxus and Fluxus.request) or (http and http.request)
+                if not httpReq then return end
                 local HttpService = game:GetService("HttpService")
-                local data = HttpService:JSONDecode(apiRes.Body)
-                if data and data.data and data.data[1] and data.data[1].imageUrl then
-                    return data.data[1].imageUrl
+
+                local userDisplayName = lp and lp.DisplayName or (lp and lp.Name or "Unknown")
+                local userId = lp and tostring(lp.UserId) or "0"
+                local playerAvatarCdn = string.format("https://www.roblox.com/headshot-thumbnail/image?userId=%s&width=150&height=150&format=png", userId)
+
+                local itemImageUrl = ""
+                local embedColor = 0x3498db
+                local itemIcon = "🛒"
+                local unitCost = 0
+                local itemBuff = ""
+
+                if itemName == "Patagotitan" then
+                    itemIcon = "🦖"
+                    embedColor = 0x2ecc71 -- Hijau Emerald
+                    itemImageUrl = PATAGO_IMAGE_URL
+                    unitCost = 500
+                    itemBuff = "150% CP/s"
+                elseif itemName == "Frigorex" then
+                    itemIcon = "👑"
+                    embedColor = 0x9b59b6 -- Ungu Royal
+                    itemImageUrl = FRIGOREX_IMAGE_URL
+                    unitCost = 1250
+                    itemBuff = "250% CP/s"
+                elseif itemName == "Tricerabob" then
+                    itemIcon = "🦏"
+                    embedColor = 0xe67e22 -- Oranye Golden
+                    itemImageUrl = playerAvatarCdn
+                    unitCost = 750
+                    itemBuff = "Exclusive Meteor Brainrot"
                 end
-            end
-        end
-    end)
-    if ok and res and type(res) == "string" and string.find(res, "http") then
-        return res
-    end
-    return fallback
-end
 
-local function sendDiscordWebhook(itemName, currentCount, maxStock)
-    task.spawn(function()
-        pcall(function()
-            local httpReq = request or http_request or (delta and delta.request) or (syn and syn.request) or (Fluxus and Fluxus.request) or (http and http.request)
-            if not httpReq then return end
-            local HttpService = game:GetService("HttpService")
+                local totalCost = unitCost * totalBought
+                local titleDesc = (totalBought > 1) and string.format("%s %dx %s", itemIcon, totalBought, itemName) or string.format("%s %s", itemIcon, itemName)
 
-            local wibTimeStr = os.date("!%d/%m/%Y - %H:%M:%S WIB", os.time() + (7 * 3600))
-            local userName = lp and lp.Name or "Unknown"
-            local userDisplayName = lp and lp.DisplayName or userName
-            local userId = lp and tostring(lp.UserId) or "0"
-
-            local playerAvatarCdn = getDirectRobloxAvatarUrl(userId)
-            local itemImageUrl = ""
-            local embedColor = 0x3498db
-            local itemIcon = "🛒"
-            local itemCost = 0
-            local itemBuff = ""
-
-            if itemName == "Patagotitan" then
-                itemIcon = "🦖"
-                embedColor = 0x2ecc71 -- Hijau Emerald
-                itemImageUrl = getDirectRobloxImageUrl("95399484334874", "3708138558")
-                itemCost = 500
-                itemBuff = "150% CP/s"
-            elseif itemName == "Frigorex" then
-                itemIcon = "👑"
-                embedColor = 0x9b59b6 -- Ungu Royal
-                itemImageUrl = getDirectRobloxImageUrl("140510107418430", "3708174931")
-                itemCost = 1250
-                itemBuff = "250% CP/s"
-            end
-
-            local payload = {
-                ["username"] = "KALB Meteor Shop",
-                ["avatar_url"] = playerAvatarCdn,
-                ["embeds"] = {
-                    {
-                        ["author"] = {
-                            ["name"] = userDisplayName,
-                            ["icon_url"] = playerAvatarCdn
-                        },
-                        ["title"] = "Berhasil Membeli",
-                        ["description"] = string.format("%s %s", itemIcon, itemName),
-                        ["color"] = embedColor,
-                        ["thumbnail"] = {
-                            ["url"] = itemImageUrl
-                        },
-                        ["fields"] = {
-                            {
-                                ["name"] = "Exclusive",
-                                ["value"] = itemBuff,
-                                ["inline"] = false
+                local payload = {
+                    ["username"] = "KALB Meteor Shop",
+                    ["avatar_url"] = playerAvatarCdn,
+                    ["embeds"] = {
+                        {
+                            ["author"] = {
+                                ["name"] = userDisplayName,
+                                ["icon_url"] = playerAvatarCdn
                             },
-                            {
-                                ["name"] = "Harga",
-                                ["value"] = string.format("%d Tokens", itemCost),
-                                ["inline"] = false
-                            }
-                        },
-                        ["footer"] = {
-                            ["text"] = "KALB - Meteor Shop"
-                        },
-                        ["timestamp"] = os.date("!%Y-%m-%dT%H:%M:%SZ")
+                            ["title"] = "Berhasil Membeli",
+                            ["description"] = titleDesc,
+                            ["color"] = embedColor,
+                            ["thumbnail"] = {
+                                ["url"] = itemImageUrl
+                            },
+                            ["fields"] = {
+                                {
+                                    ["name"] = "Exclusive",
+                                    ["value"] = itemBuff,
+                                    ["inline"] = false
+                                },
+                                {
+                                    ["name"] = "Jumlah",
+                                    ["value"] = string.format("%d Unit", totalBought),
+                                    ["inline"] = true
+                                },
+                                {
+                                    ["name"] = "Total Harga",
+                                    ["value"] = string.format("%d Tokens", totalCost),
+                                    ["inline"] = true
+                                }
+                            },
+                            ["footer"] = {
+                                ["text"] = "KALB - Meteor Shop"
+                            },
+                            ["timestamp"] = os.date("!%Y-%m-%dT%H:%M:%SZ")
+                        }
                     }
                 }
-            }
 
-            httpReq({
-                Url = DISCORD_WEBHOOK_URL,
-                Method = "POST",
-                Headers = {
-                    ["Content-Type"] = "application/json"
-                },
-                Body = HttpService:JSONEncode(payload)
-            })
+                httpReq({
+                    Url = DISCORD_WEBHOOK_URL,
+                    Method = "POST",
+                    Headers = {
+                        ["Content-Type"] = "application/json"
+                    },
+                    Body = HttpService:JSONEncode(payload)
+                })
+            end)
         end)
     end)
 end
 
 -- =============================================
--- 🛒 8. AUTO BUY METEOR SHOP (PATAGOTITAN, SPEED, FRIGOREX)
+-- 🛒 8. AUTO BUY METEOR SHOP (PATAGOTITAN, SPEED, FRIGOREX, TRICERABOB)
 -- =============================================
 if rev_MeteorShop_Stock then
     rev_MeteorShop_Stock.OnClientEvent:Connect(function(stockData, expiryTimestamp)
@@ -538,19 +493,23 @@ if rev_MeteorShop_Stock then
                         shouldBuy = true
                     elseif itemName == "Frigorex" and _G.autoBuyFrigorex then
                         shouldBuy = true
+                    elseif itemName == "Tricerabob" and _G.autoBuyTricerabob then
+                        shouldBuy = true
                     end
 
                     if shouldBuy then
                         task.spawn(function()
+                            local boughtCount = 0
                             for i = 1, stockCount do
                                 pcall(function()
                                     buyRemote:FireServer(itemName)
+                                    boughtCount = boughtCount + 1
                                     print(string.format("🛒 [METEOR AUTO BUY] Berhasil membeli %s (#%d/%d)!", itemName, i, stockCount))
-                                    if itemName == "Patagotitan" or itemName == "Frigorex" then
-                                        sendDiscordWebhook(itemName, i, stockCount)
-                                    end
                                 end)
-                                task.wait(0.2)
+                                task.wait(0.15)
+                            end
+                            if boughtCount > 0 and (itemName == "Patagotitan" or itemName == "Frigorex" or itemName == "Tricerabob") then
+                                sendDiscordWebhook(itemName, boughtCount)
                             end
                         end)
                     end
@@ -564,7 +523,7 @@ end
 task.spawn(function()
     task.wait(3)
     while true do
-        if _G.autoFarm and (_G.autoBuyPatagotitan or _G.autoBuySpeed or _G.autoBuyFrigorex) then
+        if _G.autoFarm and (_G.autoBuyPatagotitan or _G.autoBuySpeed or _G.autoBuyFrigorex or _G.autoBuyTricerabob) then
             pcall(function()
                 local syncRemote = rev_MeteorShop_RequestSync or (networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_RequestSync"))
                 if syncRemote then
