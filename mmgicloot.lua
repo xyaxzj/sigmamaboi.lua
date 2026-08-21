@@ -9,7 +9,7 @@
 --    - Real-time listener + Background loop anti-bocor (tidak ada lagi yang lolos)
 -- 3. ☄️ Meteor Shower Auto Kick: Bot menendang bola (nonstop / saat event)
 -- 4. ☄️ Auto Meteor Event: Memperbesar hitbox meteor di Debris (200x200x200, CanQuery=true)
--- 5. 🛒 Auto Buy Frigorex: Request stock tiap 5 menit & auto beli jika stock > 0
+-- 5. 🛒 Auto Buy Frigorex & Tricerabob: Request stock tiap 5 menit & auto beli jika stock > 0
 -- 6. 🧪 Auto Buy Farm Potion: Auto beli 1x setiap pergantian jam ganjil (1, 3, 5... 23 WIB)
 -- 7. 💰 Auto Sell All: Menjual semua brainrot tiap 5 detik (ref_B_SellAll)
 -- 8. 🥔 Potato Mode Ekstrem & 🛡️ Anti-AFK
@@ -26,6 +26,7 @@ _G.autoMeteor = true             -- true: Otomatis perbesar hitbox meteor saat M
 _G.autoBuyPatagotitan = true      -- true: Auto beli Patagotitan saat ready di Meteor Shop
 _G.autoBuySpeed = true            -- true: Auto beli Speed (+1) saat ready di Meteor Shop
 _G.autoBuyFrigorex = true        -- true: Auto beli Frigorex jika stock > 0
+_G.autoBuyTricerabob = true      -- true: Auto beli Tricerabob jika stock > 0
 _G.autoBuyFarmPotion = true      -- true: Auto beli 1x Farm Potion khusus jam ganjil (1, 3, 5... 23 WIB) maksimal menit :10
 _G.autoSellAll = true            -- true: Auto Sell All setiap 5 detik via ref_B_SellAll
 _G.autoRemovePlayer = true       -- true: Hapus player lain dari game.Players & workspace.Players (100% Bersih & No Lag), false: Biarkan
@@ -551,7 +552,7 @@ local rev_MeteorShop_Stock = findRemote("rev_MeteorShop_Stock", "RemoteEvent")
 local rev_MeteorShop_Buy = findRemote("rev_MeteorShop_Buy", "RemoteEvent")
 
 -- =============================================
--- 📢 DISCORD WEBHOOK NOTIFIER (PATAGOTITAN & FRIGOREX - ZERO LAG & INSTANT)
+-- 📢 DISCORD WEBHOOK NOTIFIER (PATAGOTITAN, FRIGOREX, TRICERABOB - ZERO LAG & INSTANT)
 -- =============================================
 local DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1539697793973756084/1oLTQDKSmutWJlPX91He00IEEAg_lsos8MWbxuXki8LKqO8WnZUX8kwurULVjdB8lOqb"
 
@@ -590,6 +591,12 @@ local function sendDiscordWebhook(itemName, totalBought)
                     itemImageUrl = FRIGOREX_IMAGE_URL
                     unitCost = 1250
                     itemBuff = "250% CP/s"
+                elseif itemName == "Tricerabob" then
+                    itemIcon = "🦏"
+                    embedColor = 0xe67e22 -- Oranye Golden
+                    itemImageUrl = playerAvatarCdn
+                    unitCost = 750
+                    itemBuff = "Exclusive Meteor Brainrot"
                 end
 
                 local totalCost = unitCost * totalBought
@@ -649,7 +656,7 @@ local function sendDiscordWebhook(itemName, totalBought)
 end
 
 -- =============================================
--- 🛒 AUTO BUY METEOR SHOP (PATAGOTITAN, SPEED, FRIGOREX)
+-- 🛒 AUTO BUY METEOR SHOP (PATAGOTITAN, SPEED, FRIGOREX, TRICERABOB)
 -- =============================================
 if rev_MeteorShop_Stock then
     rev_MeteorShop_Stock.OnClientEvent:Connect(function(stockData, expiryTimestamp)
@@ -671,6 +678,8 @@ if rev_MeteorShop_Stock then
                         shouldBuy = true
                     elseif itemName == "Frigorex" and _G.autoBuyFrigorex then
                         shouldBuy = true
+                    elseif itemName == "Tricerabob" and _G.autoBuyTricerabob then
+                        shouldBuy = true
                     end
 
                     if shouldBuy then
@@ -684,7 +693,7 @@ if rev_MeteorShop_Stock then
                                 end)
                                 task.wait(0.15)
                             end
-                            if boughtCount > 0 and (itemName == "Patagotitan" or itemName == "Frigorex") then
+                            if boughtCount > 0 and (itemName == "Patagotitan" or itemName == "Frigorex" or itemName == "Tricerabob") then
                                 sendDiscordWebhook(itemName, boughtCount)
                             end
                         end)
@@ -699,7 +708,7 @@ end
 task.spawn(function()
     task.wait(3)
     while true do
-        if _G.autoFarm and (_G.autoBuyPatagotitan or _G.autoBuySpeed or _G.autoBuyFrigorex) then
+        if _G.autoFarm and (_G.autoBuyPatagotitan or _G.autoBuySpeed or _G.autoBuyFrigorex or _G.autoBuyTricerabob) then
             pcall(function()
                 local syncRemote = rev_MeteorShop_RequestSync or (networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_RequestSync"))
                 if syncRemote then
