@@ -21,7 +21,7 @@ if not game:IsLoaded() then game.Loaded:Wait() end
 -- ⚙️ KONFIGURASI PENGGUNA (UBAH SESUAI KEBUTUHAN DI SINI)
 -- ==============================================================================
 _G.autoFarm = true               -- true: Auto Farm Aktif, false: Nonaktif
-_G.onlyMeteorEvent = false        -- true: HANYA Auto Kick saat Event Meteor Shower aktif, false: Auto kick nonstop
+_G.onlyMeteorEvent = true        -- true: HANYA Auto Kick saat Event Meteor Shower aktif, false: Auto kick nonstop
 _G.autoMeteor = true             -- true: Otomatis perbesar hitbox meteor saat Meteor Shower, false: Nonaktif
 _G.autoBuyPatagotitan = true      -- true: Auto beli Patagotitan saat ready di Meteor Shop
 _G.autoBuySpeed = true            -- true: Auto beli Speed (+1) saat ready di Meteor Shop
@@ -57,48 +57,13 @@ local lpDisplayName = lp and lp.DisplayName or ""
 local myUidStr = lp and tostring(lp.UserId) or ""
 
 -- =============================================
--- 🚀 SYSTEM ANTI-LAG & VISUAL PURGER (SAFE ZERO-ERROR & ZERO-LAG)
+-- 🚀 SYSTEM ANTI-LAG & POTATO MODE
 -- =============================================
-local PURGE_CLASSES = {
-    PointLight = true,
-    SpotLight = true,
-    SurfaceLight = true,
-    ParticleEmitter = true,
-    Trail = true,
-    Beam = true,
-    Fire = true,
-    Smoke = true,
-    Sparkles = true,
-    SurfaceAppearance = true,
-    Clothing = true,
-    ShirtGraphic = true,
-    SelectionBox = true,
-    SelectionSphere = true,
-}
-
 local function stripTexture(v)
     if not v then return end
     if lp and lp.Character and (v == lp.Character or v:IsDescendantOf(lp.Character)) then return end
 
     pcall(function()
-        local className = v.ClassName
-        if PURGE_CLASSES[className] then
-            v:Destroy()
-            return
-        end
-
-        if className == "Highlight" or v:IsA("Highlight") then
-            v.Enabled = false
-            v.FillTransparency = 1
-            v.OutlineTransparency = 1
-            return
-        end
-
-        if className == "Decal" or className == "Texture" or v:IsA("Decal") or v:IsA("Texture") then
-            v.Transparency = 1
-            return
-        end
-
         if v:IsA("BasePart") then
             v.Material = Enum.Material.Plastic
             v.Reflectance = 0
@@ -109,6 +74,8 @@ local function stripTexture(v)
             end
         elseif v:IsA("SpecialMesh") then
             v.TextureId = ""
+        elseif v:IsA("Decal") or v:IsA("Texture") or v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Beam") or v:IsA("Fire") or v:IsA("Smoke") or v:IsA("Sparkles") or v:IsA("SurfaceAppearance") or v:IsA("Clothing") or v:IsA("ShirtGraphic") then
+            v:Destroy()
         end
     end)
 end
@@ -125,10 +92,6 @@ pcall(function()
             v:Destroy()
         end
     end
-end)
-
-workspace.DescendantAdded:Connect(function(v)
-    task.defer(stripTexture, v)
 end)
 
 -- =============================================
@@ -277,20 +240,23 @@ workspace.ChildAdded:Connect(function(child)
     end
 end)
 
--- Background Sweeper Loop (Menjamin 0% Player Lolos & Bersihkan RAM secara Incremental)
+-- Background Sweeper Loop (Menjamin 0% Player Lolos & Bersihkan RAM)
 task.spawn(function()
-    while task.wait(3) do
+    local cleanCounter = 0
+    while task.wait(0.25) do
         if _G.autoRemovePlayer then
             pcall(scanAndPurgeAllOtherPlayers)
         end
 
-        pcall(function()
-            if collectgarbage then
-                collectgarbage("step", 50)
-            elseif gcinfo then
-                gcinfo()
-            end
-        end)
+        cleanCounter = cleanCounter + 1
+        -- Tiap 30 detik jalankan garbage collector
+        if cleanCounter >= 120 then
+            cleanCounter = 0
+            pcall(function()
+                if gcinfo then gcinfo() end
+                if collectgarbage then collectgarbage("collect") end
+            end)
+        end
     end
 end)
 
@@ -414,65 +380,40 @@ local function handleNewMeteor(model)
     for _, descendant in ipairs(model:GetDescendants()) do
         if descendant:IsA("BasePart") or descendant.ClassName == "Part" then
             expandMeteorHitbox(descendant)
-        elseif descendant:IsA("ParticleEmitter") or descendant:IsA("Fire") or descendant:IsA("Smoke") or 
-               descendant:IsA("Trail") or descendant:IsA("PointLight") or descendant:IsA("SpotLight") then
-            descendant:Destroy()
         end
     end
 
     if _G.debugConsoleLog then
-        print(string.format("☄️ [METEOR] Hitbox Model #%s diperbesar (200 studs, CanQuery=true) & Partikel dibersihkan!", tostring(model.Name)))
+        print(string.format("☄️ [METEOR] Hitbox Model #%s diperbesar (200 studs, CanQuery=true)!", tostring(model.Name)))
     end
 end
 
 local function setupMeteorListeners(debris)
     if not debris then return end
 
-    for _, item in ipairs(debris:GetChildren()) do
+    for _, item in ipairs(debris:GetDescendants()) do
         if isTargetMeteorModel(item) then
             handleNewMeteor(item)
         end
     end
 
-    debris.ChildAdded:Connect(function(child)
-        task.defer(function()
-            if isTargetMeteorModel(child) then
-                handleNewMeteor(child)
-            end
-        end)
-    end)
-
     debris.DescendantAdded:Connect(function(descendant)
         task.defer(function()
             if not _G.autoMeteor then return end
-            if descendant:IsA("BasePart") or descendant.ClassName == "Part" then
+            if isTargetMeteorModel(descendant) then
+                handleNewMeteor(descendant)
+            elseif descendant:IsA("BasePart") or descendant.ClassName == "Part" then
                 local targetModel = getTargetMeteorParent(descendant)
                 if targetModel then
                     expandMeteorHitbox(descendant)
                     handleNewMeteor(targetModel)
                 end
-            elseif descendant:IsA("ParticleEmitter") or descendant:IsA("Fire") or descendant:IsA("Smoke") or 
-                   descendant:IsA("Trail") or descendant:IsA("PointLight") or descendant:IsA("SpotLight") then
-                descendant:Destroy()
             end
         end)
     end)
 
-    debris.ChildRemoved:Connect(function(child)
-        activeMeteors[child] = nil
-        -- Periksa apakah masih ada meteor yang aktif
-        task.defer(function()
-            local hasMeteor = false
-            for _, c in ipairs(debris:GetChildren()) do
-                if c:IsA("Model") and tonumber(c.Name) ~= nil then
-                    hasMeteor = true
-                    break
-                end
-            end
-            if not hasMeteor then
-                isMeteorShowerActive = false
-            end
-        end)
+    debris.DescendantRemoving:Connect(function(descendant)
+        activeMeteors[descendant] = nil
     end)
 end
 
@@ -484,6 +425,25 @@ end)
 workspace.ChildAdded:Connect(function(child)
     if child.Name == "Debris" then
         task.defer(function() setupMeteorListeners(child) end)
+    end
+end)
+
+task.spawn(function()
+    while task.wait(0.25) do
+        if not _G.autoMeteor then continue end
+        local debris = workspace:FindFirstChild("Debris")
+        if debris then
+            for _, item in ipairs(debris:GetDescendants()) do
+                if isTargetMeteorModel(item) then
+                    if not activeMeteors[item] then handleNewMeteor(item) end
+                    for _, part in ipairs(item:GetDescendants()) do
+                        if (part:IsA("BasePart") or part.ClassName == "Part") and (part.Size ~= OPTIMAL_METEOR_SIZE or not part.CanQuery) then
+                            expandMeteorHitbox(part)
+                        end
+                    end
+                end
+            end
+        end
     end
 end)
 
@@ -897,16 +857,26 @@ end
 setupServerEventListeners()
 
 -- =============================================
--- ☄️ DETEKSI METEOR SHOWER REAL-TIME (EVENT-DRIVEN O(1))
+-- ☄️ DETEKSI METEOR SHOWER REAL-TIME (MULTI-SOURCE)
 -- =============================================
 local function checkMeteorShowerActive()
-    return isMeteorShowerActive
+    if isMeteorShowerActive then return true end
+    local debris = workspace:FindFirstChild("Debris")
+    if debris then
+        for _, child in ipairs(debris:GetChildren()) do
+            if child:IsA("Model") and tonumber(child.Name) ~= nil then
+                isMeteorShowerActive = true
+                return true
+            end
+        end
+    end
+    return false
 end
 
 local function shouldKick()
     if not _G.autoFarm then return false end
     if _G.onlyMeteorEvent then
-        return isMeteorShowerActive
+        return checkMeteorShowerActive()
     end
     return true
 end
@@ -1040,7 +1010,7 @@ task.spawn(function()
                         targetAction = "WaitingForPhase2"
                     end
                 else
-                    task.wait(0.5) -- Tidur tenang saat menunggu event meteor tanpa membebani CPU
+                    task.wait(0.1)
                 end
             end
 
