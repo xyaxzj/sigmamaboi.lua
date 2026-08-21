@@ -9,7 +9,7 @@
 --    - Real-time listener + Background loop anti-bocor (tidak ada lagi yang lolos)
 -- 3. ☄️ Meteor Shower Auto Kick: Bot menendang bola (nonstop / saat event)
 -- 4. ☄️ Auto Meteor Event: Memperbesar hitbox meteor di Debris (200x200x200, CanQuery=true)
--- 5. 🛒 Auto Buy Frigorex: Request stock tiap 5 menit & auto beli jika stock > 0
+-- 5. 🛒 Auto Buy Frigorex & Tricerabob: Request stock tiap 5 menit & auto beli jika stock > 0
 -- 6. 🧪 Auto Buy Farm Potion: Auto beli 1x setiap pergantian jam ganjil (1, 3, 5... 23 WIB)
 -- 7. 💰 Auto Sell All: Menjual semua brainrot tiap 5 detik (ref_B_SellAll)
 -- 8. 🥔 Potato Mode Ekstrem & 🛡️ Anti-AFK
@@ -26,6 +26,7 @@ _G.autoMeteor = true             -- true: Otomatis perbesar hitbox meteor saat M
 _G.autoBuyPatagotitan = true      -- true: Auto beli Patagotitan saat ready di Meteor Shop
 _G.autoBuySpeed = true            -- true: Auto beli Speed (+1) saat ready di Meteor Shop
 _G.autoBuyFrigorex = true        -- true: Auto beli Frigorex jika stock > 0
+_G.autoBuyTricerabob = true      -- true: Auto beli Tricerabob jika stock > 0
 _G.autoBuyFarmPotion = true      -- true: Auto beli 1x Farm Potion khusus jam ganjil (1, 3, 5... 23 WIB) maksimal menit :10
 _G.autoSellAll = true            -- true: Auto Sell All setiap 5 detik via ref_B_SellAll
 _G.autoRemovePlayer = true       -- true: Hapus player lain dari game.Players & workspace.Players (100% Bersih & No Lag), false: Biarkan
@@ -457,6 +458,7 @@ local mutationCount = 0
 local lastRewardDesc = "None"
 local kickRetryCount = 0
 local MAX_KICK_RETRIES = 2
+local kickAcceptedByServer = false
 local safeZone = Vector3.new(698.030701, 3.298559, 233.707077)
 local safeZoneCFrame = CFrame.new(698.030701, 3.298559, 233.707077, -0.061024, -0.000000, 0.998136, -0.000000, 1.000000, 0.000000, -0.998136, -0.000000, -0.061024)
 
@@ -514,7 +516,7 @@ lp.Idled:Connect(function()
 end)
 
 -- =============================================
--- 📡 DAFTAR REMOTE NETWORK RESMI
+-- 📡 DAFTAR REMOTE NETWORK RESMI & AUTO-RESOLVER
 -- =============================================
 local networkFolder = nil
 pcall(function()
@@ -523,188 +525,138 @@ pcall(function()
     networkFolder = packages and (packages:FindFirstChild("Network") or packages:WaitForChild("Network", 3))
 end)
 
-local ref_KickEvent = networkFolder and networkFolder:FindFirstChild("ref_KickEvent")
-local kickRemote = networkFolder and networkFolder:FindFirstChild("rev_KickEvent")
-local rev_kickPhase2 = networkFolder and networkFolder:FindFirstChild("rev_kickPhase2")
-local rev_Collected = networkFolder and networkFolder:FindFirstChild("rev_Collected")
-local rev_KickEventEnded = networkFolder and networkFolder:FindFirstChild("rev_KickEventEnded")
-local rev_AddedWeather = networkFolder and networkFolder:FindFirstChild("rev_AddedWeather")
-local rev_RemovedWeather = networkFolder and networkFolder:FindFirstChild("rev_RemovedWeather")
-
-local ref_B_SellAll = networkFolder and networkFolder:FindFirstChild("ref_B_SellAll")
-local rev_MeteorShop_RequestSync = networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_RequestSync")
-local rev_MeteorShop_Stock = networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_Stock")
-local rev_MeteorShop_Buy = networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_Buy")
-
-if not ref_KickEvent then
-    for _, r in pairs(ReplicatedStorage:GetDescendants()) do
-        if r:IsA("RemoteFunction") and r.Name == "ref_KickEvent" then
-            ref_KickEvent = r
-            break
+local function findRemote(name, className)
+    if networkFolder then
+        local r = networkFolder:FindFirstChild(name)
+        if r and (not className or r:IsA(className)) then return r end
+    end
+    for _, r in ipairs(ReplicatedStorage:GetDescendants()) do
+        if r.Name == name and (not className or r:IsA(className)) then
+            return r
         end
     end
+    return nil
 end
-if not kickRemote then
-    for _, r in pairs(ReplicatedStorage:GetDescendants()) do
-        if r:IsA("RemoteEvent") and string.find(r.Name, "rev_KickEvent") and not string.find(r.Name, "Ended") then
-            kickRemote = r
-            break
-        end
-    end
-end
+
+local ref_KickEvent = findRemote("ref_KickEvent", "RemoteFunction")
+local kickRemote = findRemote("rev_KickEvent", "RemoteEvent")
+local rev_kickPhase2 = findRemote("rev_kickPhase2", "RemoteEvent")
+local rev_Collected = findRemote("rev_Collected", "RemoteEvent")
+local rev_KickEventEnded = findRemote("rev_KickEventEnded", "RemoteEvent")
+local rev_AddedWeather = findRemote("rev_AddedWeather", "RemoteEvent")
+local rev_RemovedWeather = findRemote("rev_RemovedWeather", "RemoteEvent")
+
+local ref_B_SellAll = findRemote("ref_B_SellAll", "RemoteFunction")
+local rev_MeteorShop_RequestSync = findRemote("rev_MeteorShop_RequestSync", "RemoteEvent")
+local rev_MeteorShop_Stock = findRemote("rev_MeteorShop_Stock", "RemoteEvent")
+local rev_MeteorShop_Buy = findRemote("rev_MeteorShop_Buy", "RemoteEvent")
 
 -- =============================================
--- 📢 DISCORD WEBHOOK NOTIFIER (PATAGOTITAN & FRIGOREX - COMPACT & CLEAN)
+-- 📢 DISCORD WEBHOOK NOTIFIER (PATAGOTITAN, FRIGOREX, TRICERABOB - ZERO LAG & INSTANT)
 -- =============================================
 local DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1539697793973756084/1oLTQDKSmutWJlPX91He00IEEAg_lsos8MWbxuXki8LKqO8WnZUX8kwurULVjdB8lOqb"
 
-local function getDirectRobloxImageUrl(assetId, productId)
-    local fallback = string.format("https://www.roblox.com/asset-thumbnail/image?assetId=%s&width=420&height=420&format=png", tostring(assetId))
-    local ok, res = pcall(function()
-        local httpReq = request or http_request or (delta and delta.request) or (syn and syn.request) or (Fluxus and Fluxus.request) or (http and http.request)
-        if not httpReq then return nil end
-        local HttpService = game:GetService("HttpService")
+-- URL CDN Langsung (0x Request HTTP Ekstra, 100% Bebas Freeze/Lag)
+local PATAGO_IMAGE_URL = "https://www.roblox.com/asset-thumbnail/image?assetId=95399484334874&width=420&height=420&format=png"
+local FRIGOREX_IMAGE_URL = "https://www.roblox.com/asset-thumbnail/image?assetId=140510107418430&width=420&height=420&format=png"
 
-        -- 1. Coba Developer Product Icon API jika ada productId
-        if productId then
-            local pRes = httpReq({
-                Url = string.format("https://thumbnails.roblox.com/v1/developer-products/icons?developerProductIds=%s&size=420x420&format=Png", tostring(productId)),
-                Method = "GET"
-            })
-            if pRes and pRes.Body then
-                local data = HttpService:JSONDecode(pRes.Body)
-                if data and data.data and data.data[1] and data.data[1].imageUrl and data.data[1].imageUrl ~= "" then
-                    return data.data[1].imageUrl
-                end
-            end
-        end
-
-        -- 2. Coba Asset Thumbnail API
-        if assetId then
-            local aRes = httpReq({
-                Url = string.format("https://thumbnails.roblox.com/v1/assets?assetIds=%s&size=420x420&format=Png", tostring(assetId)),
-                Method = "GET"
-            })
-            if aRes and aRes.Body then
-                local data = HttpService:JSONDecode(aRes.Body)
-                if data and data.data and data.data[1] and data.data[1].imageUrl and data.data[1].imageUrl ~= "" then
-                    return data.data[1].imageUrl
-                end
-            end
-        end
-    end)
-    if ok and res and type(res) == "string" and string.find(res, "http") then
-        return res
-    end
-    return fallback
-end
-
-local function getDirectRobloxAvatarUrl(userId)
-    local fallback = string.format("https://www.roblox.com/headshot-thumbnail/image?userId=%s&width=150&height=150&format=png", tostring(userId))
-    local ok, res = pcall(function()
-        local httpReq = request or http_request or (delta and delta.request) or (syn and syn.request) or (Fluxus and Fluxus.request) or (http and http.request)
-        if httpReq then
-            local apiRes = httpReq({
-                Url = string.format("https://thumbnails.roblox.com/v1/users/avatar-headshot?userIds=%s&size=150x150&format=Png", tostring(userId)),
-                Method = "GET"
-            })
-            if apiRes and apiRes.Body then
+local function sendDiscordWebhook(itemName, totalBought)
+    totalBought = totalBought or 1
+    task.defer(function()
+        task.spawn(function()
+            pcall(function()
+                local httpReq = request or http_request or (delta and delta.request) or (syn and syn.request) or (Fluxus and Fluxus.request) or (http and http.request)
+                if not httpReq then return end
                 local HttpService = game:GetService("HttpService")
-                local data = HttpService:JSONDecode(apiRes.Body)
-                if data and data.data and data.data[1] and data.data[1].imageUrl then
-                    return data.data[1].imageUrl
+
+                local userDisplayName = lp and lp.DisplayName or (lp and lp.Name or "Unknown")
+                local userId = lp and tostring(lp.UserId) or "0"
+                local playerAvatarCdn = string.format("https://www.roblox.com/headshot-thumbnail/image?userId=%s&width=150&height=150&format=png", userId)
+
+                local itemImageUrl = ""
+                local embedColor = 0x3498db
+                local itemIcon = "🛒"
+                local unitCost = 0
+                local itemBuff = ""
+
+                if itemName == "Patagotitan" then
+                    itemIcon = "🦖"
+                    embedColor = 0x2ecc71 -- Hijau Emerald
+                    itemImageUrl = PATAGO_IMAGE_URL
+                    unitCost = 500
+                    itemBuff = "150% CP/s"
+                elseif itemName == "Frigorex" then
+                    itemIcon = "👑"
+                    embedColor = 0x9b59b6 -- Ungu Royal
+                    itemImageUrl = FRIGOREX_IMAGE_URL
+                    unitCost = 1250
+                    itemBuff = "250% CP/s"
+                elseif itemName == "Tricerabob" then
+                    itemIcon = "🦏"
+                    embedColor = 0xe67e22 -- Oranye Golden
+                    itemImageUrl = playerAvatarCdn
+                    unitCost = 750
+                    itemBuff = "Exclusive Meteor Brainrot"
                 end
-            end
-        end
-    end)
-    if ok and res and type(res) == "string" and string.find(res, "http") then
-        return res
-    end
-    return fallback
-end
 
-local function sendDiscordWebhook(itemName, currentCount, maxStock)
-    task.spawn(function()
-        pcall(function()
-            local httpReq = request or http_request or (delta and delta.request) or (syn and syn.request) or (Fluxus and Fluxus.request) or (http and http.request)
-            if not httpReq then return end
-            local HttpService = game:GetService("HttpService")
+                local totalCost = unitCost * totalBought
+                local titleDesc = (totalBought > 1) and string.format("%s %dx %s", itemIcon, totalBought, itemName) or string.format("%s %s", itemIcon, itemName)
 
-            local wibTimeStr = os.date("!%d/%m/%Y - %H:%M:%S WIB", os.time() + (7 * 3600))
-            local userName = lp and lp.Name or "Unknown"
-            local userDisplayName = lp and lp.DisplayName or userName
-            local userId = lp and tostring(lp.UserId) or "0"
-
-            local playerAvatarCdn = getDirectRobloxAvatarUrl(userId)
-            local itemImageUrl = ""
-            local embedColor = 0x3498db
-            local itemIcon = "🛒"
-            local itemCost = 0
-            local itemBuff = ""
-
-            if itemName == "Patagotitan" then
-                itemIcon = "🦖"
-                embedColor = 0x2ecc71 -- Hijau Emerald
-                itemImageUrl = getDirectRobloxImageUrl("95399484334874", "3708138558")
-                itemCost = 500
-                itemBuff = "150% CP/s"
-            elseif itemName == "Frigorex" then
-                itemIcon = "👑"
-                embedColor = 0x9b59b6 -- Ungu Royal
-                itemImageUrl = getDirectRobloxImageUrl("140510107418430", "3708174931")
-                itemCost = 1250
-                itemBuff = "250% CP/s"
-            end
-
-            local payload = {
-                ["username"] = "KALB Meteor Shop",
-                ["avatar_url"] = playerAvatarCdn,
-                ["embeds"] = {
-                    {
-                        ["author"] = {
-                            ["name"] = userDisplayName,
-                            ["icon_url"] = playerAvatarCdn
-                        },
-                        ["title"] = "Berhasil Membeli",
-                        ["description"] = string.format("%s %s", itemIcon, itemName),
-                        ["color"] = embedColor,
-                        ["thumbnail"] = {
-                            ["url"] = itemImageUrl
-                        },
-                        ["fields"] = {
-                            {
-                                ["name"] = "Exclusive",
-                                ["value"] = itemBuff,
-                                ["inline"] = false
+                local payload = {
+                    ["username"] = "KALB Meteor Shop",
+                    ["avatar_url"] = playerAvatarCdn,
+                    ["embeds"] = {
+                        {
+                            ["author"] = {
+                                ["name"] = userDisplayName,
+                                ["icon_url"] = playerAvatarCdn
                             },
-                            {
-                                ["name"] = "Harga",
-                                ["value"] = string.format("%d Tokens", itemCost),
-                                ["inline"] = false
-                            }
-                        },
-                        ["footer"] = {
-                            ["text"] = "KALB - Meteor Shop"
-                        },
-                        ["timestamp"] = os.date("!%Y-%m-%dT%H:%M:%SZ")
+                            ["title"] = "Berhasil Membeli",
+                            ["description"] = titleDesc,
+                            ["color"] = embedColor,
+                            ["thumbnail"] = {
+                                ["url"] = itemImageUrl
+                            },
+                            ["fields"] = {
+                                {
+                                    ["name"] = "Exclusive",
+                                    ["value"] = itemBuff,
+                                    ["inline"] = false
+                                },
+                                {
+                                    ["name"] = "Jumlah",
+                                    ["value"] = string.format("%d Unit", totalBought),
+                                    ["inline"] = true
+                                },
+                                {
+                                    ["name"] = "Total Harga",
+                                    ["value"] = string.format("%d Tokens", totalCost),
+                                    ["inline"] = true
+                                }
+                            },
+                            ["footer"] = {
+                                ["text"] = "KALB - Meteor Shop"
+                            },
+                            ["timestamp"] = os.date("!%Y-%m-%dT%H:%M:%SZ")
+                        }
                     }
                 }
-            }
 
-            httpReq({
-                Url = DISCORD_WEBHOOK_URL,
-                Method = "POST",
-                Headers = {
-                    ["Content-Type"] = "application/json"
-                },
-                Body = HttpService:JSONEncode(payload)
-            })
+                httpReq({
+                    Url = DISCORD_WEBHOOK_URL,
+                    Method = "POST",
+                    Headers = {
+                        ["Content-Type"] = "application/json"
+                    },
+                    Body = HttpService:JSONEncode(payload)
+                })
+            end)
         end)
     end)
 end
 
 -- =============================================
--- 🛒 AUTO BUY METEOR SHOP (PATAGOTITAN, SPEED, FRIGOREX)
+-- 🛒 AUTO BUY METEOR SHOP (PATAGOTITAN, SPEED, FRIGOREX, TRICERABOB)
 -- =============================================
 if rev_MeteorShop_Stock then
     rev_MeteorShop_Stock.OnClientEvent:Connect(function(stockData, expiryTimestamp)
@@ -726,19 +678,23 @@ if rev_MeteorShop_Stock then
                         shouldBuy = true
                     elseif itemName == "Frigorex" and _G.autoBuyFrigorex then
                         shouldBuy = true
+                    elseif itemName == "Tricerabob" and _G.autoBuyTricerabob then
+                        shouldBuy = true
                     end
 
                     if shouldBuy then
                         task.spawn(function()
+                            local boughtCount = 0
                             for i = 1, stockCount do
                                 pcall(function()
                                     buyRemote:FireServer(itemName)
+                                    boughtCount = boughtCount + 1
                                     print(string.format("🛒 [METEOR AUTO BUY] Berhasil membeli %s (#%d/%d)!", itemName, i, stockCount))
-                                    if itemName == "Patagotitan" or itemName == "Frigorex" then
-                                        sendDiscordWebhook(itemName, i, stockCount)
-                                    end
                                 end)
-                                task.wait(0.2)
+                                task.wait(0.15)
+                            end
+                            if boughtCount > 0 and (itemName == "Patagotitan" or itemName == "Frigorex" or itemName == "Tricerabob") then
+                                sendDiscordWebhook(itemName, boughtCount)
                             end
                         end)
                     end
@@ -752,7 +708,7 @@ end
 task.spawn(function()
     task.wait(3)
     while true do
-        if _G.autoFarm and (_G.autoBuyPatagotitan or _G.autoBuySpeed or _G.autoBuyFrigorex) then
+        if _G.autoFarm and (_G.autoBuyPatagotitan or _G.autoBuySpeed or _G.autoBuyFrigorex or _G.autoBuyTricerabob) then
             pcall(function()
                 local syncRemote = rev_MeteorShop_RequestSync or (networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_RequestSync"))
                 if syncRemote then
@@ -811,51 +767,23 @@ task.spawn(function()
 end)
 
 -- =============================================
--- 🎮 LAPIS 1: REINFORCED CLIENT CONTROLLER HOOK (MULTI-SOURCE DISCOVERY & AUTO-UNBLOCK)
+-- 🎮 LAPIS 1: ULTRA-LIGHTWEIGHT CONTROLLER HOOK (ZERO-FREEZE & NON-BLOCKING)
 -- =============================================
 local cachedGameController = nil
 
-local function isHealthyController(t)
-    if not t or type(t) ~= "table" then return false end
-    local ok, res = pcall(function()
-        local hasKick = type(rawget(t, "Kick") or t.Kick) == "function"
-        local hasAttr = (rawget(t, "CanKick") ~= nil or t.CanKick ~= nil) or
-                         (rawget(t, "UnblockKick") ~= nil or t.UnblockKick ~= nil) or
-                         (rawget(t, "BlockKick") ~= nil or t.BlockKick ~= nil) or
-                         (rawget(t, "Status") ~= nil or t.Status ~= nil)
-        return hasKick and hasAttr
-    end)
-    return ok and res
-end
-
-local function scanGCForController()
-    if not getgc then return nil end
-
-    -- Jalur 1: Scan Semua Tabel di GC
-    local ok1, tables = pcall(function() return getgc(true) end)
-    if not ok1 or not tables then
-        ok1, tables = pcall(function() return getgc() end)
+local function getGameController()
+    if cachedGameController and type(cachedGameController.Kick) == "function" then
+        return cachedGameController
     end
 
-    if ok1 and type(tables) == "table" then
-        for _, item in ipairs(tables) do
-            if isHealthyController(item) then
-                return item
-            end
-        end
-    end
-
-    -- Jalur 2: Scan Upvalues Fungsi di GC (Deep Recovery)
-    local getUpvals = getupvalues or (debug and debug.getupvalues)
-    if getUpvals and tables and type(tables) == "table" then
-        for _, item in ipairs(tables) do
-            if type(item) == "function" then
-                local okUv, uvs = pcall(getUpvals, item)
-                if okUv and type(uvs) == "table" then
-                    for _, uv in pairs(uvs) do
-                        if isHealthyController(uv) then
-                            return uv
-                        end
+    if getgc then
+        local ok, tables = pcall(function() return getgc(true) end)
+        if ok and type(tables) == "table" then
+            for _, item in ipairs(tables) do
+                if type(item) == "table" then
+                    if rawget(item, "CanKick") ~= nil and type(rawget(item, "Kick")) == "function" then
+                        cachedGameController = item
+                        return item
                     end
                 end
             end
@@ -865,66 +793,68 @@ local function scanGCForController()
     return nil
 end
 
-local function getGameController()
-    if cachedGameController and isHealthyController(cachedGameController) then
-        return cachedGameController
-    end
-
-    cachedGameController = scanGCForController()
-    if cachedGameController then
-        logConsole("🎯 [CONTROLLER DITEMUKAN] Hook GameController terhubung dan aktif!")
-    end
-    return cachedGameController
-end
+-- Pre-fetch controller saat script pertama kali dimuat
+task.spawn(function()
+    task.wait(1)
+    getGameController()
+end)
 
 -- =============================================
--- 📡 LISTENER EVENT SERVER
+-- 📡 LISTENER EVENT SERVER (REAL-TIME RECEPTOR)
 -- =============================================
 local phase2Fired = false
 local collectedFired = false
 local kickEndedFired = false
 
-if rev_kickPhase2 then
-    rev_kickPhase2.OnClientEvent:Connect(function(rewardTable, ...)
-        phase2Fired = true
-        pcall(function()
-            if type(rewardTable) == "table" and rewardTable[1] then
-                lastRewardDesc = string.format("%s [%s]", tostring(rewardTable[1].Name or "Brainrot"), tostring(rewardTable[1].Mutation or "Normal"))
-                logConsole(string.format("🎉 Gacha Reward Masuk: %s", lastRewardDesc))
+local function setupServerEventListeners()
+    local p2 = rev_kickPhase2 or findRemote("rev_kickPhase2", "RemoteEvent")
+    if p2 then
+        p2.OnClientEvent:Connect(function(rewardTable, ...)
+            phase2Fired = true
+            pcall(function()
+                if type(rewardTable) == "table" and rewardTable[1] then
+                    lastRewardDesc = string.format("%s [%s]", tostring(rewardTable[1].Name or "Brainrot"), tostring(rewardTable[1].Mutation or "Normal"))
+                    logConsole(string.format("🎉 Gacha Reward Masuk: %s", lastRewardDesc))
+                end
+            end)
+        end)
+    end
+
+    local col = rev_Collected or findRemote("rev_Collected", "RemoteEvent")
+    if col then
+        col.OnClientEvent:Connect(function(...)
+            collectedFired = true
+        end)
+    end
+
+    local ended = rev_KickEventEnded or findRemote("rev_KickEventEnded", "RemoteEvent")
+    if ended then
+        ended.OnClientEvent:Connect(function(...)
+            kickEndedFired = true
+        end)
+    end
+
+    local addW = rev_AddedWeather or findRemote("rev_AddedWeather", "RemoteEvent")
+    if addW then
+        addW.OnClientEvent:Connect(function(weatherType, ...)
+            if weatherType == "MeteorShower" then
+                isMeteorShowerActive = true
+                logConsole("☄️ Event Cuaca: METEOR SHOWER AKTIF! Memulai Auto Kick & Farm...")
             end
         end)
-    end)
-end
+    end
 
-if rev_Collected then
-    rev_Collected.OnClientEvent:Connect(function(...)
-        collectedFired = true
-    end)
+    local remW = rev_RemovedWeather or findRemote("rev_RemovedWeather", "RemoteEvent")
+    if remW then
+        remW.OnClientEvent:Connect(function(weatherType, ...)
+            if weatherType == "MeteorShower" then
+                isMeteorShowerActive = false
+                logConsole("☁️ Event Cuaca: Meteor Shower Selesai. Menyelesaikan ronde ini lalu standby di Safe Zone...")
+            end
+        end)
+    end
 end
-
-if rev_KickEventEnded then
-    rev_KickEventEnded.OnClientEvent:Connect(function(...)
-        kickEndedFired = true
-    end)
-end
-
-if rev_AddedWeather then
-    rev_AddedWeather.OnClientEvent:Connect(function(weatherType, ...)
-        if weatherType == "MeteorShower" then
-            isMeteorShowerActive = true
-            logConsole("☄️ Event Cuaca: METEOR SHOWER AKTIF! Memulai Auto Kick & Farm...")
-        end
-    end)
-end
-
-if rev_RemovedWeather then
-    rev_RemovedWeather.OnClientEvent:Connect(function(weatherType, ...)
-        if weatherType == "MeteorShower" then
-            isMeteorShowerActive = false
-            logConsole("☁️ Event Cuaca: Meteor Shower Selesai. Menyelesaikan ronde ini lalu standby di Safe Zone...")
-        end
-    end)
-end
+setupServerEventListeners()
 
 -- =============================================
 -- ☄️ DETEKSI METEOR SHOWER REAL-TIME (MULTI-SOURCE)
@@ -952,82 +882,58 @@ local function shouldKick()
 end
 
 -- =============================================
--- 🚀 FUNGSI EKSEKUSI TENDANGAN REINFORCED (LAPIS 1 FORCE-UNBLOCK & MULTI-CALL)
+-- 🚀 FUNGSI EKSEKUSI TENDANGAN REINFORCED (LAPIS 1 + LAPIS 3 NETWORK)
 -- =============================================
 local function executeKick()
-    logConsole("⚡ Mengeksekusi Kick (Reinforced Lapis 1 Client Controller)...")
-
-    local controller = getGameController()
-    if not controller then
-        logConsole("⚠️ [CONTROLLER TIDAK DITEMUKAN] Mencoba re-scan GC...")
-        cachedGameController = nil
-        controller = getGameController()
+    local timestamp = nil
+    pcall(function() timestamp = workspace:GetServerTimeNow() end)
+    if not timestamp or type(timestamp) ~= "number" or timestamp <= 0 then
+        timestamp = tick()
     end
 
-    if not controller then
-        logConsole("❌ [FATAL] Gagal menemukan GameController di memory GC!")
-        return false
-    end
+    logConsole("⚡ Mengeksekusi Kick (Lapis 1 Controller Hook + Lapis 3 Network)...")
 
-    -- 1. Force Unblock & Reset State Lengkap
+    -- 🎮 LAPIS 1: Direct GameController Hook (Buka Kunci Cooldown & Panggil Kick Asli di Game)
     pcall(function()
-        if type(controller.UnblockKick) == "function" then
-            controller:UnblockKick()
-        end
-        if type(controller.ResetCooldown) == "function" then
-            controller:ResetCooldown()
-        end
-        controller.CanKick = true
-        if controller.InGame ~= nil then
-            controller.InGame = false
-        end
-        if controller.Status ~= nil and controller.Status == "InKick" then
-            controller.Status = "Lobby"
+        local controller = getGameController()
+        if controller then
+            if controller.UnblockKick then pcall(function() controller:UnblockKick() end) end
+            if controller.ResetCooldown then pcall(function() controller:ResetCooldown() end) end
+            controller.CanKick = true
+            if controller.InGame ~= nil then controller.InGame = false end
+            if controller.Status ~= nil and controller.Status == "InKick" then controller.Status = "Lobby" end
+            pcall(function() controller:Kick(1, 0.2) end)
         end
     end)
 
-    -- 2. Eksekusi Tendangan dengan Berbagai Variasi Signature
-    local kickCalled = false
-    local errList = {}
-
-    -- Signature Utama: controller:Kick(1, 1)
-    local ok1, err1 = pcall(function()
-        controller:Kick(1, 1)
-    end)
-    if ok1 then
-        kickCalled = true
-    else
-        table.insert(errList, string.format("Sig1: %s", tostring(err1)))
-        
-        -- Signature Fallback A: controller.Kick(controller, 1, 1)
-        local ok2, err2 = pcall(function()
-            controller.Kick(controller, 1, 1)
-        end)
-        if ok2 then
-            kickCalled = true
-        else
-            table.insert(errList, string.format("Sig2: %s", tostring(err2)))
-            
-            -- Signature Fallback B: controller:Kick(1)
-            local ok3, err3 = pcall(function()
-                controller:Kick(1)
-            end)
-            if ok3 then
-                kickCalled = true
-            else
-                table.insert(errList, string.format("Sig3: %s", tostring(err3)))
+    -- 📡 LAPIS 3: Network Remote Invocation (Jalur Resmi Server Non-Blocking & Konfirmasi Sukses)
+    task.spawn(function()
+        pcall(function()
+            local targetRemote = ref_KickEvent or (networkFolder and networkFolder:FindFirstChild("ref_KickEvent"))
+            if not targetRemote then
+                for _, r in pairs(ReplicatedStorage:GetDescendants()) do
+                    if r:IsA("RemoteFunction") and r.Name == "ref_KickEvent" then
+                        targetRemote = r
+                        ref_KickEvent = r
+                        break
+                    end
+                end
             end
-        end
-    end
 
-    if kickCalled then
-        logConsole("✅ [KICK DIPANGGIL] controller:Kick berhasil dieksekusi di game!")
-        return true
-    else
-        logConsole(string.format("❌ [KICK GAGAL] Semua signature error: %s", table.concat(errList, " | ")))
-        cachedGameController = nil
-        return false
-    end
+            if targetRemote and targetRemote:IsA("RemoteFunction") then
+                local res = targetRemote:InvokeServer(1, 0.2, timestamp)
+                if res == true or (type(res) == "table" and res[1] == true) then
+                    kickAcceptedByServer = true
+                    logConsole("✅ [SERVER CONFIRMED] Tendangan resmi terdaftar di server! Bola sedang terbang...")
+                end
+            end
+
+            local fallbackEvent = kickRemote or (networkFolder and networkFolder:FindFirstChild("rev_KickEvent"))
+            if fallbackEvent and fallbackEvent:IsA("RemoteEvent") then
+                fallbackEvent:FireServer(1, 0.2, timestamp)
+            end
+        end)
+    end)
 end
 
 -- =============================================
@@ -1049,6 +955,7 @@ task.spawn(function()
             lastAction = "WaitingRespawn"
             globalStuckTimer = 0
             kickRetryCount = 0
+            kickAcceptedByServer = false
             continue 
         end
 
@@ -1056,6 +963,7 @@ task.spawn(function()
             targetAction = "Idle"
             lastAction = "Idle"
             kickRetryCount = 0
+            kickAcceptedByServer = false
             stateTimer = 0
             logConsole("Karakter Respawn -> Berjalan ke Safe Zone sebelum Kick...")
         end
@@ -1088,8 +996,13 @@ task.spawn(function()
                 hum:MoveTo(safeZone)
             else
                 if shouldKick() then
-                    if stateTimer >= 0.1 then
+                    if stateTimer >= 0.15 then
+                        pcall(function()
+                            hrp.AssemblyLinearVelocity = Vector3.zero
+                            hrp.AssemblyAngularVelocity = Vector3.zero
+                        end)
                         kickRetryCount = 0
+                        kickAcceptedByServer = false
                         phase2Fired = false
                         collectedFired = false
                         kickEndedFired = false
@@ -1106,17 +1019,21 @@ task.spawn(function()
             if phase2Fired or collectedFired or kickEndedFired then
                 phase2Fired = false
                 kickRetryCount = 0
+                kickAcceptedByServer = false
                 targetAction = "WalkToSafeZone"
-                logConsole("Phase 2 Selesai -> Langsung Jalan ke Safe Zone")
-            elseif stateTimer >= 3.0 and not phase2Fired and not collectedFired and not kickEndedFired then
+                logConsole("Phase 2 Selesai / Lucky Block Kena -> Langsung Jalan ke Safe Zone")
+
+            -- Kondisi 1: Kick belum terdaftar sama sekali di server setelah 3 detik -> Retry
+            elseif not kickAcceptedByServer and stateTimer >= 3.0 and not phase2Fired and not collectedFired and not kickEndedFired then
                 if kickRetryCount < MAX_KICK_RETRIES then
                     kickRetryCount = kickRetryCount + 1
                     stateTimer = 0
-                    logConsole(string.format("⚠️ [RETRY] Auto-Retry Kick #%d/%d (3.0s timeout)...", kickRetryCount, MAX_KICK_RETRIES))
+                    logConsole(string.format("⚠️ [RETRY] Kick belum terdaftar di server, mencoba kick ulang #%d/%d...", kickRetryCount, MAX_KICK_RETRIES))
                     executeKick()
                 else
                     logConsole(string.format("🚨 [FAILSAFE] Gagal respon setelah %d kali retry! Memaksa Respawn/Reset Karakter...", MAX_KICK_RETRIES))
                     kickRetryCount = 0
+                    kickAcceptedByServer = false
                     stateTimer = 0
                     targetAction = "WaitingRespawn"
                     pcall(function()
@@ -1124,13 +1041,20 @@ task.spawn(function()
                         if char then char:BreakJoints() end
                     end)
                 end
-            elseif stateTimer > 15 then
+
+            -- Kondisi 2: Kick sudah diterima server (bola sedang terbang), tunggu hingga maksimal 20 detik
+            elseif stateTimer >= 20.0 then
+                kickAcceptedByServer = false
                 targetAction = "WalkToSafeZone"
-                logConsole("Phase 2 Timeout (15s) -> Lanjut Jalan ke Safe Zone")
+                logConsole("Phase 2 Timeout (20s) -> Lanjut Jalan ke Safe Zone")
             end
 
         -- [ FASE 3: JALAN MURNI SAMPAI KE SAFE ZONE (TANPA TELEPORT) ]
         elseif targetAction == "WalkToSafeZone" then
+            pcall(function()
+                if hum.WalkSpeed < 16 then hum.WalkSpeed = 16 end
+                if hrp.Anchored then hrp.Anchored = false end
+            end)
             hum:MoveTo(safeZone)
             if distToSafeZone < 5 then
                 targetAction = "WaitingForCollected"
@@ -1149,6 +1073,7 @@ task.spawn(function()
                 mutationCount = mutationCount + 1
                 phase2Fired = false
                 kickRetryCount = 0
+                kickAcceptedByServer = false
 
                 if shouldKick() then
                     executeKick()
