@@ -21,7 +21,7 @@ if not game:IsLoaded() then game.Loaded:Wait() end
 -- ⚙️ KONFIGURASI PENGGUNA (UBAH SESUAI KEBUTUHAN DI SINI)
 -- ==============================================================================
 _G.autoFarm = true               -- true: Auto Farm Aktif, false: Nonaktif
-_G.onlyMeteorEvent = true        -- true: HANYA Auto Kick saat Event Meteor Shower aktif, false: Auto kick nonstop
+_G.onlyMeteorEvent = false        -- true: HANYA Auto Kick saat Event Meteor Shower aktif, false: Auto kick nonstop
 _G.autoMeteor = true             -- true: Otomatis perbesar hitbox meteor saat Meteor Shower, false: Nonaktif
 _G.autoBuyPatagotitan = true      -- true: Auto beli Patagotitan saat ready di Meteor Shop
 _G.autoBuySpeed = true            -- true: Auto beli Speed (+1) saat ready di Meteor Shop
@@ -57,10 +57,9 @@ local lpDisplayName = lp and lp.DisplayName or ""
 local myUidStr = lp and tostring(lp.UserId) or ""
 
 -- =============================================
--- 🚀 SYSTEM ANTI-LAG & VISUAL PURGER (ULTRA FAST O(1) HASH LOOKUP)
+-- 🚀 SYSTEM ANTI-LAG & VISUAL PURGER (SAFE ZERO-ERROR & ZERO-LAG)
 -- =============================================
 local PURGE_CLASSES = {
-    Highlight = true,
     PointLight = true,
     SpotLight = true,
     SurfaceLight = true,
@@ -75,42 +74,43 @@ local PURGE_CLASSES = {
     ShirtGraphic = true,
     SelectionBox = true,
     SelectionSphere = true,
-    Decal = true,
-    Texture = true,
 }
 
 local function stripTexture(v)
     if not v then return end
     if lp and lp.Character and (v == lp.Character or v:IsDescendantOf(lp.Character)) then return end
 
-    local className = v.ClassName
-    if PURGE_CLASSES[className] then
-        v:Destroy()
-        return
-    end
+    pcall(function()
+        local className = v.ClassName
+        if PURGE_CLASSES[className] then
+            v:Destroy()
+            return
+        end
 
-    if v:IsA("BasePart") then
-        v.Material = Enum.Material.Plastic
-        v.Reflectance = 0
-        v.CastShadow = false
-        v.Color = Color3.new(1, 1, 1)
-        if v:IsA("MeshPart") then
-            v.TextureID = ""
+        if className == "Highlight" or v:IsA("Highlight") then
+            v.Enabled = false
+            v.FillTransparency = 1
+            v.OutlineTransparency = 1
+            return
         end
-    elseif v:IsA("SpecialMesh") then
-        v.TextureId = ""
-    elseif v:IsA("Animator") or v:IsA("AnimationController") then
-        for _, track in ipairs(v:GetPlayingAnimationTracks()) do
-            track:Stop(0)
+
+        if className == "Decal" or className == "Texture" or v:IsA("Decal") or v:IsA("Texture") then
+            v.Transparency = 1
+            return
         end
-        if v:IsA("Animator") then
-            v.AnimationPlayed:Connect(function(track)
-                track:Stop(0)
-            end)
+
+        if v:IsA("BasePart") then
+            v.Material = Enum.Material.Plastic
+            v.Reflectance = 0
+            v.CastShadow = false
+            v.Color = Color3.new(1, 1, 1)
+            if v:IsA("MeshPart") then
+                v.TextureID = ""
+            end
+        elseif v:IsA("SpecialMesh") then
+            v.TextureId = ""
         end
-    elseif v:IsA("AnimationTrack") then
-        v:Stop(0)
-    end
+    end)
 end
 
 pcall(function()
