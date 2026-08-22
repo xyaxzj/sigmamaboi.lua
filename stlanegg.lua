@@ -152,7 +152,7 @@ local function isLocalPlayerEntity(entity)
 end
 
 local function purgeOtherCharacter(char)
-    if not char or not char:IsA("Model") or isLocalPlayerEntity(char) then return end
+    if not _G.autoRemovePlayer or not char or not char:IsA("Model") or isLocalPlayerEntity(char) then return end
     pcall(function()
         for _, part in ipairs(char:GetDescendants()) do
             if part:IsA("BasePart") then
@@ -168,7 +168,7 @@ local function purgeOtherCharacter(char)
 end
 
 local function purgeOtherPlayer(player)
-    if not player or player == lp then return end
+    if not _G.autoRemovePlayer or not player or player == lp then return end
     pcall(function()
         if player.Character then
             purgeOtherCharacter(player.Character)
@@ -181,6 +181,7 @@ local function purgeOtherPlayer(player)
 end
 
 local function scanAndPurgeAllOtherPlayers()
+    if not _G.autoRemovePlayer then return end
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= lp then
             purgeOtherPlayer(player)
@@ -239,7 +240,9 @@ local function setupWsPlayersListener(folder)
     if not folder then return end
     for _, child in ipairs(folder:GetChildren()) do
         if child.Name ~= "Plots" and not isLocalPlayerEntity(child) then
-            purgeOtherCharacter(child)
+            if _G.autoRemovePlayer then
+                purgeOtherCharacter(child)
+            end
         end
     end
     folder.ChildAdded:Connect(function(child)
@@ -262,6 +265,7 @@ workspace.ChildAdded:Connect(function(child)
         task.defer(function() setupWsPlayersListener(child) end)
     elseif child:IsA("Model") and not isLocalPlayerEntity(child) and child.Name ~= "Plots" and child.Name ~= "Debris" and child.Name ~= "NPCs" then
         task.defer(function()
+            if not _G.autoRemovePlayer then return end
             if child:FindFirstChildOfClass("Humanoid") or child:FindFirstChild("HumanoidRootPart") or child:FindFirstChild("Head") then
                 purgeOtherCharacter(child)
             end
@@ -318,13 +322,14 @@ local function isMyPlot(plotModel)
 end
 
 local function cleanPlots(plotsFolder)
-    if not plotsFolder then return end
+    if not _G.autoRemovePlayer or not plotsFolder then return end
     for _, plot in ipairs(plotsFolder:GetChildren()) do
         if plot:IsA("Model") and not isMyPlot(plot) then
             pcall(function() plot:Destroy() end)
         end
     end
     plotsFolder.ChildAdded:Connect(function(plot)
+        if not _G.autoRemovePlayer then return end
         task.wait(0.2)
         if plot:IsA("Model") and not isMyPlot(plot) then
             pcall(function() plot:Destroy() end)
