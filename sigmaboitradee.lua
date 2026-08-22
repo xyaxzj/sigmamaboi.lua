@@ -133,6 +133,7 @@ local success, errorMessage = pcall(function()
     local AutoFavMutationDropdown = nil
     local SkipTradeFavorites = false
     local FavDelay = 0.5
+    local favDelayInput = nil
     local IsFavProcessing = false
     local CancelFavProcess = false
 
@@ -666,7 +667,9 @@ local success, errorMessage = pcall(function()
         end
         
         local total = #toolsToProcess
-        local currentDelay = FavDelay or 0.5
+        local inputVal = favDelayInput and tonumber(favDelayInput:Get())
+        local currentDelay = (inputVal and inputVal > 0) and inputVal or (FavDelay or 0.5)
+        FavDelay = currentDelay
         local actionLabel = (desiredState == nil and "Toggling" or (desiredState and "Favoriting" or "Unfavoriting"))
         notifyUser("Favorite Manager", actionLabel .. " " .. total .. " items (Cooldown: " .. string.format("%.1f", currentDelay) .. "s/item)...", 3)
         
@@ -1529,8 +1532,11 @@ local success, errorMessage = pcall(function()
     local SecFav1 = TabFav:AddSection("1. Custom Favorite Control")
     if not rev_ToggleFav then SecFav1:AddParagraph("⚠️ Warning", "Favorite remote (rev_ToggleFav) not found.") end
     
-    SecFav1:AddSlider({Name = "⏱️ Favorite Delay / Cooldown (Sec)", Min = 0.1, Max = 2.0, Step = 0.1, Default = 0.5}, function(v) 
-        FavDelay = v 
+    favDelayInput = SecFav1:AddInput({Name = "⏱️ Cooldown Delay per Item (Detik):", Placeholder = "Default: 0.5 (contoh: 0.3)"}, function(v)
+        local n = tonumber(v)
+        if n and n > 0 then
+            FavDelay = n
+        end
     end)
     SecFav1:AddButton("⏹️ Stop / Cancel Running Favorite Process", function()
         CancelFavProcess = true
@@ -1713,7 +1719,12 @@ local success, errorMessage = pcall(function()
     local LiveProgress = SecDispatch:AddParagraph("Dispatch Status", "Remaining Queue: 0\nSuccess: 0")
     local ActionLog = SecDispatch:AddParagraph("Process Log", "Waiting for command...")
     local function setLog(txt) ActionLog:Set("Process Log", txt) end
-    SecDispatch:AddSlider({Name = "Input Delay", Min = 0.1, Max = 1.0, Step = 0.1, Default = 0.3}, function(v) InsertDelay = v end)
+    SecDispatch:AddInput({Name = "Input Delay (Detik):", Placeholder = "Default: 0.3"}, function(v) 
+        local n = tonumber(v)
+        if n and n > 0 then 
+            InsertDelay = n 
+        end 
+    end)
 
     local function executeSenderBatch()
         if IsProcessing or #CurrentQueue == 0 then return false end
