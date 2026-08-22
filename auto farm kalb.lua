@@ -48,7 +48,7 @@ _G.autoBuySpeed = true        -- ⚡ Speed (+1)
 _G.autoBuyFrigorex = true     -- 👑 Frigorex
 _G.autoBuyTricerabob = true   -- 🦏 Tricerabob
 _G.autoBuyFarmPotion = true   -- 🧪 Farm Potion (I) (Khusus jam ganjil WIB max menit :10)
-_G.autoSellAll = false         -- 💰 Auto Sell All tiap 5s
+_G.autoSellAll = true         -- 💰 Auto Sell All tiap 5s
 _G.autoRemovePlayer = true    -- 🚫 Hapus player lain dari game.Players & workspace.Players
 
 -- =============================================
