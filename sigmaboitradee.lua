@@ -21,6 +21,7 @@ local success, errorMessage = pcall(function()
     local f_trade_r = networkFolder:WaitForChild("ref_trade_r", 5) 
     local r_trade_i = networkFolder:WaitForChild("rev_trade_i", 5) 
     local rev_trade_start = networkFolder:WaitForChild("rev_trade_start", 5) 
+    local rev_ToggleFav = networkFolder:FindFirstChild("rev_ToggleFav") or networkFolder:WaitForChild("rev_ToggleFav", 5)
 
     local ref_B_Sell = nil
     local rev_S_Interact = nil
@@ -28,6 +29,7 @@ local success, errorMessage = pcall(function()
     for _, v in pairs(ReplicatedStorage:GetDescendants()) do
         if v.Name == "ref_B_Sell" and v:IsA("RemoteFunction") then ref_B_Sell = v end
         if v.Name == "rev_S_Interact" and v:IsA("RemoteEvent") then rev_S_Interact = v end
+        if not rev_ToggleFav and v.Name == "rev_ToggleFav" and v:IsA("RemoteEvent") then rev_ToggleFav = v end
     end
 
     -- ==========================================
@@ -43,8 +45,11 @@ local success, errorMessage = pcall(function()
     
     local CachedInventoryData = {}
     local CachedTotalCount = 0
+    local CachedFavoriteCount = 0
     local InvRarityDropdown = nil
     local InvMutationDropdown = nil
+    local InvFavFilterDropdown = nil
+    local isSyncingUI = false
     
     local ItemsProcessed = 0
     local IsProcessing = false 
@@ -92,12 +97,26 @@ local success, errorMessage = pcall(function()
     local SelectedSellItems = {}
     local SelectedSellMixQty = 0
     local AutoSellEnabled = false
+    local SkipSellFavorites = true
 
     local SelectedPlaceItems = {}
     local SelectedPlaceMixQty = 0
     local StartSlot = 1
     local MaxSlots = 30
     local CurrentPlaceSlot = 1
+
+    -- Variabel Favorite Manager
+    local SelectedFavItems = {}
+    local FavItemDropdown = nil
+    local FavMutationDropdown = nil
+    local FavRarityDropdown = nil
+    local AutoFavToggle = nil
+    local AutoFavEnabled = false
+    local AutoFavMode = "Selected Rarities & Mutations"
+    local AutoFavRarities = {"Godly", "Exclusive", "Volcanic", "Celestial", "Abyssal", "Demon", "Secret", "Rainbow", "Eternal", "Hacked"}
+    local AutoFavMutations = {}
+    local AutoFavMutationDropdown = nil
+    local SkipTradeFavorites = false
 
     -- Variabel Action Center
     local TargetToolNameAction = "Block Cup"
@@ -236,6 +255,8 @@ local success, errorMessage = pcall(function()
     local getCPSFromDisplayName, isTradeable, getPlayerList, getItemInfo, getFullItemName
     local getRealStock, addRaritiesToCart, getMutationList, getInventoryMutationList
     local isOpponentConfirmed, isLocalConfirmed, addMutationsToCart
+    local isToolFavorite, toggleToolFavorite, setToolFavorite, processFavoriteBatch
+    local favoriteCustomItems, favoriteByMutations, favoriteByRarities, favoriteAllInventory, favoriteTopCPS
 
     function getBaseName(dropdownString) 
         return string.split(dropdownString, " | ")[1] or dropdownString 
@@ -537,6 +558,207 @@ local success, errorMessage = pcall(function()
         end
     end
 
+    function isToolFavorite(tool)
+        if not tool then return false end
+        local fav = tool:GetAttribute("Favorite")
+        if fav == nil then fav = tool:GetAttribute("favorite") end
+        if fav == nil then fav = tool:GetAttribute("Fav") end
+        if fav == nil then fav = tool:GetAttribute("fav") end
+        if fav == nil then fav = tool:GetAttribute("IsFavorite") end
+        if fav == nil then fav = tool:GetAttribute("isFavorite") end
+        if fav == true or fav == 1 or fav == "true" then return true end
+        
+        local favObj = tool:FindFirstChild("Favorite") or tool:FindFirstChild("Fav") or tool:FindFirstChild("IsFavorite")
+        if favObj and (favObj:IsA("BoolValue") or favObj:IsA("ValueBase")) then
+            return favObj.Value == true or favObj.Value == 1
+        end
+        return false
+    end
+
+    function toggleToolFavorite(tool)
+        if not tool then return false end
+        local guid = getToolGUID(tool)
+        if guid and rev_ToggleFav then
+            local ok = pcall(function()
+                rev_ToggleFav:FireServer(tostring(guid))
+            end)
+            return ok
+        end
+        return false
+    end
+
+    function setToolFavorite(tool, desiredState)
+        if not tool then return false end
+        local current = isToolFavorite(tool)
+        if current ~= desiredState then
+            return toggleToolFavorite(tool)
+        end
+        return false
+    end
+
+    function processFavoriteBatch(toolsToProcess, desiredState, operationName)
+        if #toolsToProcess == 0 then
+            Library:Notify("Favorite Manager", "No matching items found to " .. (desiredState and "favorite." or "unfavorite."), 2)
+            return 0
+        end
+        
+        local actionName = desiredState and "Favoriting" or "Unfavoriting"
+        Library:Notify("Favorite Manager", actionName .. " " .. #toolsToProcess .. " items...", 2)
+        
+        task.spawn(function()
+            local count = 0
+            for _, tool in ipairs(toolsToProcess) do
+                local current = isToolFavorite(tool)
+                if current ~= desiredState then
+                    local ok = toggleToolFavorite(tool)
+                    if ok then count = count + 1 end
+                    task.wait(0.08)
+                end
+            end
+            Library:Notify("Favorite Done", "Successfully " .. (desiredState and "favorited " or "unfavorited ") .. count .. " items!", 3)
+            if updateInventoryDisplay then updateInventoryDisplay() end
+        end)
+        return #toolsToProcess
+    end
+
+    function favoriteCustomItems(selectedOptions, qtyLimit, isMax, desiredState)
+        if type(selectedOptions) ~= "table" then selectedOptions = {selectedOptions} end
+        local activeNames = {}
+        for _, opt in pairs(selectedOptions) do
+            local cleanName = getBaseName(opt)
+            if cleanName ~= "" and cleanName ~= "[ANY ASSET]" then
+                activeNames[cleanName] = true
+            end
+        end
+        
+        local toolsToProcess = {}
+        local nameCounts = {}
+        for _, tool in ipairs(getAllTools()) do
+            if isTradeable(tool) then
+                local fullName = getFullItemName(tool)
+                if activeNames[fullName] then
+                    local currentFav = isToolFavorite(tool)
+                    if currentFav ~= desiredState then
+                        local curCount = nameCounts[fullName] or 0
+                        if isMax or (qtyLimit > 0 and curCount < qtyLimit) then
+                            table.insert(toolsToProcess, tool)
+                            nameCounts[fullName] = curCount + 1
+                        end
+                    end
+                end
+            end
+        end
+        return processFavoriteBatch(toolsToProcess, desiredState, "Custom Items")
+    end
+
+    function favoriteByMutations(selectedMutations, qtyLimit, isMax, desiredState)
+        if type(selectedMutations) ~= "table" then selectedMutations = {selectedMutations} end
+        local activeMutations = {}
+        for _, opt in pairs(selectedMutations) do
+            local cleanMut = getBaseName(opt)
+            if cleanMut ~= "" and cleanMut ~= "[NO MUTATION]" then
+                activeMutations[cleanMut] = true
+            end
+        end
+        
+        local toolsToProcess = {}
+        local mutCounts = {}
+        for _, tool in ipairs(getAllTools()) do
+            if isTradeable(tool) then
+                local mut = getToolMutation(tool)
+                if mut and activeMutations[mut] then
+                    local currentFav = isToolFavorite(tool)
+                    if currentFav ~= desiredState then
+                        local curCount = mutCounts[mut] or 0
+                        if isMax or (qtyLimit > 0 and curCount < qtyLimit) then
+                            table.insert(toolsToProcess, tool)
+                            mutCounts[mut] = curCount + 1
+                        end
+                    end
+                end
+            end
+        end
+        return processFavoriteBatch(toolsToProcess, desiredState, "Mutation")
+    end
+
+    function favoriteByRarities(selectedRarities, qtyLimit, isMax, desiredState)
+        if type(selectedRarities) ~= "table" then selectedRarities = {selectedRarities} end
+        local activeRarities = {}
+        for _, r in pairs(selectedRarities) do
+            if r ~= "" then activeRarities[r] = true end
+        end
+        
+        local toolsToProcess = {}
+        local rarityCounts = {}
+        for _, tool in ipairs(getAllTools()) do
+            if isTradeable(tool) then
+                local rarity = getItemInfo(tool)
+                if activeRarities[rarity] then
+                    local currentFav = isToolFavorite(tool)
+                    if currentFav ~= desiredState then
+                        local curCount = rarityCounts[rarity] or 0
+                        if isMax or (qtyLimit > 0 and curCount < qtyLimit) then
+                            table.insert(toolsToProcess, tool)
+                            rarityCounts[rarity] = curCount + 1
+                        end
+                    end
+                end
+            end
+        end
+        return processFavoriteBatch(toolsToProcess, desiredState, "Rarity")
+    end
+
+    function favoriteAllInventory(desiredState)
+        local toolsToProcess = {}
+        for _, tool in ipairs(getAllTools()) do
+            if isTradeable(tool) then
+                local currentFav = isToolFavorite(tool)
+                if currentFav ~= desiredState then
+                    table.insert(toolsToProcess, tool)
+                end
+            end
+        end
+        return processFavoriteBatch(toolsToProcess, desiredState, "All Inventory")
+    end
+
+    function favoriteTopCPS(count, desiredState)
+        local tools = {}
+        for _, tool in ipairs(getAllTools()) do
+            if isTradeable(tool) then
+                local cps = getToolCPS(tool)
+                table.insert(tools, {
+                    tool = tool,
+                    name = getFullItemName(tool),
+                    cps = cps or 0
+                })
+            end
+        end
+        
+        table.sort(tools, function(x, y)
+            local a = x.cps
+            local b = y.cps
+            local typeA = typeof(a)
+            local typeB = typeof(b)
+            if typeA == typeB then
+                return a > b
+            elseif typeA == "table" or typeA == "userdata" then
+                return true
+            else
+                return false
+            end
+        end)
+        
+        local toolsToProcess = {}
+        local limit = math.min(count or 30, #tools)
+        for i = 1, limit do
+            local t = tools[i].tool
+            if isToolFavorite(t) ~= desiredState then
+                table.insert(toolsToProcess, t)
+            end
+        end
+        return processFavoriteBatch(toolsToProcess, desiredState, "Top " .. limit .. " CPS")
+    end
+
     local updateInventoryDisplay
     local updateStatsDisplay 
 
@@ -646,10 +868,20 @@ local success, errorMessage = pcall(function()
     local PlayerDropdown = SecCart1:AddDropdown({Name = "Receiver Target (P2)", Options = getPlayerList(), Default = ""}, function(Opt) TargetPlayerName = tostring(Opt) end)
     
     local SecCart2 = TabCart:AddSection("Send All (Bulk)")
+    SecCart2:AddToggle({Name = "⭐ Skip Favorite Items (Trade Protection)", Default = false}, function(val)
+        SkipTradeFavorites = val
+    end)
     SecCart2:AddButton("Add All Items to Queue", function()
         if TargetPlayerName == "" then return Library:Notify("Attention", "Select target first.", 2) end
         CurrentQueue = {}; ItemsProcessed = 0; local itemsFound = 0
-        for _, tool in ipairs(getAllTools()) do if isTradeable(tool) then table.insert(CurrentQueue, tool); itemsFound = itemsFound + 1 end end  
+        for _, tool in ipairs(getAllTools()) do
+            if isTradeable(tool) then
+                if not (SkipTradeFavorites and isToolFavorite(tool)) then
+                    table.insert(CurrentQueue, tool)
+                    itemsFound = itemsFound + 1
+                end
+            end
+        end  
         Library:Notify("Success", itemsFound .. " items added to queue.", 2)
         updateTradeHUD()
     end)
@@ -897,6 +1129,9 @@ local success, errorMessage = pcall(function()
     SecSell1:AddButton("🗑️ Clear Sell Cart", function() SellCart = {}; updateSellCartDisplay() end)
     
     local SecSell2 = TabSell:AddSection("2. Sell Execution")
+    SecSell2:AddToggle({Name = "⭐ Protect Favorite Items (Skip Selling)", Default = true}, function(val)
+        SkipSellFavorites = val
+    end)
     local SellToggle = SecSell2:AddToggle({Name = "🧠 Start Selling", Default = false}, function(Value)
         AutoSellEnabled = Value
         if AutoSellEnabled then
@@ -908,8 +1143,19 @@ local success, errorMessage = pcall(function()
                     for k,v in pairs(SellCart) do tempCart[k] = v; totalLeft = totalLeft + v end
                     if totalLeft <= 0 then Library:Notify("Done", "All sold / Cart empty.", 3); SellToggle:Set(false); break end
                     local itemsToProcess = {}
-                    for _, tool in ipairs(getAllTools()) do if isTradeable(tool) then local name = getFullItemName(tool); if tempCart[name] and tempCart[name] > 0 then table.insert(itemsToProcess, tool); tempCart[name] = tempCart[name] - 1 end end end
+                    for _, tool in ipairs(getAllTools()) do
+                        if isTradeable(tool) then
+                            if not (SkipSellFavorites and isToolFavorite(tool)) then
+                                local name = getFullItemName(tool)
+                                if tempCart[name] and tempCart[name] > 0 then
+                                    table.insert(itemsToProcess, tool)
+                                    tempCart[name] = tempCart[name] - 1
+                                end
+                            end
+                        end
+                    end
                     for _, toolToSell in ipairs(itemsToProcess) do
+                        if SkipSellFavorites and isToolFavorite(toolToSell) then continue end
                         local toolName = getFullItemName(toolToSell)
                         if not SellCart[toolName] or SellCart[toolName] <= 0 then continue end
                         if toolToSell.Parent == backpack then humanoid:EquipTool(toolToSell); task.wait(0.15) end
@@ -1169,12 +1415,118 @@ local success, errorMessage = pcall(function()
     end)
 
     -- ==========================================
-    -- TAB 5: STOCK & STORAGE (INVENTORY)
+    -- TAB 5: FAVORITE MANAGER (BRAINROT FAVORITES)
+    -- ==========================================
+    local TabFav = Window:MakeTab("⭐")
+    
+    local SecFav1 = TabFav:AddSection("1. Custom Favorite Control")
+    if not rev_ToggleFav then SecFav1:AddParagraph("⚠️ Warning", "Favorite remote (rev_ToggleFav) not found.") end
+    
+    FavMutationDropdown = SecFav1:AddMultiDropdown({Name = "Select Mutation (Favorite)", Options = getMutationList(), Default = {}}, function() end)
+    FavItemDropdown = SecFav1:AddMultiDropdown({Name = "Select Custom Brainrot", Options = {"[ANY ASSET]"}, Default = {}}, function(Options) SelectedFavItems = Options end)
+    local qtyInputFav = SecFav1:AddInput({Name = "Amount to Favorite / Unfavorite:", Placeholder = "Enter amount..."}, function() end)
+    FavRarityDropdown = SecFav1:AddMultiDropdown({Name = "Select Rarity (Favorite)", Options = RarityList, Default = {}}, function() end)
+
+    SecFav1:AddButton("⭐ Favorite Selected Brainrot (by Amount)", function()
+        local qty = tonumber(qtyInputFav:Get()) or 0
+        local lst = FavItemDropdown:Get()
+        favoriteCustomItems(lst, qty, false, true)
+    end)
+    SecFav1:AddButton("⭐ Favorite Selected Brainrot (Max Stock)", function()
+        local lst = FavItemDropdown:Get()
+        favoriteCustomItems(lst, 0, true, true)
+    end)
+    SecFav1:AddButton("💔 Unfavorite Selected Brainrot (by Amount)", function()
+        local qty = tonumber(qtyInputFav:Get()) or 0
+        local lst = FavItemDropdown:Get()
+        favoriteCustomItems(lst, qty, false, false)
+    end)
+    SecFav1:AddButton("💔 Unfavorite Selected Brainrot (Max Stock)", function()
+        local lst = FavItemDropdown:Get()
+        favoriteCustomItems(lst, 0, true, false)
+    end)
+    SecFav1:AddButton("✨ Favorite by Mutation", function()
+        local qty = tonumber(qtyInputFav:Get()) or 0
+        local isMax = qty <= 0
+        favoriteByMutations(FavMutationDropdown:Get(), qty, isMax, true)
+    end)
+    SecFav1:AddButton("💔 Unfavorite by Mutation", function()
+        local qty = tonumber(qtyInputFav:Get()) or 0
+        local isMax = qty <= 0
+        favoriteByMutations(FavMutationDropdown:Get(), qty, isMax, false)
+    end)
+    SecFav1:AddButton("⭐ Favorite by Rarity", function()
+        local qty = tonumber(qtyInputFav:Get()) or 0
+        local isMax = qty <= 0
+        favoriteByRarities(FavRarityDropdown:Get(), qty, isMax, true)
+    end)
+    SecFav1:AddButton("💔 Unfavorite by Rarity", function()
+        local qty = tonumber(qtyInputFav:Get()) or 0
+        local isMax = qty <= 0
+        favoriteByRarities(FavRarityDropdown:Get(), qty, isMax, false)
+    end)
+
+    local SecFav2 = TabFav:AddSection("2. Bulk & CPS Quick Actions")
+    SecFav2:AddButton("🌟 Favorite All Inventory", function()
+        favoriteAllInventory(true)
+    end)
+    SecFav2:AddButton("💔 Unfavorite All Inventory", function()
+        favoriteAllInventory(false)
+    end)
+    local qtyInputTopCPS = SecFav2:AddInput({Name = "Top N Highest CPS to Favorite:", Placeholder = "Default: 30"}, function() end)
+    SecFav2:AddButton("🔥 Favorite Top N Highest CPS", function()
+        local count = tonumber(qtyInputTopCPS:Get()) or 30
+        favoriteTopCPS(count, true)
+    end)
+    SecFav2:AddButton("❄️ Unfavorite Top N Highest CPS", function()
+        local count = tonumber(qtyInputTopCPS:Get()) or 30
+        favoriteTopCPS(count, false)
+    end)
+
+    local SecFav3 = TabFav:AddSection("3. Auto-Favorite Engine (New Drops)")
+    AutoFavToggle = SecFav3:AddToggle({Name = "⭐ Auto-Favorite New Drops", Default = false}, function(Value)
+        AutoFavEnabled = Value
+        if AutoFavEnabled then
+            Library:Notify("Auto-Favorite", "Active! Monitoring new items...", 2)
+        else
+            Library:Notify("Auto-Favorite", "Disabled.", 2)
+        end
+    end)
+    SecFav3:AddDropdown({Name = "Auto-Favorite Target", Options = {"Selected Rarities & Mutations", "All New Items", "Top 30 CPS Only"}, Default = "Selected Rarities & Mutations"}, function(val)
+        AutoFavMode = val
+    end)
+    SecFav3:AddMultiDropdown({
+        Name = "Auto-Fav Rarities", 
+        Options = RarityList, 
+        Default = {"Godly", "Exclusive", "Volcanic", "Celestial", "Abyssal", "Demon", "Secret", "Rainbow", "Eternal", "Hacked"}
+    }, function(val)
+        AutoFavRarities = val
+    end)
+    AutoFavMutationDropdown = SecFav3:AddMultiDropdown({
+        Name = "Auto-Fav Mutations", 
+        Options = getMutationList(), 
+        Default = {}
+    }, function(val)
+        AutoFavMutations = val
+    end)
+
+    -- ==========================================
+    -- TAB 6: STOCK & STORAGE (INVENTORY)
     -- ==========================================
     local TabInventory = Window:MakeTab("🎒")
     
     local SecInvFilter = TabInventory:AddSection("Filter Settings")
     
+    InvFavFilterDropdown = SecInvFilter:AddDropdown({
+        Name = "Filter by Favorite Status",
+        Options = {"All Items", "⭐ Only Favorites", "⚪ Only Non-Favorites"},
+        Default = "All Items"
+    }, function()
+        if refreshInventoryText then
+            refreshInventoryText()
+        end
+    end)
+
     InvRarityDropdown = SecInvFilter:AddMultiDropdown({
         Name = "Filter by Rarity",
         Options = RarityList,
@@ -1196,6 +1548,7 @@ local success, errorMessage = pcall(function()
     end)
     
     SecInvFilter:AddButton("🧹 Clear Filters", function()
+        pcall(function() InvFavFilterDropdown:Set("All Items") end)
         pcall(function() InvRarityDropdown:Set({}) end)
         pcall(function() InvMutationDropdown:Set({}) end)
         if refreshInventoryText then
@@ -1508,6 +1861,11 @@ local success, errorMessage = pcall(function()
             if type(selectedMutations) ~= "table" then selectedMutations = {selectedMutations} end
         end
         
+        local favFilterOpt = "All Items"
+        if InvFavFilterDropdown then
+            favFilterOpt = InvFavFilterDropdown:Get() or "All Items"
+        end
+        
         local hasRarityFilter = false
         for _, r in pairs(selectedRarities) do
             if r ~= "" then
@@ -1525,7 +1883,8 @@ local success, errorMessage = pcall(function()
             end
         end
         
-        local isFiltered = hasRarityFilter or hasMutationFilter
+        local hasFavFilter = (favFilterOpt ~= "All Items")
+        local isFiltered = hasRarityFilter or hasMutationFilter or hasFavFilter
         
         local categorizedItems = {}
         local categoryTotals = {}
@@ -1543,18 +1902,25 @@ local success, errorMessage = pcall(function()
         local filteredCPSVal = InfiniteMath and InfiniteMath.new(0) or 0
         local itemFilterPassed = {}
         local itemCPSMap = {}
+        local itemFavMap = {}
+        local totalFavCount = 0
         
-        -- Run the single-pass tool loop first to sum and cache CPS for all tools
+        -- Run the single-pass tool loop first to sum and cache CPS and favorite state for all tools
         for _, tool in ipairs(getAllTools()) do
             if isTradeable(tool) then
+                local fullName = getFullItemName(tool)
                 local toolCPS = getToolCPS(tool)
                 if toolCPS then
                     totalCPSVal = totalCPSVal + toolCPS
-                    local fullName = getFullItemName(tool)
                     itemCPSMap[fullName] = toolCPS
+                end
+                if isToolFavorite(tool) then
+                    itemFavMap[fullName] = true
+                    totalFavCount = totalFavCount + 1
                 end
             end
         end
+        CachedFavoriteCount = totalFavCount
         
         for itemName, amount in pairs(CachedInventoryData) do
             local itemRarity = "Unknown"
@@ -1567,6 +1933,7 @@ local success, errorMessage = pcall(function()
                 end
             end
             local filterMut = itemMutation or "No Mutation"
+            local isFav = itemFavMap[itemName] == true
             
             -- Rarity filter match check
             local rarityPass = true
@@ -1594,8 +1961,16 @@ local success, errorMessage = pcall(function()
                 end
                 if not found then mutationPass = false end
             end
+
+            -- Favorite filter match check
+            local favPass = true
+            if favFilterOpt == "⭐ Only Favorites" then
+                favPass = isFav
+            elseif favFilterOpt == "⚪ Only Non-Favorites" then
+                favPass = not isFav
+            end
             
-            if rarityPass and mutationPass then
+            if rarityPass and mutationPass and favPass then
                 itemFilterPassed[itemName] = true
                 local category = "🏆 " .. string.upper(itemRarity) .. (itemMutation and (" " .. string.upper(itemMutation)) or "") .. " ITEMS"
                 if not categorizedItems[category] then
@@ -1610,7 +1985,8 @@ local success, errorMessage = pcall(function()
                     name = itemName, 
                     qty = amount, 
                     rarity = itemRarity, 
-                    cps = itemCPS
+                    cps = itemCPS,
+                    isFav = isFav
                 })
                 categoryTotals[category] = categoryTotals[category] + amount
                 filteredTotalCount = filteredTotalCount + amount
@@ -1635,13 +2011,13 @@ local success, errorMessage = pcall(function()
         
         local displayString = ""
         if isFiltered then
-            displayString = string.format("Showing %d / %d Items (Filtered)\n", filteredTotalCount, CachedTotalCount)
+            displayString = string.format("Showing %d / %d Items (Filtered)  │  ⭐ %d Favorites\n", filteredTotalCount, CachedTotalCount, CachedFavoriteCount)
             displayString = displayString .. "Filtered CPS: " .. filteredCpsStr .. "  │  Total CPS: " .. totalCpsStr .. "\n\n"
             if filteredTotalCount == 0 then
                 displayString = displayString .. "No items match the selected filters."
             end
         else
-            displayString = "Total All Items: " .. CachedTotalCount .. "\n"
+            displayString = string.format("Total All Items: %d (⭐ %d Favorites)\n", CachedTotalCount, CachedFavoriteCount)
             displayString = displayString .. "Total CPS: " .. totalCpsStr .. "\n\n"
             if CachedTotalCount == 0 then
                 displayString = displayString .. "Empty."
@@ -1683,7 +2059,8 @@ local success, errorMessage = pcall(function()
                 end)
                 for _, item in ipairs(categorizedItems[cat]) do 
                     local cpsStr = item.cps and (" │ CPS: " .. tostring(item.cps)) or ""
-                    displayString = displayString .. string.format(" • %s (Stock: %d%s)\n", item.name, item.qty, cpsStr) 
+                    local favPrefix = item.isFav and "⭐ " or ""
+                    displayString = displayString .. string.format(" • %s%s (Stock: %d%s)\n", favPrefix, item.name, item.qty, cpsStr) 
                 end
                 displayString = displayString .. "\n"
             end
@@ -1728,9 +2105,14 @@ local success, errorMessage = pcall(function()
             ItemDropdown:Refresh(itemsList)
             SellItemDropdown:Refresh(itemsList)
             PlaceItemDropdown:Refresh(itemsList)
+            if FavItemDropdown then FavItemDropdown:Refresh(itemsList) end
+            
             TradeMutationDropdown:Refresh(mutList) 
             SellMutationDropdown:Refresh(mutList)
             BaseMutationDropdown:Refresh(mutList)
+            if FavMutationDropdown then FavMutationDropdown:Refresh(mutList) end
+            if AutoFavMutationDropdown then AutoFavMutationDropdown:Refresh(mutList) end
+            
             PlayerDropdown:Refresh(getPlayerList())
             
             local invMutList = getInventoryMutationList()
@@ -1743,15 +2125,62 @@ local success, errorMessage = pcall(function()
         end)
     end
 
+    local function handleAutoFavTool(tool)
+        if not AutoFavEnabled or not isTradeable(tool) then return end
+        task.spawn(function()
+            task.wait(0.3)
+            if not tool or not tool.Parent or isToolFavorite(tool) then return end
+            
+            local shouldFav = false
+            if AutoFavMode == "All New Items" then
+                shouldFav = true
+            elseif AutoFavMode == "Top 30 CPS Only" then
+                favoriteTopCPS(30, true)
+                return
+            else -- Selected Rarities & Mutations
+                local toolRarity = getItemInfo(tool)
+                local toolMutation = getToolMutation(tool)
+                
+                if type(AutoFavRarities) == "table" and table.find(AutoFavRarities, toolRarity) then
+                    shouldFav = true
+                end
+                if not shouldFav and toolMutation and type(AutoFavMutations) == "table" then
+                    for _, m in ipairs(AutoFavMutations) do
+                        if getBaseName(m) == toolMutation then
+                            shouldFav = true
+                            break
+                        end
+                    end
+                end
+            end
+            
+            if shouldFav then
+                local ok = toggleToolFavorite(tool)
+                if ok and ConsoleStats then
+                    ConsoleStats:Log("⭐ Auto-Favorited: " .. getFullItemName(tool), "success")
+                end
+            end
+        end)
+    end
+
     local function connectInventory()
         local backpack = localPlayer:WaitForChild("Backpack")
-        table.insert(InventoryConnections, backpack.ChildAdded:Connect(updateInventoryDisplay))
+        table.insert(InventoryConnections, backpack.ChildAdded:Connect(function(child)
+            handleAutoFavTool(child)
+            updateInventoryDisplay()
+        end))
         table.insert(InventoryConnections, backpack.ChildRemoved:Connect(updateInventoryDisplay))
         local char = localPlayer.Character or localPlayer.CharacterAdded:Wait()
-        table.insert(InventoryConnections, char.ChildAdded:Connect(updateInventoryDisplay))
+        table.insert(InventoryConnections, char.ChildAdded:Connect(function(child)
+            handleAutoFavTool(child)
+            updateInventoryDisplay()
+        end))
         table.insert(InventoryConnections, char.ChildRemoved:Connect(updateInventoryDisplay))
         localPlayer.CharacterAdded:Connect(function(newChar)
-            table.insert(InventoryConnections, newChar.ChildAdded:Connect(updateInventoryDisplay))
+            table.insert(InventoryConnections, newChar.ChildAdded:Connect(function(child)
+                handleAutoFavTool(child)
+                updateInventoryDisplay()
+            end))
             table.insert(InventoryConnections, newChar.ChildRemoved:Connect(updateInventoryDisplay))
         end)
         task.wait(0.5); updateInventoryDisplay()
