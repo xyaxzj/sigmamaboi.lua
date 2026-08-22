@@ -7,12 +7,27 @@ local SCRIPT_URL = "https://raw.githubusercontent.com/xyaxzj/sigmamaboi.lua/refs
 
 local success, errorMessage = pcall(function()
     
-    local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
     local StarterGui = game:GetService("StarterGui")
     local Players = game:GetService("Players")
     local localPlayer = Players.LocalPlayer
     local RunService = game:GetService("RunService")
     local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+    local Library = nil
+    local Window = nil
+    local function notifyUser(title, content, duration)
+        pcall(function()
+            if Library and type(Library) == "table" and Library.Notify then
+                Library:Notify(title, content, duration or 3)
+            elseif StarterGui then
+                StarterGui:SetCore("SendNotification", {
+                    Title = tostring(title),
+                    Text = tostring(content),
+                    Duration = duration or 3
+                })
+            end
+        end)
+    end
 
     -- ==========================================
     -- MENCARI LOKASI REMOTES
@@ -558,64 +573,116 @@ local success, errorMessage = pcall(function()
         end
     end
 
+    local function getFavRemote()
+        if rev_ToggleFav and rev_ToggleFav.Parent then return rev_ToggleFav end
+        pcall(function()
+            rev_ToggleFav = ReplicatedStorage.Shared.Packages.Network.rev_ToggleFav
+        end)
+        if rev_ToggleFav then return rev_ToggleFav end
+        
+        pcall(function()
+            local net = ReplicatedStorage:FindFirstChild("Shared") and ReplicatedStorage.Shared:FindFirstChild("Packages") and ReplicatedStorage.Shared.Packages:FindFirstChild("Network")
+            if net then
+                rev_ToggleFav = net:FindFirstChild("rev_ToggleFav") or net:FindFirstChild("ToggleFav")
+            end
+        end)
+        if rev_ToggleFav then return rev_ToggleFav end
+        
+        for _, v in pairs(ReplicatedStorage:GetDescendants()) do
+            if (v.Name == "rev_ToggleFav" or v.Name == "ToggleFav") and v:IsA("RemoteEvent") then
+                rev_ToggleFav = v
+                return rev_ToggleFav
+            end
+        end
+        return nil
+    end
+
     function isToolFavorite(tool)
         if not tool then return false end
         local fav = tool:GetAttribute("Favorite")
         if fav == nil then fav = tool:GetAttribute("favorite") end
         if fav == nil then fav = tool:GetAttribute("Fav") end
         if fav == nil then fav = tool:GetAttribute("fav") end
+        if fav == nil then fav = tool:GetAttribute("Favorited") end
+        if fav == nil then fav = tool:GetAttribute("favorited") end
         if fav == nil then fav = tool:GetAttribute("IsFavorite") end
         if fav == nil then fav = tool:GetAttribute("isFavorite") end
+        if fav == nil then fav = tool:GetAttribute("IsFav") end
+        if fav == nil then fav = tool:GetAttribute("isFav") end
         if fav == true or fav == 1 or fav == "true" then return true end
         
-        local favObj = tool:FindFirstChild("Favorite") or tool:FindFirstChild("Fav") or tool:FindFirstChild("IsFavorite")
+        local favObj = tool:FindFirstChild("Favorite") or tool:FindFirstChild("Fav") or tool:FindFirstChild("IsFavorite") or tool:FindFirstChild("Favorited")
         if favObj and (favObj:IsA("BoolValue") or favObj:IsA("ValueBase")) then
-            return favObj.Value == true or favObj.Value == 1
+            return favObj.Value == true or favObj.Value == 1 or favObj.Value == "true"
         end
         return false
     end
 
     function toggleToolFavorite(tool)
         if not tool then return false end
-        local guid = getToolGUID(tool)
-        if guid and rev_ToggleFav then
-            local ok = pcall(function()
-                rev_ToggleFav:FireServer(tostring(guid))
-            end)
-            return ok
+        local remote = getFavRemote()
+        if not remote then
+            warn("[FAVORITE] Remote rev_ToggleFav not found!")
+            return false
         end
-        return false
+        local guid = getToolGUID(tool)
+        if not guid then
+            warn("[FAVORITE] Tool has no GUID: " .. tostring(tool.Name))
+            return false
+        end
+        local ok, err = pcall(function()
+            remote:FireServer(tostring(guid))
+        end)
+        if not ok then
+            warn("[FAVORITE] FireServer error:", err)
+        end
+        return ok
     end
 
     function setToolFavorite(tool, desiredState)
         if not tool then return false end
-        local current = isToolFavorite(tool)
-        if current ~= desiredState then
-            return toggleToolFavorite(tool)
-        end
-        return false
+        return toggleToolFavorite(tool)
     end
 
     function processFavoriteBatch(toolsToProcess, desiredState, operationName)
-        if #toolsToProcess == 0 then
-            Library:Notify("Favorite Manager", "No matching items found to " .. (desiredState and "favorite." or "unfavorite."), 2)
+        if not toolsToProcess or #toolsToProcess == 0 then
+            notifyUser("Favorite Manager", "No matching items found in inventory to process.", 3)
             return 0
         end
         
-        local actionName = desiredState and "Favoriting" or "Unfavoriting"
-        Library:Notify("Favorite Manager", actionName .. " " .. #toolsToProcess .. " items...", 2)
+        local remote = getFavRemote()
+        if not remote then
+            notifyUser("Error", "Favorite remote (rev_ToggleFav) not found in game!", 4)
+            warn("[FAVORITE ERROR] rev_ToggleFav remote not found!")
+            return 0
+        end
+        
+        local actionLabel = (desiredState == nil and "Toggling" or (desiredState and "Favoriting" or "Unfavoriting"))
+        notifyUser("Favorite Manager", actionLabel .. " " .. #toolsToProcess .. " items...", 2)
         
         task.spawn(function()
             local count = 0
             for _, tool in ipairs(toolsToProcess) do
-                local current = isToolFavorite(tool)
-                if current ~= desiredState then
-                    local ok = toggleToolFavorite(tool)
-                    if ok then count = count + 1 end
+                local guid = getToolGUID(tool)
+                if guid then
+                    local ok, err = pcall(function()
+                        remote:FireServer(tostring(guid))
+                    end)
+                    if ok then
+                        count = count + 1
+                    else
+                        warn("[FAVORITE] Error calling rev_ToggleFav:", err)
+                    end
                     task.wait(0.08)
+                else
+                    warn("[FAVORITE] Tool has no GUID:", tool.Name)
                 end
             end
-            Library:Notify("Favorite Done", "Successfully " .. (desiredState and "favorited " or "unfavorited ") .. count .. " items!", 3)
+            
+            notifyUser("Favorite Done", "Processed " .. count .. " items successfully!", 3)
+            if ConsoleStats then
+                ConsoleStats:Log("⭐ Favorite: Processed " .. count .. " items (" .. tostring(operationName or "Batch") .. ")", "success")
+            end
             if updateInventoryDisplay then updateInventoryDisplay() end
         end)
         return #toolsToProcess
@@ -624,26 +691,35 @@ local success, errorMessage = pcall(function()
     function favoriteCustomItems(selectedOptions, qtyLimit, isMax, desiredState)
         if type(selectedOptions) ~= "table" then selectedOptions = {selectedOptions} end
         local activeNames = {}
+        local hasAny = false
         for _, opt in pairs(selectedOptions) do
             local cleanName = getBaseName(opt)
-            if cleanName ~= "" and cleanName ~= "[ANY ASSET]" then
+            if cleanName == "[ANY ASSET]" then
+                hasAny = true
+            elseif cleanName ~= "" then
                 activeNames[cleanName] = true
             end
         end
+        
+        local hasSpecific = false
+        for _ in pairs(activeNames) do hasSpecific = true break end
+        if not hasSpecific and not hasAny then
+            notifyUser("Attention", "Pilih minimal 1 brainrot di dropdown terlebih dahulu!", 3)
+            return 0
+        end
+        
+        local effectiveQty = (qtyLimit and qtyLimit > 0) and qtyLimit or (isMax and math.huge or 1)
         
         local toolsToProcess = {}
         local nameCounts = {}
         for _, tool in ipairs(getAllTools()) do
             if isTradeable(tool) then
                 local fullName = getFullItemName(tool)
-                if activeNames[fullName] then
-                    local currentFav = isToolFavorite(tool)
-                    if currentFav ~= desiredState then
-                        local curCount = nameCounts[fullName] or 0
-                        if isMax or (qtyLimit > 0 and curCount < qtyLimit) then
-                            table.insert(toolsToProcess, tool)
-                            nameCounts[fullName] = curCount + 1
-                        end
+                if hasAny or activeNames[fullName] then
+                    local curCount = nameCounts[fullName] or 0
+                    if curCount < effectiveQty then
+                        table.insert(toolsToProcess, tool)
+                        nameCounts[fullName] = curCount + 1
                     end
                 end
             end
@@ -661,19 +737,25 @@ local success, errorMessage = pcall(function()
             end
         end
         
+        local hasSpecific = false
+        for _ in pairs(activeMutations) do hasSpecific = true break end
+        if not hasSpecific then
+            notifyUser("Attention", "Pilih minimal 1 mutasi di dropdown terlebih dahulu!", 3)
+            return 0
+        end
+        
+        local effectiveQty = (qtyLimit and qtyLimit > 0) and qtyLimit or math.huge
+        
         local toolsToProcess = {}
         local mutCounts = {}
         for _, tool in ipairs(getAllTools()) do
             if isTradeable(tool) then
                 local mut = getToolMutation(tool)
                 if mut and activeMutations[mut] then
-                    local currentFav = isToolFavorite(tool)
-                    if currentFav ~= desiredState then
-                        local curCount = mutCounts[mut] or 0
-                        if isMax or (qtyLimit > 0 and curCount < qtyLimit) then
-                            table.insert(toolsToProcess, tool)
-                            mutCounts[mut] = curCount + 1
-                        end
+                    local curCount = mutCounts[mut] or 0
+                    if curCount < effectiveQty then
+                        table.insert(toolsToProcess, tool)
+                        mutCounts[mut] = curCount + 1
                     end
                 end
             end
@@ -688,19 +770,25 @@ local success, errorMessage = pcall(function()
             if r ~= "" then activeRarities[r] = true end
         end
         
+        local hasSpecific = false
+        for _ in pairs(activeRarities) do hasSpecific = true break end
+        if not hasSpecific then
+            notifyUser("Attention", "Pilih minimal 1 rarity di dropdown terlebih dahulu!", 3)
+            return 0
+        end
+        
+        local effectiveQty = (qtyLimit and qtyLimit > 0) and qtyLimit or math.huge
+        
         local toolsToProcess = {}
         local rarityCounts = {}
         for _, tool in ipairs(getAllTools()) do
             if isTradeable(tool) then
                 local rarity = getItemInfo(tool)
                 if activeRarities[rarity] then
-                    local currentFav = isToolFavorite(tool)
-                    if currentFav ~= desiredState then
-                        local curCount = rarityCounts[rarity] or 0
-                        if isMax or (qtyLimit > 0 and curCount < qtyLimit) then
-                            table.insert(toolsToProcess, tool)
-                            rarityCounts[rarity] = curCount + 1
-                        end
+                    local curCount = rarityCounts[rarity] or 0
+                    if curCount < effectiveQty then
+                        table.insert(toolsToProcess, tool)
+                        rarityCounts[rarity] = curCount + 1
                     end
                 end
             end
@@ -712,10 +800,7 @@ local success, errorMessage = pcall(function()
         local toolsToProcess = {}
         for _, tool in ipairs(getAllTools()) do
             if isTradeable(tool) then
-                local currentFav = isToolFavorite(tool)
-                if currentFav ~= desiredState then
-                    table.insert(toolsToProcess, tool)
-                end
+                table.insert(toolsToProcess, tool)
             end
         end
         return processFavoriteBatch(toolsToProcess, desiredState, "All Inventory")
@@ -751,10 +836,7 @@ local success, errorMessage = pcall(function()
         local toolsToProcess = {}
         local limit = math.min(count or 30, #tools)
         for i = 1, limit do
-            local t = tools[i].tool
-            if isToolFavorite(t) ~= desiredState then
-                table.insert(toolsToProcess, t)
-            end
+            table.insert(toolsToProcess, tools[i].tool)
         end
         return processFavoriteBatch(toolsToProcess, desiredState, "Top " .. limit .. " CPS")
     end
@@ -765,7 +847,6 @@ local success, errorMessage = pcall(function()
     -- ==========================================
     -- RAYFIELD WINDOW INITIALIZATION -> SIGMA V4
     -- ==========================================
-    local Library
     local successUI, err = pcall(function()
         if readfile and isfile and isfile("UI sigma.lua") then
             Library = loadstring(readfile("UI sigma.lua"))()
@@ -775,7 +856,7 @@ local success, errorMessage = pcall(function()
     end)
     if not Library or type(Library) ~= "table" then return end
 
-    local Window = Library:CreateWindow({
+    Window = Library:CreateWindow({
         Name = "Mocta Ultimate Hub V1.8",
         LogoText = "🛒",
         Footer = "v1.8",
@@ -1428,59 +1509,85 @@ local success, errorMessage = pcall(function()
     FavRarityDropdown = SecFav1:AddMultiDropdown({Name = "Select Rarity (Favorite)", Options = RarityList, Default = {}}, function() end)
 
     SecFav1:AddButton("⭐ Favorite Selected Brainrot (by Amount)", function()
-        local qty = tonumber(qtyInputFav:Get()) or 0
-        local lst = FavItemDropdown:Get()
-        favoriteCustomItems(lst, qty, false, true)
+        pcall(function()
+            local rawQty = qtyInputFav:Get()
+            local qty = tonumber(rawQty) or 1
+            local lst = FavItemDropdown:Get()
+            favoriteCustomItems(lst, qty, false, true)
+        end)
     end)
     SecFav1:AddButton("⭐ Favorite Selected Brainrot (Max Stock)", function()
-        local lst = FavItemDropdown:Get()
-        favoriteCustomItems(lst, 0, true, true)
+        pcall(function()
+            local lst = FavItemDropdown:Get()
+            favoriteCustomItems(lst, 0, true, true)
+        end)
     end)
     SecFav1:AddButton("💔 Unfavorite Selected Brainrot (by Amount)", function()
-        local qty = tonumber(qtyInputFav:Get()) or 0
-        local lst = FavItemDropdown:Get()
-        favoriteCustomItems(lst, qty, false, false)
+        pcall(function()
+            local rawQty = qtyInputFav:Get()
+            local qty = tonumber(rawQty) or 1
+            local lst = FavItemDropdown:Get()
+            favoriteCustomItems(lst, qty, false, false)
+        end)
     end)
     SecFav1:AddButton("💔 Unfavorite Selected Brainrot (Max Stock)", function()
-        local lst = FavItemDropdown:Get()
-        favoriteCustomItems(lst, 0, true, false)
+        pcall(function()
+            local lst = FavItemDropdown:Get()
+            favoriteCustomItems(lst, 0, true, false)
+        end)
     end)
     SecFav1:AddButton("✨ Favorite by Mutation", function()
-        local qty = tonumber(qtyInputFav:Get()) or 0
-        local isMax = qty <= 0
-        favoriteByMutations(FavMutationDropdown:Get(), qty, isMax, true)
+        pcall(function()
+            local qty = tonumber(qtyInputFav:Get()) or 0
+            local isMax = qty <= 0
+            favoriteByMutations(FavMutationDropdown:Get(), qty, isMax, true)
+        end)
     end)
     SecFav1:AddButton("💔 Unfavorite by Mutation", function()
-        local qty = tonumber(qtyInputFav:Get()) or 0
-        local isMax = qty <= 0
-        favoriteByMutations(FavMutationDropdown:Get(), qty, isMax, false)
+        pcall(function()
+            local qty = tonumber(qtyInputFav:Get()) or 0
+            local isMax = qty <= 0
+            favoriteByMutations(FavMutationDropdown:Get(), qty, isMax, false)
+        end)
     end)
     SecFav1:AddButton("⭐ Favorite by Rarity", function()
-        local qty = tonumber(qtyInputFav:Get()) or 0
-        local isMax = qty <= 0
-        favoriteByRarities(FavRarityDropdown:Get(), qty, isMax, true)
+        pcall(function()
+            local qty = tonumber(qtyInputFav:Get()) or 0
+            local isMax = qty <= 0
+            favoriteByRarities(FavRarityDropdown:Get(), qty, isMax, true)
+        end)
     end)
     SecFav1:AddButton("💔 Unfavorite by Rarity", function()
-        local qty = tonumber(qtyInputFav:Get()) or 0
-        local isMax = qty <= 0
-        favoriteByRarities(FavRarityDropdown:Get(), qty, isMax, false)
+        pcall(function()
+            local qty = tonumber(qtyInputFav:Get()) or 0
+            local isMax = qty <= 0
+            favoriteByRarities(FavRarityDropdown:Get(), qty, isMax, false)
+        end)
     end)
 
     local SecFav2 = TabFav:AddSection("2. Bulk & CPS Quick Actions")
     SecFav2:AddButton("🌟 Favorite All Inventory", function()
-        favoriteAllInventory(true)
+        pcall(function()
+            favoriteAllInventory(true)
+        end)
     end)
     SecFav2:AddButton("💔 Unfavorite All Inventory", function()
-        favoriteAllInventory(false)
+        pcall(function()
+            favoriteAllInventory(false)
+        end)
     end)
     local qtyInputTopCPS = SecFav2:AddInput({Name = "Top N Highest CPS to Favorite:", Placeholder = "Default: 30"}, function() end)
     SecFav2:AddButton("🔥 Favorite Top N Highest CPS", function()
-        local count = tonumber(qtyInputTopCPS:Get()) or 30
-        favoriteTopCPS(count, true)
+        pcall(function()
+            local count = tonumber(qtyInputTopCPS:Get()) or 30
+            favoriteTopCPS(count, true)
+        end)
     end)
     SecFav2:AddButton("❄️ Unfavorite Top N Highest CPS", function()
-        local count = tonumber(qtyInputTopCPS:Get()) or 30
-        favoriteTopCPS(count, false)
+        pcall(function()
+            local count = tonumber(qtyInputTopCPS:Get()) or 30
+            favoriteTopCPS(count, false)
+        end)
     end)
 
     local SecFav3 = TabFav:AddSection("3. Auto-Favorite Engine (New Drops)")
