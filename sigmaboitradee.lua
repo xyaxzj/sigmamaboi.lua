@@ -132,6 +132,9 @@ local success, errorMessage = pcall(function()
     local AutoFavMutations = {}
     local AutoFavMutationDropdown = nil
     local SkipTradeFavorites = false
+    local FavDelay = 0.5
+    local IsFavProcessing = false
+    local CancelFavProcess = false
 
     -- Variabel Action Center
     local TargetToolNameAction = "Block Cup"
@@ -650,6 +653,11 @@ local success, errorMessage = pcall(function()
             return 0
         end
         
+        if IsFavProcessing then
+            notifyUser("Favorite Busy", "Proses favorit sedang berjalan! Harap tunggu atau klik tombol Cancel.", 3)
+            return 0
+        end
+        
         local remote = getFavRemote()
         if not remote then
             notifyUser("Error", "Favorite remote (rev_ToggleFav) not found in game!", 4)
@@ -657,12 +665,22 @@ local success, errorMessage = pcall(function()
             return 0
         end
         
+        local total = #toolsToProcess
+        local currentDelay = FavDelay or 0.5
         local actionLabel = (desiredState == nil and "Toggling" or (desiredState and "Favoriting" or "Unfavoriting"))
-        notifyUser("Favorite Manager", actionLabel .. " " .. #toolsToProcess .. " items...", 2)
+        notifyUser("Favorite Manager", actionLabel .. " " .. total .. " items (Cooldown: " .. string.format("%.1f", currentDelay) .. "s/item)...", 3)
+        
+        IsFavProcessing = true
+        CancelFavProcess = false
         
         task.spawn(function()
             local count = 0
-            for _, tool in ipairs(toolsToProcess) do
+            for idx, tool in ipairs(toolsToProcess) do
+                if CancelFavProcess then
+                    notifyUser("Favorite Cancelled", "Dihentikan oleh user. Berhasil memproses " .. count .. " / " .. total .. " items.", 4)
+                    break
+                end
+                
                 local guid = getToolGUID(tool)
                 if guid then
                     local ok, err = pcall(function()
@@ -673,13 +691,21 @@ local success, errorMessage = pcall(function()
                     else
                         warn("[FAVORITE] Error calling rev_ToggleFav:", err)
                     end
-                    task.wait(0.08)
                 else
                     warn("[FAVORITE] Tool has no GUID:", tool.Name)
                 end
+                
+                -- Rate-limiting cooldown delay
+                task.wait(FavDelay or 0.5)
             end
             
-            notifyUser("Favorite Done", "Processed " .. count .. " items successfully!", 3)
+            local wasCancelled = CancelFavProcess
+            IsFavProcessing = false
+            CancelFavProcess = false
+            
+            if not wasCancelled then
+                notifyUser("Favorite Done", "Selesai! Berhasil memproses " .. count .. " / " .. total .. " items.", 4)
+            end
             if ConsoleStats then
                 ConsoleStats:Log("⭐ Favorite: Processed " .. count .. " items (" .. tostring(operationName or "Batch") .. ")", "success")
             end
@@ -1503,6 +1529,14 @@ local success, errorMessage = pcall(function()
     local SecFav1 = TabFav:AddSection("1. Custom Favorite Control")
     if not rev_ToggleFav then SecFav1:AddParagraph("⚠️ Warning", "Favorite remote (rev_ToggleFav) not found.") end
     
+    SecFav1:AddSlider({Name = "⏱️ Favorite Delay / Cooldown (Sec)", Min = 0.1, Max = 2.0, Step = 0.1, Default = 0.5}, function(v) 
+        FavDelay = v 
+    end)
+    SecFav1:AddButton("⏹️ Stop / Cancel Running Favorite Process", function()
+        CancelFavProcess = true
+        notifyUser("Favorite Manager", "Proses favorit sedang dibatalkan...", 2)
+    end)
+    
     FavMutationDropdown = SecFav1:AddMultiDropdown({Name = "Select Mutation (Favorite)", Options = getMutationList(), Default = {}}, function() end)
     FavItemDropdown = SecFav1:AddMultiDropdown({Name = "Select Custom Brainrot", Options = {"[ANY ASSET]"}, Default = {}}, function(Options) SelectedFavItems = Options end)
     local qtyInputFav = SecFav1:AddInput({Name = "Amount to Favorite / Unfavorite:", Placeholder = "Enter amount..."}, function() end)
@@ -1588,6 +1622,10 @@ local success, errorMessage = pcall(function()
             local count = tonumber(qtyInputTopCPS:Get()) or 30
             favoriteTopCPS(count, false)
         end)
+    end)
+    SecFav2:AddButton("⏹️ Stop / Cancel Running Favorite Process", function()
+        CancelFavProcess = true
+        notifyUser("Favorite Manager", "Proses favorit sedang dibatalkan...", 2)
     end)
 
     local SecFav3 = TabFav:AddSection("3. Auto-Favorite Engine (New Drops)")
