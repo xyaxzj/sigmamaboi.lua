@@ -1,44 +1,28 @@
 -- ==============================================================================
--- 🥔 KALB ULTRA LIGHTWEIGHT AUTO FARM V2 (METEOR SHOWER AUTO KICK & AUTO BUY)
+-- 🥔 KALB ULTRA LIGHTWEIGHT AUTO FARM & ANTI-LAG (ZERO MEMORY LEAK)
 -- ==============================================================================
--- Fitur & Alur:
--- 1. ⚙️ Full Config Mode: Semua pengaturan diatur via variabel _G di baris atas (Tanpa UI)
--- 2. 🚫 Total Player & Character Purger (100% Bersih):
---    - Menghapus & memusnahkan SEMUA player lain dari game.Players
---    - Menghapus SEMUA karakter player lain dari folder workspace.Players & workspace root
---    - Real-time listener + Background loop anti-bocor (tidak ada lagi yang lolos)
--- 3. ☄️ Meteor Shower Auto Kick: Bot menendang bola (nonstop / saat event)
--- 4. ☄️ Auto Meteor Event: Memperbesar hitbox meteor di Debris (200x200x200, CanQuery=true)
--- 5. 🛒 Auto Buy Frigorex & Tricerabob: Request stock tiap 5 menit & auto beli jika stock > 0
--- 6. 🧪 Auto Buy Farm Potion: Auto beli 1x setiap pergantian jam ganjil (1, 3, 5... 23 WIB)
--- 7. 💰 Auto Sell All: Menjual semua brainrot tiap 5 detik (ref_B_SellAll)
--- 8. 🥔 Potato Mode Ekstrem & 🛡️ Anti-AFK
+-- Fitur & Evaluasi:
+-- 1. 🥔 Potato Mode Ekstrem: Hapus semua texture, PBR, bayangan, partikel, & efek Lighting
+-- 2. 🚫 Total Player & Character Purger: Hapus karakter & instance player lain dari game.Players & workspace.Players
+-- 3. 🛡️ Anti-AFK (VirtualUser) & Auto Garbage Collector (RAM tetap enteng berjam-jam)
+-- 4. 💰 Auto Sell All (Setiap 5 detik via ref_B_SellAll)
+-- 5. ☄️ Auto Meteor Event: Otomatis perbesar hitbox meteor di Debris (Bisa diatur di config)
+-- 6. 🛒 Meteor Shop Auto Buy:
+--    - 🦖 Patagotitan (⚡ON)
+--    - ⚡ Speed (+1) (⚡ON)
+--    - 👑 Frigorex (⚡ON)
+--    - 🦏 Tricerabob (⚡ON)
+--    - 🧪 Farm Potion (I) (Khusus Jam Ganjil WIB & Max Menit :10)
 -- ==============================================================================
 
-if not game:IsLoaded() then game.Loaded:Wait() end
-
--- ==============================================================================
--- ⚙️ KONFIGURASI PENGGUNA (UBAH SESUAI KEBUTUHAN DI SINI)
--- ==============================================================================
-_G.autoFarm = true               -- true: Auto Farm Aktif, false: Nonaktif
-_G.onlyMeteorEvent = false        -- true: HANYA Auto Kick saat Event Meteor Shower aktif, false: Auto kick nonstop
-_G.autoMeteor = true             -- true: Otomatis perbesar hitbox meteor saat Meteor Shower, false: Nonaktif
-_G.autoBuyPatagotitan = true      -- true: Auto beli Patagotitan saat ready di Meteor Shop
-_G.autoBuySpeed = true            -- true: Auto beli Speed (+1) saat ready di Meteor Shop
-_G.autoBuyFrigorex = true        -- true: Auto beli Frigorex jika stock > 0
-_G.autoBuyTricerabob = true      -- true: Auto beli Tricerabob jika stock > 0
-_G.autoBuyFarmPotion = true      -- true: Auto beli 1x Farm Potion khusus jam ganjil (1, 3, 5... 23 WIB) maksimal menit :10
-_G.autoSellAll = true            -- true: Auto Sell All setiap 5 detik via ref_B_SellAll
-_G.autoRemovePlayer = true       -- true: Hapus player lain dari game.Players & workspace.Players (100% Bersih & No Lag), false: Biarkan
-_G.debugConsoleLog = false        -- true: Cetak log status/fase ke console (F9), false: Senyap
-_G.failsafeTimeout = 25          -- Waktu maksimal (detik) sebelum auto-reset ke Safe Zone jika macet
-
-print("--------------------------------------------------")
-print("🚀 [INIT] Memuat KALB Auto Farm V2 (Ultra Lightweight & Total Player Purger)...")
+pcall(function()
+    if not game:IsLoaded() then
+        game.Loaded:Wait()
+    end
+end)
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
 local VirtualUser = game:GetService("VirtualUser")
 
@@ -57,7 +41,42 @@ local lpDisplayName = lp and lp.DisplayName or ""
 local myUidStr = lp and tostring(lp.UserId) or ""
 
 -- =============================================
--- 🚀 SYSTEM ANTI-LAG & VISUAL PURGER (SAFE ZERO-ERROR & ZERO-LAG)
+-- ⚙️ KONFIGURASI 
+-- =============================================
+_G.autoFarm = true
+_G.autoMeteor = true             -- ☄️ true: Otomatis perbesar hitbox meteor saat Meteor Shower, false: Nonaktif
+_G.meteorHitboxSize = 200        -- 📏 Ukuran hitbox meteor dalam studs (Default: 200)
+_G.autoBuyPatagotitan = true     -- 🦖 Patagotitan
+_G.autoBuySpeed = true           -- ⚡ Speed (+1)
+_G.autoBuyFrigorex = true        -- 👑 Frigorex
+_G.autoBuyTricerabob = true      -- 🦏 Tricerabob
+_G.autoBuyFarmPotion = true      -- 🧪 Farm Potion (I) (Khusus jam ganjil WIB max menit :10)
+_G.autoSellAll = true            -- 💰 Auto Sell All tiap 5s
+_G.autoRemovePlayer = true       -- 🚫 Hapus player lain dari game.Players & workspace.Players
+
+-- =============================================
+-- 🚀 1. OPTIMISASI LIGHTING & SETTINGS GLOBAL (SUPER ENTENG)
+-- =============================================
+pcall(function()
+    Lighting.GlobalShadows = false
+    Lighting.FogEnd = 9e9
+    Lighting.Brightness = 1
+    for _, effect in ipairs(Lighting:GetChildren()) do
+        if effect:IsA("PostEffect") or effect:IsA("BloomEffect") or effect:IsA("BlurEffect") or effect:IsA("ColorCorrectionEffect") or effect:IsA("SunRaysEffect") or effect:IsA("DepthOfFieldEffect") then
+            effect.Enabled = false
+            effect:Destroy()
+        end
+    end
+end)
+
+pcall(function()
+    if settings and settings().Rendering then
+        settings().Rendering.QualityLevel = 1
+    end
+end)
+
+-- =============================================
+-- 🥔 2. SYSTEM HAPUS TEKSTUR & VISUAL (SAFE ZERO-ERROR & ZERO-LAG)
 -- =============================================
 local PURGE_CLASSES = {
     PointLight = true,
@@ -100,7 +119,7 @@ local function stripTexture(v)
         end
 
         if v:IsA("BasePart") then
-            v.Material = Enum.Material.Plastic
+            v.Material = Enum.Material.SmoothPlastic
             v.Reflectance = 0
             v.CastShadow = false
             v.Color = Color3.new(1, 1, 1)
@@ -113,43 +132,46 @@ local function stripTexture(v)
     end)
 end
 
-pcall(function()
-    for _, v in ipairs(workspace:GetDescendants()) do
-        stripTexture(v)
-    end
-
-    Lighting.GlobalShadows = false
-    Lighting.FogEnd = 9e9
-    for _, v in ipairs(Lighting:GetDescendants()) do
-        if v:IsA("PostEffect") or v:IsA("BlurEffect") or v:IsA("SunRaysEffect") or v:IsA("ColorCorrectionEffect") or v:IsA("BloomEffect") or v:IsA("DepthOfFieldEffect") or v:IsA("Sky") then
-            v:Destroy()
-        end
-    end
-end)
+for _, v in ipairs(workspace:GetDescendants()) do
+    stripTexture(v)
+end
 
 workspace.DescendantAdded:Connect(function(v)
     task.defer(stripTexture, v)
 end)
 
 -- =============================================
--- 🚫 TOTAL PLAYER & CHARACTER PURGER (100% BERSIH)
+-- 🚫 3. TOTAL PURGER (HAPUS OTHER PLAYER & DATA DI WORKSPACE + PLAYERS)
 -- =============================================
-local function isLocalPlayerEntity(inst)
-    if not inst then return false end
-    if lp and inst == lp then return true end
-    if lp and lp.Character and (inst == lp.Character or inst:IsDescendantOf(lp.Character)) then return true end
-    local name = inst.Name
-    if name == lpName or (lpDisplayName ~= "" and name == lpDisplayName) then return true end
+local function isLocalPlayerEntity(entity)
+    if not entity then return false end
+    if entity == lp then return true end
+    if lp and lp.Character and entity == lp.Character then return true end
+    if entity.Name == lpName or (lpDisplayName ~= "" and entity.Name == lpDisplayName) then return true end
     return false
 end
 
+local function purgeOtherCharacter(char)
+    if not char or not char:IsA("Model") or isLocalPlayerEntity(char) then return end
+    pcall(function()
+        for _, part in ipairs(char:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.Transparency = 1
+                part.CanCollide = false
+            elseif part:IsA("Decal") or part:IsA("Texture") or part:IsA("Clothing") then
+                part:Destroy()
+            end
+        end
+        char:ClearAllChildren()
+        char:Destroy()
+    end)
+end
+
 local function purgeOtherPlayer(player)
-    if not _G.autoRemovePlayer or not player or player == lp or player.Name == lpName then return end
-    
+    if not player or player == lp then return end
     pcall(function()
         if player.Character then
-            player.Character:ClearAllChildren()
-            player.Character:Destroy()
+            purgeOtherCharacter(player.Character)
         end
     end)
     pcall(function()
@@ -158,35 +180,10 @@ local function purgeOtherPlayer(player)
     end)
 end
 
-local function purgeOtherCharacter(charModel)
-    if not _G.autoRemovePlayer or not charModel then return end
-    if isLocalPlayerEntity(charModel) then return end
-    if charModel.Name == "Plots" or charModel.Name == "Debris" or charModel.Name == "NPCs" then return end
-
-    pcall(function()
-        for _, v in ipairs(charModel:GetDescendants()) do
-            if v:IsA("BasePart") then
-                v.Transparency = 1
-                v.CanCollide = false
-                v.CanTouch = false
-                v.CanQuery = false
-            elseif v:IsA("Decal") or v:IsA("Texture") or v:IsA("BillboardGui") or v:IsA("SurfaceGui") or v:IsA("Highlight") then
-                v.Enabled = false
-                v:Destroy()
-            end
-        end
-        charModel:ClearAllChildren()
-        charModel:Destroy()
-    end)
-end
-
 local function scanAndPurgeAllOtherPlayers()
-    if not _G.autoRemovePlayer then return end
-
-    -- 1. Bersihkan dari game:GetService("Players")
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= lp then
-            purgeOtherPlayer(p)
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= lp then
+            purgeOtherPlayer(player)
         end
     end
     for _, child in ipairs(Players:GetChildren()) do
@@ -195,7 +192,6 @@ local function scanAndPurgeAllOtherPlayers()
         end
     end
 
-    -- 2. Bersihkan dari workspace.Players folder
     local wsPlayers = workspace:FindFirstChild("Players")
     if wsPlayers then
         for _, child in ipairs(wsPlayers:GetChildren()) do
@@ -205,7 +201,6 @@ local function scanAndPurgeAllOtherPlayers()
         end
     end
 
-    -- 3. Bersihkan dari workspace root (karakter liar)
     for _, child in ipairs(workspace:GetChildren()) do
         if child:IsA("Model") and not isLocalPlayerEntity(child) and child.Name ~= "Plots" and child.Name ~= "Debris" and child.Name ~= "NPCs" and child.Name ~= "Players" then
             if child:FindFirstChildOfClass("Humanoid") or child:FindFirstChild("HumanoidRootPart") or child:FindFirstChild("Head") then
@@ -215,10 +210,8 @@ local function scanAndPurgeAllOtherPlayers()
     end
 end
 
--- Eksekusi awal pembersihan player & karakter
 scanAndPurgeAllOtherPlayers()
 
--- Event Listener saat ada Player baru join
 Players.PlayerAdded:Connect(function(player)
     if not _G.autoRemovePlayer then return end
     if player ~= lp then
@@ -242,7 +235,6 @@ Players.ChildAdded:Connect(function(child)
     end
 end)
 
--- Listener khusus untuk workspace.Players
 local function setupWsPlayersListener(folder)
     if not folder then return end
     for _, child in ipairs(folder:GetChildren()) do
@@ -277,25 +269,8 @@ workspace.ChildAdded:Connect(function(child)
     end
 end)
 
--- Background Sweeper Loop (Menjamin 0% Player Lolos & Bersihkan RAM secara Incremental)
-task.spawn(function()
-    while task.wait(3) do
-        if _G.autoRemovePlayer then
-            pcall(scanAndPurgeAllOtherPlayers)
-        end
-
-        pcall(function()
-            if collectgarbage then
-                collectgarbage("step", 50)
-            elseif gcinfo then
-                gcinfo()
-            end
-        end)
-    end
-end)
-
 -- =============================================
--- 🎯 DETEKTOR PLOT SENDIRI & REMOVER PLOT LAIN
+-- 🎯 4. DETEKTOR PLOT SENDIRI & REMOVER PLOT LAIN
 -- =============================================
 local function isMyPlot(plotModel)
     if not plotModel or not plotModel:IsA("Model") then return false end
@@ -363,200 +338,38 @@ if plotsFolder then
 end
 
 -- =============================================
--- ☄️ AUTO METEOR EVENT ENGINE (HITBOX EXPANDER)
+-- 🧹 5. PERIODIC SWEEPER & GARBAGE COLLECTOR
 -- =============================================
-local OPTIMAL_METEOR_SIZE = Vector3.new(200, 200, 200)
-local activeMeteors = {}
-local isMeteorShowerActive = false
-
-local function isTargetMeteorModel(model)
-    if not model or not model:IsA("Model") then return false end
-    local debris = workspace:FindFirstChild("Debris")
-    if not debris or not model:IsDescendantOf(debris) then return false end
-    return tonumber(model.Name) ~= nil
-end
-
-local function getTargetMeteorParent(instance)
-    if not instance then return nil end
-    local debris = workspace:FindFirstChild("Debris")
-    if not debris or not instance:IsDescendantOf(debris) then return nil end
-
-    local curr = instance
-    while curr and curr ~= debris and curr ~= workspace do
-        if curr:IsA("Model") and tonumber(curr.Name) ~= nil then
-            return curr
-        end
-        curr = curr.Parent
-    end
-    return nil
-end
-
-local function expandMeteorHitbox(part)
-    if not part or not (part:IsA("BasePart") or part.ClassName == "Part") then return end
-    pcall(function()
-        part.CanCollide = false
-        part.CanTouch = true
-        part.CanQuery = true
-        part.CastShadow = false
-        if part.Size ~= OPTIMAL_METEOR_SIZE then
-            part.Size = OPTIMAL_METEOR_SIZE
-        end
-    end)
-end
-
-local function handleNewMeteor(model)
-    if not _G.autoMeteor then return end
-    if not model or not isTargetMeteorModel(model) then return end
-    if activeMeteors[model] then return end
-    activeMeteors[model] = true
-    isMeteorShowerActive = true
-
-    for _, descendant in ipairs(model:GetDescendants()) do
-        if descendant:IsA("BasePart") or descendant.ClassName == "Part" then
-            expandMeteorHitbox(descendant)
-        elseif descendant:IsA("ParticleEmitter") or descendant:IsA("Fire") or descendant:IsA("Smoke") or 
-               descendant:IsA("Trail") or descendant:IsA("PointLight") or descendant:IsA("SpotLight") then
-            descendant:Destroy()
-        end
-    end
-
-    if _G.debugConsoleLog then
-        print(string.format("☄️ [METEOR] Hitbox Model #%s diperbesar (200 studs, CanQuery=true) & Partikel dibersihkan!", tostring(model.Name)))
-    end
-end
-
-local function setupMeteorListeners(debris)
-    if not debris then return end
-
-    for _, item in ipairs(debris:GetChildren()) do
-        if isTargetMeteorModel(item) then
-            handleNewMeteor(item)
-        end
-    end
-
-    debris.ChildAdded:Connect(function(child)
-        task.defer(function()
-            if isTargetMeteorModel(child) then
-                handleNewMeteor(child)
-            end
-        end)
-    end)
-
-    debris.DescendantAdded:Connect(function(descendant)
-        task.defer(function()
-            if not _G.autoMeteor then return end
-            if descendant:IsA("BasePart") or descendant.ClassName == "Part" then
-                local targetModel = getTargetMeteorParent(descendant)
-                if targetModel then
-                    expandMeteorHitbox(descendant)
-                    handleNewMeteor(targetModel)
-                end
-            elseif descendant:IsA("ParticleEmitter") or descendant:IsA("Fire") or descendant:IsA("Smoke") or 
-                   descendant:IsA("Trail") or descendant:IsA("PointLight") or descendant:IsA("SpotLight") then
-                descendant:Destroy()
-            end
-        end)
-    end)
-
-    debris.ChildRemoved:Connect(function(child)
-        activeMeteors[child] = nil
-        -- Periksa apakah masih ada meteor yang aktif
-        task.defer(function()
-            local hasMeteor = false
-            for _, c in ipairs(debris:GetChildren()) do
-                if c:IsA("Model") and tonumber(c.Name) ~= nil then
-                    hasMeteor = true
-                    break
-                end
-            end
-            if not hasMeteor then
-                isMeteorShowerActive = false
-            end
-        end)
-    end)
-end
-
 task.spawn(function()
-    local debris = workspace:FindFirstChild("Debris") or workspace:WaitForChild("Debris", 10)
-    if debris then setupMeteorListeners(debris) end
-end)
+    while task.wait(3) do
+        if _G.autoRemovePlayer then
+            pcall(scanAndPurgeAllOtherPlayers)
+        end
 
-workspace.ChildAdded:Connect(function(child)
-    if child.Name == "Debris" then
-        task.defer(function() setupMeteorListeners(child) end)
-    end
-end)
-
--- =============================================
--- 🧠 VARIABEL STATE MACHINE & POSISI
--- =============================================
-local targetAction = "Idle"
-local lastAction = "Idle"
-local stateTimer = 0               
-local globalStuckTimer = 0         
-local mutationCount = 0            
-local lastRewardDesc = "None"
-local kickRetryCount = 0
-local MAX_KICK_RETRIES = 2
-local kickAcceptedByServer = false
-local safeZone = Vector3.new(698.030701, 3.298559, 233.707077)
-local safeZoneCFrame = CFrame.new(698.030701, 3.298559, 233.707077, -0.061024, -0.000000, 0.998136, -0.000000, 1.000000, 0.000000, -0.998136, -0.000000, -0.061024)
-
-local function logConsole(msg)
-    if _G.debugConsoleLog then
-        print(string.format("🤖 [KALB-FARM] [%s] %s", tostring(targetAction), tostring(msg)))
-    end
-end
-
-local function checkMeteorShowerActive()
-    if isMeteorShowerActive then return true end
-    local debris = workspace:FindFirstChild("Debris")
-    if debris then
-        for _, child in ipairs(debris:GetChildren()) do
-            if child:IsA("Model") and tonumber(child.Name) ~= nil then
-                isMeteorShowerActive = true
-                return true
+        pcall(function()
+            if collectgarbage then
+                collectgarbage("step", 50)
+            elseif gcinfo then
+                gcinfo()
             end
-        end
-    end
-    return false
-end
-
-local function shouldKick()
-    if not _G.autoFarm then return false end
-    if _G.onlyMeteorEvent then
-        return checkMeteorShowerActive()
-    end
-    return true
-end
-
--- =============================================
--- 🛡️ ANTI AFK (MURNI TANPA KLIK APAPUN)
--- =============================================
-pcall(function()
-    if getconnections then
-        for _, conn in ipairs(getconnections(lp.Idled)) do
-            conn:Disable()
-        end
+        end)
     end
 end)
 
-lp.Idled:Connect(function()
-    pcall(function()
-        if getconnections then
-            for _, conn in ipairs(getconnections(lp.Idled)) do
-                conn:Disable()
-            end
-        end
-        if VirtualUser then
+-- =============================================
+-- 🛡️ 6. ANTI AFK (VIRTUALUSER)
+-- =============================================
+if lp then
+    lp.Idled:Connect(function()
+        pcall(function()
             VirtualUser:CaptureController()
             VirtualUser:ClickButton2(Vector2.new())
-        end
+        end)
     end)
-end)
+end
 
 -- =============================================
--- 📡 DAFTAR REMOTE NETWORK RESMI & AUTO-RESOLVER
+-- 📡 7. REMOTE NETWORK DISCOVERY
 -- =============================================
 local networkFolder = nil
 pcall(function()
@@ -565,38 +378,30 @@ pcall(function()
     networkFolder = packages and (packages:FindFirstChild("Network") or packages:WaitForChild("Network", 3))
 end)
 
-local function findRemote(name, className)
-    if networkFolder then
-        local r = networkFolder:FindFirstChild(name)
-        if r and (not className or r:IsA(className)) then return r end
-    end
-    for _, r in ipairs(ReplicatedStorage:GetDescendants()) do
-        if r.Name == name and (not className or r:IsA(className)) then
-            return r
+local ref_B_SellAll = networkFolder and networkFolder:FindFirstChild("ref_B_SellAll")
+local rev_MeteorShop_RequestSync = networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_RequestSync")
+local rev_MeteorShop_Stock = networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_Stock")
+local rev_MeteorShop_Buy = networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_Buy")
+
+if not rev_MeteorShop_Stock or not rev_MeteorShop_Buy or not rev_MeteorShop_RequestSync or not ref_B_SellAll then
+    for _, r in pairs(ReplicatedStorage:GetDescendants()) do
+        if r:IsA("RemoteEvent") then
+            if r.Name == "rev_MeteorShop_Stock" then rev_MeteorShop_Stock = r
+            elseif r.Name == "rev_MeteorShop_Buy" then rev_MeteorShop_Buy = r
+            elseif r.Name == "rev_MeteorShop_RequestSync" then rev_MeteorShop_RequestSync = r
+            end
+        elseif r:IsA("RemoteFunction") then
+            if r.Name == "ref_B_SellAll" then ref_B_SellAll = r
+            end
         end
     end
-    return nil
 end
 
-local ref_KickEvent = findRemote("ref_KickEvent", "RemoteFunction")
-local kickRemote = findRemote("rev_KickEvent", "RemoteEvent")
-local rev_kickPhase2 = findRemote("rev_kickPhase2", "RemoteEvent")
-local rev_Collected = findRemote("rev_Collected", "RemoteEvent")
-local rev_KickEventEnded = findRemote("rev_KickEventEnded", "RemoteEvent")
-local rev_AddedWeather = findRemote("rev_AddedWeather", "RemoteEvent")
-local rev_RemovedWeather = findRemote("rev_RemovedWeather", "RemoteEvent")
-
-local ref_B_SellAll = findRemote("ref_B_SellAll", "RemoteFunction")
-local rev_MeteorShop_RequestSync = findRemote("rev_MeteorShop_RequestSync", "RemoteEvent")
-local rev_MeteorShop_Stock = findRemote("rev_MeteorShop_Stock", "RemoteEvent")
-local rev_MeteorShop_Buy = findRemote("rev_MeteorShop_Buy", "RemoteEvent")
-
 -- =============================================
--- 📢 DISCORD WEBHOOK NOTIFIER (PATAGOTITAN, FRIGOREX, TRICERABOB - ZERO LAG & INSTANT)
+-- 📢 DISCORD WEBHOOK NOTIFIER (PATAGOTITAN, FRIGOREX, TRICERABOB - ZERO LAG)
 -- =============================================
 local DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1539697793973756084/1oLTQDKSmutWJlPX91He00IEEAg_lsos8MWbxuXki8LKqO8WnZUX8kwurULVjdB8lOqb"
 
--- URL CDN Langsung (0x Request HTTP Ekstra, 100% Bebas Freeze/Lag)
 local PATAGO_IMAGE_URL = "https://www.roblox.com/asset-thumbnail/image?assetId=95399484334874&width=420&height=420&format=png"
 local FRIGOREX_IMAGE_URL = "https://www.roblox.com/asset-thumbnail/image?assetId=140510107418430&width=420&height=420&format=png"
 
@@ -696,7 +501,7 @@ local function sendDiscordWebhook(itemName, totalBought)
 end
 
 -- =============================================
--- 🛒 AUTO BUY METEOR SHOP (PATAGOTITAN, SPEED, FRIGOREX, TRICERABOB)
+-- 🛒 8. AUTO BUY METEOR SHOP (PATAGOTITAN, SPEED, FRIGOREX, TRICERABOB)
 -- =============================================
 if rev_MeteorShop_Stock then
     rev_MeteorShop_Stock.OnClientEvent:Connect(function(stockData, expiryTimestamp)
@@ -761,7 +566,7 @@ task.spawn(function()
 end)
 
 -- =============================================
--- 🧪 AUTO BUY FARM POTION (KHUSUS JAM GANJIL WIB: 1, 3, 5... 23 & MAX MENIT :10)
+-- 🧪 9. AUTO BUY FARM POTION (KHUSUS JAM GANJIL WIB: 1, 3, 5... 23 & MAX MENIT :10)
 -- =============================================
 local lastBoughtFarmPotionHour = -1
 
@@ -792,7 +597,7 @@ task.spawn(function()
 end)
 
 -- =============================================
--- 💰 AUTO SELL ALL (SETIAP 5 DETIK)
+-- 💰 10. AUTO SELL ALL (SETIAP 5 DETIK)
 -- =============================================
 task.spawn(function()
     while task.wait(5) do
@@ -807,317 +612,114 @@ task.spawn(function()
 end)
 
 -- =============================================
--- 🎮 LAPIS 1: ULTRA-LIGHTWEIGHT CONTROLLER HOOK (ZERO-FREEZE & NON-BLOCKING)
+-- ☄️ 11. AUTO METEOR EVENT ENGINE (HITBOX EXPANDER & PARTICLE PURGER)
 -- =============================================
-local cachedGameController = nil
+local activeMeteors = {}
 
-local function getGameController()
-    if cachedGameController and type(cachedGameController.Kick) == "function" then
-        return cachedGameController
-    end
+local function getMeteorSize()
+    local s = tonumber(_G.meteorHitboxSize) or 200
+    return Vector3.new(s, s, s)
+end
 
-    if getgc then
-        local ok, tables = pcall(function() return getgc(true) end)
-        if ok and type(tables) == "table" then
-            for _, item in ipairs(tables) do
-                if type(item) == "table" then
-                    if rawget(item, "CanKick") ~= nil and type(rawget(item, "Kick")) == "function" then
-                        cachedGameController = item
-                        return item
-                    end
-                end
-            end
+local function isTargetMeteorModel(model)
+    if not model or not model:IsA("Model") then return false end
+    local debris = workspace:FindFirstChild("Debris")
+    if not debris or not model:IsDescendantOf(debris) then return false end
+    return tonumber(model.Name) ~= nil
+end
+
+local function getTargetMeteorParent(instance)
+    if not instance then return nil end
+    local debris = workspace:FindFirstChild("Debris")
+    if not debris or not instance:IsDescendantOf(debris) then return nil end
+
+    local curr = instance
+    while curr and curr ~= debris and curr ~= workspace do
+        if curr:IsA("Model") and tonumber(curr.Name) ~= nil then
+            return curr
         end
+        curr = curr.Parent
     end
-
     return nil
 end
 
--- Pre-fetch controller saat script pertama kali dimuat
-task.spawn(function()
-    task.wait(1)
-    getGameController()
-end)
-
--- =============================================
--- 📡 LISTENER EVENT SERVER (REAL-TIME RECEPTOR)
--- =============================================
-local phase2Fired = false
-local collectedFired = false
-local kickEndedFired = false
-
-local function setupServerEventListeners()
-    local p2 = rev_kickPhase2 or findRemote("rev_kickPhase2", "RemoteEvent")
-    if p2 then
-        p2.OnClientEvent:Connect(function(rewardTable, ...)
-            phase2Fired = true
-            pcall(function()
-                if type(rewardTable) == "table" and rewardTable[1] then
-                    lastRewardDesc = string.format("%s [%s]", tostring(rewardTable[1].Name or "Brainrot"), tostring(rewardTable[1].Mutation or "Normal"))
-                    logConsole(string.format("🎉 Gacha Reward Masuk: %s", lastRewardDesc))
-                end
-            end)
-        end)
-    end
-
-    local col = rev_Collected or findRemote("rev_Collected", "RemoteEvent")
-    if col then
-        col.OnClientEvent:Connect(function(...)
-            collectedFired = true
-        end)
-    end
-
-    local ended = rev_KickEventEnded or findRemote("rev_KickEventEnded", "RemoteEvent")
-    if ended then
-        ended.OnClientEvent:Connect(function(...)
-            kickEndedFired = true
-        end)
-    end
-
-    local addW = rev_AddedWeather or findRemote("rev_AddedWeather", "RemoteEvent")
-    if addW then
-        addW.OnClientEvent:Connect(function(weatherType, ...)
-            if weatherType == "MeteorShower" then
-                isMeteorShowerActive = true
-                logConsole("☄️ Event Cuaca: METEOR SHOWER AKTIF! Memulai Auto Kick & Farm...")
-            end
-        end)
-    end
-
-    local remW = rev_RemovedWeather or findRemote("rev_RemovedWeather", "RemoteEvent")
-    if remW then
-        remW.OnClientEvent:Connect(function(weatherType, ...)
-            if weatherType == "MeteorShower" then
-                isMeteorShowerActive = false
-                logConsole("☁️ Event Cuaca: Meteor Shower Selesai. Menyelesaikan ronde ini lalu standby di Safe Zone...")
-            end
-        end)
-    end
-end
-setupServerEventListeners()
-
--- =============================================
--- ☄️ DETEKSI METEOR SHOWER REAL-TIME (EVENT-DRIVEN O(1))
--- =============================================
-local function checkMeteorShowerActive()
-    return isMeteorShowerActive
-end
-
-local function shouldKick()
-    if not _G.autoFarm then return false end
-    if _G.onlyMeteorEvent then
-        return isMeteorShowerActive
-    end
-    return true
-end
-
--- =============================================
--- 🚀 FUNGSI EKSEKUSI TENDANGAN REINFORCED (LAPIS 1 + LAPIS 3 NETWORK)
--- =============================================
-local function executeKick()
-    local timestamp = nil
-    pcall(function() timestamp = workspace:GetServerTimeNow() end)
-    if not timestamp or type(timestamp) ~= "number" or timestamp <= 0 then
-        timestamp = tick()
-    end
-
-    logConsole("⚡ Mengeksekusi Kick (Lapis 1 Controller Hook + Lapis 3 Network)...")
-
-    -- 🎮 LAPIS 1: Direct GameController Hook (Buka Kunci Cooldown & Panggil Kick Asli di Game)
+local function expandMeteorHitbox(part)
+    if not part or not (part:IsA("BasePart") or part.ClassName == "Part") then return end
     pcall(function()
-        local controller = getGameController()
-        if controller then
-            if controller.UnblockKick then pcall(function() controller:UnblockKick() end) end
-            if controller.ResetCooldown then pcall(function() controller:ResetCooldown() end) end
-            controller.CanKick = true
-            if controller.InGame ~= nil then controller.InGame = false end
-            if controller.Status ~= nil and controller.Status == "InKick" then controller.Status = "Lobby" end
-            pcall(function() controller:Kick(1, 1) end)
+        part.CanCollide = false
+        part.CanTouch = true
+        part.CanQuery = true
+        part.CastShadow = false
+        local targetSize = getMeteorSize()
+        if part.Size ~= targetSize then
+            part.Size = targetSize
         end
-    end)
-
-    -- 📡 LAPIS 3: Network Remote Invocation (Jalur Resmi Server Non-Blocking & Konfirmasi Sukses)
-    task.spawn(function()
-        pcall(function()
-            local targetRemote = ref_KickEvent or (networkFolder and networkFolder:FindFirstChild("ref_KickEvent"))
-            if not targetRemote then
-                for _, r in pairs(ReplicatedStorage:GetDescendants()) do
-                    if r:IsA("RemoteFunction") and r.Name == "ref_KickEvent" then
-                        targetRemote = r
-                        ref_KickEvent = r
-                        break
-                    end
-                end
-            end
-
-            if targetRemote and targetRemote:IsA("RemoteFunction") then
-                local res = targetRemote:InvokeServer(1, 1, timestamp)
-                if res == true or (type(res) == "table" and res[1] == true) then
-                    kickAcceptedByServer = true
-                    logConsole("✅ [SERVER CONFIRMED] Tendangan resmi terdaftar di server! Bola sedang terbang...")
-                end
-            end
-
-            local fallbackEvent = kickRemote or (networkFolder and networkFolder:FindFirstChild("rev_KickEvent"))
-            if fallbackEvent and fallbackEvent:IsA("RemoteEvent") then
-                fallbackEvent:FireServer(1, 1, timestamp)
-            end
-        end)
     end)
 end
 
--- =============================================
--- ⚙️ MAIN LOOP (STATE MACHINE AUTO FARM)
--- =============================================
+local function handleNewMeteor(model)
+    if not _G.autoMeteor then return end
+    if not model or not isTargetMeteorModel(model) then return end
+    if activeMeteors[model] then return end
+    activeMeteors[model] = true
+
+    for _, descendant in ipairs(model:GetDescendants()) do
+        if descendant:IsA("BasePart") or descendant.ClassName == "Part" then
+            expandMeteorHitbox(descendant)
+        elseif descendant:IsA("ParticleEmitter") or descendant:IsA("Fire") or descendant:IsA("Smoke") or 
+               descendant:IsA("Trail") or descendant:IsA("PointLight") or descendant:IsA("SpotLight") then
+            descendant:Destroy()
+        end
+    end
+end
+
+local function setupMeteorListeners(debris)
+    if not debris then return end
+
+    for _, item in ipairs(debris:GetChildren()) do
+        if isTargetMeteorModel(item) then
+            handleNewMeteor(item)
+        end
+    end
+
+    debris.ChildAdded:Connect(function(child)
+        task.defer(function()
+            if isTargetMeteorModel(child) then
+                handleNewMeteor(child)
+            end
+        end)
+    end)
+
+    debris.DescendantAdded:Connect(function(descendant)
+        task.defer(function()
+            if not _G.autoMeteor then return end
+            if descendant:IsA("BasePart") or descendant.ClassName == "Part" then
+                local targetModel = getTargetMeteorParent(descendant)
+                if targetModel then
+                    expandMeteorHitbox(descendant)
+                    handleNewMeteor(targetModel)
+                end
+            elseif descendant:IsA("ParticleEmitter") or descendant:IsA("Fire") or descendant:IsA("Smoke") or 
+                   descendant:IsA("Trail") or descendant:IsA("PointLight") or descendant:IsA("SpotLight") then
+                descendant:Destroy()
+            end
+        end)
+    end)
+
+    debris.ChildRemoved:Connect(function(child)
+        activeMeteors[child] = nil
+    end)
+end
+
 task.spawn(function()
-    while task.wait(0.05) do
-        if not _G.autoFarm then continue end
+    local debris = workspace:FindFirstChild("Debris") or workspace:WaitForChild("Debris", 10)
+    if debris then setupMeteorListeners(debris) end
+end)
 
-        local char = lp.Character
-        local hum = char and char:FindFirstChild("Humanoid")
-        local hrp = char and char:FindFirstChild("HumanoidRootPart")
-
-        if not hum or not hrp then continue end 
-
-        -- [ PENDETEKSI MATI & RESPAWN ]
-        if hum.Health <= 0 then
-            targetAction = "WaitingRespawn"
-            lastAction = "WaitingRespawn"
-            globalStuckTimer = 0
-            kickRetryCount = 0
-            kickAcceptedByServer = false
-            continue 
-        end
-
-        if targetAction == "WaitingRespawn" and hum.Health > 0 then
-            targetAction = "Idle"
-            lastAction = "Idle"
-            kickRetryCount = 0
-            kickAcceptedByServer = false
-            stateTimer = 0
-            logConsole("Karakter Respawn -> Berjalan ke Safe Zone sebelum Kick...")
-        end
-
-        -- [ PENGATUR WAKTU & FAILSAFE RESET (MURNI JALAN TANPA TELEPORT) ]
-        if targetAction ~= lastAction then
-            globalStuckTimer = 0
-            stateTimer = 0 
-            lastAction = targetAction
-            logConsole("Transisi Fase -> " .. tostring(targetAction))
-        else
-            globalStuckTimer = globalStuckTimer + 0.05
-            stateTimer = stateTimer + 0.05 
-            
-            local maxTimeout = _G.failsafeTimeout or 45
-            if globalStuckTimer >= maxTimeout and targetAction ~= "WalkToSafeZone" then
-                globalStuckTimer = 0
-                stateTimer = 0
-                targetAction = "Idle"
-                logConsole("🚨 Failsafe Triggered: Reset ke Idle")
-                continue
-            end
-        end
-
-        local distToSafeZone = (hrp.Position - safeZone).Magnitude
-
-        -- [ FASE 1: IDLE / NENDANG DI SAFE ZONE (MURNI JALAN KAKI - TANPA TELEPORT) ]
-        if targetAction == "Idle" then
-            if distToSafeZone > 5 then
-                hum:MoveTo(safeZone)
-            else
-                if shouldKick() then
-                    if stateTimer >= 0.15 then
-                        pcall(function()
-                            hrp.AssemblyLinearVelocity = Vector3.zero
-                            hrp.AssemblyAngularVelocity = Vector3.zero
-                        end)
-                        kickRetryCount = 0
-                        kickAcceptedByServer = false
-                        phase2Fired = false
-                        collectedFired = false
-                        kickEndedFired = false
-                        executeKick()
-                        targetAction = "WaitingForPhase2"
-                    end
-                else
-                    task.wait(0.5) -- Tidur tenang saat menunggu event meteor tanpa membebani CPU
-                end
-            end
-
-        -- [ FASE 2: NUNGGU PHASE 2 DARI SERVER -> LANGSUNG JALAN KE SAFEZONE ]
-        elseif targetAction == "WaitingForPhase2" then
-            if phase2Fired or collectedFired or kickEndedFired then
-                phase2Fired = false
-                kickRetryCount = 0
-                kickAcceptedByServer = false
-                targetAction = "WalkToSafeZone"
-                logConsole("Phase 2 Selesai / Lucky Block Kena -> Langsung Jalan ke Safe Zone")
-
-            -- Kondisi 1: Kick belum terdaftar sama sekali di server setelah 3 detik -> Retry
-            elseif not kickAcceptedByServer and stateTimer >= 3.0 and not phase2Fired and not collectedFired and not kickEndedFired then
-                if kickRetryCount < MAX_KICK_RETRIES then
-                    kickRetryCount = kickRetryCount + 1
-                    stateTimer = 0
-                    logConsole(string.format("⚠️ [RETRY] Kick belum terdaftar di server, mencoba kick ulang #%d/%d...", kickRetryCount, MAX_KICK_RETRIES))
-                    executeKick()
-                else
-                    logConsole(string.format("🚨 [FAILSAFE] Gagal respon setelah %d kali retry! Memaksa Respawn/Reset Karakter...", MAX_KICK_RETRIES))
-                    kickRetryCount = 0
-                    kickAcceptedByServer = false
-                    stateTimer = 0
-                    targetAction = "WaitingRespawn"
-                    pcall(function()
-                        if hum then hum.Health = 0 end
-                        if char then char:BreakJoints() end
-                    end)
-                end
-
-            -- Kondisi 2: Kick sudah diterima server (bola sedang terbang), tunggu hingga maksimal 20 detik
-            elseif stateTimer >= 20.0 then
-                kickAcceptedByServer = false
-                targetAction = "WalkToSafeZone"
-                logConsole("Phase 2 Timeout (20s) -> Lanjut Jalan ke Safe Zone")
-            end
-
-        -- [ FASE 3: JALAN MURNI SAMPAI KE SAFE ZONE (TANPA TELEPORT) ]
-        elseif targetAction == "WalkToSafeZone" then
-            pcall(function()
-                if hum.WalkSpeed < 16 then hum.WalkSpeed = 16 end
-                if hrp.Anchored then hrp.Anchored = false end
-            end)
-            hum:MoveTo(safeZone)
-            if distToSafeZone < 5 then
-                targetAction = "WaitingForCollected"
-                logConsole("Tiba di Safe Zone -> Menunggu Reward Collected")
-            end
-
-        -- [ FASE 4: NUNGGU COLLECTED & RE-KICK INSTAN / STOP JIKA METEOR BERAKHIR ]
-        elseif targetAction == "WaitingForCollected" then
-            if distToSafeZone >= 5 then
-                hum:MoveTo(safeZone)
-            end
-
-            if collectedFired or kickEndedFired or stateTimer >= 2.5 then
-                collectedFired = false
-                kickEndedFired = false
-                mutationCount = mutationCount + 1
-                phase2Fired = false
-                kickRetryCount = 0
-                kickAcceptedByServer = false
-
-                if shouldKick() then
-                    executeKick()
-                    targetAction = "WaitingForPhase2"
-                    logConsole(string.format("🎉 Total Mutasi: %d | Re-Kick Langsung!", mutationCount))
-                else
-                    targetAction = "Idle"
-                    logConsole(string.format("🎉 Total Mutasi: %d | Ronde Tuntas -> Standby di Safe Zone (Menunggu Event Meteor)", mutationCount))
-                end
-            end
-        end
+workspace.ChildAdded:Connect(function(child)
+    if child.Name == "Debris" then
+        task.defer(function() setupMeteorListeners(child) end)
     end
 end)
 
-print("--------------------------------------------------")
-print("🚀 [SUKSES] KALB Meteor Shower Auto Farm Siap Berjalan!")
-print("--------------------------------------------------")
+print("🥔 [KALB] Auto Farm (Hitbox Meteor 200s, Anti-Lag, Total Purge, Auto Sell, Auto Buy) Siap!")
