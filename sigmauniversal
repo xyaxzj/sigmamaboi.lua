@@ -74,6 +74,20 @@ local function copyToClipboard(text)
     return false
 end
 
+local function getClipboardText()
+    local text = nil
+    pcall(function()
+        if getclipboard then
+            text = getclipboard()
+        elseif syn and syn.get_clipboard then
+            text = syn.get_clipboard()
+        elseif get_clipboard then
+            text = get_clipboard()
+        end
+    end)
+    return text
+end
+
 -- ===========================================================================
 --  MOVEMENT & CHEATS ENFORCEMENT LOOP
 -- ===========================================================================
@@ -1399,6 +1413,185 @@ SecUtility:AddButton("🚀 Server Hop", function()
         end
     else
         Library:Notify({Title = "Error", Content = "Server Hop failed to fetch servers.", Type = "Error", Duration = 3})
+    end
+end)
+
+-- ===========================================================================
+--  PRIVATE / VIP SERVER JOINER ENGINE
+-- ===========================================================================
+local function joinPrivateServerByLink(inputLink)
+    if not inputLink or inputLink == "" then
+        Library:Notify({Title = "Peringatan", Content = "Masukkan Link atau Kode Private Server terlebih dahulu!", Type = "Warning", Duration = 3})
+        return
+    end
+
+    local HttpService = game:GetService("HttpService")
+    local TeleportService = game:GetService("TeleportService")
+    
+    local cleanInput = tostring(inputLink):match("^%s*(.-)%s*$") -- Trim spasi
+    local targetPlaceId = game.PlaceId
+    local linkCode = nil
+    local jobInstanceId = nil
+
+    -- 1. Deteksi PlaceId dari link jika ada
+    local foundPlaceId = cleanInput:match("roblox%.com/games/(%d+)") or cleanInput:match("placeId=(%d+)")
+    if foundPlaceId then
+        targetPlaceId = tonumber(foundPlaceId) or game.PlaceId
+    end
+
+    -- 2. Deteksi privateServerLinkCode
+    local pCode = cleanInput:match("privateServerLinkCode=([%w%-]+)") or cleanInput:match("linkCode=([%w%-]+)")
+    if pCode then
+        linkCode = pCode
+    end
+
+    -- 3. Deteksi Share Link (type=Server)
+    local shareCode = cleanInput:match("roblox%.com/share%?code=([%w%-]+)")
+    if shareCode then
+        linkCode = shareCode
+    end
+
+    -- 4. Deteksi gameInstanceId / JobId dari link atau direct input
+    local instId = cleanInput:match("gameInstanceId=([%w%-]+)") or cleanInput:match("jobId=([%w%-]+)") or cleanInput:match("instanceId=([%w%-]+)")
+    if instId then
+        jobInstanceId = instId
+    elseif not linkCode and cleanInput:match("^%x%x%x%x%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%x%x%x%x%x%x%x%x$") then
+        jobInstanceId = cleanInput
+    elseif not linkCode and #cleanInput >= 20 and not cleanInput:find("://") and not cleanInput:find(" ") then
+        linkCode = cleanInput
+    end
+
+    Library:Notify({
+        Title = "Teleporting...",
+        Content = string.format("Memproses join ke Place ID: %d...", targetPlaceId),
+        Type = "Info",
+        Duration = 3.5
+    })
+
+    task.spawn(function()
+        -- JALUR 1: Jika memiliki JobId / GameInstanceId spesifik
+        if jobInstanceId then
+            local ok, err = pcall(function()
+                TeleportService:TeleportToPlaceInstance(targetPlaceId, jobInstanceId, LocalPlayer)
+            end)
+            if ok then
+                Library:Notify({Title = "Teleporting", Content = "Menghubungkan ke Server Job ID...", Type = "Success", Duration = 3})
+                return
+            end
+        end
+
+        -- JALUR 2: Jika memiliki linkCode / privateServerLinkCode
+        if linkCode then
+            local resolved = false
+            
+            -- Metode A: Resolve Share Link API (apis.roblox.com/share-links/v1/resolve-link)
+            pcall(function()
+                local requestFunc = request or http_request or (syn and syn.request) or (delta and delta.request) or (Fluxus and Fluxus.request) or (http and http.request)
+                if requestFunc then
+                    local res = requestFunc({
+                        Url = "https://apis.roblox.com/share-links/v1/resolve-link",
+                        Method = "POST",
+                        Headers = {
+                            ["Content-Type"] = "application/json"
+                        },
+                        Body = HttpService:JSONEncode({
+                            linkCode = linkCode,
+                            linkType = "Server"
+                        })
+                    })
+                    if res and res.Body then
+                        local data = HttpService:JSONDecode(res.Body)
+                        if data and data.status == "Valid" and data.serverDetails then
+                            local pId = tonumber(data.serverDetails.placeId) or targetPlaceId
+                            local sId = data.serverDetails.gameInstanceId or data.serverDetails.serverId
+                            if sId then
+                                TeleportService:TeleportToPlaceInstance(pId, sId, LocalPlayer)
+                                resolved = true
+                            end
+                        end
+                    end
+                end
+            end)
+            if resolved then return end
+
+            -- Metode B: Coba Resolve via games.roblox.com VIP Server Link API
+            pcall(function()
+                local url = string.format("https://games.roblox.com/v1/vip-servers/linkCode?linkCode=%s", linkCode)
+                local resStr = game:HttpGet(url)
+                if resStr then
+                    local data = HttpService:JSONDecode(resStr)
+                    if data and data.gameInstanceId then
+                        TeleportService:TeleportToPlaceInstance(targetPlaceId, data.gameInstanceId, LocalPlayer)
+                        resolved = true
+                    end
+                end
+            end)
+            if resolved then return end
+
+            -- Metode C: TeleportAsync dengan TeleportOptions (ReservedServerAccessCode)
+            pcall(function()
+                local tOptions = Instance.new("TeleportOptions")
+                tOptions.ReservedServerAccessCode = linkCode
+                TeleportService:TeleportAsync(targetPlaceId, {LocalPlayer}, tOptions)
+                resolved = true
+            end)
+            if resolved then return end
+
+            -- Metode D: TeleportToPrivateServer
+            pcall(function()
+                TeleportService:TeleportToPrivateServer(targetPlaceId, linkCode, {LocalPlayer})
+                resolved = true
+            end)
+            if resolved then return end
+
+            -- Metode E: TeleportToPlaceInstance dengan linkCode sebagai instance
+            pcall(function()
+                TeleportService:TeleportToPlaceInstance(targetPlaceId, linkCode, LocalPlayer)
+                resolved = true
+            end)
+        else
+            -- Jalur 3: Default Teleport ke targetPlaceId
+            local ok, err = pcall(function()
+                TeleportService:Teleport(targetPlaceId, LocalPlayer)
+            end)
+            if not ok then
+                Library:Notify({
+                    Title = "Gagal Teleport",
+                    Content = "Link tidak valid atau private server tidak dapat diakses.",
+                    Type = "Error",
+                    Duration = 4
+                })
+            end
+        end
+    end)
+end
+
+-- SECTION PRIVATE SERVER JOINER
+local SecPrivate = TabDash:AddSection("🔒 Private & VIP Server Joiner")
+local privateServerInput = ""
+
+SecPrivate:AddInput({
+    Name = "Private Server Link / Code / Job ID",
+    Placeholder = "Paste link private server atau share link di sini..."
+}, function(val)
+    privateServerInput = val
+end)
+
+SecPrivate:AddButton("🚀 Join Private Server (dari Input)", function()
+    joinPrivateServerByLink(privateServerInput)
+end)
+
+SecPrivate:AddButton("📋 Paste dari Clipboard & Langsung Join", function()
+    local clip = getClipboardText()
+    if clip and clip ~= "" then
+        joinPrivateServerByLink(clip)
+    else
+        Library:Notify({
+            Title = "Clipboard Kosong",
+            Content = "Clipboard tidak terdeteksi teks. Silakan gunakan kotak input di atas.",
+            Type = "Warning",
+            Duration = 3
+        })
     end
 end)
 
