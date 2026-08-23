@@ -807,7 +807,7 @@ task.spawn(function()
 end)
 
 -- =============================================
--- 🎮 LAPIS 1: ULTRA-LIGHTWEIGHT CONTROLLER HOOK (ZERO-FREEZE & NON-BLOCKING)
+-- 🎮 LAPIS 1: ULTRA-LIGHTWEIGHT CONTROLLER HOOK (ZERO-FREEZE & DYNAMIC RESPAWN RECOVERY)
 -- =============================================
 local cachedGameController = nil
 
@@ -832,6 +832,15 @@ local function getGameController()
 
     return nil
 end
+
+-- Listener pemulihan otomatis controller & state saat karakter respawn / mati
+lp.CharacterAdded:Connect(function(newChar)
+    cachedGameController = nil
+    task.defer(function()
+        task.wait(0.5)
+        getGameController()
+    end)
+end)
 
 -- Pre-fetch controller saat script pertama kali dimuat
 task.spawn(function()
@@ -897,79 +906,113 @@ end
 setupServerEventListeners()
 
 -- =============================================
--- ☄️ DETEKSI METEOR SHOWER REAL-TIME (EVENT-DRIVEN O(1))
+-- ☄️ DETEKSI METEOR SHOWER REAL-TIME (HYBRID EVENT + DYNAMIC DEBRIS SCANNER)
 -- =============================================
 local function checkMeteorShowerActive()
-    return isMeteorShowerActive
+    if isMeteorShowerActive then return true end
+    
+    -- Fallback scan Debris jika event listener terlewat saat respawn
+    local debris = workspace:FindFirstChild("Debris")
+    if debris then
+        for _, child in ipairs(debris:GetChildren()) do
+            if child:IsA("Model") and tonumber(child.Name) ~= nil then
+                isMeteorShowerActive = true
+                return true
+            end
+        end
+    end
+    return false
 end
 
 local function shouldKick()
     if not _G.autoFarm then return false end
     if _G.onlyMeteorEvent then
-        return isMeteorShowerActive
+        return checkMeteorShowerActive()
     end
     return true
 end
 
 -- =============================================
--- 🚀 FUNGSI EKSEKUSI TENDANGAN REINFORCED (LAPIS 1 + LAPIS 3 NETWORK)
+-- 🚀 FUNGSI EKSEKUSI TENDANGAN (CLEAN SINGLE-INVOCATION & ANTI-DUPLICATE)
 -- =============================================
 local function executeKick()
+    local char = lp.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if hrp and (hrp.Position - safeZone).Magnitude > 7 then
+        logConsole(string.format("⚠️ [BATAL KICK] Karakter belum di Safe Zone (Jarak: %.1f studs)! Membatalkan tendangan prematur...", (hrp.Position - safeZone).Magnitude))
+        return false
+    end
+
     local timestamp = nil
     pcall(function() timestamp = workspace:GetServerTimeNow() end)
     if not timestamp or type(timestamp) ~= "number" or timestamp <= 0 then
         timestamp = tick()
     end
 
-    logConsole("⚡ Mengeksekusi Kick (Lapis 1 Controller Hook + Lapis 3 Network)...")
+    logConsole("⚡ Mengeksekusi Kick di Safe Zone...")
 
-    -- 🎮 LAPIS 1: Direct GameController Hook (Buka Kunci Cooldown & Panggil Kick Asli di Game)
-    pcall(function()
-        local controller = getGameController()
-        if controller then
+    local controller = getGameController()
+    local controllerSuccess = false
+
+    -- 🎮 JALUR UTAMA: Panggil Controller Resmi Game (Controller otomatis memicu remote resmi & animasi)
+    if controller then
+        local ok = pcall(function()
             if controller.UnblockKick then pcall(function() controller:UnblockKick() end) end
             if controller.ResetCooldown then pcall(function() controller:ResetCooldown() end) end
             controller.CanKick = true
             if controller.InGame ~= nil then controller.InGame = false end
             if controller.Status ~= nil and controller.Status == "InKick" then controller.Status = "Lobby" end
-            pcall(function() controller:Kick(1, 1) end)
+            
+            controller:Kick(1, 1)
+        end)
+        if ok then
+            controllerSuccess = true
+            kickAcceptedByServer = true
+            logConsole("✅ [CONTROLLER] Tendangan berhasil dipicu via Game Controller!")
         end
-    end)
+    end
 
-    -- 📡 LAPIS 3: Network Remote Invocation (Jalur Resmi Server Non-Blocking & Konfirmasi Sukses)
-    task.spawn(function()
-        pcall(function()
-            local targetRemote = ref_KickEvent or (networkFolder and networkFolder:FindFirstChild("ref_KickEvent"))
-            if not targetRemote then
-                for _, r in pairs(ReplicatedStorage:GetDescendants()) do
-                    if r:IsA("RemoteFunction") and r.Name == "ref_KickEvent" then
-                        targetRemote = r
-                        ref_KickEvent = r
-                        break
+    -- 📡 JALUR CADANGAN: HANYA jika Game Controller tidak ditemukan
+    if not controllerSuccess then
+        task.spawn(function()
+            pcall(function()
+                local targetRemote = ref_KickEvent or (networkFolder and networkFolder:FindFirstChild("ref_KickEvent"))
+                if not targetRemote then
+                    for _, r in pairs(ReplicatedStorage:GetDescendants()) do
+                        if r:IsA("RemoteFunction") and r.Name == "ref_KickEvent" then
+                            targetRemote = r
+                            ref_KickEvent = r
+                            break
+                        end
                     end
                 end
-            end
 
-            if targetRemote and targetRemote:IsA("RemoteFunction") then
-                local res = targetRemote:InvokeServer(1, 1, timestamp)
-                if res == true or (type(res) == "table" and res[1] == true) then
-                    kickAcceptedByServer = true
-                    logConsole("✅ [SERVER CONFIRMED] Tendangan resmi terdaftar di server! Bola sedang terbang...")
+                if targetRemote and targetRemote:IsA("RemoteFunction") then
+                    local res = targetRemote:InvokeServer(1, 1, timestamp)
+                    if res == true or (type(res) == "table" and res[1] == true) then
+                        kickAcceptedByServer = true
+                        logConsole("✅ [SERVER CONFIRMED] Tendangan fallback berhasil terdaftar di server!")
+                    end
+                else
+                    local fallbackEvent = kickRemote or (networkFolder and networkFolder:FindFirstChild("rev_KickEvent"))
+                    if fallbackEvent and fallbackEvent:IsA("RemoteEvent") then
+                        fallbackEvent:FireServer(1, 1, timestamp)
+                        kickAcceptedByServer = true
+                        logConsole("✅ [FALLBACK EVENT] Tendangan dikirim via RemoteEvent!")
+                    end
                 end
-            end
-
-            local fallbackEvent = kickRemote or (networkFolder and networkFolder:FindFirstChild("rev_KickEvent"))
-            if fallbackEvent and fallbackEvent:IsA("RemoteEvent") then
-                fallbackEvent:FireServer(1, 1, timestamp)
-            end
+            end)
         end)
-    end)
+    end
 end
 
 -- =============================================
--- ⚙️ MAIN LOOP (STATE MACHINE AUTO FARM)
+-- ⚙️ MAIN LOOP (STATE MACHINE AUTO FARM - RESPAWN & WAVE IMMUNE)
 -- =============================================
 task.spawn(function()
+    local lastRecordedPos = nil
+    local positionStuckTimer = 0
+
     while task.wait(0.05) do
         if not _G.autoFarm then continue end
 
@@ -986,7 +1029,18 @@ task.spawn(function()
             globalStuckTimer = 0
             kickRetryCount = 0
             kickAcceptedByServer = false
+            cachedGameController = nil
             continue 
+        end
+
+        -- [ ANTI-RAGDOLL / ANTI-KNOCKDOWN DARI OMBAK ]
+        if hum.Sit then
+            hum.Sit = false
+            hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+        end
+        if hum.PlatformStand then
+            hum.PlatformStand = false
+            hum:ChangeState(Enum.HumanoidStateType.GettingUp)
         end
 
         if targetAction == "WaitingRespawn" and hum.Health > 0 then
@@ -995,10 +1049,12 @@ task.spawn(function()
             kickRetryCount = 0
             kickAcceptedByServer = false
             stateTimer = 0
-            logConsole("Karakter Respawn -> Berjalan ke Safe Zone sebelum Kick...")
+            globalStuckTimer = 0
+            cachedGameController = nil
+            logConsole("Karakter Respawn -> Reset State & Berjalan ke Safe Zone...")
         end
 
-        -- [ PENGATUR WAKTU & FAILSAFE RESET (MURNI JALAN TANPA TELEPORT) ]
+        -- [ PENGATUR WAKTU & FAILSAFE RESET GLOBAL ]
         if targetAction ~= lastAction then
             globalStuckTimer = 0
             stateTimer = 0 
@@ -1008,21 +1064,40 @@ task.spawn(function()
             globalStuckTimer = globalStuckTimer + 0.05
             stateTimer = stateTimer + 0.05 
             
-            local maxTimeout = _G.failsafeTimeout or 45
-            if globalStuckTimer >= maxTimeout and targetAction ~= "WalkToSafeZone" then
+            local maxTimeout = _G.failsafeTimeout or 25
+            -- Failsafe aktif di SEMUA fase (termasuk WalkToSafeZone) agar tidak pernah beku
+            if globalStuckTimer >= maxTimeout then
                 globalStuckTimer = 0
                 stateTimer = 0
+                kickRetryCount = 0
+                kickAcceptedByServer = false
                 targetAction = "Idle"
-                logConsole("🚨 Failsafe Triggered: Reset ke Idle")
+                logConsole("🚨 Failsafe Triggered: Memulihkan Bot ke Status Idle")
                 continue
             end
         end
 
         local distToSafeZone = (hrp.Position - safeZone).Magnitude
 
-        -- [ FASE 1: IDLE / NENDANG DI SAFE ZONE (MURNI JALAN KAKI - TANPA TELEPORT) ]
+        -- [ DETEKSI NYANGKUT SAAT BERJALAN ]
+        if targetAction == "Idle" or targetAction == "WalkToSafeZone" or targetAction == "WaitingForCollected" then
+            if lastRecordedPos and (hrp.Position - lastRecordedPos).Magnitude < 0.3 then
+                positionStuckTimer = positionStuckTimer + 0.05
+                if positionStuckTimer >= 3.0 and distToSafeZone > 5 then
+                    positionStuckTimer = 0
+                    hum.Jump = true
+                    hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+                end
+            else
+                positionStuckTimer = 0
+                lastRecordedPos = hrp.Position
+            end
+        end
+
+        -- [ FASE 1: IDLE / NENDANG DI SAFE ZONE (MURNI JALAN KAKI) ]
         if targetAction == "Idle" then
             if distToSafeZone > 5 then
+                if hum.WalkSpeed < 16 then hum.WalkSpeed = 16 end
                 hum:MoveTo(safeZone)
             else
                 if shouldKick() then
@@ -1040,7 +1115,7 @@ task.spawn(function()
                         targetAction = "WaitingForPhase2"
                     end
                 else
-                    task.wait(0.5) -- Tidur tenang saat menunggu event meteor tanpa membebani CPU
+                    task.wait(0.2)
                 end
             end
 
@@ -1053,7 +1128,7 @@ task.spawn(function()
                 targetAction = "WalkToSafeZone"
                 logConsole("Phase 2 Selesai / Lucky Block Kena -> Langsung Jalan ke Safe Zone")
 
-            -- Kondisi 1: Kick belum terdaftar sama sekali di server setelah 3 detik -> Retry
+            -- Kondisi 1: Kick belum terdaftar di server setelah 3 detik -> Retry
             elseif not kickAcceptedByServer and stateTimer >= 3.0 and not phase2Fired and not collectedFired and not kickEndedFired then
                 if kickRetryCount < MAX_KICK_RETRIES then
                     kickRetryCount = kickRetryCount + 1
@@ -1061,15 +1136,11 @@ task.spawn(function()
                     logConsole(string.format("⚠️ [RETRY] Kick belum terdaftar di server, mencoba kick ulang #%d/%d...", kickRetryCount, MAX_KICK_RETRIES))
                     executeKick()
                 else
-                    logConsole(string.format("🚨 [FAILSAFE] Gagal respon setelah %d kali retry! Memaksa Respawn/Reset Karakter...", MAX_KICK_RETRIES))
+                    logConsole("⚠️ [RECOVERY] Tidak ada respon kick setelah retry -> Reset kembali ke Idle (Tanpa Suicide)")
                     kickRetryCount = 0
                     kickAcceptedByServer = false
                     stateTimer = 0
-                    targetAction = "WaitingRespawn"
-                    pcall(function()
-                        if hum then hum.Health = 0 end
-                        if char then char:BreakJoints() end
-                    end)
+                    targetAction = "Idle"
                 end
 
             -- Kondisi 2: Kick sudah diterima server (bola sedang terbang), tunggu hingga maksimal 20 detik
@@ -1079,39 +1150,45 @@ task.spawn(function()
                 logConsole("Phase 2 Timeout (20s) -> Lanjut Jalan ke Safe Zone")
             end
 
-        -- [ FASE 3: JALAN MURNI SAMPAI KE SAFE ZONE (TANPA TELEPORT) ]
+        -- [ FASE 3: JALAN MURNI SAMPAI KE SAFE ZONE (MEMBAWA BRAINROT) ]
         elseif targetAction == "WalkToSafeZone" then
             pcall(function()
                 if hum.WalkSpeed < 16 then hum.WalkSpeed = 16 end
                 if hrp.Anchored then hrp.Anchored = false end
             end)
             hum:MoveTo(safeZone)
-            if distToSafeZone < 5 then
+            
+            -- HANYA boleh selesai jalan jika BENAR-BENAR sudah tiba di Safe Zone (<= 5 studs)
+            if distToSafeZone <= 5 then
                 targetAction = "WaitingForCollected"
-                logConsole("Tiba di Safe Zone -> Menunggu Reward Collected")
+                stateTimer = 0
+                logConsole("Tiba di Safe Zone -> Menunggu Brainrot Disetor / Dikumpulkan")
             end
 
-        -- [ FASE 4: NUNGGU COLLECTED & RE-KICK INSTAN / STOP JIKA METEOR BERAKHIR ]
+        -- [ FASE 4: NUNGGU COLLECTED / DISETOR DI BASE SEBELUM KICK LAGI ]
         elseif targetAction == "WaitingForCollected" then
-            if distToSafeZone >= 5 then
+            -- Jika terlempar/terdorong ombak saat deposit, jalan kembali ke Safe Zone
+            if distToSafeZone > 5 then
+                if hum.WalkSpeed < 16 then hum.WalkSpeed = 16 end
                 hum:MoveTo(safeZone)
-            end
+            else
+                -- HANYA BOLEH KICK JIKA BERDIRI TEGAK DI SAFE ZONE (distToSafeZone <= 5)
+                if collectedFired or kickEndedFired or stateTimer >= 2.0 then
+                    collectedFired = false
+                    kickEndedFired = false
+                    mutationCount = mutationCount + 1
+                    phase2Fired = false
+                    kickRetryCount = 0
+                    kickAcceptedByServer = false
 
-            if collectedFired or kickEndedFired or stateTimer >= 2.5 then
-                collectedFired = false
-                kickEndedFired = false
-                mutationCount = mutationCount + 1
-                phase2Fired = false
-                kickRetryCount = 0
-                kickAcceptedByServer = false
-
-                if shouldKick() then
-                    executeKick()
-                    targetAction = "WaitingForPhase2"
-                    logConsole(string.format("🎉 Total Mutasi: %d | Re-Kick Langsung!", mutationCount))
-                else
-                    targetAction = "Idle"
-                    logConsole(string.format("🎉 Total Mutasi: %d | Ronde Tuntas -> Standby di Safe Zone (Menunggu Event Meteor)", mutationCount))
+                    if shouldKick() then
+                        executeKick()
+                        targetAction = "WaitingForPhase2"
+                        logConsole(string.format("🎉 Total Setoran Mutasi: %d | Re-Kick Langsung di Safe Zone!", mutationCount))
+                    else
+                        targetAction = "Idle"
+                        logConsole(string.format("🎉 Total Setoran Mutasi: %d | Ronde Tuntas -> Standby di Safe Zone (Menunggu Event Meteor)", mutationCount))
+                    end
                 end
             end
         end
