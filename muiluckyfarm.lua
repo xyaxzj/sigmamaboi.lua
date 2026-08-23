@@ -936,13 +936,20 @@ end
 -- 🚀 FUNGSI EKSEKUSI TENDANGAN REINFORCED (LAPIS 1 + LAPIS 3 NETWORK)
 -- =============================================
 local function executeKick()
+    local char = lp.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if hrp and (hrp.Position - safeZone).Magnitude > 7 then
+        logConsole(string.format("⚠️ [BATAL KICK] Karakter belum di Safe Zone (Jarak: %.1f studs)! Membatalkan tendangan prematur...", (hrp.Position - safeZone).Magnitude))
+        return false
+    end
+
     local timestamp = nil
     pcall(function() timestamp = workspace:GetServerTimeNow() end)
     if not timestamp or type(timestamp) ~= "number" or timestamp <= 0 then
         timestamp = tick()
     end
 
-    logConsole("⚡ Mengeksekusi Kick (Lapis 1 Controller Hook + Lapis 3 Network)...")
+    logConsole("⚡ Mengeksekusi Kick di Safe Zone (Lapis 1 Controller Hook + Lapis 3 Network)...")
 
     -- 🎮 LAPIS 1: Direct GameController Hook (Buka Kunci Cooldown & Panggil Kick Asli di Game)
     pcall(function()
@@ -1131,39 +1138,45 @@ task.spawn(function()
                 logConsole("Phase 2 Timeout (20s) -> Lanjut Jalan ke Safe Zone")
             end
 
-        -- [ FASE 3: JALAN MURNI SAMPAI KE SAFE ZONE ]
+        -- [ FASE 3: JALAN MURNI SAMPAI KE SAFE ZONE (MEMBAWA BRAINROT) ]
         elseif targetAction == "WalkToSafeZone" then
             pcall(function()
                 if hum.WalkSpeed < 16 then hum.WalkSpeed = 16 end
                 if hrp.Anchored then hrp.Anchored = false end
             end)
             hum:MoveTo(safeZone)
-            if distToSafeZone < 5 or stateTimer >= 10.0 then
+            
+            -- HANYA boleh selesai jalan jika BENAR-BENAR sudah tiba di Safe Zone (<= 5 studs)
+            if distToSafeZone <= 5 then
                 targetAction = "WaitingForCollected"
-                logConsole("Tiba di Safe Zone -> Menunggu Reward Collected")
+                stateTimer = 0
+                logConsole("Tiba di Safe Zone -> Menunggu Brainrot Disetor / Dikumpulkan")
             end
 
-        -- [ FASE 4: NUNGGU COLLECTED & RE-KICK INSTAN / STANDBY ]
+        -- [ FASE 4: NUNGGU COLLECTED / DISETOR DI BASE SEBELUM KICK LAGI ]
         elseif targetAction == "WaitingForCollected" then
-            if distToSafeZone >= 5 then
+            -- Jika terlempar/terdorong ombak saat deposit, jalan kembali ke Safe Zone
+            if distToSafeZone > 5 then
+                if hum.WalkSpeed < 16 then hum.WalkSpeed = 16 end
                 hum:MoveTo(safeZone)
-            end
+            else
+                -- HANYA BOLEH KICK JIKA BERDIRI TEGAK DI SAFE ZONE (distToSafeZone <= 5)
+                if collectedFired or kickEndedFired or stateTimer >= 2.0 then
+                    collectedFired = false
+                    kickEndedFired = false
+                    mutationCount = mutationCount + 1
+                    phase2Fired = false
+                    kickRetryCount = 0
+                    kickAcceptedByServer = false
 
-            if collectedFired or kickEndedFired or stateTimer >= 2.5 then
-                collectedFired = false
-                kickEndedFired = false
-                mutationCount = mutationCount + 1
-                phase2Fired = false
-                kickRetryCount = 0
-                kickAcceptedByServer = false
-
-                if shouldKick() then
-                    executeKick()
-                    targetAction = "WaitingForPhase2"
-                    logConsole(string.format("🎉 Total Mutasi: %d | Re-Kick Langsung!", mutationCount))
-                else
-                    targetAction = "Idle"
-                    logConsole(string.format("🎉 Total Mutasi: %d | Ronde Tuntas -> Standby di Safe Zone (Menunggu Event Meteor)", mutationCount))
+                    if shouldKick() then
+                        executeKick()
+                        targetAction = "WaitingForPhase2"
+                        logConsole(string.format("🎉 Total Setoran Mutasi: %d | Re-Kick Langsung di Safe Zone!", mutationCount))
+                    else
+                        targetAction = "Idle"
+                        logConsole(string.format("🎉 Total Setoran Mutasi: %d | Ronde Tuntas -> Standby di Safe Zone (Menunggu Event Meteor)", mutationCount))
+                    end
                 end
             end
         end
