@@ -31,8 +31,8 @@ _G.autoBuyFarmPotion = true      -- true: Auto beli 1x Farm Potion khusus jam ga
 _G.autoSellAll = true            -- true: Auto Sell All setiap 5 detik via ref_B_SellAll
 _G.autoRemovePlayer = true       -- true: Hapus player lain dari game.Players & workspace.Players (100% Bersih & No Lag), false: Biarkan
 _G.debugConsoleLog = false        -- true: Cetak log status/fase ke console (F9), false: Senyap
-_G.kickPower = 0.1                 -- Value power tendangan (Default: 1)
-_G.kickAccuracy = 0.3              -- Value accuracy / timing tendangan (Default: 1)
+_G.kickAccuracy = 0.1              -- Value accuracy / timing tendangan [Argumen 1] (Default: 1)
+_G.kickPower = 0.05                 -- Value power tendangan [Argumen 2] (Default: 1)
 _G.failsafeTimeout = 25          -- Waktu maksimal (detik) sebelum auto-reset ke Safe Zone jika macet
 
 print("--------------------------------------------------")
@@ -584,41 +584,34 @@ local rev_MeteorShop_Stock = findRemote("rev_MeteorShop_Stock", "RemoteEvent")
 local rev_MeteorShop_Buy = findRemote("rev_MeteorShop_Buy", "RemoteEvent")
 
 -- =============================================
--- 🎯 HOOK PENCEGAT REMOTE KICK (OVERRIDE POWER & ACCURACY SERVER-WIDE)
+-- 🎯 HOOK PENCEGAT REMOTE KICK (OVERRIDE ACCURACY & POWER SERVER-WIDE)
 -- =============================================
 pcall(function()
     if hookmetamethod then
         local oldNamecall
         oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
             local method = getnamecallmethod()
-            if typeof(self) == "Instance" and self.Name == "ref_KickEvent" and (method == "InvokeServer" or method == "invokeServer") then
-                local args = {...}
-                local customPower = tonumber(_G.kickPower)
-                local customAcc = tonumber(_G.kickAccuracy)
+            if typeof(self) == "Instance" then
+                local sName = self.Name
+                local isKickFunc = (method == "InvokeServer" or method == "invokeServer") and (sName == "ref_KickEvent" or sName:find("Kick") or sName:find("kick"))
+                local isKickEvent = (method == "FireServer" or method == "fireServer") and (sName == "rev_KickEvent" or (sName:find("Kick") and not sName:find("Phase2") and not sName:find("Ended") and not sName:find("Weather")))
                 
-                if customPower ~= nil then
-                    args[1] = customPower
+                if isKickFunc or isKickEvent then
+                    local args = {...}
+                    local customAcc = tonumber(_G.kickAccuracy)
+                    local customPower = tonumber(_G.kickPower)
+                    
+                    -- Argumen 1: Accuracy
+                    if customAcc ~= nil then
+                        args[1] = customAcc
+                    end
+                    -- Argumen 2: Power
+                    if customPower ~= nil then
+                        args[2] = customPower
+                    end
+                    
+                    return oldNamecall(self, table.unpack(args))
                 end
-                if customAcc ~= nil then
-                    args[2] = customAcc
-                end
-                
-                return oldNamecall(self, unpack(args))
-            end
-            
-            if typeof(self) == "Instance" and self.Name == "rev_KickEvent" and (method == "FireServer" or method == "fireServer") then
-                local args = {...}
-                local customPower = tonumber(_G.kickPower)
-                local customAcc = tonumber(_G.kickAccuracy)
-                
-                if customPower ~= nil then
-                    args[1] = customPower
-                end
-                if customAcc ~= nil then
-                    args[2] = customAcc
-                end
-                
-                return oldNamecall(self, unpack(args))
             end
 
             return oldNamecall(self, ...)
@@ -960,11 +953,11 @@ local function shouldKick()
 end
 
 -- =============================================
--- 🚀 FUNGSI EKSEKUSI TENDANGAN REINFORCED (DIRECT SERVER REMOTE + CUSTOM VALUE)
+-- 🚀 FUNGSI EKSEKUSI TENDANGAN REINFORCED (LAPIS 1 CONTROLLER + LAPIS 2 BACKUP)
 -- =============================================
 local function executeKick()
-    local power = tonumber(_G.kickPower) or 1
     local accuracy = tonumber(_G.kickAccuracy) or 1
+    local power = tonumber(_G.kickPower) or 1
 
     local timestamp = nil
     pcall(function() timestamp = workspace:GetServerTimeNow() end)
@@ -972,9 +965,9 @@ local function executeKick()
         timestamp = tick()
     end
 
-    logConsole(string.format("⚡ Mengeksekusi Kick [Power: %.2f, Acc: %.2f] (Direct Server Remote)...", power, accuracy))
+    logConsole(string.format("⚡ Mengeksekusi Kick [Arg1 Acc: %.2f, Arg2 Power: %.2f] via Controller:Kick()...", accuracy, power))
 
-    -- 🎮 Buka Kunci Controller Client agar tidak macet di UI/Cooldown
+    -- 🎮 LAPIS 1: Direct GameController Hook (WAJIB: Memulai sequence kick, animasi, dan memicu event game)
     pcall(function()
         local controller = getGameController()
         if controller then
@@ -983,10 +976,11 @@ local function executeKick()
             controller.CanKick = true
             if controller.InGame ~= nil then controller.InGame = false end
             if controller.Status ~= nil and controller.Status == "InKick" then controller.Status = "Lobby" end
+            pcall(function() controller:Kick(accuracy, power) end)
         end
     end)
 
-    -- 📡 Network Remote Invocation (Jalur Resmi Server Non-Blocking & Konfirmasi Sukses)
+    -- 📡 LAPIS 2: Network Remote Invocation Backup (Server Direct Non-Blocking)
     task.spawn(function()
         pcall(function()
             local targetRemote = ref_KickEvent or (networkFolder and networkFolder:FindFirstChild("ref_KickEvent"))
@@ -1001,17 +995,11 @@ local function executeKick()
             end
 
             if targetRemote and targetRemote:IsA("RemoteFunction") then
-                local res = targetRemote:InvokeServer(power, accuracy, timestamp)
+                -- Arg 1 = Accuracy, Arg 2 = Power, Arg 3 = Timestamp
+                local res = targetRemote:InvokeServer(accuracy, power, timestamp)
                 if res == true or (type(res) == "table" and res[1] == true) then
                     kickAcceptedByServer = true
-                    logConsole(string.format("✅ [SERVER CONFIRMED] Tendangan sukses terdaftar! [Power: %.2f, Acc: %.2f]", power, accuracy))
-                end
-            else
-                local fallbackEvent = kickRemote or (networkFolder and networkFolder:FindFirstChild("rev_KickEvent"))
-                if fallbackEvent and fallbackEvent:IsA("RemoteEvent") then
-                    fallbackEvent:FireServer(power, accuracy, timestamp)
-                    kickAcceptedByServer = true
-                    logConsole(string.format("✅ [FALLBACK EVENT] Tendangan dikirim via RemoteEvent! [Power: %.2f, Acc: %.2f]", power, accuracy))
+                    logConsole(string.format("✅ [SERVER CONFIRMED] Tendangan sukses terdaftar! [Acc: %.2f, Power: %.2f]", accuracy, power))
                 end
             end
         end)
