@@ -933,7 +933,7 @@ local function shouldKick()
 end
 
 -- =============================================
--- 🚀 FUNGSI EKSEKUSI TENDANGAN REINFORCED (LAPIS 1 + LAPIS 3 NETWORK)
+-- 🚀 FUNGSI EKSEKUSI TENDANGAN (CLEAN SINGLE-INVOCATION & ANTI-DUPLICATE)
 -- =============================================
 local function executeKick()
     local char = lp.Character
@@ -949,49 +949,61 @@ local function executeKick()
         timestamp = tick()
     end
 
-    logConsole("⚡ Mengeksekusi Kick di Safe Zone (Lapis 1 Controller Hook + Lapis 3 Network)...")
+    logConsole("⚡ Mengeksekusi Kick di Safe Zone...")
 
-    -- 🎮 LAPIS 1: Direct GameController Hook (Buka Kunci Cooldown & Panggil Kick Asli di Game)
-    pcall(function()
-        local controller = getGameController()
-        if controller then
+    local controller = getGameController()
+    local controllerSuccess = false
+
+    -- 🎮 JALUR UTAMA: Panggil Controller Resmi Game (Controller otomatis memicu remote resmi & animasi)
+    if controller then
+        local ok = pcall(function()
             if controller.UnblockKick then pcall(function() controller:UnblockKick() end) end
             if controller.ResetCooldown then pcall(function() controller:ResetCooldown() end) end
             controller.CanKick = true
             if controller.InGame ~= nil then controller.InGame = false end
             if controller.Status ~= nil and controller.Status == "InKick" then controller.Status = "Lobby" end
-            pcall(function() controller:Kick(1, 1) end)
+            
+            controller:Kick(1, 1)
+        end)
+        if ok then
+            controllerSuccess = true
+            kickAcceptedByServer = true
+            logConsole("✅ [CONTROLLER] Tendangan berhasil dipicu via Game Controller!")
         end
-    end)
+    end
 
-    -- 📡 LAPIS 3: Network Remote Invocation (Jalur Resmi Server Non-Blocking & Konfirmasi Sukses)
-    task.spawn(function()
-        pcall(function()
-            local targetRemote = ref_KickEvent or (networkFolder and networkFolder:FindFirstChild("ref_KickEvent"))
-            if not targetRemote then
-                for _, r in pairs(ReplicatedStorage:GetDescendants()) do
-                    if r:IsA("RemoteFunction") and r.Name == "ref_KickEvent" then
-                        targetRemote = r
-                        ref_KickEvent = r
-                        break
+    -- 📡 JALUR CADANGAN: HANYA jika Game Controller tidak ditemukan
+    if not controllerSuccess then
+        task.spawn(function()
+            pcall(function()
+                local targetRemote = ref_KickEvent or (networkFolder and networkFolder:FindFirstChild("ref_KickEvent"))
+                if not targetRemote then
+                    for _, r in pairs(ReplicatedStorage:GetDescendants()) do
+                        if r:IsA("RemoteFunction") and r.Name == "ref_KickEvent" then
+                            targetRemote = r
+                            ref_KickEvent = r
+                            break
+                        end
                     end
                 end
-            end
 
-            if targetRemote and targetRemote:IsA("RemoteFunction") then
-                local res = targetRemote:InvokeServer(1, 1, timestamp)
-                if res == true or (type(res) == "table" and res[1] == true) then
-                    kickAcceptedByServer = true
-                    logConsole("✅ [SERVER CONFIRMED] Tendangan resmi terdaftar di server! Bola sedang terbang...")
+                if targetRemote and targetRemote:IsA("RemoteFunction") then
+                    local res = targetRemote:InvokeServer(1, 1, timestamp)
+                    if res == true or (type(res) == "table" and res[1] == true) then
+                        kickAcceptedByServer = true
+                        logConsole("✅ [SERVER CONFIRMED] Tendangan fallback berhasil terdaftar di server!")
+                    end
+                else
+                    local fallbackEvent = kickRemote or (networkFolder and networkFolder:FindFirstChild("rev_KickEvent"))
+                    if fallbackEvent and fallbackEvent:IsA("RemoteEvent") then
+                        fallbackEvent:FireServer(1, 1, timestamp)
+                        kickAcceptedByServer = true
+                        logConsole("✅ [FALLBACK EVENT] Tendangan dikirim via RemoteEvent!")
+                    end
                 end
-            end
-
-            local fallbackEvent = kickRemote or (networkFolder and networkFolder:FindFirstChild("rev_KickEvent"))
-            if fallbackEvent and fallbackEvent:IsA("RemoteEvent") then
-                fallbackEvent:FireServer(1, 1, timestamp)
-            end
+            end)
         end)
-    end)
+    end
 end
 
 -- =============================================
