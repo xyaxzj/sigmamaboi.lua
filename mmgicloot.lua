@@ -1007,13 +1007,14 @@ local function executeKick()
 end
 
 -- =============================================
--- ⚙️ MAIN LOOP (STATE MACHINE AUTO FARM - RESPAWN & WAVE IMMUNE)
+-- ⚙️ MAIN LOOP (STATE MACHINE AUTO FARM - RESPAWN & LOW-FPS IMMUNE)
 -- =============================================
 task.spawn(function()
     local lastRecordedPos = nil
     local positionStuckTimer = 0
 
-    while task.wait(0.05) do
+    while true do
+        local dt = task.wait(0.05)
         if not _G.autoFarm then continue end
 
         local char = lp.Character
@@ -1033,16 +1034,6 @@ task.spawn(function()
             continue 
         end
 
-        -- [ ANTI-RAGDOLL / ANTI-KNOCKDOWN DARI OMBAK ]
-        if hum.Sit then
-            hum.Sit = false
-            hum:ChangeState(Enum.HumanoidStateType.GettingUp)
-        end
-        if hum.PlatformStand then
-            hum.PlatformStand = false
-            hum:ChangeState(Enum.HumanoidStateType.GettingUp)
-        end
-
         if targetAction == "WaitingRespawn" and hum.Health > 0 then
             targetAction = "Idle"
             lastAction = "Idle"
@@ -1054,15 +1045,15 @@ task.spawn(function()
             logConsole("Karakter Respawn -> Reset State & Berjalan ke Safe Zone...")
         end
 
-        -- [ PENGATUR WAKTU & FAILSAFE RESET GLOBAL ]
+        -- [ PENGATUR WAKTU & FAILSAFE RESET GLOBAL (DELTA-TIME RESILIENT) ]
         if targetAction ~= lastAction then
             globalStuckTimer = 0
             stateTimer = 0 
             lastAction = targetAction
             logConsole("Transisi Fase -> " .. tostring(targetAction))
         else
-            globalStuckTimer = globalStuckTimer + 0.05
-            stateTimer = stateTimer + 0.05 
+            globalStuckTimer = globalStuckTimer + (dt or 0.05)
+            stateTimer = stateTimer + (dt or 0.05)
             
             local maxTimeout = _G.failsafeTimeout or 25
             -- Failsafe aktif di SEMUA fase (termasuk WalkToSafeZone) agar tidak pernah beku
@@ -1082,11 +1073,10 @@ task.spawn(function()
         -- [ DETEKSI NYANGKUT SAAT BERJALAN ]
         if targetAction == "Idle" or targetAction == "WalkToSafeZone" or targetAction == "WaitingForCollected" then
             if lastRecordedPos and (hrp.Position - lastRecordedPos).Magnitude < 0.3 then
-                positionStuckTimer = positionStuckTimer + 0.05
+                positionStuckTimer = positionStuckTimer + (dt or 0.05)
                 if positionStuckTimer >= 3.0 and distToSafeZone > 5 then
                     positionStuckTimer = 0
                     hum.Jump = true
-                    hum:ChangeState(Enum.HumanoidStateType.GettingUp)
                 end
             else
                 positionStuckTimer = 0
