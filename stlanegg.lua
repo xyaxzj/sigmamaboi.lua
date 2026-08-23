@@ -31,7 +31,7 @@ _G.autoBuyFarmPotion = true      -- true: Auto beli 1x Farm Potion khusus jam ga
 _G.autoSellAll = true            -- true: Auto Sell All setiap 5 detik via ref_B_SellAll
 _G.autoRemovePlayer = true       -- true: Hapus player lain dari game.Players & workspace.Players (100% Bersih & No Lag), false: Biarkan
 _G.debugConsoleLog = false        -- true: Cetak log status/fase ke console (F9), false: Senyap
-_G.kickPower = 0.2                 -- Value power tendangan (Default: 1)
+_G.kickPower = 0.1                 -- Value power tendangan (Default: 1)
 _G.kickAccuracy = 0.3              -- Value accuracy / timing tendangan (Default: 1)
 _G.failsafeTimeout = 25          -- Waktu maksimal (detik) sebelum auto-reset ke Safe Zone jika macet
 
