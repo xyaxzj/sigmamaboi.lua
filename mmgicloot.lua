@@ -1,6 +1,7 @@
 -- ==============================================================================
 -- 🚀 AUTO SETOR EXCLUSIVE BRAINROT -> USERNAME: szeshuro + AUTO SERVER HOP
 -- ⚡ ULTRA ANTI-LAG & POTATO MODE (60+ FPS & ZERO FREEZE)
+-- ⏱️ SYNCHRONIZED TIMING DENGAN AUTO TRADE.LUA (5.1s Countdown & Phase Handshake)
 -- ==============================================================================
 -- Alur Kerja:
 -- 1. 🥔 Aktifkan Ultra Anti-Lag (Matikan Shadow, Texture, Partikel, Efek Lighting & Potato Map).
@@ -10,10 +11,11 @@
 -- 4. 🎯 Cek keberadaan target (szeshuro) di server saat ini:
 --    - Jika target TIDAK ADA di server -> Langsung Server Hop mencari server lain.
 --    - Jika target ADA di server:
---      a. Kirim trade request ke szeshuro.
---      b. Masukkan semua item Exclusive (maksimal 10 item per kloter).
---      c. Tunggu countdown & auto confirm trade (Fase 1 & Fase 2).
---      d. Ulangi kloter berikutnya hingga SEMUA item Exclusive di inventory habis (0).
+--      a. Kirim trade request ke szeshuro (f_trade_r:InvokeServer).
+--      b. Masukkan semua item Exclusive (maksimal 10 item per kloter, delay 0.25s).
+--      c. Tunggu 5.1s & Confirm Phase 1 -> Tunggu handshake receiver auto trade.lua.
+--      d. Tunggu 5.1s & Confirm Phase 2 -> Transaksi selesai.
+--      e. Ulangi kloter berikutnya hingga SEMUA item Exclusive di inventory habis (0).
 -- 5. 🌐 Setelah semua item Exclusive selesai disetor:
 --    - Otomatis Server Hop ke server publik lain untuk mencari stok/server berikutnya!
 -- ==============================================================================
@@ -26,7 +28,7 @@ if not game:IsLoaded() then game.Loaded:Wait() end
 local TARGET_USERNAME = "szeshuro"      -- Username tujuan setor
 local TARGET_RARITY = "Exclusive"       -- Rarity yang disetor
 local INSERT_DELAY = 0.25               -- Jeda input item ke trade slot (detik)
-local TRADE_TIMEOUT = 20                -- Batas waktu menunggu target merespon trade (detik)
+local TRADE_TIMEOUT = 15                -- Batas waktu menunggu target merespon trade (detik)
 local AUTO_UNFAVORITE = true            -- Otomatis unfavorite item jika terkunci favorite
 local AUTO_REQUEUE_ON_HOP = true        -- Otomatis jalankan script kembali setelah teleport ke server baru
 
@@ -54,19 +56,16 @@ end
 -- ==============================================================================
 if ENABLE_ANTI_LAG then
     pcall(function()
-        -- Setting Hardware / Rendering Level 1
         if settings and settings().Rendering then
             settings().Rendering.QualityLevel = 1
         end
 
-        -- Lighting Optimization
         if DISABLE_SHADOWS then
             Lighting.GlobalShadows = false
             Lighting.FogEnd = 9e9
             Lighting.Brightness = 1
         end
 
-        -- Hapus Efek Berat di Lighting
         for _, effect in ipairs(Lighting:GetChildren()) do
             if effect:IsA("PostEffect") or effect:IsA("BloomEffect") or effect:IsA("BlurEffect") or effect:IsA("ColorCorrectionEffect") or effect:IsA("SunRaysEffect") or effect:IsA("DepthOfFieldEffect") or effect:IsA("Atmosphere") then
                 effect.Enabled = false
@@ -74,7 +73,6 @@ if ENABLE_ANTI_LAG then
             end
         end
 
-        -- Terrain Optimization
         local terrain = workspace:FindFirstChildOfClass("Terrain")
         if terrain then
             terrain.WaterWaveSize = 0
@@ -103,7 +101,6 @@ if ENABLE_ANTI_LAG then
 
     local function optimizeInstance(v)
         if not v then return end
-        -- Jangan ganggu karakter pemain sendiri atau target szeshuro
         if LocalPlayer.Character and (v == LocalPlayer.Character or v:IsDescendantOf(LocalPlayer.Character)) then return end
         local targetObj = Players:FindFirstChild(TARGET_USERNAME)
         if targetObj and targetObj.Character and (v == targetObj.Character or v:IsDescendantOf(targetObj.Character)) then return end
@@ -111,13 +108,11 @@ if ENABLE_ANTI_LAG then
         pcall(function()
             local className = v.ClassName
 
-            -- Hapus partikel dan efek cahaya berat
             if REMOVE_PARTICLES and PURGE_CLASSES[className] then
                 v:Destroy()
                 return
             end
 
-            -- Hilangkan Decal & Tekstur jika Potato Mode aktif
             if POTATO_WHITE_MAP then
                 if className == "Decal" or className == "Texture" or v:IsA("Decal") or v:IsA("Texture") then
                     v.Transparency = 1
@@ -128,7 +123,7 @@ if ENABLE_ANTI_LAG then
                     v.Material = Enum.Material.Plastic
                     v.Reflectance = 0
                     v.CastShadow = false
-                    v.Color = Color3.new(1, 1, 1) -- Potato White Map
+                    v.Color = Color3.new(1, 1, 1)
                     if v:IsA("MeshPart") then
                         v.TextureID = ""
                     end
@@ -139,14 +134,12 @@ if ENABLE_ANTI_LAG then
         end)
     end
 
-    -- Sapu objek awal di workspace
     task.spawn(function()
         for _, v in ipairs(workspace:GetDescendants()) do
             optimizeInstance(v)
         end
     end)
 
-    -- Listener real-time untuk objek baru yang spawn
     workspace.DescendantAdded:Connect(function(v)
         task.defer(optimizeInstance, v)
     end)
@@ -155,7 +148,7 @@ if ENABLE_ANTI_LAG then
 end
 
 -- ==============================================================================
--- 🛡️ 2. ANTI-AFK SYSTEM (Mencegah Kick 20 Menit)
+-- 🛡️ 2. ANTI-AFK SYSTEM
 -- ==============================================================================
 pcall(function()
     LocalPlayer.Idled:Connect(function()
@@ -186,7 +179,7 @@ end
 
 log("==================================================")
 log("🚀 Script Auto Setor Dimulai! Target: " .. TARGET_USERNAME)
-log("⚡ Anti-Lag & Booster: AKTIF")
+log("⚡ Timing: Synchronized dengan Auto Trade Receiver (5.1s)")
 log("==================================================")
 
 -- ==============================================================================
@@ -204,7 +197,6 @@ local rev_trade_i = networkFolder and networkFolder:FindFirstChild("rev_trade_i"
 local rev_trade_start = networkFolder and networkFolder:FindFirstChild("rev_trade_start")
 local rev_ToggleFav = networkFolder and networkFolder:FindFirstChild("rev_ToggleFav")
 
--- Fallback pencarian remote jika folder network berubah
 if not ref_trade_r or not rev_trade_i then
     for _, desc in ipairs(ReplicatedStorage:GetDescendants()) do
         if desc.Name == "ref_trade_r" and desc:IsA("RemoteFunction") then ref_trade_r = desc end
@@ -245,7 +237,6 @@ local function getToolRarity(tool)
     if not tool then return "Unknown" end
     local baseName = tool.Name
 
-    -- 1. Cek EntitiesData runtime
     if EntitiesDataModule then
         if EntitiesDataModule.Brainrots and EntitiesDataModule.Brainrots[baseName] then
             local r = EntitiesDataModule.Brainrots[baseName].Rarity
@@ -257,13 +248,11 @@ local function getToolRarity(tool)
         end
     end
 
-    -- 2. Cek Attribute pada Tool
     local attrRarity = tool:GetAttribute("Rarity") or tool:GetAttribute("rarity") or tool:GetAttribute("RarityName")
     if attrRarity and tostring(attrRarity) ~= "" then
         return tostring(attrRarity)
     end
 
-    -- 3. Cek Child Value pada Tool
     local rarityObj = tool:FindFirstChild("Rarity") or tool:FindFirstChild("rarity")
     if rarityObj and rarityObj:IsA("StringValue") and rarityObj.Value ~= "" then
         return rarityObj.Value
@@ -282,7 +271,6 @@ local function isTargetExclusiveTool(tool)
         return true
     end
 
-    -- Khusus item Lucky Block / Item Exclusive bawaan
     local lowerName = string.lower(tool.Name)
     if lowerName == "virus" or lowerName == "block cup" or lowerName == "volcanic" or lowerName == "weather" or lowerName == "rainbow" or lowerName == "eternal" then
         return true
@@ -350,7 +338,6 @@ local function serverHop()
         local currentJobId = game.JobId
         local candidateServers = {}
 
-        -- Query server publik Roblox API
         local success, response = pcall(function()
             local url = "https://games.roblox.com/v1/games/" .. tostring(placeId) .. "/servers/Public?sortOrder=Asc&limit=100"
             return game:HttpGet(url)
@@ -372,7 +359,6 @@ local function serverHop()
         end
 
         if #candidateServers > 0 then
-            -- Pilih server acak yang tersedia
             local chosen = candidateServers[math.random(1, #candidateServers)]
             log(string.format("🚀 Teleportasi ke Server ID: %s (%d/%d pemain)...", chosen.id, chosen.playing, chosen.maxPlayers))
             
@@ -388,7 +374,6 @@ local function serverHop()
     end)
 end
 
--- Listener jika teleport gagal
 TeleportService.TeleportInitFailed:Connect(function(player, teleportResult, errorMessage)
     log("⚠️ Teleport gagal: " .. tostring(errorMessage) .. ". Mengulang Server Hop...")
     task.wait(2)
@@ -396,7 +381,7 @@ TeleportService.TeleportInitFailed:Connect(function(player, teleportResult, erro
 end)
 
 -- ==============================================================================
--- 🤝 7. PROSES TRADE KE TARGET (szeshuro)
+-- 🤝 7. PROSES TRADE KE TARGET (szeshuro) DENGAN TIMING SINKRON
 -- ==============================================================================
 local function findTargetPlayer()
     for _, p in ipairs(Players:GetPlayers()) do
@@ -429,43 +414,40 @@ local function executeTradeBatch(targetPlayer, itemsToTrade)
     log(string.format("📤 Mengirim Trade Request ke %s (Kloter: %d item)...", targetPlayer.Name, #itemsToTrade))
     notify("🤝 Trade Request", "Mengajak trade " .. targetPlayer.Name .. " (" .. #itemsToTrade .. " item)...", 3)
 
-    -- Kirim Trade Request
-    local requestSent = false
+    -- 1. Kirim Trade Request persis seperti di auto trade.lua (Line 1736)
     pcall(function()
         task.spawn(function()
-            ref_trade_r:InvokeServer(targetPlayer.UserId)
+            pcall(function() ref_trade_r:InvokeServer(targetPlayer.UserId) end)
         end)
-        requestSent = true
     end)
 
-    -- Tunggu TradingFrame terbuka di PlayerGui
+    -- 2. Tunggu TradingFrame terbuka di PlayerGui (Loop 15 detik dengan step 1s)
     local tradeFrame = nil
-    local waitTimer = 0
-    while waitTimer < TRADE_TIMEOUT do
+    local timer = 0
+    while timer < TRADE_TIMEOUT do
         tradeFrame = LocalPlayer.PlayerGui:FindFirstChild("TradingFrame", true)
         if tradeFrame and tradeFrame.Visible then
             break
         end
-        task.wait(0.5)
-        waitTimer = waitTimer + 0.5
+        task.wait(1)
+        timer = timer + 1
     end
 
     if not (tradeFrame and tradeFrame.Visible) then
-        log("⚠️ Timeout: Target tidak menerima trade request dalam waktu " .. TRADE_TIMEOUT .. " detik.")
+        log("❌ Timeout target: Target tidak merespon trade dalam " .. TRADE_TIMEOUT .. " detik.")
         return false
     end
 
     log("✅ Trade window terbuka! Mulai memasukkan item...")
     notify("📦 Input Item", "Memasukkan " .. #itemsToTrade .. " item ke slot trade...", 3)
 
-    -- Masukkan item ke trade slot
+    -- 3. Masukkan item ke trade slot (AddItem per item)
     for idx, tool in ipairs(itemsToTrade) do
         local guid = getToolGUID(tool)
         if guid then
-            -- Unfavorite jika terkunci
             if AUTO_UNFAVORITE and isToolFavorite(tool) and rev_ToggleFav then
                 pcall(function() rev_ToggleFav:FireServer(guid) end)
-                task.wait(0.1)
+                task.wait(0.05)
             end
 
             pcall(function()
@@ -476,43 +458,45 @@ local function executeTradeBatch(targetPlayer, itemsToTrade)
         end
     end
 
-    -- Tunggu timer countdown game (5.5 detik)
-    log("⏳ Menunggu countdown trade phase 1 (5.5 detik)...")
-    task.wait(5.5)
-
-    -- Confirm Phase 1
+    -- 4. Phase 1: Tunggu persis 5.1 detik countdown game lalu kirim Confirm (Line 1756 auto trade.lua)
+    log("⏳ Menunggu countdown Phase 1 (5.1 detik)...")
+    task.wait(5.1)
     pcall(function()
         rev_trade_i:FireServer("Confirm")
     end)
-    log("🔒 Konfirmasi Phase 1 terkirim.")
+    log("🔒 Konfirmasi Phase 1 terkirim. Menunggu respon dari receiver...")
+    task.wait(0.5)
 
-    -- Tunggu konfirmasi lawan / countdown phase 2
-    local phase2Timer = 0
+    -- 5. Tunggu konfirmasi receiver (Phase 1 selesai ketika status local confirmed berganti / reset untuk Phase 2)
+    local waitTimeout = 0
     while tradeFrame and tradeFrame.Parent and tradeFrame.Visible do
-        if not isLocalConfirmed(tradeFrame) then break end
+        if not isLocalConfirmed(tradeFrame) then
+            break
+        end
         task.wait(0.2)
-        phase2Timer = phase2Timer + 0.2
-        if phase2Timer > 60 then
-            log("⚠️ Trade timeout menunggu konfirmasi lawan.")
+        waitTimeout = waitTimeout + 0.2
+        if waitTimeout > 60 then
+            log("❌ Timeout: Menunggu respon konfirmasi Phase 1 dari receiver terlalu lama (>60s).")
             return false
         end
     end
 
-    -- Confirm Phase 2 jika window masih terbuka
+    -- 6. Phase 2: Tunggu persis 5.1 detik countdown lalu kirim Confirm kedua (Line 1766 auto trade.lua)
     if tradeFrame and tradeFrame.Parent and tradeFrame.Visible then
-        log("⏳ Menunggu countdown trade phase 2 (5.5 detik)...")
-        task.wait(5.5)
+        log("⏳ Menunggu countdown Phase 2 (5.1 detik)...")
+        task.wait(5.1)
         pcall(function()
             rev_trade_i:FireServer("Confirm")
         end)
-        log("🔒 Konfirmasi Phase 2 terkirim.")
+        log("🔒 Konfirmasi Phase 2 terkirim. Menunggu transaksi final...")
 
+        -- Tunggu sampai trade frame tertutup sempurna (transaksi sukses)
         while tradeFrame and tradeFrame.Parent and tradeFrame.Visible do
             task.wait(0.5)
         end
     end
 
-    log("🎉 Kloter trade berhasil diselesaikan!")
+    log("🎉 Kloter trade berhasil diselesaikan secara sempurna!")
     notify("✅ Trade Berhasil", #itemsToTrade .. " item Exclusive sukses terkirim!", 3)
     task.wait(1.5)
     return true
