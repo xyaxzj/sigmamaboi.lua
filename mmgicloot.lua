@@ -1,22 +1,22 @@
 -- ==============================================================================
--- 🚀 AUTO SETOR EXCLUSIVE BRAINROT -> USERNAME: szeshuro + AUTO SERVER HOP
+-- 🚀 AUTO SETOR (FRIGOREX & PATAGOTITAN) -> USERNAME: szeshuro + AUTO SERVER HOP
 -- ⚡ ULTRA ANTI-LAG & POTATO MODE (60+ FPS & ZERO FREEZE)
 -- ⏱️ SYNCHRONIZED TIMING DENGAN AUTO TRADE.LUA (5.1s Countdown & Phase Handshake)
 -- ==============================================================================
 -- Alur Kerja:
 -- 1. 🥔 Aktifkan Ultra Anti-Lag (Matikan Shadow, Texture, Partikel, Efek Lighting & Potato Map).
--- 2. 🔍 Pindai seluruh inventory (Backpack & Karakter) untuk item bertipe "Exclusive".
+-- 2. 🔍 Pindai seluruh inventory (Backpack & Karakter) KHUSUS item: Frigorex & Patagotitan.
 -- 3. ❓ Cek ketersediaan item:
---    - Jika TIDAK ADA item Exclusive -> Langsung Server Hop ke server publik lain.
+--    - Jika TIDAK ADA Frigorex/Patagotitan -> Langsung Server Hop ke server publik lain.
 -- 4. 🎯 Cek keberadaan target (szeshuro) di server saat ini:
 --    - Jika target TIDAK ADA di server -> Langsung Server Hop mencari server lain.
 --    - Jika target ADA di server:
 --      a. Kirim trade request ke szeshuro (f_trade_r:InvokeServer).
---      b. Masukkan semua item Exclusive (maksimal 10 item per kloter, delay 0.25s).
+--      b. Masukkan semua Frigorex & Patagotitan (maksimal 10 item per kloter, delay 0.25s).
 --      c. Tunggu 5.1s & Confirm Phase 1 -> Tunggu handshake receiver auto trade.lua.
 --      d. Tunggu 5.1s & Confirm Phase 2 -> Transaksi selesai.
---      e. Ulangi kloter berikutnya hingga SEMUA item Exclusive di inventory habis (0).
--- 5. 🌐 Setelah semua item Exclusive selesai disetor:
+--      e. Ulangi kloter berikutnya hingga SEMUA Frigorex & Patagotitan di tas habis (0).
+-- 5. 🌐 Setelah semua Frigorex & Patagotitan selesai disetor:
 --    - Otomatis Server Hop ke server publik lain untuk mencari stok/server berikutnya!
 -- ==============================================================================
 
@@ -26,7 +26,13 @@ if not game:IsLoaded() then game.Loaded:Wait() end
 -- ⚙️ KONFIGURASI PENGGUNA
 -- ==============================================================================
 local TARGET_USERNAME = "szeshuro"      -- Username tujuan setor
-local TARGET_RARITY = "Exclusive"       -- Rarity yang disetor
+
+-- 🦖 Daftar Item Khusus yang Disetor (Hanya Frigorex & Patagotitan)
+local TARGET_ITEMS = {
+    ["frigorex"] = true,
+    ["patagotitan"] = true,
+}
+
 local INSERT_DELAY = 0.25               -- Jeda input item ke trade slot (detik)
 local TRADE_TIMEOUT = 15                -- Batas waktu menunggu target merespon trade (detik)
 local AUTO_UNFAVORITE = true            -- Otomatis unfavorite item jika terkunci favorite
@@ -179,6 +185,7 @@ end
 
 log("==================================================")
 log("🚀 Script Auto Setor Dimulai! Target: " .. TARGET_USERNAME)
+log("🦖 Target Item: Frigorex & Patagotitan")
 log("⚡ Timing: Synchronized dengan Auto Trade Receiver (5.1s)")
 log("==================================================")
 
@@ -207,18 +214,8 @@ if not ref_trade_r or not rev_trade_i then
 end
 
 -- ==============================================================================
--- 📚 5. DATABASE & ENTITIES DATA SCANNER
+-- 📚 5. ITEM SCANNER (KHUSUS FRIGOREX & PATAGOTITAN)
 -- ==============================================================================
-local EntitiesDataModule = nil
-pcall(function()
-    local shared = ReplicatedStorage:FindFirstChild("Shared")
-    local dataFolder = shared and shared:FindFirstChild("Data")
-    local entitiesObj = dataFolder and dataFolder:FindFirstChild("EntitiesData")
-    if entitiesObj then
-        EntitiesDataModule = require(entitiesObj)
-    end
-end)
-
 local function getToolGUID(tool)
     if not tool then return nil end
     return tool:GetAttribute("guid") or tool:GetAttribute("GUID") or tool:GetAttribute("uid")
@@ -233,74 +230,43 @@ local function isToolFavorite(tool)
     return false
 end
 
-local function getToolRarity(tool)
-    if not tool then return "Unknown" end
-    local baseName = tool.Name
-
-    if EntitiesDataModule then
-        if EntitiesDataModule.Brainrots and EntitiesDataModule.Brainrots[baseName] then
-            local r = EntitiesDataModule.Brainrots[baseName].Rarity
-            if r and r ~= "" then return r end
-        end
-        if EntitiesDataModule.LuckyBlocks and EntitiesDataModule.LuckyBlocks[baseName] then
-            local r = EntitiesDataModule.LuckyBlocks[baseName].Rarity
-            if r and r ~= "" then return r end
-        end
-    end
-
-    local attrRarity = tool:GetAttribute("Rarity") or tool:GetAttribute("rarity") or tool:GetAttribute("RarityName")
-    if attrRarity and tostring(attrRarity) ~= "" then
-        return tostring(attrRarity)
-    end
-
-    local rarityObj = tool:FindFirstChild("Rarity") or tool:FindFirstChild("rarity")
-    if rarityObj and rarityObj:IsA("StringValue") and rarityObj.Value ~= "" then
-        return rarityObj.Value
-    end
-
-    return "Unknown"
-end
-
-local function isTargetExclusiveTool(tool)
+local function isTargetSetorTool(tool)
     if not tool or not tool:IsA("Tool") then return false end
     local guid = getToolGUID(tool)
     if not guid then return false end
 
-    local rarity = getToolRarity(tool)
-    if string.lower(rarity) == string.lower(TARGET_RARITY) then
-        return true
-    end
-
-    local lowerName = string.lower(tool.Name)
-    if lowerName == "virus" or lowerName == "block cup" or lowerName == "volcanic" or lowerName == "weather" or lowerName == "rainbow" or lowerName == "eternal" then
-        return true
+    local name = string.lower(tool.Name)
+    for targetKey, _ in pairs(TARGET_ITEMS) do
+        if string.find(name, targetKey) then
+            return true
+        end
     end
 
     return false
 end
 
-local function getExclusiveToolsInInventory()
-    local exclusiveList = {}
+local function getTargetToolsInInventory()
+    local targetList = {}
     local backpack = LocalPlayer:FindFirstChild("Backpack")
     local char = LocalPlayer.Character
 
     if backpack then
         for _, t in ipairs(backpack:GetChildren()) do
-            if isTargetExclusiveTool(t) then
-                table.insert(exclusiveList, t)
+            if isTargetSetorTool(t) then
+                table.insert(targetList, t)
             end
         end
     end
 
     if char then
         for _, t in ipairs(char:GetChildren()) do
-            if isTargetExclusiveTool(t) then
-                table.insert(exclusiveList, t)
+            if isTargetSetorTool(t) then
+                table.insert(targetList, t)
             end
         end
     end
 
-    return exclusiveList
+    return targetList
 end
 
 -- ==============================================================================
@@ -497,7 +463,7 @@ local function executeTradeBatch(targetPlayer, itemsToTrade)
     end
 
     log("🎉 Kloter trade berhasil diselesaikan secara sempurna!")
-    notify("✅ Trade Berhasil", #itemsToTrade .. " item Exclusive sukses terkirim!", 3)
+    notify("✅ Trade Berhasil", #itemsToTrade .. " item sukses terkirim!", 3)
     task.wait(1.5)
     return true
 end
@@ -506,44 +472,44 @@ end
 -- 🚀 8. FUNGSI UTAMA AUTO SETOR & HOP (1X EXECUTE)
 -- ==============================================================================
 local function runAutoSetor()
-    log("🔍 Memeriksa stok item Exclusive di tas...")
-    local exclusiveItems = getExclusiveToolsInInventory()
-    local totalExclusive = #exclusiveItems
+    log("🔍 Memeriksa stok Frigorex & Patagotitan di tas...")
+    local targetTools = getTargetToolsInInventory()
+    local totalItems = #targetTools
 
-    log(string.format("📊 Ditemukan %d item Exclusive di inventory.", totalExclusive))
+    log(string.format("📊 Ditemukan %d item Frigorex & Patagotitan di inventory.", totalItems))
 
-    -- KASUS 1: Tidak ada item Exclusive sama sekali di tas
-    if totalExclusive == 0 then
-        log("ℹ️ Tidak ada Brainrot Exclusive di inventory. Segera melakukan Server Hop...")
-        notify("📦 Stok Kosong", "Tidak ada item Exclusive di tas. Memulai Server Hop...", 4)
+    -- KASUS 1: Tidak ada Frigorex atau Patagotitan sama sekali di tas
+    if totalItems == 0 then
+        log("ℹ️ Tidak ada Frigorex atau Patagotitan di inventory. Segera melakukan Server Hop...")
+        notify("📦 Stok Kosong", "Tidak ada Frigorex / Patagotitan di tas. Memulai Server Hop...", 4)
         task.wait(1)
         serverHop()
         return
     end
 
-    -- KASUS 2: Ada item Exclusive, cek target szeshuro
+    -- KASUS 2: Ada item, cek target szeshuro
     local targetPlayer = findTargetPlayer()
     if not targetPlayer then
         log(string.format("⚠️ Target '%s' TIDAK DITEMUKAN di server ini!", TARGET_USERNAME))
-        log(string.format("ℹ️ Memiliki %d item Exclusive, berpindah server untuk mencari target...", totalExclusive))
+        log(string.format("ℹ️ Memiliki %d item Frigorex & Patagotitan, berpindah server untuk mencari target...", totalItems))
         notify("⚠️ Target Tidak Ada", "Target " .. TARGET_USERNAME .. " tidak di server. Melakukan Server Hop...", 4)
         task.wait(1)
         serverHop()
         return
     end
 
-    -- KASUS 3: Ada item Exclusive DAN target ada di server!
-    log(string.format("🎯 Target '%s' DITEMUKAN! Memulai setor %d item Exclusive...", targetPlayer.Name, totalExclusive))
-    notify("🎯 Target Ditemukan", "Memulai setor " .. totalExclusive .. " item ke " .. targetPlayer.Name .. "...", 4)
+    -- KASUS 3: Ada item DAN target ada di server!
+    log(string.format("🎯 Target '%s' DITEMUKAN! Memulai setor %d item ke %s...", targetPlayer.Name, totalItems, targetPlayer.Name))
+    notify("🎯 Target Ditemukan", "Memulai setor " .. totalItems .. " item ke " .. targetPlayer.Name .. "...", 4)
 
     local totalSent = 0
     local retryCount = 0
 
     while true do
-        local remainingItems = getExclusiveToolsInInventory()
+        local remainingItems = getTargetToolsInInventory()
         if #remainingItems == 0 then
-            log("🎉 SEMUA ITEM EXCLUSIVE TELAH HABIS DISETOR!")
-            notify("🏆 Selesai", "Semua item Exclusive berhasil disetor ke " .. TARGET_USERNAME .. "!", 5)
+            log("🎉 SEMUA FRIGOREX & PATAGOTITAN TELAH HABIS DISETOR!")
+            notify("🏆 Selesai", "Semua Frigorex & Patagotitan berhasil disetor ke " .. TARGET_USERNAME .. "!", 5)
             break
         end
 
@@ -571,7 +537,7 @@ local function runAutoSetor()
 
     -- Setelah semua selesai disetor, lakukan Server Hop ke server publik lain
     log("==================================================")
-    log(string.format("🚀 Total %d item Exclusive disetor. Berpindah ke server publik lain...", totalSent))
+    log(string.format("🚀 Total %d item Frigorex & Patagotitan disetor. Berpindah ke server publik lain...", totalSent))
     log("==================================================")
     notify("🌐 Selesai Setor", "Berhasil setor " .. totalSent .. " item. Melakukan Server Hop...", 4)
     task.wait(1.5)
