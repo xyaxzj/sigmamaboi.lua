@@ -2,22 +2,7 @@
 -- 🚀 AUTO SETOR (FRIGOREX & PATAGOTITAN) -> USERNAME: szeshuro + AUTO SERVER HOP
 -- ⚡ ULTRA ANTI-LAG & POTATO MODE (60+ FPS & ZERO FREEZE)
 -- ⏱️ SYNCHRONIZED TIMING DENGAN AUTO TRADE.LUA (5.1s Countdown & Phase Handshake)
--- ==============================================================================
--- Alur Kerja:
--- 1. 🥔 Aktifkan Ultra Anti-Lag (Matikan Shadow, Texture, Partikel, Efek Lighting & Potato Map).
--- 2. 🔍 Pindai seluruh inventory (Backpack & Karakter) KHUSUS item: Frigorex & Patagotitan.
--- 3. ❓ Cek ketersediaan item:
---    - Jika TIDAK ADA Frigorex/Patagotitan -> Langsung Server Hop ke server publik lain.
--- 4. 🎯 Cek keberadaan target (szeshuro) di server saat ini:
---    - Jika target TIDAK ADA di server -> Langsung Server Hop mencari server lain.
---    - Jika target ADA di server:
---      a. Kirim trade request ke szeshuro (f_trade_r:InvokeServer).
---      b. Masukkan semua Frigorex & Patagotitan (maksimal 10 item per kloter, delay 0.25s).
---      c. Tunggu 5.1s & Confirm Phase 1 -> Tunggu handshake receiver auto trade.lua.
---      d. Tunggu 5.1s & Confirm Phase 2 -> Transaksi selesai.
---      e. Ulangi kloter berikutnya hingga SEMUA Frigorex & Patagotitan di tas habis (0).
--- 5. 🌐 Setelah semua Frigorex & Patagotitan selesai disetor:
---    - Otomatis Server Hop ke server publik lain untuk mencari stok/server berikutnya!
+-- 🔒 ANTI-PREMATURE HOP: HANYA HOP JIKA SEMUA STOK FRIGOREX & PATAGOTITAN BENAR-BENAR 0!
 -- ==============================================================================
 
 if not game:IsLoaded() then game.Loaded:Wait() end
@@ -31,6 +16,8 @@ local TARGET_USERNAME = "szeshuro"      -- Username tujuan setor
 local TARGET_ITEMS = {
     ["frigorex"] = true,
     ["patagotitan"] = true,
+    ["frigo"] = true,
+    ["patago"] = true,
 }
 
 local INSERT_DELAY = 0.25               -- Jeda input item ke trade slot (detik)
@@ -218,7 +205,15 @@ end
 -- ==============================================================================
 local function getToolGUID(tool)
     if not tool then return nil end
-    return tool:GetAttribute("guid") or tool:GetAttribute("GUID") or tool:GetAttribute("uid")
+    local g = tool:GetAttribute("guid") or tool:GetAttribute("GUID") or tool:GetAttribute("uid") or tool:GetAttribute("UID") or tool:GetAttribute("id") or tool:GetAttribute("ID") or tool:GetAttribute("itemId")
+    if g then return tostring(g) end
+    
+    local child = tool:FindFirstChild("guid") or tool:FindFirstChild("GUID") or tool:FindFirstChild("uid") or tool:FindFirstChild("UID") or tool:FindFirstChild("id")
+    if child and (child:IsA("StringValue") or child:IsA("IntValue") or child:IsA("NumberValue")) then 
+        return tostring(child.Value) 
+    end
+    
+    return tool.Name
 end
 
 local function isToolFavorite(tool)
@@ -232,17 +227,31 @@ end
 
 local function isTargetSetorTool(tool)
     if not tool or not tool:IsA("Tool") then return false end
-    local guid = getToolGUID(tool)
-    if not guid then return false end
 
-    local name = string.lower(tool.Name)
+    local toolName = string.lower(tool.Name)
+    local isMatch = false
+
     for targetKey, _ in pairs(TARGET_ITEMS) do
-        if string.find(name, targetKey) then
-            return true
+        if string.find(toolName, targetKey) then
+            isMatch = true
+            break
         end
     end
 
-    return false
+    if not isMatch then
+        local attrName = tool:GetAttribute("ItemName") or tool:GetAttribute("Name") or tool:GetAttribute("name")
+        if attrName then
+            local lowerAttr = string.lower(tostring(attrName))
+            for targetKey, _ in pairs(TARGET_ITEMS) do
+                if string.find(lowerAttr, targetKey) then
+                    isMatch = true
+                    break
+                end
+            end
+        end
+    end
+
+    return isMatch
 end
 
 local function getTargetToolsInInventory()
@@ -347,12 +356,15 @@ TeleportService.TeleportInitFailed:Connect(function(player, teleportResult, erro
 end)
 
 -- ==============================================================================
--- 🤝 7. PROSES TRADE KE TARGET (szeshuro) DENGAN TIMING SINKRON
+-- 🤝 7. PROSES TRADE KE TARGET (szeshuro)
 -- ==============================================================================
 local function findTargetPlayer()
+    local targetLower = string.lower(TARGET_USERNAME)
     for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= LocalPlayer and string.lower(p.Name) == string.lower(TARGET_USERNAME) then
-            return p
+        if p ~= LocalPlayer then
+            if string.lower(p.Name) == targetLower or string.lower(p.DisplayName) == targetLower then
+                return p
+            end
         end
     end
     return nil
@@ -380,14 +392,14 @@ local function executeTradeBatch(targetPlayer, itemsToTrade)
     log(string.format("📤 Mengirim Trade Request ke %s (Kloter: %d item)...", targetPlayer.Name, #itemsToTrade))
     notify("🤝 Trade Request", "Mengajak trade " .. targetPlayer.Name .. " (" .. #itemsToTrade .. " item)...", 3)
 
-    -- 1. Kirim Trade Request persis seperti di auto trade.lua (Line 1736)
+    -- Kirim Trade Request
     pcall(function()
         task.spawn(function()
             pcall(function() ref_trade_r:InvokeServer(targetPlayer.UserId) end)
         end)
     end)
 
-    -- 2. Tunggu TradingFrame terbuka di PlayerGui (Loop 15 detik dengan step 1s)
+    -- Tunggu TradingFrame terbuka di PlayerGui
     local tradeFrame = nil
     local timer = 0
     while timer < TRADE_TIMEOUT do
@@ -400,14 +412,14 @@ local function executeTradeBatch(targetPlayer, itemsToTrade)
     end
 
     if not (tradeFrame and tradeFrame.Visible) then
-        log("❌ Timeout target: Target tidak merespon trade dalam " .. TRADE_TIMEOUT .. " detik.")
+        log("⚠️ Target belum merespon trade request (" .. timer .. "s).")
         return false
     end
 
-    log("✅ Trade window terbuka! Mulai memasukkan item...")
+    log("✅ Trade window terbuka! Memasukkan item...")
     notify("📦 Input Item", "Memasukkan " .. #itemsToTrade .. " item ke slot trade...", 3)
 
-    -- 3. Masukkan item ke trade slot (AddItem per item)
+    -- Masukkan item ke trade slot
     for idx, tool in ipairs(itemsToTrade) do
         local guid = getToolGUID(tool)
         if guid then
@@ -424,7 +436,7 @@ local function executeTradeBatch(targetPlayer, itemsToTrade)
         end
     end
 
-    -- 4. Phase 1: Tunggu persis 5.1 detik countdown game lalu kirim Confirm (Line 1756 auto trade.lua)
+    -- Phase 1 Countdown 5.1s
     log("⏳ Menunggu countdown Phase 1 (5.1 detik)...")
     task.wait(5.1)
     pcall(function()
@@ -433,7 +445,7 @@ local function executeTradeBatch(targetPlayer, itemsToTrade)
     log("🔒 Konfirmasi Phase 1 terkirim. Menunggu respon dari receiver...")
     task.wait(0.5)
 
-    -- 5. Tunggu konfirmasi receiver (Phase 1 selesai ketika status local confirmed berganti / reset untuk Phase 2)
+    -- Tunggu konfirmasi receiver (Phase 1)
     local waitTimeout = 0
     while tradeFrame and tradeFrame.Parent and tradeFrame.Visible do
         if not isLocalConfirmed(tradeFrame) then
@@ -442,12 +454,12 @@ local function executeTradeBatch(targetPlayer, itemsToTrade)
         task.wait(0.2)
         waitTimeout = waitTimeout + 0.2
         if waitTimeout > 60 then
-            log("❌ Timeout: Menunggu respon konfirmasi Phase 1 dari receiver terlalu lama (>60s).")
+            log("❌ Timeout menunggu konfirmasi Phase 1 dari receiver (>60s).")
             return false
         end
     end
 
-    -- 6. Phase 2: Tunggu persis 5.1 detik countdown lalu kirim Confirm kedua (Line 1766 auto trade.lua)
+    -- Phase 2 Countdown 5.1s
     if tradeFrame and tradeFrame.Parent and tradeFrame.Visible then
         log("⏳ Menunggu countdown Phase 2 (5.1 detik)...")
         task.wait(5.1)
@@ -456,7 +468,6 @@ local function executeTradeBatch(targetPlayer, itemsToTrade)
         end)
         log("🔒 Konfirmasi Phase 2 terkirim. Menunggu transaksi final...")
 
-        -- Tunggu sampai trade frame tertutup sempurna (transaksi sukses)
         while tradeFrame and tradeFrame.Parent and tradeFrame.Visible do
             task.wait(0.5)
         end
@@ -464,7 +475,6 @@ local function executeTradeBatch(targetPlayer, itemsToTrade)
 
     log("🎉 Kloter trade berhasil diselesaikan secara sempurna!")
     notify("✅ Trade Berhasil", #itemsToTrade .. " item sukses terkirim!", 3)
-    task.wait(1.5)
     return true
 end
 
@@ -472,75 +482,107 @@ end
 -- 🚀 8. FUNGSI UTAMA AUTO SETOR & HOP (1X EXECUTE)
 -- ==============================================================================
 local function runAutoSetor()
+    -- 1. Unequip semua tool agar tersimpan rapi di Backpack
+    pcall(function()
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
+            LocalPlayer.Character.Humanoid:UnequipTools()
+            task.wait(0.4)
+        end
+    end)
+
     log("🔍 Memeriksa stok Frigorex & Patagotitan di tas...")
-    local targetTools = getTargetToolsInInventory()
-    local totalItems = #targetTools
+    local initialItems = getTargetToolsInInventory()
+    local totalInitial = #initialItems
 
-    log(string.format("📊 Ditemukan %d item Frigorex & Patagotitan di inventory.", totalItems))
+    log(string.format("📊 Ditemukan %d item Frigorex & Patagotitan di inventory.", totalInitial))
 
-    -- KASUS 1: Tidak ada Frigorex atau Patagotitan sama sekali di tas
-    if totalItems == 0 then
+    -- KASUS 1: Jika stok Frigorex & Patagotitan memang 0 dari awal
+    if totalInitial == 0 then
         log("ℹ️ Tidak ada Frigorex atau Patagotitan di inventory. Segera melakukan Server Hop...")
         notify("📦 Stok Kosong", "Tidak ada Frigorex / Patagotitan di tas. Memulai Server Hop...", 4)
-        task.wait(1)
+        task.wait(1.5)
         serverHop()
         return
     end
 
-    -- KASUS 2: Ada item, cek target szeshuro
+    -- KASUS 2: Cari target szeshuro (tunggu hingga 10 detik jika baru load)
     local targetPlayer = findTargetPlayer()
-    if not targetPlayer then
-        log(string.format("⚠️ Target '%s' TIDAK DITEMUKAN di server ini!", TARGET_USERNAME))
-        log(string.format("ℹ️ Memiliki %d item Frigorex & Patagotitan, berpindah server untuk mencari target...", totalItems))
-        notify("⚠️ Target Tidak Ada", "Target " .. TARGET_USERNAME .. " tidak di server. Melakukan Server Hop...", 4)
+    local findTimer = 0
+    while not targetPlayer and findTimer < 10 do
         task.wait(1)
+        findTimer = findTimer + 1
+        targetPlayer = findTargetPlayer()
+    end
+
+    if not targetPlayer then
+        log(string.format("⚠️ Target '%s' TIDAK DITEMUKAN di server ini setelah 10 detik!", TARGET_USERNAME))
+        log(string.format("ℹ️ Memiliki %d item Frigorex & Patagotitan, berpindah server untuk mencari target...", totalInitial))
+        notify("⚠️ Target Tidak Ada", "Target " .. TARGET_USERNAME .. " tidak di server. Melakukan Server Hop...", 4)
+        task.wait(2)
         serverHop()
         return
     end
 
-    -- KASUS 3: Ada item DAN target ada di server!
-    log(string.format("🎯 Target '%s' DITEMUKAN! Memulai setor %d item ke %s...", targetPlayer.Name, totalItems, targetPlayer.Name))
-    notify("🎯 Target Ditemukan", "Memulai setor " .. totalItems .. " item ke " .. targetPlayer.Name .. "...", 4)
+    -- KASUS 3: Target DITEMUKAN & Ada Item!
+    log(string.format("🎯 Target '%s' DITEMUKAN! Memulai proses setor %d item...", targetPlayer.Name, totalInitial))
+    notify("🎯 Target Ditemukan", "Memulai setor " .. totalInitial .. " item ke " .. targetPlayer.Name .. "...", 4)
 
     local totalSent = 0
-    local retryCount = 0
 
+    -- 🔁 LOOP TERUS SAMPAI SEMUA FRIGOREX & PATAGOTITAN DI TAS BENAR-BENAR HABIS (0)!
     while true do
-        local remainingItems = getTargetToolsInInventory()
-        if #remainingItems == 0 then
-            log("🎉 SEMUA FRIGOREX & PATAGOTITAN TELAH HABIS DISETOR!")
+        -- Pastikan unequip tool setiap awal putaran
+        pcall(function()
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid") then
+                LocalPlayer.Character.Humanoid:UnequipTools()
+            end
+        end)
+        task.wait(0.5)
+
+        local currentStock = getTargetToolsInInventory()
+        local remainingCount = #currentStock
+
+        if remainingCount == 0 then
+            log("🎉 SEMUA FRIGOREX & PATAGOTITAN TELAH HABIS DISETOR (Sisa: 0)!")
             notify("🏆 Selesai", "Semua Frigorex & Patagotitan berhasil disetor ke " .. TARGET_USERNAME .. "!", 5)
             break
         end
 
+        log(string.format("📦 Sisa stok Frigorex & Patagotitan: %d item. Menyiapkan kloter trade...", remainingCount))
+
         -- Ambil maksimal 10 item per kloter
         local batch = {}
-        for i = 1, math.min(10, #remainingItems) do
-            table.insert(batch, remainingItems[i])
+        for i = 1, math.min(10, remainingCount) do
+            table.insert(batch, currentStock[i])
+        end
+
+        -- Pastikan target masih ada di server
+        targetPlayer = findTargetPlayer()
+        if not targetPlayer then
+            log("⚠️ Target " .. TARGET_USERNAME .. " terputus dari server. Berpindah server...")
+            notify("⚠️ Target Hilang", "Target keluar server. Melakukan Server Hop...", 4)
+            task.wait(2)
+            serverHop()
+            return
         end
 
         local success = executeTradeBatch(targetPlayer, batch)
         if success then
             totalSent = totalSent + #batch
-            retryCount = 0
-            task.wait(1.5)
+            log(string.format("✅ Kloter berhasil (%d item)! Total disetor: %d. Jeda 3.5 detik untuk kloter berikutnya...", #batch, totalSent))
+            task.wait(3.5)
         else
-            retryCount = retryCount + 1
-            log(string.format("⚠️ Trade gagal atau ditolak. Percobaan ulang #%d/3...", retryCount))
-            if retryCount >= 3 then
-                log("❌ Gagal trade 3x berturut-turut. Membatalkan dan melakukan Server Hop...")
-                break
-            end
-            task.wait(2)
+            log("⚠️ Kloter trade belum berhasil / sedang sibuk. Mengulang kembali dalam 3 detik (TIDAK HOP, lanjut setor)...")
+            task.wait(3.0)
         end
     end
 
-    -- Setelah semua selesai disetor, lakukan Server Hop ke server publik lain
+    -- 🌐 HANYA SERVER HOP KETIKA SEMUA STOK DI TAS SUDAH HABIS (0)!
     log("==================================================")
-    log(string.format("🚀 Total %d item Frigorex & Patagotitan disetor. Berpindah ke server publik lain...", totalSent))
+    log(string.format("🚀 Total %d item Frigorex & Patagotitan berhasil disetor ke %s. Berpindah ke server publik lain...", totalSent, TARGET_USERNAME))
     log("==================================================")
     notify("🌐 Selesai Setor", "Berhasil setor " .. totalSent .. " item. Melakukan Server Hop...", 4)
-    task.wait(1.5)
+    task.wait(2)
     serverHop()
 end
 
