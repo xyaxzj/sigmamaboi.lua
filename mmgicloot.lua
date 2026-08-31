@@ -1,5 +1,5 @@
 -- ==============================================================================
--- 🥔 KALB ULTRA LIGHTWEIGHT AUTO FARM V2 (METEOR SHOWER AUTO KICK & AUTO BUY)
+-- 🥔 KALB ULTRA LIGHTWEIGHT AUTO FARM V2 (BACK TO SCHOOL EVENT: MATH EVENT AUTO SOLVE & FARM)
 -- ==============================================================================
 -- Fitur & Alur:
 -- 1. ⚙️ Full Config Mode: Semua pengaturan diatur via variabel _G di baris atas (Tanpa UI)
@@ -7,12 +7,14 @@
 --    - Menghapus & memusnahkan SEMUA player lain dari game.Players
 --    - Menghapus SEMUA karakter player lain dari folder workspace.Players & workspace root
 --    - Real-time listener + Background loop anti-bocor (tidak ada lagi yang lolos)
--- 3. ☄️ Meteor Shower Auto Kick: Bot menendang bola (nonstop / saat event)
--- 4. ☄️ Auto Meteor Event: Memperbesar hitbox meteor di Debris (200x200x200, CanQuery=true)
--- 5. 🛒 Auto Buy Frigorex & Tricerabob: Request stock tiap 5 menit & auto beli jika stock > 0
--- 6. 🧪 Auto Buy Farm Potion: Auto beli 1x setiap pergantian jam ganjil (1, 3, 5... 23 WIB)
--- 7. 💰 Auto Sell All: Menjual semua brainrot tiap 5 detik (ref_B_SellAll)
--- 8. 🥔 Potato Mode Ekstrem & 🛡️ Anti-AFK
+-- 3. 📚 Back To School Event 1: Math Event Auto Solver & Hitbox Expander:
+--    - Mendeteksi rev_AddedWeather "MathEvent" & Model angka (1, 2, 3...) di Debris
+--    - Membaca soal matematika di GuiPart.SurfaceGui.TextLabel (cth: 7+5) & menyelesaikannya otomatis
+--    - Menghapus Part jawaban SALAH di folder Answers (cth: Part A = 10 dihapus)
+--    - Memperbesar hitbox Part jawaban BENAR (cth: Part B = 12 diperbesar ke 200 studs, CanQuery=true)
+-- 4. ⚽ Auto Kick: Bot menendang bola (nonstop / saat MathEvent berlangsung)
+-- 5. 💰 Auto Sell All: Menjual semua brainrot tiap 5 detik (ref_B_SellAll)
+-- 6. 🥔 Potato Mode Ekstrem & 🛡️ Anti-AFK
 -- ==============================================================================
 
 if not game:IsLoaded() then game.Loaded:Wait() end
@@ -20,21 +22,16 @@ if not game:IsLoaded() then game.Loaded:Wait() end
 -- ==============================================================================
 -- ⚙️ KONFIGURASI PENGGUNA (UBAH SESUAI KEBUTUHAN DI SINI)
 -- ==============================================================================
-_G.autoFarm = false               -- true: Auto Farm Aktif, false: Nonaktif
-_G.onlyMeteorEvent = false        -- true: HANYA Auto Kick saat Event Meteor Shower aktif, false: Auto kick nonstop
-_G.autoMeteor = true             -- true: Otomatis perbesar hitbox meteor saat Meteor Shower, false: Nonaktif
-_G.autoBuyPatagotitan = true      -- true: Auto beli Patagotitan saat ready di Meteor Shop
-_G.autoBuySpeed = true            -- true: Auto beli Speed (+1) saat ready di Meteor Shop
-_G.autoBuyFrigorex = true        -- true: Auto beli Frigorex jika stock > 0
-_G.autoBuyTricerabob = true      -- true: Auto beli Tricerabob jika stock > 0
-_G.autoBuyFarmPotion = true      -- true: Auto beli 1x Farm Potion khusus jam ganjil (1, 3, 5... 23 WIB) maksimal menit :10
-_G.autoSellAll = false            -- true: Auto Sell All setiap 5 detik via ref_B_SellAll
+_G.autoFarm = true               -- true: Auto Farm Aktif, false: Nonaktif
+_G.onlyMathEvent = false         -- true: HANYA Auto Kick saat MathEvent aktif, false: Auto kick nonstop
+_G.autoMathEvent = true          -- true: Otomatis selesaikan soal matematika, perbesar jawaban benar & hapus jawaban salah
+_G.autoSellAll = false           -- true: Auto Sell All setiap 5 detik via ref_B_SellAll
 _G.autoRemovePlayer = true       -- true: Hapus player lain dari game.Players & workspace.Players (100% Bersih & No Lag), false: Biarkan
-_G.debugConsoleLog = false        -- true: Cetak log status/fase ke console (F9), false: Senyap
+_G.debugConsoleLog = true        -- true: Cetak log status/fase/soal math ke console (F9), false: Senyap
 _G.failsafeTimeout = 25          -- Waktu maksimal (detik) sebelum auto-reset ke Safe Zone jika macet
 
 print("--------------------------------------------------")
-print("🚀 [INIT] Memuat KALB Auto Farm V2 (Ultra Lightweight & Total Player Purger)...")
+print("🚀 [INIT] Memuat KALB Auto Farm V2 (BackToSchool Math Event Auto Solver & Hitbox)...")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -329,20 +326,65 @@ if plotsFolder then
 end
 
 -- =============================================
--- ☄️ AUTO METEOR EVENT ENGINE (HITBOX EXPANDER)
+-- 📚 BACK TO SCHOOL EVENT 1: MATH EVENT ENGINE (AUTO SOLVER & HITBOX EXPANDER)
 -- =============================================
-local OPTIMAL_METEOR_SIZE = Vector3.new(200, 200, 200)
-local activeMeteors = {}
-local isMeteorShowerActive = false
+local OPTIMAL_ANSWER_SIZE = Vector3.new(200, 200, 200)
+local isMathEventActive = false
+local processedQuestionModels = {}
 
-local function isTargetMeteorModel(model)
+-- Evaluator Matematika Aman (Mendukung +, -, *, /, x, ×, ÷, kurung, dan format teks)
+local function solveMathExpression(rawText)
+    if not rawText or rawText == "" then return nil end
+    local str = tostring(rawText)
+
+    -- Bersihkan tag HTML / RichText jika ada (<font>...</font>)
+    str = str:gsub("<[^>]+>", "")
+
+    -- Bersihkan tanda sama dengan dan tanda tanya
+    str = str:gsub("=%s*%?", ""):gsub("=", ""):gsub("%?", "")
+
+    -- Konversi simbol perkalian
+    str = str:gsub("×", "*"):gsub("x", "*"):gsub("X", "*")
+
+    -- Konversi simbol pembagian
+    str = str:gsub("÷", "/"):gsub(":", "/")
+
+    -- Bersihkan spasi
+    str = str:gsub("%s+", "")
+
+    -- Hapus semua karakter selain angka, operator dan kurung
+    str = str:gsub("[^%d%+%-%*%/%.%(%)]", "")
+
+    if str == "" then return nil end
+
+    local func = loadstring("return " .. str)
+    if func then
+        local ok, val = pcall(func)
+        if ok and type(val) == "number" then
+            return val
+        end
+    end
+    return nil
+end
+
+local function parseAnswerValue(rawText)
+    if not rawText or rawText == "" then return nil end
+    local str = tostring(rawText)
+    str = str:gsub("<[^>]+>", "")
+    local mathVal = solveMathExpression(str)
+    if mathVal ~= nil then return mathVal end
+    str = str:gsub("[^%d%.%-]", "")
+    return tonumber(str)
+end
+
+local function isTargetQuestionModel(model)
     if not model or not model:IsA("Model") then return false end
     local debris = workspace:FindFirstChild("Debris")
     if not debris or not model:IsDescendantOf(debris) then return false end
     return tonumber(model.Name) ~= nil
 end
 
-local function getTargetMeteorParent(instance)
+local function getTargetQuestionParent(instance)
     if not instance then return nil end
     local debris = workspace:FindFirstChild("Debris")
     if not debris or not instance:IsDescendantOf(debris) then return nil end
@@ -357,93 +399,154 @@ local function getTargetMeteorParent(instance)
     return nil
 end
 
-local function expandMeteorHitbox(part)
-    if not part or not (part:IsA("BasePart") or part.ClassName == "Part") then return end
-    pcall(function()
-        part.CanCollide = false
-        part.CanTouch = true
-        part.CanQuery = true
-        part.CastShadow = false
-        if part.Size ~= OPTIMAL_METEOR_SIZE then
-            part.Size = OPTIMAL_METEOR_SIZE
-        end
-    end)
-end
+local function processMathQuestionModel(model)
+    if not _G.autoMathEvent then return end
+    if not model or not isTargetQuestionModel(model) then return end
+    if processedQuestionModels[model] then return end
 
-local function handleNewMeteor(model)
-    if not _G.autoMeteor then return end
-    if not model or not isTargetMeteorModel(model) then return end
-    if activeMeteors[model] then return end
-    activeMeteors[model] = true
-    isMeteorShowerActive = true
+    local guiPart = model:FindFirstChild("GuiPart")
+    local answersFolder = model:FindFirstChild("Answers")
 
-    for _, descendant in ipairs(model:GetDescendants()) do
-        if descendant:IsA("BasePart") or descendant.ClassName == "Part" then
-            expandMeteorHitbox(descendant)
+    if not guiPart or not answersFolder then
+        task.defer(function()
+            task.wait(0.2)
+            if not processedQuestionModels[model] and model.Parent then
+                guiPart = model:FindFirstChild("GuiPart")
+                answersFolder = model:FindFirstChild("Answers")
+                if guiPart and answersFolder then
+                    processMathQuestionModel(model)
+                end
+            end
+        end)
+        return
+    end
+
+    local questionLabel = guiPart:FindFirstChildWhichIsA("TextLabel", true)
+    if not questionLabel then
+        task.defer(function()
+            task.wait(0.2)
+            if not processedQuestionModels[model] and model.Parent and guiPart.Parent then
+                questionLabel = guiPart:FindFirstChildWhichIsA("TextLabel", true)
+                if questionLabel then
+                    processMathQuestionModel(model)
+                end
+            end
+        end)
+        return
+    end
+
+    local qText = questionLabel.ContentText ~= "" and questionLabel.ContentText or questionLabel.Text
+    local correctAnswer = solveMathExpression(qText)
+
+    if correctAnswer == nil then
+        local conn
+        conn = questionLabel:GetPropertyChangedSignal("Text"):Connect(function()
+            conn:Disconnect()
+            processMathQuestionModel(model)
+        end)
+        return
+    end
+
+    processedQuestionModels[model] = true
+    isMathEventActive = true
+
+    logConsole(string.format("📚 [MATH EVENT] Soal #%s: '%s' -> Kunci Jawaban: %s", tostring(model.Name), qText, tostring(correctAnswer)))
+
+    -- Bersihkan partikel & efek visual berat pada model soal
+    for _, desc in ipairs(model:GetDescendants()) do
+        if desc:IsA("ParticleEmitter") or desc:IsA("Fire") or desc:IsA("Smoke") or 
+           desc:IsA("Trail") or desc:IsA("PointLight") or desc:IsA("SpotLight") then
+            desc:Destroy()
         end
     end
 
-    if _G.debugConsoleLog then
-        print(string.format("☄️ [METEOR] Hitbox Model #%s diperbesar (200 studs, CanQuery=true)!", tostring(model.Name)))
+    -- Evaluasi semua pilihan jawaban di Folder Answers (A, B, dll)
+    for _, ansPart in ipairs(answersFolder:GetChildren()) do
+        if ansPart:IsA("BasePart") or ansPart.ClassName == "Part" then
+            local ansLabel = ansPart:FindFirstChildWhichIsA("TextLabel", true)
+            local ansText = ansLabel and (ansLabel.ContentText ~= "" and ansLabel.ContentText or ansLabel.Text) or ""
+            local ansVal = parseAnswerValue(ansText)
+
+            if ansVal ~= nil and math.abs(ansVal - correctAnswer) < 0.0001 then
+                -- JAWABAN BENAR: Perbesar Hitbox agar mudah ditendang/disentuh
+                pcall(function()
+                    ansPart.CanCollide = false
+                    ansPart.CanTouch = true
+                    ansPart.CanQuery = true
+                    ansPart.CastShadow = false
+                    if ansPart.Size ~= OPTIMAL_ANSWER_SIZE then
+                        ansPart.Size = OPTIMAL_ANSWER_SIZE
+                    end
+                end)
+                logConsole(string.format("   ✅ [JAWABAN BENAR] Part %s ('%s') diperbesar ke 200 studs!", ansPart.Name, tostring(ansText)))
+            else
+                -- JAWABAN SALAH: Hapus Part agar tidak tersentuh bola/karakter!
+                pcall(function()
+                    ansPart:Destroy()
+                end)
+                logConsole(string.format("   ❌ [JAWABAN SALAH] Part %s ('%s') dihapus!", ansPart.Name, tostring(ansText)))
+            end
+        end
     end
 end
 
-local function setupMeteorListeners(debris)
+local function setupMathEventListeners(debris)
     if not debris then return end
 
-    for _, item in ipairs(debris:GetDescendants()) do
-        if isTargetMeteorModel(item) then
-            handleNewMeteor(item)
+    for _, item in ipairs(debris:GetChildren()) do
+        if isTargetQuestionModel(item) then
+            processMathQuestionModel(item)
         end
     end
 
-    debris.DescendantAdded:Connect(function(descendant)
+    debris.ChildAdded:Connect(function(child)
         task.defer(function()
-            if not _G.autoMeteor then return end
-            if isTargetMeteorModel(descendant) then
-                handleNewMeteor(descendant)
-            elseif descendant:IsA("BasePart") or descendant.ClassName == "Part" then
-                local targetModel = getTargetMeteorParent(descendant)
-                if targetModel then
-                    expandMeteorHitbox(descendant)
-                    handleNewMeteor(targetModel)
-                end
+            if isTargetQuestionModel(child) then
+                processMathQuestionModel(child)
             end
         end)
     end)
 
-    debris.DescendantRemoving:Connect(function(descendant)
-        activeMeteors[descendant] = nil
+    debris.DescendantAdded:Connect(function(descendant)
+        task.defer(function()
+            if not _G.autoMathEvent then return end
+            if descendant:IsA("BasePart") or descendant:IsA("TextLabel") or descendant.ClassName == "Part" then
+                local targetModel = getTargetQuestionParent(descendant)
+                if targetModel then
+                    processMathQuestionModel(targetModel)
+                end
+            elseif descendant:IsA("ParticleEmitter") or descendant:IsA("Fire") or descendant:IsA("Smoke") or 
+                   descendant:IsA("Trail") or descendant:IsA("PointLight") or descendant:IsA("SpotLight") then
+                descendant:Destroy()
+            end
+        end)
+    end)
+
+    debris.ChildRemoved:Connect(function(child)
+        processedQuestionModels[child] = nil
+        task.defer(function()
+            local hasQuestions = false
+            for _, c in ipairs(debris:GetChildren()) do
+                if c:IsA("Model") and tonumber(c.Name) ~= nil then
+                    hasQuestions = true
+                    break
+                end
+            end
+            if not hasQuestions then
+                isMathEventActive = false
+            end
+        end)
     end)
 end
 
 task.spawn(function()
     local debris = workspace:FindFirstChild("Debris") or workspace:WaitForChild("Debris", 10)
-    if debris then setupMeteorListeners(debris) end
+    if debris then setupMathEventListeners(debris) end
 end)
 
 workspace.ChildAdded:Connect(function(child)
     if child.Name == "Debris" then
-        task.defer(function() setupMeteorListeners(child) end)
-    end
-end)
-
-task.spawn(function()
-    while task.wait(0.25) do
-        if not _G.autoMeteor then continue end
-        local debris = workspace:FindFirstChild("Debris")
-        if debris then
-            for _, item in ipairs(debris:GetDescendants()) do
-                if isTargetMeteorModel(item) then
-                    if not activeMeteors[item] then handleNewMeteor(item) end
-                    for _, part in ipairs(item:GetDescendants()) do
-                        if (part:IsA("BasePart") or part.ClassName == "Part") and (part.Size ~= OPTIMAL_METEOR_SIZE or not part.CanQuery) then
-                            expandMeteorHitbox(part)
-                        end
-                    end
-                end
-            end
-        end
+        task.defer(function() setupMathEventListeners(child) end)
     end
 end)
 
@@ -468,13 +571,13 @@ local function logConsole(msg)
     end
 end
 
-local function checkMeteorShowerActive()
-    if isMeteorShowerActive then return true end
+local function checkMathEventActive()
+    if isMathEventActive then return true end
     local debris = workspace:FindFirstChild("Debris")
     if debris then
         for _, child in ipairs(debris:GetChildren()) do
             if child:IsA("Model") and tonumber(child.Name) ~= nil then
-                isMeteorShowerActive = true
+                isMathEventActive = true
                 return true
             end
         end
@@ -484,8 +587,8 @@ end
 
 local function shouldKick()
     if not _G.autoFarm then return false end
-    if _G.onlyMeteorEvent then
-        return checkMeteorShowerActive()
+    if _G.onlyMathEvent then
+        return checkMathEventActive()
     end
     return true
 end
@@ -837,9 +940,9 @@ local function setupServerEventListeners()
     local addW = rev_AddedWeather or findRemote("rev_AddedWeather", "RemoteEvent")
     if addW then
         addW.OnClientEvent:Connect(function(weatherType, ...)
-            if weatherType == "MeteorShower" then
-                isMeteorShowerActive = true
-                logConsole("☄️ Event Cuaca: METEOR SHOWER AKTIF! Memulai Auto Kick & Farm...")
+            if weatherType == "MathEvent" then
+                isMathEventActive = true
+                logConsole("📚 Event Cuaca: MATH EVENT AKTIF! Memulai Auto Solver & Hitbox Expander...")
             end
         end)
     end
@@ -847,9 +950,9 @@ local function setupServerEventListeners()
     local remW = rev_RemovedWeather or findRemote("rev_RemovedWeather", "RemoteEvent")
     if remW then
         remW.OnClientEvent:Connect(function(weatherType, ...)
-            if weatherType == "MeteorShower" then
-                isMeteorShowerActive = false
-                logConsole("☁️ Event Cuaca: Meteor Shower Selesai. Menyelesaikan ronde ini lalu standby di Safe Zone...")
+            if weatherType == "MathEvent" then
+                isMathEventActive = false
+                logConsole("☁️ Event Cuaca: Math Event Selesai. Standby di Safe Zone...")
             end
         end)
     end
@@ -857,15 +960,15 @@ end
 setupServerEventListeners()
 
 -- =============================================
--- ☄️ DETEKSI METEOR SHOWER REAL-TIME (MULTI-SOURCE)
+-- 📚 DETEKSI MATH EVENT REAL-TIME (MULTI-SOURCE)
 -- =============================================
-local function checkMeteorShowerActive()
-    if isMeteorShowerActive then return true end
+local function checkMathEventActive()
+    if isMathEventActive then return true end
     local debris = workspace:FindFirstChild("Debris")
     if debris then
         for _, child in ipairs(debris:GetChildren()) do
             if child:IsA("Model") and tonumber(child.Name) ~= nil then
-                isMeteorShowerActive = true
+                isMathEventActive = true
                 return true
             end
         end
@@ -875,8 +978,8 @@ end
 
 local function shouldKick()
     if not _G.autoFarm then return false end
-    if _G.onlyMeteorEvent then
-        return checkMeteorShowerActive()
+    if _G.onlyMathEvent then
+        return checkMathEventActive()
     end
     return true
 end
