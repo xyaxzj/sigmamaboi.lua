@@ -1,5 +1,5 @@
 -- ==============================================================================
--- 🥔 KALB ULTRA LIGHTWEIGHT AUTO FARM V2 (BACK TO SCHOOL EVENT: MATH EVENT AUTO SOLVE & FARM)
+-- 🥔 KALB ULTRA LIGHTWEIGHT AUTO FARM V2 (BACK TO SCHOOL: MATH EVENT & PECLASS)
 -- ==============================================================================
 -- Fitur & Alur:
 -- 1. ⚙️ Full Config Mode: Semua pengaturan diatur via variabel _G di baris atas (Tanpa UI)
@@ -12,9 +12,12 @@
 --    - Membaca soal matematika di GuiPart.SurfaceGui.TextLabel (cth: 7+5) & menyelesaikannya otomatis
 --    - Menghapus Part jawaban SALAH di folder Answers (cth: Part A = 10 dihapus)
 --    - Memperbesar hitbox Part jawaban BENAR (cth: Part B = 12 diperbesar ke 200 studs, CanQuery=true)
--- 4. ⚽ Auto Kick: Bot menendang bola (nonstop / saat MathEvent berlangsung)
--- 5. 💰 Auto Sell All: Menjual semua brainrot tiap 5 detik (ref_B_SellAll)
--- 6. 🥔 Potato Mode Ekstrem & 🛡️ Anti-AFK
+-- 4. 🏃 Back To School Event 2: PEClass Auto Purger:
+--    - Mendeteksi rev_AddedWeather "PEClass"
+--    - Menghapus SEMUA Model angka (1, 2, 3...) dan Part "Ball" di Debris secara real-time
+-- 5. ⚽ Auto Kick: Bot menendang bola (nonstop / saat event berlangsung)
+-- 6. 💰 Auto Sell All: Menjual semua brainrot tiap 5 detik (ref_B_SellAll)
+-- 7. 🥔 Potato Mode Ekstrem & 🛡️ Anti-AFK
 -- ==============================================================================
 
 if not game:IsLoaded() then game.Loaded:Wait() end
@@ -25,13 +28,14 @@ if not game:IsLoaded() then game.Loaded:Wait() end
 _G.autoFarm = true               -- true: Auto Farm Aktif, false: Nonaktif
 _G.onlyMathEvent = false         -- true: HANYA Auto Kick saat MathEvent aktif, false: Auto kick nonstop
 _G.autoMathEvent = true          -- true: Otomatis selesaikan soal matematika, perbesar jawaban benar & hapus jawaban salah
+_G.autoPEClass = true            -- true: Otomatis hapus Model angka & Ball di Debris saat event PEClass
 _G.autoSellAll = false           -- true: Auto Sell All setiap 5 detik via ref_B_SellAll
 _G.autoRemovePlayer = true       -- true: Hapus player lain dari game.Players & workspace.Players (100% Bersih & No Lag), false: Biarkan
 _G.debugConsoleLog = true        -- true: Cetak log status/fase/soal math ke console (F9), false: Senyap
 _G.failsafeTimeout = 25          -- Waktu maksimal (detik) sebelum auto-reset ke Safe Zone jika macet
 
 print("--------------------------------------------------")
-print("🚀 [INIT] Memuat KALB Auto Farm V2 (BackToSchool Math Event Auto Solver & Hitbox)...")
+print("🚀 [INIT] Memuat KALB Auto Farm V2 (BackToSchool Math Event & PEClass)...")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -326,10 +330,11 @@ if plotsFolder then
 end
 
 -- =============================================
--- 📚 BACK TO SCHOOL EVENT 1: MATH EVENT ENGINE (AUTO SOLVER & HITBOX EXPANDER)
+-- 📚 BACK TO SCHOOL EVENT 1 & 2: MATH EVENT & PECLASS ENGINE
 -- =============================================
 local OPTIMAL_ANSWER_SIZE = Vector3.new(200, 200, 200)
 local isMathEventActive = false
+local isPEClassActive = false
 local processedQuestionModels = {}
 
 -- Evaluator Matematika Aman (Mendukung +, -, *, /, x, ×, ÷, kurung, dan format teks)
@@ -399,8 +404,55 @@ local function getTargetQuestionParent(instance)
     return nil
 end
 
+-- =============================================
+-- 🏃 DETEKTOR & PURGER PECLASS (MODEL ANGKA & BALL)
+-- =============================================
+local function isTargetPEClassEntity(instance)
+    if not instance then return false end
+    local debris = workspace:FindFirstChild("Debris")
+    if not debris or not instance:IsDescendantOf(debris) then return false end
+
+    -- Model dengan nama angka (1, 2, 3...)
+    if instance:IsA("Model") and tonumber(instance.Name) ~= nil then
+        return true
+    end
+
+    -- Part / Instance dengan nama "Ball"
+    local lowerName = string.lower(instance.Name)
+    if lowerName == "ball" then
+        return true
+    end
+
+    return false
+end
+
+local function scanAndPurgePEClass(debris)
+    if not _G.autoPEClass or not isPEClassActive then return end
+    debris = debris or workspace:FindFirstChild("Debris")
+    if not debris then return end
+
+    for _, child in ipairs(debris:GetChildren()) do
+        if isTargetPEClassEntity(child) then
+            pcall(function()
+                logConsole(string.format("🏃 [PECLASS PURGE] Menghapus %s '%s' dari Debris!", child.ClassName, child.Name))
+                child:Destroy()
+            end)
+        end
+    end
+end
+
+-- Fast Sweeper Loop saat PEClass aktif
+task.spawn(function()
+    while task.wait(0.15) do
+        if isPEClassActive and _G.autoPEClass then
+            scanAndPurgePEClass()
+        end
+    end
+end)
+
 local function processMathQuestionModel(model)
     if not _G.autoMathEvent then return end
+    if isPEClassActive then return end -- Jika sedang PEClass, biarkan purger yang menangani
     if not model or not isTargetQuestionModel(model) then return end
     if processedQuestionModels[model] then return end
 
@@ -493,14 +545,28 @@ end
 local function setupMathEventListeners(debris)
     if not debris then return end
 
+    if isPEClassActive and _G.autoPEClass then
+        scanAndPurgePEClass(debris)
+    end
+
     for _, item in ipairs(debris:GetChildren()) do
-        if isTargetQuestionModel(item) then
+        if isPEClassActive and _G.autoPEClass and isTargetPEClassEntity(item) then
+            pcall(function() item:Destroy() end)
+        elseif isTargetQuestionModel(item) then
             processMathQuestionModel(item)
         end
     end
 
     debris.ChildAdded:Connect(function(child)
         task.defer(function()
+            if isPEClassActive and _G.autoPEClass and isTargetPEClassEntity(child) then
+                pcall(function()
+                    logConsole(string.format("🏃 [PECLASS PURGE] Menghapus %s '%s' dari Debris!", child.ClassName, child.Name))
+                    child:Destroy()
+                end)
+                return
+            end
+
             if isTargetQuestionModel(child) then
                 processMathQuestionModel(child)
             end
@@ -509,6 +575,14 @@ local function setupMathEventListeners(debris)
 
     debris.DescendantAdded:Connect(function(descendant)
         task.defer(function()
+            if isPEClassActive and _G.autoPEClass and isTargetPEClassEntity(descendant) then
+                pcall(function()
+                    logConsole(string.format("🏃 [PECLASS PURGE] Menghapus %s '%s' dari Debris!", descendant.ClassName, descendant.Name))
+                    descendant:Destroy()
+                end)
+                return
+            end
+
             if not _G.autoMathEvent then return end
             if descendant:IsA("BasePart") or descendant:IsA("TextLabel") or descendant.ClassName == "Part" then
                 local targetModel = getTargetQuestionParent(descendant)
@@ -650,209 +724,6 @@ local rev_AddedWeather = findRemote("rev_AddedWeather", "RemoteEvent")
 local rev_RemovedWeather = findRemote("rev_RemovedWeather", "RemoteEvent")
 
 local ref_B_SellAll = findRemote("ref_B_SellAll", "RemoteFunction")
-local rev_MeteorShop_RequestSync = findRemote("rev_MeteorShop_RequestSync", "RemoteEvent")
-local rev_MeteorShop_Stock = findRemote("rev_MeteorShop_Stock", "RemoteEvent")
-local rev_MeteorShop_Buy = findRemote("rev_MeteorShop_Buy", "RemoteEvent")
-
--- =============================================
--- 📢 DISCORD WEBHOOK NOTIFIER (PATAGOTITAN, FRIGOREX, TRICERABOB - ZERO LAG & INSTANT)
--- =============================================
-local DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1539697793973756084/1oLTQDKSmutWJlPX91He00IEEAg_lsos8MWbxuXki8LKqO8WnZUX8kwurULVjdB8lOqb"
-
--- URL CDN Langsung (0x Request HTTP Ekstra, 100% Bebas Freeze/Lag)
-local PATAGO_IMAGE_URL = "https://www.roblox.com/asset-thumbnail/image?assetId=95399484334874&width=420&height=420&format=png"
-local FRIGOREX_IMAGE_URL = "https://www.roblox.com/asset-thumbnail/image?assetId=140510107418430&width=420&height=420&format=png"
-
-local function sendDiscordWebhook(itemName, totalBought)
-    totalBought = totalBought or 1
-    task.defer(function()
-        task.spawn(function()
-            pcall(function()
-                local httpReq = request or http_request or (delta and delta.request) or (syn and syn.request) or (Fluxus and Fluxus.request) or (http and http.request)
-                if not httpReq then return end
-                local HttpService = game:GetService("HttpService")
-
-                local userDisplayName = lp and lp.DisplayName or (lp and lp.Name or "Unknown")
-                local userId = lp and tostring(lp.UserId) or "0"
-                local playerAvatarCdn = string.format("https://www.roblox.com/headshot-thumbnail/image?userId=%s&width=150&height=150&format=png", userId)
-
-                local itemImageUrl = ""
-                local embedColor = 0x3498db
-                local itemIcon = "🛒"
-                local unitCost = 0
-                local itemBuff = ""
-
-                if itemName == "Patagotitan" then
-                    itemIcon = "🦖"
-                    embedColor = 0x2ecc71 -- Hijau Emerald
-                    itemImageUrl = PATAGO_IMAGE_URL
-                    unitCost = 500
-                    itemBuff = "150% CP/s"
-                elseif itemName == "Frigorex" then
-                    itemIcon = "👑"
-                    embedColor = 0x9b59b6 -- Ungu Royal
-                    itemImageUrl = FRIGOREX_IMAGE_URL
-                    unitCost = 1250
-                    itemBuff = "250% CP/s"
-                elseif itemName == "Tricerabob" then
-                    itemIcon = "🦏"
-                    embedColor = 0xe67e22 -- Oranye Golden
-                    itemImageUrl = playerAvatarCdn
-                    unitCost = 750
-                    itemBuff = "Exclusive Meteor Brainrot"
-                end
-
-                local totalCost = unitCost * totalBought
-                local titleDesc = (totalBought > 1) and string.format("%s %dx %s", itemIcon, totalBought, itemName) or string.format("%s %s", itemIcon, itemName)
-
-                local payload = {
-                    ["username"] = "KALB Meteor Shop",
-                    ["avatar_url"] = playerAvatarCdn,
-                    ["embeds"] = {
-                        {
-                            ["author"] = {
-                                ["name"] = userDisplayName,
-                                ["icon_url"] = playerAvatarCdn
-                            },
-                            ["title"] = "Berhasil Membeli",
-                            ["description"] = titleDesc,
-                            ["color"] = embedColor,
-                            ["thumbnail"] = {
-                                ["url"] = itemImageUrl
-                            },
-                            ["fields"] = {
-                                {
-                                    ["name"] = "Exclusive",
-                                    ["value"] = itemBuff,
-                                    ["inline"] = false
-                                },
-                                {
-                                    ["name"] = "Jumlah",
-                                    ["value"] = string.format("%d Unit", totalBought),
-                                    ["inline"] = true
-                                },
-                                {
-                                    ["name"] = "Total Harga",
-                                    ["value"] = string.format("%d Tokens", totalCost),
-                                    ["inline"] = true
-                                }
-                            },
-                            ["footer"] = {
-                                ["text"] = "KALB - Meteor Shop"
-                            },
-                            ["timestamp"] = os.date("!%Y-%m-%dT%H:%M:%SZ")
-                        }
-                    }
-                }
-
-                httpReq({
-                    Url = DISCORD_WEBHOOK_URL,
-                    Method = "POST",
-                    Headers = {
-                        ["Content-Type"] = "application/json"
-                    },
-                    Body = HttpService:JSONEncode(payload)
-                })
-            end)
-        end)
-    end)
-end
-
--- =============================================
--- 🛒 AUTO BUY METEOR SHOP (PATAGOTITAN, SPEED, FRIGOREX, TRICERABOB)
--- =============================================
-if rev_MeteorShop_Stock then
-    rev_MeteorShop_Stock.OnClientEvent:Connect(function(stockData, expiryTimestamp)
-        if type(stockData) ~= "table" then return end
-        
-        local buyRemote = rev_MeteorShop_Buy or (networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_Buy"))
-        if not buyRemote then return end
-
-        for itemName, itemInfo in pairs(stockData) do
-            if type(itemInfo) == "table" then
-                local stockCount = tonumber(itemInfo.Stock) or 0
-                
-                if stockCount > 0 then
-                    local shouldBuy = false
-
-                    if itemName == "Patagotitan" and _G.autoBuyPatagotitan then
-                        shouldBuy = true
-                    elseif itemName == "Speed" and _G.autoBuySpeed then
-                        shouldBuy = true
-                    elseif itemName == "Frigorex" and _G.autoBuyFrigorex then
-                        shouldBuy = true
-                    elseif itemName == "Tricerabob" and _G.autoBuyTricerabob then
-                        shouldBuy = true
-                    end
-
-                    if shouldBuy then
-                        task.spawn(function()
-                            local boughtCount = 0
-                            for i = 1, stockCount do
-                                pcall(function()
-                                    buyRemote:FireServer(itemName)
-                                    boughtCount = boughtCount + 1
-                                    print(string.format("🛒 [METEOR AUTO BUY] Berhasil membeli %s (#%d/%d)!", itemName, i, stockCount))
-                                end)
-                                task.wait(0.15)
-                            end
-                            if boughtCount > 0 and (itemName == "Patagotitan" or itemName == "Frigorex" or itemName == "Tricerabob") then
-                                sendDiscordWebhook(itemName, boughtCount)
-                            end
-                        end)
-                    end
-                end
-            end
-        end
-    end)
-end
-
--- Loop Request Sync Stock setiap 60 Detik
-task.spawn(function()
-    task.wait(3)
-    while true do
-        if _G.autoFarm and (_G.autoBuyPatagotitan or _G.autoBuySpeed or _G.autoBuyFrigorex or _G.autoBuyTricerabob) then
-            pcall(function()
-                local syncRemote = rev_MeteorShop_RequestSync or (networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_RequestSync"))
-                if syncRemote then
-                    syncRemote:FireServer()
-                end
-            end)
-        end
-        task.wait(60)
-    end
-end)
-
--- =============================================
--- 🧪 AUTO BUY FARM POTION (KHUSUS JAM GANJIL WIB: 1, 3, 5... 23 & MAX MENIT :10)
--- =============================================
-local lastBoughtFarmPotionHour = -1
-
-task.spawn(function()
-    task.wait(2)
-    while true do
-        if _G.autoFarm and _G.autoBuyFarmPotion then
-            pcall(function()
-                local wibTime = os.date("!*t", os.time() + (7 * 3600))
-                local hourWIB = wibTime.hour
-                local minWIB = wibTime.min
-                local secWIB = wibTime.sec
-
-                -- Hanya beli jika jam ganjil (1, 3, 5... 23) DAN menit masih <= 10
-                if (hourWIB % 2 == 1) and (minWIB <= 10) and (lastBoughtFarmPotionHour ~= hourWIB) then
-                    lastBoughtFarmPotionHour = hourWIB
-                    
-                    local buyRemote = rev_MeteorShop_Buy or (networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_Buy"))
-                    if buyRemote then
-                        buyRemote:FireServer("Farm Potion")
-                        print(string.format("🧪 [AUTO BUY WIB] Berhasil membeli 1x Farm Potion pada jam %02d:%02d:%02d WIB (Di bawah menit :10)!", hourWIB, minWIB, secWIB))
-                    end
-                end
-            end)
-        end
-        task.wait(5)
-    end
-end)
 
 -- =============================================
 -- 💰 AUTO SELL ALL (SETIAP 5 DETIK)
@@ -943,6 +814,10 @@ local function setupServerEventListeners()
             if weatherType == "MathEvent" then
                 isMathEventActive = true
                 logConsole("📚 Event Cuaca: MATH EVENT AKTIF! Memulai Auto Solver & Hitbox Expander...")
+            elseif weatherType == "PEClass" then
+                isPEClassActive = true
+                logConsole("🏃 Event Cuaca: PECLASS AKTIF! Memulai Auto Purger (Model Angka & Ball)...")
+                scanAndPurgePEClass()
             end
         end)
     end
@@ -953,6 +828,9 @@ local function setupServerEventListeners()
             if weatherType == "MathEvent" then
                 isMathEventActive = false
                 logConsole("☁️ Event Cuaca: Math Event Selesai. Standby di Safe Zone...")
+            elseif weatherType == "PEClass" then
+                isPEClassActive = false
+                logConsole("☁️ Event Cuaca: PEClass Selesai. Standby di Safe Zone...")
             end
         end)
     end
