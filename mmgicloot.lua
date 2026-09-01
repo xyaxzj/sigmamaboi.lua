@@ -1,17 +1,24 @@
 -- ==============================================================================
--- 🎓 KALB AUTO MATH, PECLASS & AUTO SELL (KHUSUS EVENT & SELL - TANPA KICK)
+-- 🎓 KALB AUTO MATH, PECLASS & AUTO SELL (ROCK-SOLID AFK ENGINE)
 -- ==============================================================================
--- Fitur Khusus:
--- 1. 📚 Math Event Solver:
---    - Membaca soal dari GuiPart.SurfaceGui.TextLabel (Mendukung 1-3 digit, +, -, *, /, x, ÷, :)
---    - ✅ Jawaban BENAR: Hitbox diperbesar ke 200x200x200 studs (CanTouch=true, CanQuery=true)
---    - ❌ Jawaban SALAH: Part langsung dimusnahkan/dihapus (Destroy)
---    - Pemindai universal Workspace & Debris (aktif 24/7 seketika)
--- 2. 🏃 PEClass Purger:
---    - Menghapus Model angka & Part "Ball" saat event PEClass aktif
--- 3. 💰 Auto Sell All:
---    - Menjual seluruh brainrot secara berkala via RemoteFunction ref_B_SellAll
--- 4. 🛡️ Anti-AFK & 🥔 Anti-Lag Ringan
+-- Fitur & Alur Kerja:
+-- 1. 🔄 Dynamic Event Switcher (Bergantian Otomatis & Self-Healing 24/7):
+--    - Otomatis berganti mode antara "MathEvent", "PEClass", dan "Idle".
+--    - Mampu mendeteksi otomatis walaupun bot baru join atau remote cuaca terlewat.
+--
+-- 2. 📚 MathEvent Mode:
+--    - Mendeteksi Model Soal di Workspace & Debris
+--    - Membaca soal dari GuiPart.SurfaceGui.TextLabel (Mendukung 1-3 digit, RichText, +, -, *, /, x, ÷, :)
+--    - ✅ Jawaban BENAR: Hitbox diperbesar ke 200x200x200 studs (CanTouch=true, CanQuery=true, Transparency=0.5)
+--    - ❌ Jawaban SALAH: Part langsung dimusnahkan/dihapus (:Destroy())
+--
+-- 3. 🏃 PEClass Mode:
+--    - Menghapus seketika semua Model angka non-Math dan Part "Ball" di Workspace & Debris
+--
+-- 4. 💰 Auto Sell All:
+--    - Menjual seluruh brainrot setiap 5 detik via RemoteFunction ref_B_SellAll
+--
+-- 5. 🛡️ Anti-AFK & 🧹 Auto Garbage Collector (Stabil untuk AFK Berjam-jam/Berhari-hari)
 -- ==============================================================================
 
 if not game:IsLoaded() then game.Loaded:Wait() end
@@ -23,10 +30,10 @@ _G.autoMathEvent = true      -- true: Otomatis selesaikan soal math & perbesar j
 _G.autoPEClass = true        -- true: Otomatis hapus Model angka & Ball saat PEClass
 _G.autoSellAll = true        -- true: Otomatis jual semua brainrot berkala
 _G.sellInterval = 5          -- Interval waktu (detik) Auto Sell All
-_G.debugConsoleLog = true    -- true: Tampilkan log di Developer Console (F9)
+_G.debugConsoleLog = false    -- true: Tampilkan log di Developer Console (F9)
 
 print("--------------------------------------------------")
-print("🚀 [INIT] Memuat KALB Auto Math, PEClass & Auto Sell...")
+print("🚀 [INIT] Memuat KALB Auto Math, PEClass & Auto Sell (AFK Mode)...")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -50,7 +57,7 @@ local function logConsole(...)
 end
 
 -- ==============================================================================
--- 🛡️ ANTI-AFK (BUILT-IN)
+-- 🛡️ ANTI-AFK & MEMORY STABILIZER (ANTI DISCONNECT & ANTI MEMORY LEAK)
 -- ==============================================================================
 pcall(function()
     if getconnections then
@@ -74,8 +81,18 @@ lp.Idled:Connect(function()
     end)
 end)
 
+-- Pembersih Memori Tiap 60 Detik (AFK Long Run)
+task.spawn(function()
+    while task.wait(60) do
+        pcall(function()
+            if gcinfo then gcinfo() end
+            if collectgarbage then collectgarbage("collect") end
+        end)
+    end
+end)
+
 -- ==============================================================================
--- 📡 DAFTAR REMOTE NETWORK & RESOLVER
+-- 📡 DAFTAR REMOTE NETWORK & AUTO-RESOLVER
 -- ==============================================================================
 local networkFolder = nil
 pcall(function()
@@ -102,7 +119,7 @@ local rev_AddedWeather = findRemote("rev_AddedWeather", "RemoteEvent")
 local rev_RemovedWeather = findRemote("rev_RemovedWeather", "RemoteEvent")
 
 -- ==============================================================================
--- 💰 FITUR 1: AUTO SELL ALL (SETIAP BEBERAPA DETIK)
+-- 💰 FITUR 1: AUTO SELL ALL (SETIAP BEBERAPA DETIK NONSTOP)
 -- ==============================================================================
 task.spawn(function()
     while true do
@@ -110,8 +127,8 @@ task.spawn(function()
         task.wait(delayTime)
         if _G.autoSellAll then
             pcall(function()
-                local sellRemote = ref_B_SellAll or (networkFolder and networkFolder:FindFirstChild("ref_B_SellAll"))
-                if not sellRemote then
+                local sellRemote = ref_B_SellAll
+                if not sellRemote or not sellRemote.Parent then
                     sellRemote = findRemote("ref_B_SellAll", "RemoteFunction")
                     ref_B_SellAll = sellRemote
                 end
@@ -126,14 +143,24 @@ task.spawn(function()
 end)
 
 -- ==============================================================================
--- 📚 FITUR 2: BACK TO SCHOOL MATH EVENT ENGINE (UNIVERSAL & BULLETPROOF)
+-- 🔄 STATE CONTROLLER EVENT CUACA (MATH EVENT & PECLASS)
 -- ==============================================================================
 local OPTIMAL_ANSWER_SIZE = Vector3.new(200, 200, 200)
-local isMathEventActive = true -- Default Aktif Langsung 24/7
-local isPEClassActive = false
+local currentActiveMode = "Idle" -- "MathEvent" | "PEClass" | "Idle"
 local processedQuestionModels = {}
 
--- Evaluator Matematika Tangguh (Mendukung +, -, *, /, x, X, ×, ÷, :, kurung, & RichText)
+-- Bersihkan cache model yang sudah hancur
+local function pruneProcessedCache()
+    for model, _ in pairs(processedQuestionModels) do
+        if not model or not model.Parent then
+            processedQuestionModels[model] = nil
+        end
+    end
+end
+
+-- ==============================================================================
+-- 🧠 EVALUATOR MATEMATIKA (MENDUKUNG 1-3 DIGIT, RICHTEXT, +, -, *, /, x, ÷, :)
+-- ==============================================================================
 local function solveMathExpression(rawText)
     if not rawText or rawText == "" then return nil end
     local str = tostring(rawText)
@@ -215,12 +242,12 @@ local function getQuestionModelFromInstance(inst)
 end
 
 -- ==============================================================================
--- 🏃 FITUR 3: PECLASS AUTO PURGER (MODEL ANGKA NON-MATH & BALL)
+-- 🏃 MEKANIK PECLASS: PURGER BALL & MODEL ANGKA
 -- ==============================================================================
 local function isTargetPEClassEntity(instance)
     if not instance then return false end
 
-    -- Jika ini adalah soal matematika (ada GuiPart/Answers), JANGAN anggap sebagai PEClass
+    -- Jika ini adalah soal matematika (ada GuiPart/Answers), JANGAN dihapus
     if instance:IsA("Model") and (instance:FindFirstChild("GuiPart") or instance:FindFirstChild("Answers")) then
         return false
     end
@@ -231,8 +258,8 @@ local function isTargetPEClassEntity(instance)
         return true
     end
 
-    -- Model dengan nama angka murni saat PEClass aktif (tanpa GuiPart)
-    if isPEClassActive and instance:IsA("Model") and tonumber(instance.Name) ~= nil then
+    -- Model dengan nama angka murni saat PEClass aktif (tanpa GuiPart/Answers)
+    if currentActiveMode == "PEClass" and instance:IsA("Model") and tonumber(instance.Name) ~= nil then
         return true
     end
 
@@ -240,22 +267,26 @@ local function isTargetPEClassEntity(instance)
 end
 
 local function scanAndPurgePEClass()
-    if not _G.autoPEClass or not isPEClassActive then return end
+    if not _G.autoPEClass then return end
+    
     local debris = workspace:FindFirstChild("Debris")
-    local container = debris or workspace
+    local containers = {workspace}
+    if debris then table.insert(containers, debris) end
 
-    for _, child in ipairs(container:GetChildren()) do
-        if isTargetPEClassEntity(child) then
-            pcall(function()
-                logConsole(string.format("🏃 [PECLASS PURGE] Menghapus %s '%s'!", child.ClassName, child.Name))
-                child:Destroy()
-            end)
+    for _, container in ipairs(containers) do
+        for _, child in ipairs(container:GetChildren()) do
+            if isTargetPEClassEntity(child) then
+                pcall(function()
+                    logConsole(string.format("🏃 [PECLASS PURGE] Menghapus %s '%s'!", child.ClassName, child.Name))
+                    child:Destroy()
+                end)
+            end
         end
     end
 end
 
 -- ==============================================================================
--- 🧠 PROSES & SOLVE SOAL MATEMATIKA REAL-TIME
+-- 🧠 MEKANIK MATHEVENT: SOLVER, HITBOX EXPANDER & WRONG ANSWER DESTROYER
 -- ==============================================================================
 local function processMathQuestionModel(model)
     if not _G.autoMathEvent then return end
@@ -264,10 +295,8 @@ local function processMathQuestionModel(model)
     local guiPart = model:FindFirstChild("GuiPart") or model:FindFirstChild("GuiPart", true)
     local answersFolder = model:FindFirstChild("Answers") or model:FindFirstChild("Answers", true)
 
-    -- Tunggu hingga GuiPart dan Answers folder ada
     if not guiPart or not answersFolder then return end
 
-    -- Cari TextLabel pada GuiPart
     local questionLabel = guiPart:FindFirstChildWhichIsA("TextLabel", true)
     if not questionLabel then return end
 
@@ -296,18 +325,17 @@ local function processMathQuestionModel(model)
         end
     end
 
-    -- Pastikan semua pilihan jawaban sudah ter-load teksnya sebelum eksekusi
+    -- Tunggu hingga semua opsi jawaban ter-load teksnya
     if totalParts == 0 or #answerItems < totalParts then
-        return -- Tunggu tick berikutnya agar semua label ter-load
+        return
     end
 
-    -- Tandai bahwa model soal ini sudah berhasil diproses
     processedQuestionModels[model] = true
-    isMathEventActive = true
+    currentActiveMode = "MathEvent"
 
     logConsole(string.format("📚 [MATH EVENT] Soal #%s: '%s' -> Kunci Jawaban: %s", tostring(model.Name), tostring(qText), tostring(correctAnswer)))
 
-    -- Bersihkan partikel visual berat pada model soal
+    -- Bersihkan partikel visual berat
     for _, desc in ipairs(model:GetDescendants()) do
         if desc:IsA("ParticleEmitter") or desc:IsA("Fire") or desc:IsA("Smoke") or 
            desc:IsA("Trail") or desc:IsA("PointLight") or desc:IsA("SpotLight") then
@@ -333,7 +361,7 @@ local function processMathQuestionModel(model)
             end)
             logConsole(string.format("   ✅ [JAWABAN BENAR] Part %s ('%s') diperbesar ke 200 studs!", item.part.Name, tostring(item.text)))
         else
-            -- JAWABAN SALAH: Hapus Part agar tidak tersentuh bola/karakter!
+            -- JAWABAN SALAH: Hapus Part agar tidak tersentuh!
             pcall(function()
                 item.obj:Destroy()
             end)
@@ -343,41 +371,39 @@ local function processMathQuestionModel(model)
 end
 
 -- ==============================================================================
--- 📡 PEMINDAI UNIVERSAL WORKSPACE & DEBRIS
+-- 📡 UNIVERSAL REAL-TIME SCANNER & DYNAMIC EVENT MANAGER
 -- ==============================================================================
-local function scanAndProcessAllMath()
-    if not _G.autoMathEvent then return end
+local function runUniversalScanner()
+    pruneProcessedCache()
 
-    -- 1. Scan di Debris (jika ada)
     local debris = workspace:FindFirstChild("Debris")
-    if debris then
-        if isPEClassActive and _G.autoPEClass then
-            scanAndPurgePEClass()
-        end
+    local containers = {workspace}
+    if debris then table.insert(containers, debris) end
 
-        for _, child in ipairs(debris:GetChildren()) do
-            if child:IsA("Model") and not processedQuestionModels[child] then
-                if isTargetQuestionModel(child) then
-                    task.defer(processMathQuestionModel, child)
-                end
-            end
-        end
+    -- 1. Jika mode aktif adalah PEClass, jalankan purger
+    if currentActiveMode == "PEClass" and _G.autoPEClass then
+        scanAndPurgePEClass()
     end
 
-    -- 2. Scan langsung di Workspace
-    for _, child in ipairs(workspace:GetChildren()) do
-        if child:IsA("Model") and not processedQuestionModels[child] then
-            if isTargetQuestionModel(child) then
-                task.defer(processMathQuestionModel, child)
+    -- 2. Scan model soal matematika di seluruh container
+    if _G.autoMathEvent then
+        for _, container in ipairs(containers) do
+            for _, child in ipairs(container:GetChildren()) do
+                if child:IsA("Model") and not processedQuestionModels[child] then
+                    if isTargetQuestionModel(child) then
+                        task.defer(processMathQuestionModel, child)
+                    end
+                end
             end
         end
     end
 end
 
--- Listener DescendantAdded pada Workspace (Menangkap model soal instan di mana pun berada)
+-- Listener DescendantAdded Real-time
 workspace.DescendantAdded:Connect(function(descendant)
     task.defer(function()
-        if isPEClassActive and _G.autoPEClass and isTargetPEClassEntity(descendant) then
+        -- Deteksi & Purge PEClass
+        if currentActiveMode == "PEClass" and _G.autoPEClass and isTargetPEClassEntity(descendant) then
             pcall(function()
                 logConsole(string.format("🏃 [PECLASS PURGE] Menghapus %s '%s'!", descendant.ClassName, descendant.Name))
                 descendant:Destroy()
@@ -385,62 +411,75 @@ workspace.DescendantAdded:Connect(function(descendant)
             return
         end
 
-        if not _G.autoMathEvent then return end
-        if descendant.Name == "GuiPart" or descendant.Name == "Answers" or descendant:IsA("TextLabel") or descendant.Name == "A" or descendant.Name == "B" then
-            local model = getQuestionModelFromInstance(descendant)
-            if model and not processedQuestionModels[model] then
-                processMathQuestionModel(model)
-            end
-        elseif descendant:IsA("Model") and isTargetQuestionModel(descendant) then
-            if not processedQuestionModels[descendant] then
-                processMathQuestionModel(descendant)
+        -- Deteksi Soal Matematika
+        if _G.autoMathEvent then
+            if descendant.Name == "GuiPart" or descendant.Name == "Answers" or descendant:IsA("TextLabel") or descendant.Name == "A" or descendant.Name == "B" then
+                local model = getQuestionModelFromInstance(descendant)
+                if model and not processedQuestionModels[model] then
+                    processMathQuestionModel(model)
+                end
+            elseif descendant:IsA("Model") and isTargetQuestionModel(descendant) then
+                if not processedQuestionModels[descendant] then
+                    processMathQuestionModel(descendant)
+                end
             end
         end
     end)
 end)
 
--- Background Scanner Loop (tiap 0.15 detik)
+-- Fast Background Loop (tiap 0.15 detik)
 task.spawn(function()
     while task.wait(0.15) do
-        scanAndProcessAllMath()
+        pcall(runUniversalScanner)
     end
 end)
 
--- Scan awal saat script pertama kali jalan
+-- Scan awal saat script dieksekusi
 task.spawn(function()
     task.wait(0.1)
-    scanAndProcessAllMath()
+    pcall(runUniversalScanner)
 end)
 
--- Listener Remote Weather
-pcall(function()
-    if rev_AddedWeather then
-        rev_AddedWeather.OnClientEvent:Connect(function(weatherType, ...)
+-- ==============================================================================
+-- 🌦️ SINKRONISASI REMOTE WEATHER (EVENT SWITCHER RESMI)
+-- ==============================================================================
+local function setupWeatherListeners()
+    local addW = rev_AddedWeather or findRemote("rev_AddedWeather", "RemoteEvent")
+    if addW then
+        addW.OnClientEvent:Connect(function(weatherType, ...)
+            logConsole(string.format("📡 [WEATHER CHANGE] Event Cuaca Baru: %s", tostring(weatherType)))
+            
             if weatherType == "MathEvent" then
-                isMathEventActive = true
-                isPEClassActive = false
-                logConsole("📡 [WEATHER] MathEvent Aktif!")
+                currentActiveMode = "MathEvent"
+                processedQuestionModels = {} -- Reset cache ronde baru
+                logConsole("📚 [MODE SWITCH] Mode MathEvent Aktif! Membaca soal & memperbesar jawaban benar...")
+                pcall(runUniversalScanner)
             elseif weatherType == "PEClass" then
-                isPEClassActive = true
-                isMathEventActive = false
-                logConsole("🏃 [WEATHER] PEClass Aktif! Membersihkan Model Angka & Ball...")
-                scanAndPurgePEClass()
+                currentActiveMode = "PEClass"
+                processedQuestionModels = {}
+                logConsole("🏃 [MODE SWITCH] Mode PEClass Aktif! Membersihkan Model Angka & Ball...")
+                pcall(scanAndPurgePEClass)
+            else
+                currentActiveMode = "Idle"
+                processedQuestionModels = {}
+                logConsole(string.format("☁️ [MODE SWITCH] Event %s Aktif. Standby...", tostring(weatherType)))
             end
         end)
     end
 
-    if rev_RemovedWeather then
-        rev_RemovedWeather.OnClientEvent:Connect(function(weatherType, ...)
-            if weatherType == "MathEvent" then
-                isMathEventActive = true -- Tetap aktif agar tidak ada soal terlewat
-                logConsole("☁️ [WEATHER] MathEvent Selesai!")
-            elseif weatherType == "PEClass" then
-                isPEClassActive = false
-                logConsole("☁️ [WEATHER] PEClass Selesai!")
+    local remW = rev_RemovedWeather or findRemote("rev_RemovedWeather", "RemoteEvent")
+    if remW then
+        remW.OnClientEvent:Connect(function(weatherType, ...)
+            logConsole(string.format("☁️ [WEATHER END] Event %s Berakhir.", tostring(weatherType)))
+            if weatherType == "MathEvent" or weatherType == "PEClass" then
+                currentActiveMode = "Idle"
+                processedQuestionModels = {} -- Bersihkan cache saat ronde tuntas
             end
         end)
     end
-end)
+end
+
+setupWeatherListeners()
 
 print("--------------------------------------------------")
-print("✅ [BackToSchool] Script Auto Math, PEClass & Auto Sell Siap Berjalan!")
+print("✅ [BackToSchool] AFK Engine (MathEvent, PEClass & Auto Sell) Siap Berjalan 24/7!")
