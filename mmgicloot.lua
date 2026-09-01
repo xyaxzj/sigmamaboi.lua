@@ -57,6 +57,12 @@ local lpName = lp and lp.Name or ""
 local lpDisplayName = lp and lp.DisplayName or ""
 local myUidStr = lp and tostring(lp.UserId) or ""
 
+local function logConsole(...)
+    if _G.debugConsoleLog ~= false then
+        print(...)
+    end
+end
+
 -- =============================================
 -- 🚀 SYSTEM ANTI-LAG & POTATO MODE
 -- =============================================
@@ -509,15 +515,13 @@ local function processMathQuestionModel(model)
     processedQuestionModels[model] = true
     isMathEventActive = true
 
-    local logMsg = string.format("📚 [MATH EVENT] Soal #%s: '%s' -> Kunci Jawaban: %s", tostring(model.Name), tostring(qText), tostring(correctAnswer))
-    print(logMsg)
-    logConsole(logMsg)
+    logConsole(string.format("📚 [MATH EVENT] Soal #%s: '%s' -> Kunci Jawaban: %s", tostring(model.Name), tostring(qText), tostring(correctAnswer)))
 
     -- Bersihkan partikel visual berat pada model soal
     for _, desc in ipairs(model:GetDescendants()) do
         if desc:IsA("ParticleEmitter") or desc:IsA("Fire") or desc:IsA("Smoke") or 
            desc:IsA("Trail") or desc:IsA("PointLight") or desc:IsA("SpotLight") then
-            desc:Destroy()
+            pcall(function() desc:Destroy() end)
         end
     end
 
@@ -537,17 +541,13 @@ local function processMathQuestionModel(model)
                 item.part.Transparency = 0.5
                 item.part.Size = OPTIMAL_ANSWER_SIZE
             end)
-            local winMsg = string.format("   ✅ [JAWABAN BENAR] Part %s ('%s') diperbesar ke 200 studs!", item.part.Name, tostring(item.text))
-            print(winMsg)
-            logConsole(winMsg)
+            logConsole(string.format("   ✅ [JAWABAN BENAR] Part %s ('%s') diperbesar ke 200 studs!", item.part.Name, tostring(item.text)))
         else
             -- JAWABAN SALAH: Hapus Part agar tidak tersentuh bola/karakter!
             pcall(function()
                 item.obj:Destroy()
             end)
-            local loseMsg = string.format("   ❌ [JAWABAN SALAH] Part %s ('%s') dihapus!", item.part.Name, tostring(item.text))
-            print(loseMsg)
-            logConsole(loseMsg)
+            logConsole(string.format("   ❌ [JAWABAN SALAH] Part %s ('%s') dihapus!", item.part.Name, tostring(item.text)))
         end
     end
 end
