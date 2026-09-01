@@ -330,45 +330,53 @@ if plotsFolder then
 end
 
 -- =============================================
--- 📚 BACK TO SCHOOL EVENT 1 & 2: MATH EVENT & PECLASS ENGINE
+-- 📚 BACK TO SCHOOL EVENT 1 & 2: MATH EVENT & PECLASS ENGINE (ROBUST & BULLETPROOF)
 -- =============================================
 local OPTIMAL_ANSWER_SIZE = Vector3.new(200, 200, 200)
 local isMathEventActive = false
 local isPEClassActive = false
 local processedQuestionModels = {}
 
--- Evaluator Matematika Aman (Mendukung +, -, *, /, x, ×, ÷, kurung, dan format teks)
+-- Evaluator Matematika Super Kuat (Mendukung +, -, *, /, x, X, ×, ÷, :, serta teks campuran)
 local function solveMathExpression(rawText)
     if not rawText or rawText == "" then return nil end
     local str = tostring(rawText)
 
-    -- Bersihkan tag HTML / RichText jika ada (<font>...</font>)
+    -- Bersihkan tag HTML / RichText (<font>...</font>, <stroke>...</stroke>)
     str = str:gsub("<[^>]+>", "")
 
     -- Bersihkan tanda sama dengan dan tanda tanya
     str = str:gsub("=%s*%?", ""):gsub("=", ""):gsub("%?", "")
 
-    -- Konversi simbol perkalian
-    str = str:gsub("×", "*"):gsub("x", "*"):gsub("X", "*")
-
-    -- Konversi simbol pembagian
-    str = str:gsub("÷", "/"):gsub(":", "/")
-
-    -- Bersihkan spasi
-    str = str:gsub("%s+", "")
-
-    -- Hapus semua karakter selain angka, operator dan kurung
-    str = str:gsub("[^%d%+%-%*%/%.%(%)]", "")
-
-    if str == "" then return nil end
-
-    local func = loadstring("return " .. str)
-    if func then
-        local ok, val = pcall(func)
-        if ok and type(val) == "number" then
-            return val
+    -- Coba ekstrak pola 2 angka dengan operator matematika (cth: "7 + 5", "12 x 4", "20 ÷ 5")
+    local num1Str, op, num2Str = str:match("(%-?%d+%.?%d*)%s*([%+%-%*%/xX×÷:])%s*(%-?%d+%.?%d*)")
+    if num1Str and op and num2Str then
+        local n1 = tonumber(num1Str)
+        local n2 = tonumber(num2Str)
+        if n1 and n2 then
+            if op == "+" then return n1 + n2
+            elseif op == "-" then return n1 - n2
+            elseif op == "*" or op == "x" or op == "X" or op == "×" then return n1 * n2
+            elseif (op == "/" or op == "÷" or op == ":") and n2 ~= 0 then return n1 / n2
+            end
         end
     end
+
+    -- Konversi simbol perkalian & pembagian global
+    local cleanStr = str:gsub("×", "*"):gsub("x", "*"):gsub("X", "*"):gsub("÷", "/"):gsub(":", "/")
+    cleanStr = cleanStr:gsub("%s+", "")
+    cleanStr = cleanStr:gsub("[^%d%+%-%*%/%.%(%)]", "")
+
+    if cleanStr ~= "" then
+        local func = loadstring and loadstring("return " .. cleanStr)
+        if func then
+            local ok, val = pcall(func)
+            if ok and type(val) == "number" then
+                return val
+            end
+        end
+    end
+
     return nil
 end
 
@@ -376,17 +384,26 @@ local function parseAnswerValue(rawText)
     if not rawText or rawText == "" then return nil end
     local str = tostring(rawText)
     str = str:gsub("<[^>]+>", "")
-    local mathVal = solveMathExpression(str)
-    if mathVal ~= nil then return mathVal end
-    str = str:gsub("[^%d%.%-]", "")
-    return tonumber(str)
+    
+    -- Ekstrak angka murni dari string (cth: "12", "A) 12", "Ans: 12")
+    local numMatch = str:match("(%-?%d+%.?%d*)")
+    if numMatch then
+        local val = tonumber(numMatch)
+        if val then return val end
+    end
+
+    return solveMathExpression(str)
 end
 
 local function isTargetQuestionModel(model)
     if not model or not model:IsA("Model") then return false end
     local debris = workspace:FindFirstChild("Debris")
     if not debris or not model:IsDescendantOf(debris) then return false end
-    return tonumber(model.Name) ~= nil
+
+    -- Model dengan nama angka ("1", "2", "3"...) atau yang memiliki GuiPart / Answers
+    if tonumber(model.Name) ~= nil then return true end
+    if model:FindFirstChild("GuiPart") or model:FindFirstChild("Answers") then return true end
+    return false
 end
 
 local function getTargetQuestionParent(instance)
@@ -396,7 +413,7 @@ local function getTargetQuestionParent(instance)
 
     local curr = instance
     while curr and curr ~= debris and curr ~= workspace do
-        if curr:IsA("Model") and tonumber(curr.Name) ~= nil then
+        if curr:IsA("Model") and (tonumber(curr.Name) ~= nil or curr:FindFirstChild("GuiPart") or curr:FindFirstChild("Answers")) then
             return curr
         end
         curr = curr.Parent
@@ -412,14 +429,19 @@ local function isTargetPEClassEntity(instance)
     local debris = workspace:FindFirstChild("Debris")
     if not debris or not instance:IsDescendantOf(debris) then return false end
 
-    -- Model dengan nama angka (1, 2, 3...)
-    if instance:IsA("Model") and tonumber(instance.Name) ~= nil then
+    -- Jika ini adalah soal matematika (ada GuiPart/Answers), JANGAN anggap sebagai PEClass
+    if instance:IsA("Model") and (instance:FindFirstChild("GuiPart") or instance:FindFirstChild("Answers")) then
+        return false
+    end
+
+    -- Part / Model dengan nama "Ball"
+    local lowerName = string.lower(instance.Name)
+    if lowerName == "ball" then
         return true
     end
 
-    -- Part / Instance dengan nama "Ball"
-    local lowerName = string.lower(instance.Name)
-    if lowerName == "ball" then
+    -- Model dengan nama angka murni saat PEClass aktif (tanpa GuiPart)
+    if isPEClassActive and instance:IsA("Model") and tonumber(instance.Name) ~= nil then
         return true
     end
 
@@ -441,70 +463,59 @@ local function scanAndPurgePEClass(debris)
     end
 end
 
--- Fast Sweeper Loop saat PEClass aktif
-task.spawn(function()
-    while task.wait(0.15) do
-        if isPEClassActive and _G.autoPEClass then
-            scanAndPurgePEClass()
-        end
-    end
-end)
-
+-- =============================================
+-- 🧠 PROSES & SOLVE SOAL MATEMATIKA REAL-TIME
+-- =============================================
 local function processMathQuestionModel(model)
     if not _G.autoMathEvent then return end
-    if isPEClassActive then return end -- Jika sedang PEClass, biarkan purger yang menangani
-    if not model or not isTargetQuestionModel(model) then return end
-    if processedQuestionModels[model] then return end
+    if not model or not model.Parent or processedQuestionModels[model] then return end
 
     local guiPart = model:FindFirstChild("GuiPart")
     local answersFolder = model:FindFirstChild("Answers")
 
-    if not guiPart or not answersFolder then
-        task.defer(function()
-            task.wait(0.2)
-            if not processedQuestionModels[model] and model.Parent then
-                guiPart = model:FindFirstChild("GuiPart")
-                answersFolder = model:FindFirstChild("Answers")
-                if guiPart and answersFolder then
-                    processMathQuestionModel(model)
-                end
-            end
-        end)
-        return
-    end
+    -- Tunggu hingga GuiPart dan Answers folder ada
+    if not guiPart or not answersFolder then return end
 
+    -- Cari TextLabel pada GuiPart
     local questionLabel = guiPart:FindFirstChildWhichIsA("TextLabel", true)
-    if not questionLabel then
-        task.defer(function()
-            task.wait(0.2)
-            if not processedQuestionModels[model] and model.Parent and guiPart.Parent then
-                questionLabel = guiPart:FindFirstChildWhichIsA("TextLabel", true)
-                if questionLabel then
-                    processMathQuestionModel(model)
-                end
-            end
-        end)
-        return
-    end
+    if not questionLabel then return end
 
     local qText = questionLabel.ContentText ~= "" and questionLabel.ContentText or questionLabel.Text
-    local correctAnswer = solveMathExpression(qText)
+    if not qText or qText == "" then return end
 
-    if correctAnswer == nil then
-        local conn
-        conn = questionLabel:GetPropertyChangedSignal("Text"):Connect(function()
-            conn:Disconnect()
-            processMathQuestionModel(model)
-        end)
-        return
+    local correctAnswer = solveMathExpression(qText)
+    if correctAnswer == nil then return end
+
+    -- Ambil semua opsi jawaban dari folder Answers
+    local answerItems = {}
+    local totalParts = 0
+
+    for _, child in ipairs(answersFolder:GetChildren()) do
+        if child:IsA("BasePart") or child.ClassName == "Part" then
+            totalParts = totalParts + 1
+            local ansLabel = child:FindFirstChildWhichIsA("TextLabel", true)
+            if ansLabel then
+                local ansText = ansLabel.ContentText ~= "" and ansLabel.ContentText or ansLabel.Text
+                local ansVal = parseAnswerValue(ansText)
+                if ansVal ~= nil then
+                    table.insert(answerItems, {part = child, val = ansVal, text = ansText})
+                end
+            end
+        end
     end
 
+    -- Pastikan semua pilihan jawaban sudah ter-load teksnya sebelum eksekusi
+    if totalParts == 0 or #answerItems < totalParts then
+        return -- Tunggu tick berikutnya agar semua label ter-load
+    end
+
+    -- Tandai bahwa model soal ini sudah berhasil diproses
     processedQuestionModels[model] = true
     isMathEventActive = true
 
     logConsole(string.format("📚 [MATH EVENT] Soal #%s: '%s' -> Kunci Jawaban: %s", tostring(model.Name), qText, tostring(correctAnswer)))
 
-    -- Bersihkan partikel & efek visual berat pada model soal
+    -- Bersihkan partikel visual berat pada model soal
     for _, desc in ipairs(model:GetDescendants()) do
         if desc:IsA("ParticleEmitter") or desc:IsA("Fire") or desc:IsA("Smoke") or 
            desc:IsA("Trail") or desc:IsA("PointLight") or desc:IsA("SpotLight") then
@@ -512,48 +523,44 @@ local function processMathQuestionModel(model)
         end
     end
 
-    -- Evaluasi semua pilihan jawaban di Folder Answers (A, B, dll)
-    for _, ansPart in ipairs(answersFolder:GetChildren()) do
-        if ansPart:IsA("BasePart") or ansPart.ClassName == "Part" then
-            local ansLabel = ansPart:FindFirstChildWhichIsA("TextLabel", true)
-            local ansText = ansLabel and (ansLabel.ContentText ~= "" and ansLabel.ContentText or ansLabel.Text) or ""
-            local ansVal = parseAnswerValue(ansText)
+    -- Eksekusi pembesaran jawaban benar & penghapusan jawaban salah
+    local foundCorrect = false
+    for _, item in ipairs(answerItems) do
+        local isCorrect = (math.abs(item.val - correctAnswer) < 0.0001)
 
-            if ansVal ~= nil and math.abs(ansVal - correctAnswer) < 0.0001 then
-                -- JAWABAN BENAR: Perbesar Hitbox agar mudah ditendang/disentuh
-                pcall(function()
-                    ansPart.CanCollide = false
-                    ansPart.CanTouch = true
-                    ansPart.CanQuery = true
-                    ansPart.CastShadow = false
-                    if ansPart.Size ~= OPTIMAL_ANSWER_SIZE then
-                        ansPart.Size = OPTIMAL_ANSWER_SIZE
-                    end
-                end)
-                logConsole(string.format("   ✅ [JAWABAN BENAR] Part %s ('%s') diperbesar ke 200 studs!", ansPart.Name, tostring(ansText)))
-            else
-                -- JAWABAN SALAH: Hapus Part agar tidak tersentuh bola/karakter!
-                pcall(function()
-                    ansPart:Destroy()
-                end)
-                logConsole(string.format("   ❌ [JAWABAN SALAH] Part %s ('%s') dihapus!", ansPart.Name, tostring(ansText)))
-            end
+        if isCorrect and not foundCorrect then
+            foundCorrect = true
+            -- JAWABAN BENAR: Perbesar Hitbox (200x200x200) & aktifkan CanTouch/CanQuery
+            pcall(function()
+                item.part.CanCollide = false
+                item.part.CanTouch = true
+                item.part.CanQuery = true
+                item.part.CastShadow = false
+                item.part.Size = OPTIMAL_ANSWER_SIZE
+            end)
+            logConsole(string.format("   ✅ [JAWABAN BENAR] Part %s ('%s') diperbesar ke 200 studs!", item.part.Name, tostring(item.text)))
+        else
+            -- JAWABAN SALAH: Hapus Part agar tidak tersentuh bola/karakter!
+            pcall(function()
+                item.part:Destroy()
+            end)
+            logConsole(string.format("   ❌ [JAWABAN SALAH] Part %s ('%s') dihapus!", item.part.Name, tostring(item.text)))
         end
     end
 end
 
+-- =============================================
+-- 📡 LISTENER EVENT DEBRIS & BACKGROUND SCANNER
+-- =============================================
 local function setupMathEventListeners(debris)
     if not debris then return end
 
-    if isPEClassActive and _G.autoPEClass then
-        scanAndPurgePEClass(debris)
-    end
-
+    -- Scan semua objek yang sudah ada
     for _, item in ipairs(debris:GetChildren()) do
         if isPEClassActive and _G.autoPEClass and isTargetPEClassEntity(item) then
             pcall(function() item:Destroy() end)
         elseif isTargetQuestionModel(item) then
-            processMathQuestionModel(item)
+            task.defer(processMathQuestionModel, item)
         end
     end
 
@@ -584,9 +591,9 @@ local function setupMathEventListeners(debris)
             end
 
             if not _G.autoMathEvent then return end
-            if descendant:IsA("BasePart") or descendant:IsA("TextLabel") or descendant.ClassName == "Part" then
+            if descendant:IsA("BasePart") or descendant:IsA("TextLabel") or descendant.ClassName == "Part" or descendant.Name == "GuiPart" or descendant.Name == "Answers" then
                 local targetModel = getTargetQuestionParent(descendant)
-                if targetModel then
+                if targetModel and not processedQuestionModels[targetModel] then
                     processMathQuestionModel(targetModel)
                 end
             elseif descendant:IsA("ParticleEmitter") or descendant:IsA("Fire") or descendant:IsA("Smoke") or 
@@ -601,7 +608,7 @@ local function setupMathEventListeners(debris)
         task.defer(function()
             local hasQuestions = false
             for _, c in ipairs(debris:GetChildren()) do
-                if c:IsA("Model") and tonumber(c.Name) ~= nil then
+                if c:IsA("Model") and (tonumber(c.Name) ~= nil or c:FindFirstChild("GuiPart")) then
                     hasQuestions = true
                     break
                 end
@@ -612,6 +619,28 @@ local function setupMathEventListeners(debris)
         end)
     end)
 end
+
+-- 🔄 CONTINUOUS BACKGROUND SCANNER LOOP (ANTI-MISSING & 100% RELIABLE)
+task.spawn(function()
+    while task.wait(0.2) do
+        local debris = workspace:FindFirstChild("Debris")
+        if debris then
+            if isPEClassActive and _G.autoPEClass then
+                scanAndPurgePEClass(debris)
+            end
+
+            if _G.autoMathEvent then
+                for _, child in ipairs(debris:GetChildren()) do
+                    if child:IsA("Model") and not processedQuestionModels[child] then
+                        if isTargetQuestionModel(child) or child:FindFirstChild("GuiPart") or child:FindFirstChild("Answers") then
+                            processMathQuestionModel(child)
+                        end
+                    end
+                end
+            end
+        end
+    end
+end)
 
 task.spawn(function()
     local debris = workspace:FindFirstChild("Debris") or workspace:WaitForChild("Debris", 10)
