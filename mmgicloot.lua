@@ -333,7 +333,7 @@ end
 -- 📚 BACK TO SCHOOL EVENT 1 & 2: MATH EVENT & PECLASS ENGINE (ROBUST & BULLETPROOF)
 -- =============================================
 local OPTIMAL_ANSWER_SIZE = Vector3.new(200, 200, 200)
-local isMathEventActive = false
+local isMathEventActive = true -- Default Aktif Langsung (Tanpa perlu menunggu sinyal weather)
 local isPEClassActive = false
 local processedQuestionModels = {}
 
@@ -555,11 +555,11 @@ end
 local function setupMathEventListeners(debris)
     if not debris then return end
 
-    -- Scan semua objek yang sudah ada
+    -- Scan semua objek yang sudah ada (langsung eksekusi tanpa menunggu)
     for _, item in ipairs(debris:GetChildren()) do
         if isPEClassActive and _G.autoPEClass and isTargetPEClassEntity(item) then
             pcall(function() item:Destroy() end)
-        elseif isTargetQuestionModel(item) then
+        elseif isTargetQuestionModel(item) or item:FindFirstChild("GuiPart") or item:FindFirstChild("Answers") then
             task.defer(processMathQuestionModel, item)
         end
     end
@@ -574,7 +574,7 @@ local function setupMathEventListeners(debris)
                 return
             end
 
-            if isTargetQuestionModel(child) then
+            if isTargetQuestionModel(child) or child:FindFirstChild("GuiPart") or child:FindFirstChild("Answers") then
                 processMathQuestionModel(child)
             end
         end)
