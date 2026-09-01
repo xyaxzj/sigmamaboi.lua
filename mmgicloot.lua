@@ -330,14 +330,14 @@ if plotsFolder then
 end
 
 -- =============================================
--- 📚 BACK TO SCHOOL EVENT 1 & 2: MATH EVENT & PECLASS ENGINE (ROBUST & BULLETPROOF)
+-- 📚 BACK TO SCHOOL EVENT 1 & 2: MATH EVENT & PECLASS ENGINE (UNIVERSAL & ROBUST)
 -- =============================================
 local OPTIMAL_ANSWER_SIZE = Vector3.new(200, 200, 200)
-local isMathEventActive = true -- Default Aktif Langsung (Tanpa perlu menunggu sinyal weather)
+local isMathEventActive = true -- Default Aktif Langsung
 local isPEClassActive = false
 local processedQuestionModels = {}
 
--- Evaluator Matematika Super Kuat (Mendukung +, -, *, /, x, X, ×, ÷, :, serta teks campuran)
+-- Evaluator Matematika Super Kuat (Mendukung +, -, *, /, x, X, ×, ÷, :, serta format teks RichText)
 local function solveMathExpression(rawText)
     if not rawText or rawText == "" then return nil end
     local str = tostring(rawText)
@@ -395,25 +395,22 @@ local function parseAnswerValue(rawText)
     return solveMathExpression(str)
 end
 
+-- Deteksi apakah sebuah Model adalah Model Soal Matematika
 local function isTargetQuestionModel(model)
     if not model or not model:IsA("Model") then return false end
-    local debris = workspace:FindFirstChild("Debris")
-    if not debris or not model:IsDescendantOf(debris) then return false end
-
-    -- Model dengan nama angka ("1", "2", "3"...) atau yang memiliki GuiPart / Answers
-    if tonumber(model.Name) ~= nil then return true end
-    if model:FindFirstChild("GuiPart") or model:FindFirstChild("Answers") then return true end
+    local hasGui = model:FindFirstChild("GuiPart") or model:FindFirstChild("GuiPart", true)
+    local hasAns = model:FindFirstChild("Answers") or model:FindFirstChild("Answers", true)
+    if hasGui and hasAns then return true end
+    if tonumber(model.Name) ~= nil and (hasGui or hasAns) then return true end
     return false
 end
 
-local function getTargetQuestionParent(instance)
-    if not instance then return nil end
-    local debris = workspace:FindFirstChild("Debris")
-    if not debris or not instance:IsDescendantOf(debris) then return nil end
-
-    local curr = instance
-    while curr and curr ~= debris and curr ~= workspace do
-        if curr:IsA("Model") and (tonumber(curr.Name) ~= nil or curr:FindFirstChild("GuiPart") or curr:FindFirstChild("Answers")) then
+-- Cari Model Soal dari komponen apapun di dalamnya
+local function getQuestionModelFromInstance(inst)
+    if not inst or inst == workspace or inst == game then return nil end
+    local curr = inst
+    while curr and curr ~= workspace and curr ~= game do
+        if curr:IsA("Model") and isTargetQuestionModel(curr) then
             return curr
         end
         curr = curr.Parent
@@ -426,8 +423,6 @@ end
 -- =============================================
 local function isTargetPEClassEntity(instance)
     if not instance then return false end
-    local debris = workspace:FindFirstChild("Debris")
-    if not debris or not instance:IsDescendantOf(debris) then return false end
 
     -- Jika ini adalah soal matematika (ada GuiPart/Answers), JANGAN anggap sebagai PEClass
     if instance:IsA("Model") and (instance:FindFirstChild("GuiPart") or instance:FindFirstChild("Answers")) then
@@ -448,15 +443,15 @@ local function isTargetPEClassEntity(instance)
     return false
 end
 
-local function scanAndPurgePEClass(debris)
+local function scanAndPurgePEClass()
     if not _G.autoPEClass or not isPEClassActive then return end
-    debris = debris or workspace:FindFirstChild("Debris")
-    if not debris then return end
+    local debris = workspace:FindFirstChild("Debris")
+    local container = debris or workspace
 
-    for _, child in ipairs(debris:GetChildren()) do
+    for _, child in ipairs(container:GetChildren()) do
         if isTargetPEClassEntity(child) then
             pcall(function()
-                logConsole(string.format("🏃 [PECLASS PURGE] Menghapus %s '%s' dari Debris!", child.ClassName, child.Name))
+                logConsole(string.format("🏃 [PECLASS PURGE] Menghapus %s '%s'!", child.ClassName, child.Name))
                 child:Destroy()
             end)
         end
@@ -470,8 +465,8 @@ local function processMathQuestionModel(model)
     if not _G.autoMathEvent then return end
     if not model or not model.Parent or processedQuestionModels[model] then return end
 
-    local guiPart = model:FindFirstChild("GuiPart")
-    local answersFolder = model:FindFirstChild("Answers")
+    local guiPart = model:FindFirstChild("GuiPart") or model:FindFirstChild("GuiPart", true)
+    local answersFolder = model:FindFirstChild("Answers") or model:FindFirstChild("Answers", true)
 
     -- Tunggu hingga GuiPart dan Answers folder ada
     if not guiPart or not answersFolder then return end
@@ -491,14 +486,15 @@ local function processMathQuestionModel(model)
     local totalParts = 0
 
     for _, child in ipairs(answersFolder:GetChildren()) do
-        if child:IsA("BasePart") or child.ClassName == "Part" then
+        if child:IsA("BasePart") or child.ClassName == "Part" or child:IsA("Model") then
             totalParts = totalParts + 1
+            local targetPart = child:IsA("BasePart") and child or child:FindFirstChildWhichIsA("BasePart", true)
             local ansLabel = child:FindFirstChildWhichIsA("TextLabel", true)
-            if ansLabel then
+            if ansLabel and targetPart then
                 local ansText = ansLabel.ContentText ~= "" and ansLabel.ContentText or ansLabel.Text
                 local ansVal = parseAnswerValue(ansText)
                 if ansVal ~= nil then
-                    table.insert(answerItems, {part = child, val = ansVal, text = ansText})
+                    table.insert(answerItems, {part = targetPart, val = ansVal, text = ansText, obj = child})
                 end
             end
         end
@@ -513,7 +509,9 @@ local function processMathQuestionModel(model)
     processedQuestionModels[model] = true
     isMathEventActive = true
 
-    logConsole(string.format("📚 [MATH EVENT] Soal #%s: '%s' -> Kunci Jawaban: %s", tostring(model.Name), qText, tostring(correctAnswer)))
+    local logMsg = string.format("📚 [MATH EVENT] Soal #%s: '%s' -> Kunci Jawaban: %s", tostring(model.Name), tostring(qText), tostring(correctAnswer))
+    print(logMsg)
+    logConsole(logMsg)
 
     -- Bersihkan partikel visual berat pada model soal
     for _, desc in ipairs(model:GetDescendants()) do
@@ -536,121 +534,92 @@ local function processMathQuestionModel(model)
                 item.part.CanTouch = true
                 item.part.CanQuery = true
                 item.part.CastShadow = false
+                item.part.Transparency = 0.5
                 item.part.Size = OPTIMAL_ANSWER_SIZE
             end)
-            logConsole(string.format("   ✅ [JAWABAN BENAR] Part %s ('%s') diperbesar ke 200 studs!", item.part.Name, tostring(item.text)))
+            local winMsg = string.format("   ✅ [JAWABAN BENAR] Part %s ('%s') diperbesar ke 200 studs!", item.part.Name, tostring(item.text))
+            print(winMsg)
+            logConsole(winMsg)
         else
             -- JAWABAN SALAH: Hapus Part agar tidak tersentuh bola/karakter!
             pcall(function()
-                item.part:Destroy()
+                item.obj:Destroy()
             end)
-            logConsole(string.format("   ❌ [JAWABAN SALAH] Part %s ('%s') dihapus!", item.part.Name, tostring(item.text)))
+            local loseMsg = string.format("   ❌ [JAWABAN SALAH] Part %s ('%s') dihapus!", item.part.Name, tostring(item.text))
+            print(loseMsg)
+            logConsole(loseMsg)
         end
     end
 end
 
 -- =============================================
--- 📡 LISTENER EVENT DEBRIS & BACKGROUND SCANNER
+-- 📡 PEMINDAI UNIVERSAL WORKSPACE & DEBRIS
 -- =============================================
-local function setupMathEventListeners(debris)
-    if not debris then return end
+local function scanAndProcessAllMath()
+    if not _G.autoMathEvent then return end
 
-    -- Scan semua objek yang sudah ada (langsung eksekusi tanpa menunggu)
-    for _, item in ipairs(debris:GetChildren()) do
-        if isPEClassActive and _G.autoPEClass and isTargetPEClassEntity(item) then
-            pcall(function() item:Destroy() end)
-        elseif isTargetQuestionModel(item) or item:FindFirstChild("GuiPart") or item:FindFirstChild("Answers") then
-            task.defer(processMathQuestionModel, item)
+    -- 1. Scan di Debris (jika ada)
+    local debris = workspace:FindFirstChild("Debris")
+    if debris then
+        if isPEClassActive and _G.autoPEClass then
+            scanAndPurgePEClass()
+        end
+
+        for _, child in ipairs(debris:GetChildren()) do
+            if child:IsA("Model") and not processedQuestionModels[child] then
+                if isTargetQuestionModel(child) then
+                    task.defer(processMathQuestionModel, child)
+                end
+            end
         end
     end
 
-    debris.ChildAdded:Connect(function(child)
-        task.defer(function()
-            if isPEClassActive and _G.autoPEClass and isTargetPEClassEntity(child) then
-                pcall(function()
-                    logConsole(string.format("🏃 [PECLASS PURGE] Menghapus %s '%s' dari Debris!", child.ClassName, child.Name))
-                    child:Destroy()
-                end)
-                return
+    -- 2. Scan langsung di Workspace (jika model soal berada langsung di workspace)
+    for _, child in ipairs(workspace:GetChildren()) do
+        if child:IsA("Model") and not processedQuestionModels[child] then
+            if isTargetQuestionModel(child) then
+                task.defer(processMathQuestionModel, child)
             end
+        end
+    end
+end
 
-            if isTargetQuestionModel(child) or child:FindFirstChild("GuiPart") or child:FindFirstChild("Answers") then
-                processMathQuestionModel(child)
-            end
-        end)
-    end)
-
-    debris.DescendantAdded:Connect(function(descendant)
-        task.defer(function()
-            if isPEClassActive and _G.autoPEClass and isTargetPEClassEntity(descendant) then
-                pcall(function()
-                    logConsole(string.format("🏃 [PECLASS PURGE] Menghapus %s '%s' dari Debris!", descendant.ClassName, descendant.Name))
-                    descendant:Destroy()
-                end)
-                return
-            end
-
-            if not _G.autoMathEvent then return end
-            if descendant:IsA("BasePart") or descendant:IsA("TextLabel") or descendant.ClassName == "Part" or descendant.Name == "GuiPart" or descendant.Name == "Answers" then
-                local targetModel = getTargetQuestionParent(descendant)
-                if targetModel and not processedQuestionModels[targetModel] then
-                    processMathQuestionModel(targetModel)
-                end
-            elseif descendant:IsA("ParticleEmitter") or descendant:IsA("Fire") or descendant:IsA("Smoke") or 
-                   descendant:IsA("Trail") or descendant:IsA("PointLight") or descendant:IsA("SpotLight") then
+-- Listener DescendantAdded pada Workspace (Menangkap model soal instan di mana pun berada)
+workspace.DescendantAdded:Connect(function(descendant)
+    task.defer(function()
+        if isPEClassActive and _G.autoPEClass and isTargetPEClassEntity(descendant) then
+            pcall(function()
+                logConsole(string.format("🏃 [PECLASS PURGE] Menghapus %s '%s'!", descendant.ClassName, descendant.Name))
                 descendant:Destroy()
-            end
-        end)
-    end)
+            end)
+            return
+        end
 
-    debris.ChildRemoved:Connect(function(child)
-        processedQuestionModels[child] = nil
-        task.defer(function()
-            local hasQuestions = false
-            for _, c in ipairs(debris:GetChildren()) do
-                if c:IsA("Model") and (tonumber(c.Name) ~= nil or c:FindFirstChild("GuiPart")) then
-                    hasQuestions = true
-                    break
-                end
+        if not _G.autoMathEvent then return end
+        if descendant.Name == "GuiPart" or descendant.Name == "Answers" or descendant:IsA("TextLabel") or descendant.Name == "A" or descendant.Name == "B" then
+            local model = getQuestionModelFromInstance(descendant)
+            if model and not processedQuestionModels[model] then
+                processMathQuestionModel(model)
             end
-            if not hasQuestions then
-                isMathEventActive = false
-            end
-        end)
-    end)
-end
-
--- 🔄 CONTINUOUS BACKGROUND SCANNER LOOP (ANTI-MISSING & 100% RELIABLE)
-task.spawn(function()
-    while task.wait(0.2) do
-        local debris = workspace:FindFirstChild("Debris")
-        if debris then
-            if isPEClassActive and _G.autoPEClass then
-                scanAndPurgePEClass(debris)
-            end
-
-            if _G.autoMathEvent then
-                for _, child in ipairs(debris:GetChildren()) do
-                    if child:IsA("Model") and not processedQuestionModels[child] then
-                        if isTargetQuestionModel(child) or child:FindFirstChild("GuiPart") or child:FindFirstChild("Answers") then
-                            processMathQuestionModel(child)
-                        end
-                    end
-                end
+        elseif descendant:IsA("Model") and isTargetQuestionModel(descendant) then
+            if not processedQuestionModels[descendant] then
+                processMathQuestionModel(descendant)
             end
         end
-    end
+    end)
 end)
 
+-- Background Scanner Loop (tiap 0.15 detik)
 task.spawn(function()
-    local debris = workspace:FindFirstChild("Debris") or workspace:WaitForChild("Debris", 10)
-    if debris then setupMathEventListeners(debris) end
+    while task.wait(0.15) do
+        scanAndProcessAllMath()
+    end
 end)
 
-workspace.ChildAdded:Connect(function(child)
-    if child.Name == "Debris" then
-        task.defer(function() setupMathEventListeners(child) end)
-    end
+-- Scan awal saat script pertama kali jalan
+task.spawn(function()
+    task.wait(0.1)
+    scanAndProcessAllMath()
 end)
 
 -- =============================================
