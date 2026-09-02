@@ -635,13 +635,34 @@ local success, errorMessage = pcall(function()
 
     function isOpponentConfirmed(tradeFrame)
         if not tradeFrame then return false end
-        local p2Confirm = tradeFrame:FindFirstChild("P2_Frame") and tradeFrame.P2_Frame:FindFirstChild("Confirmed")
-        return p2Confirm and p2Confirm.Visible or false
+        local p1 = tradeFrame:FindFirstChild("P1_Frame")
+        local p2 = tradeFrame:FindFirstChild("P2_Frame")
+
+        if p1 and (p1:FindFirstChild(localPlayer.Name, true) or p1:FindFirstChild(localPlayer.DisplayName, true)) then
+            local p2Conf = p2 and p2:FindFirstChild("Confirmed")
+            return p2Conf and p2Conf.Visible or false
+        elseif p2 and (p2:FindFirstChild(localPlayer.Name, true) or p2:FindFirstChild(localPlayer.DisplayName, true)) then
+            local p1Conf = p1 and p1:FindFirstChild("Confirmed")
+            return p1Conf and p1Conf.Visible or false
+        end
+
+        local p2Confirm = p2 and p2:FindFirstChild("Confirmed")
+        if p2Confirm and p2Confirm.Visible then return true end
+        local p1Confirm = p1 and p1:FindFirstChild("Confirmed")
+        return p1Confirm and p1Confirm.Visible or false
     end
 
     function isLocalConfirmed(tradeFrame)
         if not tradeFrame then return false end
-        local p1Confirm = tradeFrame:FindFirstChild("P1_Frame") and tradeFrame.P1_Frame:FindFirstChild("Confirmed")
+        local p1 = tradeFrame:FindFirstChild("P1_Frame")
+        local p2 = tradeFrame:FindFirstChild("P2_Frame")
+
+        if p2 and (p2:FindFirstChild(localPlayer.Name, true) or p2:FindFirstChild(localPlayer.DisplayName, true)) then
+            local p2Conf = p2:FindFirstChild("Confirmed")
+            return p2Conf and p2Conf.Visible or false
+        end
+
+        local p1Confirm = p1 and p1:FindFirstChild("Confirmed")
         return p1Confirm and p1Confirm.Visible or false
     end
 
@@ -961,50 +982,63 @@ local success, errorMessage = pcall(function()
 
     local function upgradeBrainrotSlot(slot)
         local ok = false
+        local slotNum = tonumber(slot) or 1
+        
+        -- 1. Try Network Module with dot notation (NOT colon : because Network functions are static)
         pcall(function()
             local shared = ReplicatedStorage:FindFirstChild("Shared")
             local packages = shared and shared:FindFirstChild("Packages")
             local net = packages and packages:FindFirstChild("Network")
-            if net then
-                if net:IsA("ModuleScript") then
-                    local netMod = require(net)
-                    if netMod and netMod.FireServer then
-                        netMod:FireServer("B_Upgrade", slot)
-                        ok = true
-                    end
-                elseif net:FindFirstChild("rev_B_Upgrade") then
-                    net.rev_B_Upgrade:FireServer(slot)
+            if net and net:IsA("ModuleScript") then
+                local netMod = require(net)
+                if netMod and type(netMod.FireServer) == "function" then
+                    netMod.FireServer("B_Upgrade", slotNum)
                     ok = true
-                elseif net:FindFirstChild("ref_B_Upgrade") then
-                    net.ref_B_Upgrade:InvokeServer(slot)
-                    ok = true
-                elseif net:FindFirstChild("B_Upgrade") then
-                    local b = net.B_Upgrade
-                    if b:IsA("RemoteEvent") then b:FireServer(slot)
-                    elseif b:IsA("RemoteFunction") then b:InvokeServer(slot) end
+                elseif netMod and type(netMod.InvokeServer) == "function" then
+                    netMod.InvokeServer("B_Upgrade", slotNum)
                     ok = true
                 end
             end
         end)
         if ok then return true end
 
+        -- 2. Try direct networkFolder remotes
+        pcall(function()
+            local netFolder = ReplicatedStorage.Shared.Packages.Network
+            local rev = netFolder:FindFirstChild("rev_B_Upgrade")
+            if rev and rev:IsA("RemoteEvent") then
+                rev:FireServer(slotNum)
+                ok = true
+                return
+            end
+            local ref = netFolder:FindFirstChild("ref_B_Upgrade")
+            if ref and ref:IsA("RemoteFunction") then
+                ref:InvokeServer(slotNum)
+                ok = true
+                return
+            end
+        end)
+        if ok then return true end
+
+        -- 3. Try cached remotes
         if rev_B_Upgrade then
-            pcall(function() rev_B_Upgrade:FireServer(slot) end)
+            pcall(function() rev_B_Upgrade:FireServer(slotNum) end)
             return true
         elseif ref_B_Upgrade then
-            pcall(function() ref_B_Upgrade:InvokeServer(slot) end)
+            pcall(function() ref_B_Upgrade:InvokeServer(slotNum) end)
             return true
         end
 
+        -- 4. Global search in ReplicatedStorage
         pcall(function()
             for _, v in pairs(ReplicatedStorage:GetDescendants()) do
-                if (v.Name == "B_Upgrade" or v.Name == "rev_B_Upgrade") and v:IsA("RemoteEvent") then
+                if (v.Name == "rev_B_Upgrade" or v.Name == "B_Upgrade") and v:IsA("RemoteEvent") then
                     rev_B_Upgrade = v
-                    v:FireServer(slot)
+                    v:FireServer(slotNum)
                     return true
-                elseif (v.Name == "B_Upgrade" or v.Name == "ref_B_Upgrade") and v:IsA("RemoteFunction") then
+                elseif (v.Name == "ref_B_Upgrade" or v.Name == "B_Upgrade") and v:IsA("RemoteFunction") then
                     ref_B_Upgrade = v
-                    v:InvokeServer(slot)
+                    v:InvokeServer(slotNum)
                     return true
                 end
             end
@@ -2021,36 +2055,54 @@ local success, errorMessage = pcall(function()
             ReceiverLog:Set("Status", "🟢 Active...")
             task.spawn(function()
                 while AutoReceiverEnabled do
-                    local tradeFrame = localPlayer.PlayerGui:FindFirstChild("TradingFrame", true)
+                    local tradeFrame = nil
+                    local pGui = localPlayer:FindFirstChild("PlayerGui")
+                    if pGui then
+                        for _, name in ipairs({"TradingFrame", "TradeGui", "Trade", "TradeFrame", "Trading"}) do
+                            local found = pGui:FindFirstChild(name, true)
+                            if found and (found:IsA("Frame") or found:IsA("ScreenGui")) and found.Visible then
+                                tradeFrame = found
+                                break
+                            end
+                        end
+                    end
+
                     if not (tradeFrame and tradeFrame.Visible) then
-                        local pGui = localPlayer:FindFirstChild("PlayerGui")
                         if pGui then
                             for _, gui in ipairs(pGui:GetChildren()) do
-                                if gui:IsA("ScreenGui") and gui.Name ~= "Sigma UI" and gui.Name ~= "Rayfield" then
+                                if gui:IsA("ScreenGui") and gui.Enabled and gui.Name ~= "Sigma UI" and gui.Name ~= "Rayfield" and gui.Name ~= "MiRaGe_Suite_v2" then
                                     for _, desc in ipairs(gui:GetDescendants()) do
                                         if (desc:IsA("TextButton") or desc:IsA("ImageButton")) and desc.Visible then
                                             local text = string.lower(desc:IsA("TextButton") and desc.Text or desc.Name)
-                                            if string.find(text, "accept") or string.find(text, "yes") or string.find(text, "trade") then
+                                            if string.find(text, "accept") or string.find(text, "yes") or string.find(text, "agree") or (string.find(text, "trade") and not string.find(text, "decline") and not string.find(text, "cancel")) then
                                                 pcall(function()
                                                     if getconnections then
                                                         local c = getconnections(desc.MouseButton1Click)
                                                         if c then for _, conn in ipairs(c) do pcall(function() conn:Fire() end) end end
+                                                        local c2 = getconnections(desc.Activated)
+                                                        if c2 then for _, conn in ipairs(c2) do pcall(function() conn:Fire() end) end end
                                                     end
-                                                    if firesignal then firesignal(desc.MouseButton1Click) end
+                                                    if firesignal then
+                                                        firesignal(desc.MouseButton1Click)
+                                                        firesignal(desc.Activated)
+                                                    end
                                                 end)
                                             end
                                         end
                                     end
                                 end
                             end
-                            if rev_trade_start then
-                                for _, desc in ipairs(pGui:GetDescendants()) do
-                                    if desc:IsA("TextLabel") and desc.Visible then
-                                        local txt = string.lower(desc.Text)
-                                        if string.find(txt, "trade") or string.find(txt, "request") then
-                                            for _, p in ipairs(Players:GetPlayers()) do
-                                                if p ~= localPlayer and (string.find(desc.Text, p.Name) or string.find(desc.Text, p.DisplayName)) then
-                                                    pcall(function() rev_trade_start:InvokeServer(p.UserId) end)
+
+                            for _, desc in ipairs(pGui:GetDescendants()) do
+                                if desc:IsA("TextLabel") and desc.Visible then
+                                    local txt = string.lower(desc.Text)
+                                    if string.find(txt, "trade") or string.find(txt, "request") or string.find(txt, "invited") then
+                                        for _, p in ipairs(Players:GetPlayers()) do
+                                            if p ~= localPlayer and (string.find(desc.Text, p.Name) or string.find(desc.Text, p.DisplayName)) then
+                                                if f_trade_r then
+                                                    pcall(function() f_trade_r:InvokeServer(p.UserId) end)
+                                                end
+                                                if rev_trade_start then
                                                     pcall(function() rev_trade_start:FireServer(p.UserId) end)
                                                 end
                                             end
@@ -2059,19 +2111,40 @@ local success, errorMessage = pcall(function()
                                 end
                             end
                         end
-                        task.wait(1)
+                        task.wait(0.3)
                     else
-                        while tradeFrame.Visible and not isOpponentConfirmed(tradeFrame) do task.wait(0.2) end
-                        if tradeFrame.Visible and isOpponentConfirmed(tradeFrame) then task.wait(5.1); r_trade_i:FireServer("Confirm"); task.wait(1) end
-                        while tradeFrame.Visible and isOpponentConfirmed(tradeFrame) do task.wait(0.2) end
-                        while tradeFrame.Visible and not isOpponentConfirmed(tradeFrame) do task.wait(0.2) end
-                        if tradeFrame.Visible and isOpponentConfirmed(tradeFrame) then task.wait(5.1); r_trade_i:FireServer("Confirm") end
-                        while tradeFrame.Visible do task.wait(0.5) end
+                        ReceiverLog:Set("Status", "🟢 In Trade Session...")
+
+                        local tStart = tick()
+                        while tradeFrame.Visible and not isOpponentConfirmed(tradeFrame) and (tick() - tStart < 8) do
+                            task.wait(0.2)
+                        end
+
+                        if tradeFrame.Visible then
+                            pcall(function() r_trade_i:FireServer("Confirm") end)
+                            task.wait(0.5)
+                        end
+
+                        task.wait(5.1)
+                        if tradeFrame.Visible then
+                            pcall(function() r_trade_i:FireServer("Confirm") end)
+                        end
+
+                        local waitClose = tick()
+                        while tradeFrame.Visible and (tick() - waitClose < 15) do
+                            task.wait(0.3)
+                        end
+
                         local receivedNames = {}
                         pcall(function()
+                            local p1Frame = tradeFrame:FindFirstChild("P1_Frame")
                             local p2Frame = tradeFrame:FindFirstChild("P2_Frame")
-                            if p2Frame then
-                                for _, slot in ipairs(p2Frame:GetDescendants()) do
+                            local oppFrame = p2Frame
+                            if p2Frame and (p2Frame:FindFirstChild(localPlayer.Name, true) or p2Frame:FindFirstChild(localPlayer.DisplayName, true)) then
+                                oppFrame = p1Frame
+                            end
+                            if oppFrame then
+                                for _, slot in ipairs(oppFrame:GetDescendants()) do
                                     if slot:IsA("TextLabel") and slot.Visible and slot.Text ~= "" and slot.Text ~= "Confirmed" then
                                         local isPlayer = false
                                         for _, p in ipairs(Players:GetPlayers()) do
@@ -2084,8 +2157,13 @@ local success, errorMessage = pcall(function()
                                 end
                             end
                         end)
-                        P2TradesCompleted = P2TradesCompleted + 1; updateStatsDisplay(); updateTradeHUD()
-                        if ConsoleStats then
+
+                        P2TradesCompleted = P2TradesCompleted + 1
+                        updateStatsDisplay()
+                        updateTradeHUD()
+                        ReceiverLog:Set("Status", "🟢 Active listening...")
+
+                        if ConsoleStats or ConsoleStatsReceived then
                             local partnerName = "Opponent"
                             for _, p in ipairs(Players:GetPlayers()) do
                                 if p ~= localPlayer then
@@ -2097,7 +2175,6 @@ local success, errorMessage = pcall(function()
                             end
 
                             if #receivedNames > 0 then
-                                -- Always track cumulative received in the background
                                 if not CumulativeReceived[partnerName] then CumulativeReceived[partnerName] = {} end
                                 local playerRec = CumulativeReceived[partnerName]
                                 for _, name in ipairs(receivedNames) do
@@ -2119,8 +2196,6 @@ local success, errorMessage = pcall(function()
                                     end
                                 end
                                 local recCpsStr = tostring(recCPSVal)
-
-                                -- Akumulasi ke Net Session Tracker
                                 local recCPSNum = tonumber(tostring(recCPSVal)) or 0
                                 NetReceivedCPS = NetReceivedCPS + recCPSNum
 
