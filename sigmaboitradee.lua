@@ -127,6 +127,7 @@ local success, errorMessage = pcall(function()
     local MaxSlots = 30
     local CurrentPlaceSlot = 1
     local AutoUpgradeEnabled = false
+    local AutoSwapMaxLevel = true
     local UpgradeDelay = 0.1
 
     -- Variabel Favorite Manager
@@ -1046,6 +1047,113 @@ local success, errorMessage = pcall(function()
         return false
     end
 
+    local function isSlotMaxLevel(slot)
+        local slotNum = tonumber(slot) or 1
+        local isMax = false
+
+        -- 1. Cek Model di Workspace
+        pcall(function()
+            for _, obj in ipairs(workspace:GetDescendants()) do
+                if obj:IsA("Model") or obj:IsA("Folder") then
+                    local sAttr = obj:GetAttribute("Slot") or obj:GetAttribute("slot") or obj:GetAttribute("SlotIndex")
+                    local nameLower = string.lower(obj.Name)
+                    if tonumber(sAttr) == slotNum or string.find(nameLower, "slot" .. slotNum) or string.find(nameLower, "slot_" .. slotNum) then
+                        local lvl = obj:GetAttribute("Level") or obj:GetAttribute("level") or obj:GetAttribute("Lvl")
+                        local maxLvl = obj:GetAttribute("MaxLevel") or obj:GetAttribute("maxLevel") or obj:GetAttribute("MaxLvl")
+                        local maxFlag = obj:GetAttribute("IsMax") or obj:GetAttribute("Max") or obj:GetAttribute("IsMaxLevel")
+                        if maxFlag == true or (lvl and maxLvl and tonumber(lvl) >= tonumber(maxLvl)) then
+                            isMax = true
+                            return
+                        end
+
+                        for _, desc in ipairs(obj:GetDescendants()) do
+                            if desc:IsA("TextLabel") and desc.Visible then
+                                local txt = string.lower(desc.Text)
+                                if string.find(txt, "max") or string.find(txt, "max lvl") or string.find(txt, "max level") or string.find(txt, "lvl max") then
+                                    isMax = true
+                                    return
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end)
+
+        return isMax
+    end
+
+    local function swapMaxedSlot(slotNum)
+        local character = localPlayer.Character
+        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+        local backpack = localPlayer:FindFirstChild("Backpack")
+        if not humanoid or not backpack or not rev_S_Interact then return false end
+
+        -- 1. Pickup brainrot max level dari slot
+        humanoid:UnequipTools()
+        task.wait(0.15)
+        pcall(function() rev_S_Interact:FireServer(slotNum) end)
+        task.wait(0.2)
+
+        -- 2. Cari pengganti dari BaseCart atau Inventory (yang belum Max)
+        local toolToPlace = nil
+        local toolName = ""
+
+        -- Prioritas 1: Dari BaseCart jika ada antrean
+        for bName, qty in pairs(BaseCart) do
+            if qty > 0 then
+                for _, t in ipairs(getAllTools()) do
+                    if isTradeable(t) and getFullItemName(t) == bName then
+                        toolToPlace = t
+                        toolName = bName
+                        BaseCart[bName] = BaseCart[bName] - 1
+                        break
+                    end
+                end
+                if toolToPlace then break end
+            end
+        end
+
+        -- Prioritas 2: Dari Backpack / Inventory yang belum Max
+        if not toolToPlace then
+            for _, t in ipairs(getAllTools()) do
+                if isTradeable(t) then
+                    if not (SkipPlaceFavorites and isToolFavorite(t)) then
+                        local name = getFullItemName(t)
+                        local lvl = t:GetAttribute("Level") or 1
+                        local maxLvl = t:GetAttribute("MaxLevel") or 100
+                        if tonumber(lvl) < tonumber(maxLvl) and not string.find(string.lower(name), "max") then
+                            toolToPlace = t
+                            toolName = name
+                            break
+                        end
+                    end
+                end
+            end
+        end
+
+        -- 3. Equip dan pasang ke base slot
+        if toolToPlace then
+            if toolToPlace.Parent ~= character then
+                humanoid:EquipTool(toolToPlace)
+                task.wait(0.2)
+            end
+            pcall(function() rev_S_Interact:FireServer(slotNum) end)
+            task.wait(0.2)
+            if updateBaseCartDisplay then updateBaseCartDisplay() end
+            if ConsoleStats then
+                ConsoleStats:Log(string.format("🔄 Slot %d MAX LEVEL! Replaced with: %s", slotNum, toolName), "success")
+            end
+            Library:Notify("Max Replaced", string.format("Slot %d Max! Placed: %s", slotNum, toolName), 3)
+            return true
+        else
+            if ConsoleStats then
+                ConsoleStats:Log(string.format("⚠️ Slot %d MAX LEVEL! No replacement items available.", slotNum), "warn")
+            end
+            return false
+        end
+    end
+
     local updateInventoryDisplay
     local updateStatsDisplay 
 
@@ -1645,10 +1753,14 @@ local success, errorMessage = pcall(function()
         end
     end)
 
-    local SecBase4 = TabBase:AddSection("4. Base Auto-Upgrade")
+    local SecBase4 = TabBase:AddSection("4. Base Auto-Upgrade & Max Replacer")
     local upgradeDelayInput = SecBase4:AddInput({Name = "Upgrade Delay (Seconds):", Placeholder = "Default: 0.1"}, function(Text)
         local num = tonumber(Text)
         if num and num >= 0.01 then UpgradeDelay = num end
+    end)
+
+    SecBase4:AddToggle({Name = "🔄 Auto-Swap When Max Level", Default = true}, function(Value)
+        AutoSwapMaxLevel = Value
     end)
 
     SecBase4:AddButton("⚡ Upgrade All Placed Once", function()
@@ -1658,14 +1770,34 @@ local success, errorMessage = pcall(function()
             Library:Notify("Upgrading", "Upgrading placed brainrots (Slots " .. minS .. "-" .. maxS .. ")...", 2)
             local upgraded = 0
             for s = minS, maxS do
-                local ok = upgradeBrainrotSlot(s)
-                if ok then upgraded = upgraded + 1 end
+                if AutoSwapMaxLevel and isSlotMaxLevel(s) then
+                    swapMaxedSlot(s)
+                else
+                    local ok = upgradeBrainrotSlot(s)
+                    if ok then upgraded = upgraded + 1 end
+                end
                 task.wait(UpgradeDelay or 0.1)
             end
             Library:Notify("Done", "Upgrade pass complete! Fired on " .. upgraded .. " slots.", 3)
             if ConsoleStats then
-                ConsoleStats:Log("⚡ Upgrade Pass: Fired B_Upgrade on slots " .. minS .. "-" .. maxS, "success")
+                ConsoleStats:Log("⚡ Upgrade Pass: Fired on slots " .. minS .. "-" .. maxS, "success")
             end
+        end)
+    end)
+
+    SecBase4:AddButton("🔄 Scan & Swap All Max Placed Now", function()
+        task.spawn(function()
+            local minS = StartSlot or 1
+            local maxS = MaxSlots or 30
+            local swapped = 0
+            for s = minS, maxS do
+                if isSlotMaxLevel(s) then
+                    local ok = swapMaxedSlot(s)
+                    if ok then swapped = swapped + 1 end
+                    task.wait(0.2)
+                end
+            end
+            Library:Notify("Scan Complete", "Swapped " .. swapped .. " Max Level slots.", 3)
         end)
     end)
 
@@ -1679,7 +1811,11 @@ local success, errorMessage = pcall(function()
                     local maxS = MaxSlots or 30
                     for s = minS, maxS do
                         if not AutoUpgradeEnabled then break end
-                        upgradeBrainrotSlot(s)
+                        if AutoSwapMaxLevel and isSlotMaxLevel(s) then
+                            swapMaxedSlot(s)
+                        else
+                            upgradeBrainrotSlot(s)
+                        end
                         task.wait(UpgradeDelay or 0.1)
                     end
                     task.wait(0.5)
