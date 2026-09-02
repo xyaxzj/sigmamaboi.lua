@@ -277,6 +277,20 @@ local success, errorMessage = pcall(function()
     local isToolFavorite, toggleToolFavorite, setToolFavorite, processFavoriteBatch
     local favoriteCustomItems, favoriteByMutations, favoriteByRarities, favoriteAllInventory, favoriteTopCPS
 
+    -- Rarity yang diklasifikasikan sebagai Exclusive (tidak pakai Lv & CPS, tapi pakai % stat)
+    local EXCLUSIVE_RARITIES = {
+        Exclusive = true,
+        Volcanic = true,
+        Celestial = true,
+        Abyssal = true,
+        Demon = true,
+        Secret = true,
+        Rainbow = true,
+        Eternal = true,
+        Hacked = true,
+        OG = true,
+    }
+
     function getBaseName(dropdownString) 
         return string.split(dropdownString, " | ")[1] or dropdownString 
     end
@@ -357,7 +371,13 @@ local success, errorMessage = pcall(function()
     function getCPSFromDisplayName(fullName)
         local status, result = pcall(function()
             if not fullName or fullName == "" then return nil end
-            
+
+            -- Jika format mengandung %, ini item Exclusive (tidak punya CPS)
+            if string.match(fullName, "%((%d+%%)%)?") then
+                -- Return nil karena Exclusive tidak dihitung CPS
+                return nil
+            end
+
             local level = 1
             local lvlMatch = string.match(fullName, "%(Lv%.(%d+)%)")
             if not lvlMatch then lvlMatch = string.match(fullName, "Lv%.(%d+)") end
@@ -375,6 +395,7 @@ local success, errorMessage = pcall(function()
             baseName = string.gsub(baseName, "%s*%[(.-)%]", "")
             baseName = string.gsub(baseName, "%s*%(Lv%.%d+%)", "")
             baseName = string.gsub(baseName, "%s*%(Lv%.%s*%d+%)", "")
+            baseName = string.gsub(baseName, "%s*%(%d+%%%)", "")  -- strip (250%) untuk lookup
             baseName = string.trim and string.trim(baseName) or baseName:match("^%s*(.-)%s*$")
             
             local EntitiesDataModule, MutationDataModule
@@ -388,9 +409,13 @@ local success, errorMessage = pcall(function()
                 local MutationDataObj = Data and Data:FindFirstChild("MutationData")
                 if MutationDataObj then MutationDataModule = require(MutationDataObj) end
             end)
-            
+
+            -- Jika rarity Exclusive, skip CPS calc
             if EntitiesDataModule and EntitiesDataModule.Brainrots and EntitiesDataModule.Brainrots[baseName] then
                 local info = EntitiesDataModule.Brainrots[baseName]
+                if EXCLUSIVE_RARITIES[info.Rarity or ""] then
+                    return nil  -- Exclusive tidak punya CPS numerik
+                end
                 local baseCPS = info.CPS
                 if baseCPS then
                     local levelMult = 1
@@ -522,17 +547,72 @@ local success, errorMessage = pcall(function()
         return list
     end
 
+    local function isExclusiveRarity(tool)
+        if not tool then return false end
+        local rarity = getItemInfo(tool)
+        return EXCLUSIVE_RARITIES[rarity] == true
+    end
+
+    -- Ambil stat % dari Exclusive item (KickPowerMultiplier, Value, Percent, dll)
+    local function getExclusivePercent(tool)
+        if not tool then return nil end
+        -- Coba berbagai attribute yang mungkin dipakai game untuk stat Exclusive
+        local statAttr = tool:GetAttribute("KickPowerMultiplier")
+            or tool:GetAttribute("Multiplier")
+            or tool:GetAttribute("Percent")
+            or tool:GetAttribute("Value")
+            or tool:GetAttribute("StatValue")
+            or tool:GetAttribute("Power")
+            or tool:GetAttribute("Boost")
+        if statAttr then
+            local num = tonumber(statAttr)
+            if num then
+                -- Jika nilainya < 10, kemungkinan dalam bentuk multiplier (misal 2.5 = 250%)
+                if num > 0 and num <= 50 then
+                    return string.format("%.0f%%", num * 100)
+                else
+                    return string.format("%.0f%%", num)
+                end
+            end
+        end
+        -- Coba cari dari children (IntValue, NumberValue)
+        for _, child in ipairs(tool:GetChildren()) do
+            local lname = child.Name:lower()
+            if (lname == "value" or lname == "percent" or lname == "multiplier" or lname == "kickpowermultiplier" or lname == "boost" or lname == "power")
+                and (child:IsA("NumberValue") or child:IsA("IntValue")) then
+                local num = tonumber(child.Value)
+                if num then
+                    if num > 0 and num <= 50 then
+                        return string.format("%.0f%%", num * 100)
+                    else
+                        return string.format("%.0f%%", num)
+                    end
+                end
+            end
+        end
+        return nil
+    end
+
     function getFullItemName(tool)
         local displayName = tool.Name
         local mutValue = getToolMutation(tool)
-        if mutValue then displayName = displayName .. " [" .. mutValue .. "]" end  
-        
-        local lvlValue = tool:GetAttribute("Level") or tool:GetAttribute("level") or tool:GetAttribute("Lvl")
-        if not lvlValue then
-            local lvlObj = tool:FindFirstChild("Level") or tool:FindFirstChild("level") or tool:FindFirstChild("Lvl")
-            if lvlObj and (lvlObj:IsA("IntValue") or lvlObj:IsA("NumberValue") or lvlObj:IsA("StringValue")) then lvlValue = lvlObj.Value end
+        if mutValue then displayName = displayName .. " [" .. mutValue .. "]" end
+
+        if isExclusiveRarity(tool) then
+            -- Exclusive: tampilkan % stat, TIDAK pakai Lv.
+            local pct = getExclusivePercent(tool)
+            if pct then
+                displayName = displayName .. " (" .. pct .. ")"
+            end
+        else
+            -- Non-Exclusive: tampilkan level seperti biasa
+            local lvlValue = tool:GetAttribute("Level") or tool:GetAttribute("level") or tool:GetAttribute("Lvl")
+            if not lvlValue then
+                local lvlObj = tool:FindFirstChild("Level") or tool:FindFirstChild("level") or tool:FindFirstChild("Lvl")
+                if lvlObj and (lvlObj:IsA("IntValue") or lvlObj:IsA("NumberValue") or lvlObj:IsA("StringValue")) then lvlValue = lvlObj.Value end
+            end
+            if lvlValue then displayName = displayName .. " (Lv." .. tostring(lvlValue) .. ")" end
         end
-        if lvlValue then displayName = displayName .. " (Lv." .. tostring(lvlValue) .. ")" end
         return displayName
     end
 
