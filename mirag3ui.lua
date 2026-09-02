@@ -1,12 +1,12 @@
 --[[
     ========================================================================
-                             MiRaGe HUB UI LIBRARY (v2.1)
+                             MiRaGe HUB UI LIBRARY (v2.2)
                 Mobile-Optimized Responsive Roblox Automation Suite
     ========================================================================
 ]]
 
 local MiRaGe = {
-    Version = "2.1.0",
+    Version = "2.2.0",
     Flags = {},
     Themes = {},
     CurrentTheme = "VoidMirage",
@@ -189,47 +189,6 @@ local function makePadding(instance, top, bottom, left, right)
     return pad
 end
 
--- Touch & Mouse Draggable Function (Optimized for Mobile)
-local function makeDraggable(frame, handle)
-    handle = handle or frame
-    local dragging = false
-    local dragInput, dragStart, startPos
-
-    handle.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            dragStart = input.Position
-            startPos = frame.Position
-            
-            local conn
-            conn = input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    dragging = false
-                    if conn then conn:Disconnect() end
-                end
-            end)
-        end
-    end)
-
-    handle.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-            dragInput = input
-        end
-    end)
-
-    UserInputService.InputChanged:Connect(function(input)
-        if input == dragInput and dragging then
-            local delta = input.Position - dragStart
-            frame.Position = UDim2.new(
-                startPos.X.Scale,
-                startPos.X.Offset + delta.X,
-                startPos.Y.Scale,
-                startPos.Y.Offset + delta.Y
-            )
-        end
-    end)
-end
-
 -- ══════════════════════════════════════════════════════════════════
 -- TOAST NOTIFICATION ENGINE
 -- ══════════════════════════════════════════════════════════════════
@@ -271,7 +230,7 @@ function MiRaGe:Notify(options)
     local container = getNotificationContainer()
 
     local toast = Instance.new("Frame")
-    toast.Size = UDim2.new(1, 0, 0, 54)
+    toast.Size = UDim2.new(1, 0, 0, 52)
     toast.BackgroundColor3 = Theme.Surface
     toast.BackgroundTransparency = 0.05
     toast.Position = UDim2.new(1, 80, 0, 0)
@@ -280,32 +239,32 @@ function MiRaGe:Notify(options)
     makeStroke(toast, Theme.Border, 1)
 
     local iconLabel = Instance.new("TextLabel")
-    iconLabel.Size = UDim2.new(0, 28, 0, 28)
-    iconLabel.Position = UDim2.new(0, 8, 0.5, -14)
+    iconLabel.Size = UDim2.new(0, 26, 0, 26)
+    iconLabel.Position = UDim2.new(0, 8, 0.5, -13)
     iconLabel.BackgroundColor3 = Theme.Card
     iconLabel.Text = nType == "Success" and "✅" or (nType == "Warn" and "⚠️" or (nType == "Danger" and "❌" or "⚡"))
-    iconLabel.TextSize = 13
+    iconLabel.TextSize = 12
     iconLabel.Parent = toast
     makeCorner(iconLabel, 6)
 
     local titleLbl = Instance.new("TextLabel")
-    titleLbl.Size = UDim2.new(1, -44, 0, 15)
-    titleLbl.Position = UDim2.new(0, 42, 0, 8)
+    titleLbl.Size = UDim2.new(1, -42, 0, 15)
+    titleLbl.Position = UDim2.new(0, 38, 0, 6)
     titleLbl.BackgroundTransparency = 1
     titleLbl.Text = title
     titleLbl.TextColor3 = Theme.Text
-    titleLbl.TextSize = 11
+    titleLbl.TextSize = 10.5
     titleLbl.Font = Enum.Font.GothamBold
     titleLbl.TextXAlignment = Enum.TextXAlignment.Left
     titleLbl.Parent = toast
 
     local descLbl = Instance.new("TextLabel")
-    descLbl.Size = UDim2.new(1, -44, 0, 24)
-    descLbl.Position = UDim2.new(0, 42, 0, 24)
+    descLbl.Size = UDim2.new(1, -42, 0, 24)
+    descLbl.Position = UDim2.new(0, 38, 0, 22)
     descLbl.BackgroundTransparency = 1
     descLbl.Text = content
     descLbl.TextColor3 = Theme.TextSub
-    descLbl.TextSize = 9.5
+    descLbl.TextSize = 9
     descLbl.Font = Enum.Font.Gotham
     descLbl.TextWrapped = true
     descLbl.TextXAlignment = Enum.TextXAlignment.Left
@@ -351,7 +310,7 @@ function MiRaGe:CreateWindow(config)
 
     -- Mobile Responsive Dimensions
     local winW = math.clamp(viewport.X - 30, 360, isMobile and 540 or 650)
-    local winH = math.clamp(viewport.Y - 50, 260, isMobile and 310 or 390)
+    local winH = math.clamp(viewport.Y - 45, 260, isMobile and 310 or 390)
 
     local ScreenGui = Instance.new("ScreenGui")
     ScreenGui.Name = "MiRaGe_Suite_v2"
@@ -364,12 +323,12 @@ function MiRaGe:CreateWindow(config)
     -- ──────────────────────────────────────────────────────────────
     local FloatingBubble = Instance.new("Frame")
     FloatingBubble.Name = "FloatingBubble"
-    FloatingBubble.Size = UDim2.new(0, 50, 0, 50)
-    FloatingBubble.Position = UDim2.new(0, 20, 0.5, -25)
+    FloatingBubble.Size = UDim2.new(0, 48, 0, 48)
+    FloatingBubble.Position = UDim2.new(0, 20, 0.5, -24)
     FloatingBubble.BackgroundColor3 = Theme.Surface
     FloatingBubble.Visible = false
     FloatingBubble.ZIndex = 500
-    makeCorner(FloatingBubble, 25)
+    makeCorner(FloatingBubble, 24)
     makeStroke(FloatingBubble, Theme.Accent, 2)
 
     local bubbleGrad = Instance.new("UIGradient")
@@ -377,7 +336,6 @@ function MiRaGe:CreateWindow(config)
     bubbleGrad.Rotation = 45
     bubbleGrad.Parent = FloatingBubble
 
-    -- Radar Pulsing Ring
     local pulseRing = Instance.new("Frame")
     pulseRing.Name = "PulseRing"
     pulseRing.Size = UDim2.new(1, 10, 1, 10)
@@ -415,10 +373,9 @@ function MiRaGe:CreateWindow(config)
     bubbleLetter.ZIndex = 502
     bubbleLetter.Parent = FloatingBubble
 
-    -- Queue Badge on Bubble
     local bubbleBadge = Instance.new("TextLabel")
     bubbleBadge.Name = "BubbleBadge"
-    bubbleBadge.Size = UDim2.new(0, 20, 0, 16)
+    bubbleBadge.Size = UDim2.new(0, 20, 0, 15)
     bubbleBadge.Position = UDim2.new(1, -10, 0, -3)
     bubbleBadge.BackgroundColor3 = Theme.Success
     bubbleBadge.Text = "●"
@@ -426,7 +383,7 @@ function MiRaGe:CreateWindow(config)
     bubbleBadge.TextSize = 9
     bubbleBadge.Font = Enum.Font.GothamBold
     bubbleBadge.ZIndex = 505
-    makeCorner(bubbleBadge, 8)
+    makeCorner(bubbleBadge, 7)
     bubbleBadge.Parent = FloatingBubble
 
     FloatingBubble.Parent = ScreenGui
@@ -455,8 +412,8 @@ function MiRaGe:CreateWindow(config)
         MainFrame.Visible = false
         FloatingBubble.Visible = true
         FloatingBubble.Size = UDim2.new(0, 0, 0, 0)
-        fastTween(FloatingBubble, {Size = UDim2.new(0, 50, 0, 50)}, 0.25, Enum.EasingStyle.Back)
-        MiRaGe:Notify({Title = "MiRaGe HUB", Content = "Minimized! Tap/Drag floating bubble anytime.", Duration = 2.0})
+        fastTween(FloatingBubble, {Size = UDim2.new(0, 48, 0, 48)}, 0.25, Enum.EasingStyle.Back)
+        MiRaGe:Notify({Title = "MiRaGe HUB", Content = "Minimized! Tap floating logo to reopen.", Duration = 2.0})
     end
 
     local function restoreWindow()
@@ -470,7 +427,7 @@ function MiRaGe:CreateWindow(config)
         }, 0.25, Enum.EasingStyle.Back)
     end
 
-    -- Draggable for Bubble with Tap to Restore
+    -- Touch & Mouse Draggable for Floating Bubble
     do
         local dragging = false
         local dragStart, startPos
@@ -527,16 +484,36 @@ function MiRaGe:CreateWindow(config)
     end)
 
     -- ──────────────────────────────────────────────────────────────
-    -- 3. COMPACT TITLEBAR (MOBILE FRIENDLY)
+    -- 3. COMPACT TITLEBAR
     -- ──────────────────────────────────────────────────────────────
     local TitleBar = Instance.new("Frame")
     TitleBar.Name = "TitleBar"
-    TitleBar.Size = UDim2.new(1, 0, 0, 40)
+    TitleBar.Size = UDim2.new(1, 0, 0, 36)
     TitleBar.BackgroundColor3 = Theme.Surface
     TitleBar.BorderSizePixel = 0
     TitleBar.Parent = MainFrame
 
-    makeDraggable(MainFrame, TitleBar)
+    -- Window Dragging
+    do
+        local dragging = false
+        local dragStart, startPos
+        TitleBar.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                dragging = true
+                dragStart = input.Position
+                startPos = MainFrame.Position
+                input.Changed:Connect(function()
+                    if input.UserInputState == Enum.UserInputState.End then dragging = false end
+                end)
+            end
+        end)
+        UserInputService.InputChanged:Connect(function(input)
+            if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                local delta = input.Position - dragStart
+                MainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+            end
+        end)
+    end
 
     local titleLine = Instance.new("Frame")
     titleLine.Size = UDim2.new(1, 0, 0, 1)
@@ -554,12 +531,11 @@ function MiRaGe:CreateWindow(config)
     stripGrad.Color = Theme.Grad1
     stripGrad.Parent = topStrip
 
-    -- Left Brand Info
     local brandIcon = Instance.new("Frame")
-    brandIcon.Size = UDim2.new(0, 26, 0, 26)
-    brandIcon.Position = UDim2.new(0, 10, 0.5, -13)
+    brandIcon.Size = UDim2.new(0, 22, 0, 22)
+    brandIcon.Position = UDim2.new(0, 8, 0.5, -11)
     brandIcon.BackgroundColor3 = Theme.Accent
-    makeCorner(brandIcon, 6)
+    makeCorner(brandIcon, 5)
     brandIcon.Parent = TitleBar
     local biGrad = Instance.new("UIGradient")
     biGrad.Color = Theme.Grad1
@@ -570,86 +546,86 @@ function MiRaGe:CreateWindow(config)
     biText.BackgroundTransparency = 1
     biText.Text = "M"
     biText.TextColor3 = Color3.fromRGB(255, 255, 255)
-    biText.TextSize = 14
+    biText.TextSize = 12
     biText.Font = Enum.Font.GothamBlack
     biText.Parent = brandIcon
 
     local titleLabel = Instance.new("TextLabel")
-    titleLabel.Size = UDim2.new(0, 130, 0, 16)
-    titleLabel.Position = UDim2.new(0, 42, 0, 5)
+    titleLabel.Size = UDim2.new(0, 120, 0, 14)
+    titleLabel.Position = UDim2.new(0, 36, 0, 4)
     titleLabel.BackgroundTransparency = 1
     titleLabel.Text = hubTitle
     titleLabel.TextColor3 = Theme.Text
-    titleLabel.TextSize = 12
+    titleLabel.TextSize = 11
     titleLabel.Font = Enum.Font.GothamBold
     titleLabel.TextXAlignment = Enum.TextXAlignment.Left
     titleLabel.Parent = TitleBar
 
     local subLabel = Instance.new("TextLabel")
-    subLabel.Size = UDim2.new(0, 130, 0, 12)
-    subLabel.Position = UDim2.new(0, 42, 0, 21)
+    subLabel.Size = UDim2.new(0, 120, 0, 11)
+    subLabel.Position = UDim2.new(0, 36, 0, 18)
     subLabel.BackgroundTransparency = 1
     subLabel.Text = hubSubtitle
     subLabel.TextColor3 = Theme.TextSub
-    subLabel.TextSize = 8.5
+    subLabel.TextSize = 8
     subLabel.Font = Enum.Font.Gotham
     subLabel.TextXAlignment = Enum.TextXAlignment.Left
     subLabel.Parent = TitleBar
 
-    -- Compact Center Profile Card
+    -- Center Player Headshot Card
     local ProfileCard = Instance.new("Frame")
     ProfileCard.Name = "ProfileCard"
-    ProfileCard.Size = UDim2.new(0, 140, 0, 26)
-    ProfileCard.Position = UDim2.new(0.5, -70, 0.5, -13)
+    ProfileCard.Size = UDim2.new(0, 120, 0, 22)
+    ProfileCard.Position = UDim2.new(0.5, -60, 0.5, -11)
     ProfileCard.BackgroundColor3 = Theme.Card
-    makeCorner(ProfileCard, 13)
+    makeCorner(ProfileCard, 11)
     makeStroke(ProfileCard, Theme.Border, 1)
     ProfileCard.Parent = TitleBar
 
     local avatarImg = Instance.new("ImageLabel")
-    avatarImg.Size = UDim2.new(0, 20, 0, 20)
-    avatarImg.Position = UDim2.new(0, 3, 0.5, -10)
+    avatarImg.Size = UDim2.new(0, 16, 0, 16)
+    avatarImg.Position = UDim2.new(0, 3, 0.5, -8)
     avatarImg.BackgroundColor3 = Theme.Surface
     avatarImg.Image = "rbxthumb://type=AvatarHeadShot&id=" .. tostring(LocalPlayer.UserId) .. "&w=100&h=100"
-    makeCorner(avatarImg, 10)
+    makeCorner(avatarImg, 8)
     avatarImg.Parent = ProfileCard
 
     local onlineDot = Instance.new("Frame")
-    onlineDot.Size = UDim2.new(0, 6, 0, 6)
-    onlineDot.Position = UDim2.new(1, -5, 1, -5)
+    onlineDot.Size = UDim2.new(0, 5, 0, 5)
+    onlineDot.Position = UDim2.new(1, -4, 1, -4)
     onlineDot.BackgroundColor3 = Theme.Success
-    makeCorner(onlineDot, 3)
+    makeCorner(onlineDot, 2.5)
     makeStroke(onlineDot, Theme.Card, 1)
     onlineDot.Parent = avatarImg
 
     local pName = Instance.new("TextLabel")
-    pName.Size = UDim2.new(1, -28, 1, 0)
-    pName.Position = UDim2.new(0, 26, 0, 0)
+    pName.Size = UDim2.new(1, -24, 1, 0)
+    pName.Position = UDim2.new(0, 22, 0, 0)
     pName.BackgroundTransparency = 1
     pName.Text = LocalPlayer.DisplayName
     pName.TextColor3 = Theme.Text
-    pName.TextSize = 9.5
+    pName.TextSize = 8.5
     pName.Font = Enum.Font.GothamBold
     pName.TextXAlignment = Enum.TextXAlignment.Left
     pName.Parent = ProfileCard
 
     -- Right Action Buttons
     local winControls = Instance.new("Frame")
-    winControls.Size = UDim2.new(0, 80, 0, 26)
-    winControls.Position = UDim2.new(1, -88, 0.5, -13)
+    winControls.Size = UDim2.new(0, 75, 0, 22)
+    winControls.Position = UDim2.new(1, -82, 0.5, -11)
     winControls.BackgroundTransparency = 1
     winControls.Parent = TitleBar
 
     local function makeWinBtn(text, posX, callback)
         local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(0, 24, 0, 24)
-        btn.Position = UDim2.new(0, posX, 0, 1)
+        btn.Size = UDim2.new(0, 22, 0, 22)
+        btn.Position = UDim2.new(0, posX, 0, 0)
         btn.BackgroundColor3 = Theme.Card
         btn.Text = text
         btn.TextColor3 = Theme.TextSub
-        btn.TextSize = 10
+        btn.TextSize = 9.5
         btn.Font = Enum.Font.GothamBold
-        makeCorner(btn, 5)
+        makeCorner(btn, 4)
         makeStroke(btn, Theme.Border, 1)
         btn.Parent = winControls
 
@@ -662,12 +638,12 @@ function MiRaGe:CreateWindow(config)
     makeWinBtn("🎨", 0, function()
         curThemeIdx = (curThemeIdx % #themeNames) + 1
         MiRaGe:SetTheme(themeNames[curThemeIdx])
-        MiRaGe:Notify({Title = "Theme Changed", Content = "Applied " .. themeNames[curThemeIdx] .. " palette.", Duration = 1.5})
+        MiRaGe:Notify({Title = "Theme Changed", Content = "Switched to " .. themeNames[curThemeIdx], Duration = 1.5})
     end)
 
-    makeWinBtn("—", 28, minimizeWindow)
+    makeWinBtn("—", 26, minimizeWindow)
 
-    local closeBtn = makeWinBtn("✕", 56, function()
+    local closeBtn = makeWinBtn("✕", 52, function()
         MainFrame.Visible = false
         MiRaGe:Notify({Title = "MiRaGe HUB", Content = "Hidden. Press RightControl to reopen.", Duration = 2})
     end)
@@ -676,12 +652,12 @@ function MiRaGe:CreateWindow(config)
     -- 4. SIDEBAR & PAGE SYSTEM
     -- ──────────────────────────────────────────────────────────────
     local BodyFrame = Instance.new("Frame")
-    BodyFrame.Size = UDim2.new(1, 0, 1, -40)
-    BodyFrame.Position = UDim2.new(0, 0, 0, 40)
+    BodyFrame.Size = UDim2.new(1, 0, 1, -36)
+    BodyFrame.Position = UDim2.new(0, 0, 0, 36)
     BodyFrame.BackgroundTransparency = 1
     BodyFrame.Parent = MainFrame
 
-    local sideW = 145
+    local sideW = 135
     local Sidebar = Instance.new("ScrollingFrame")
     Sidebar.Name = "Sidebar"
     Sidebar.Size = UDim2.new(0, sideW, 1, 0)
@@ -691,6 +667,7 @@ function MiRaGe:CreateWindow(config)
     Sidebar.ScrollBarImageColor3 = Theme.Accent
     Sidebar.CanvasSize = UDim2.new(0, 0, 0, 0)
     Sidebar.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    Sidebar.CanvasPosition = Vector2.new(0, 0)
     Sidebar.Parent = BodyFrame
 
     local sideStroke = Instance.new("Frame")
@@ -702,9 +679,11 @@ function MiRaGe:CreateWindow(config)
 
     local sideList = Instance.new("UIListLayout")
     sideList.SortOrder = Enum.SortOrder.LayoutOrder
+    sideList.VerticalAlignment = Enum.VerticalAlignment.Top
+    sideList.HorizontalAlignment = Enum.HorizontalAlignment.Left
     sideList.Padding = UDim.new(0, 2)
     sideList.Parent = Sidebar
-    makePadding(Sidebar, 8, 8, 6, 6)
+    makePadding(Sidebar, 4, 4, 4, 4)
 
     local PageContainer = Instance.new("Frame")
     PageContainer.Name = "PageContainer"
@@ -712,6 +691,8 @@ function MiRaGe:CreateWindow(config)
     PageContainer.Position = UDim2.new(0, sideW, 0, 0)
     PageContainer.BackgroundTransparency = 1
     PageContainer.Parent = BodyFrame
+
+    local sidebarOrder = 0
 
     local Window = {
         ScreenGui = ScreenGui,
@@ -726,70 +707,74 @@ function MiRaGe:CreateWindow(config)
     end
 
     function Window:AddCategory(categoryName)
+        sidebarOrder = sidebarOrder + 1
         local catLabel = Instance.new("TextLabel")
-        catLabel.Size = UDim2.new(1, 0, 0, 20)
+        catLabel.LayoutOrder = sidebarOrder
+        catLabel.Size = UDim2.new(1, 0, 0, 16)
         catLabel.BackgroundTransparency = 1
         catLabel.Text = string.upper(categoryName)
         catLabel.TextColor3 = Theme.TextDim
-        catLabel.TextSize = 8
+        catLabel.TextSize = 7.5
         catLabel.Font = Enum.Font.GothamBold
         catLabel.TextXAlignment = Enum.TextXAlignment.Left
         catLabel.Parent = Sidebar
-        makePadding(catLabel, 6, 2, 4, 0)
+        makePadding(catLabel, 4, 1, 4, 0)
     end
 
     function Window:MakeTab(tabConfig)
+        sidebarOrder = sidebarOrder + 1
         local tabName = type(tabConfig) == "table" and (tabConfig.Name or tabConfig[1]) or tostring(tabConfig)
         local tabIcon = type(tabConfig) == "table" and (tabConfig.Icon or "⚡") or "⚡"
         local initialBadge = type(tabConfig) == "table" and tabConfig.Badge or nil
 
         local tabBtn = Instance.new("TextButton")
         tabBtn.Name = "TabBtn_" .. tabName
-        tabBtn.Size = UDim2.new(1, 0, 0, 28)
+        tabBtn.LayoutOrder = sidebarOrder
+        tabBtn.Size = UDim2.new(1, 0, 0, 24)
         tabBtn.BackgroundColor3 = Theme.Surface
         tabBtn.BackgroundTransparency = 1
         tabBtn.Text = ""
-        makeCorner(tabBtn, 6)
+        makeCorner(tabBtn, 4)
         tabBtn.Parent = Sidebar
 
         local activeBar = Instance.new("Frame")
-        activeBar.Size = UDim2.new(0, 2.5, 0.5, 0)
-        activeBar.Position = UDim2.new(0, 0, 0.25, 0)
+        activeBar.Size = UDim2.new(0, 2, 0.6, 0)
+        activeBar.Position = UDim2.new(0, 0, 0.2, 0)
         activeBar.BackgroundColor3 = Theme.Accent
         activeBar.Visible = false
-        makeCorner(activeBar, 2)
+        makeCorner(activeBar, 1)
         activeBar.Parent = tabBtn
 
         local iconLbl = Instance.new("TextLabel")
-        iconLbl.Size = UDim2.new(0, 18, 1, 0)
-        iconLbl.Position = UDim2.new(0, 5, 0, 0)
+        iconLbl.Size = UDim2.new(0, 16, 1, 0)
+        iconLbl.Position = UDim2.new(0, 4, 0, 0)
         iconLbl.BackgroundTransparency = 1
         iconLbl.Text = tabIcon
-        iconLbl.TextSize = 12
+        iconLbl.TextSize = 11
         iconLbl.Font = Enum.Font.Gotham
         iconLbl.Parent = tabBtn
 
         local nameLbl = Instance.new("TextLabel")
-        nameLbl.Size = UDim2.new(1, -48, 1, 0)
-        nameLbl.Position = UDim2.new(0, 26, 0, 0)
+        nameLbl.Size = UDim2.new(1, -44, 1, 0)
+        nameLbl.Position = UDim2.new(0, 22, 0, 0)
         nameLbl.BackgroundTransparency = 1
         nameLbl.Text = tabName
         nameLbl.TextColor3 = Theme.TextSub
-        nameLbl.TextSize = 10.5
+        nameLbl.TextSize = 9.5
         nameLbl.Font = Enum.Font.GothamSemibold
         nameLbl.TextXAlignment = Enum.TextXAlignment.Left
         nameLbl.Parent = tabBtn
 
         local badgeLbl = Instance.new("TextLabel")
-        badgeLbl.Size = UDim2.new(0, 20, 0, 14)
-        badgeLbl.Position = UDim2.new(1, -22, 0.5, -7)
+        badgeLbl.Size = UDim2.new(0, 18, 0, 13)
+        badgeLbl.Position = UDim2.new(1, -20, 0.5, -6.5)
         badgeLbl.BackgroundColor3 = Theme.Card
         badgeLbl.Text = initialBadge or ""
         badgeLbl.TextColor3 = Theme.Accent
-        badgeLbl.TextSize = 8
+        badgeLbl.TextSize = 7.5
         badgeLbl.Font = Enum.Font.GothamBold
         badgeLbl.Visible = (initialBadge ~= nil and initialBadge ~= "")
-        makeCorner(badgeLbl, 6)
+        makeCorner(badgeLbl, 5)
         badgeLbl.Parent = tabBtn
 
         local Page = Instance.new("ScrollingFrame")
@@ -805,9 +790,9 @@ function MiRaGe:CreateWindow(config)
 
         local pageLayout = Instance.new("UIListLayout")
         pageLayout.SortOrder = Enum.SortOrder.LayoutOrder
-        pageLayout.Padding = UDim.new(0, 8)
+        pageLayout.Padding = UDim.new(0, 6)
         pageLayout.Parent = Page
-        makePadding(Page, 10, 10, 10, 10)
+        makePadding(Page, 8, 8, 8, 8)
 
         local Tab = {
             Button = tabBtn,
@@ -860,38 +845,38 @@ function MiRaGe:CreateWindow(config)
             SectionFrame.Size = UDim2.new(1, 0, 0, 0)
             SectionFrame.AutomaticSize = Enum.AutomaticSize.Y
             SectionFrame.BackgroundColor3 = Theme.Card
-            makeCorner(SectionFrame, 8)
+            makeCorner(SectionFrame, 6)
             makeStroke(SectionFrame, Theme.Border, 1)
             SectionFrame.Parent = Page
 
             local secHeader = Instance.new("Frame")
-            secHeader.Size = UDim2.new(1, 0, 0, 26)
+            secHeader.Size = UDim2.new(1, 0, 0, 22)
             secHeader.BackgroundTransparency = 1
             secHeader.Parent = SectionFrame
 
             local sTitle = Instance.new("TextLabel")
             sTitle.Size = UDim2.new(1, -16, 1, 0)
-            sTitle.Position = UDim2.new(0, 10, 0, 0)
+            sTitle.Position = UDim2.new(0, 8, 0, 0)
             sTitle.BackgroundTransparency = 1
             sTitle.Text = secTitle
             sTitle.TextColor3 = Theme.Text
-            sTitle.TextSize = 10.5
+            sTitle.TextSize = 9.5
             sTitle.Font = Enum.Font.GothamBold
             sTitle.TextXAlignment = Enum.TextXAlignment.Left
             sTitle.Parent = secHeader
 
             local contentHolder = Instance.new("Frame")
             contentHolder.Size = UDim2.new(1, 0, 0, 0)
-            contentHolder.Position = UDim2.new(0, 0, 0, 26)
+            contentHolder.Position = UDim2.new(0, 0, 0, 22)
             contentHolder.AutomaticSize = Enum.AutomaticSize.Y
             contentHolder.BackgroundTransparency = 1
             contentHolder.Parent = SectionFrame
 
             local clayout = Instance.new("UIListLayout")
             clayout.SortOrder = Enum.SortOrder.LayoutOrder
-            clayout.Padding = UDim.new(0, 6)
+            clayout.Padding = UDim.new(0, 5)
             clayout.Parent = contentHolder
-            makePadding(contentHolder, 2, 8, 8, 8)
+            makePadding(contentHolder, 2, 6, 6, 6)
 
             local Section = {
                 Frame = SectionFrame,
@@ -902,14 +887,14 @@ function MiRaGe:CreateWindow(config)
             function Section:AddButton(btnText, callback)
                 callback = callback or function() end
                 local btn = Instance.new("TextButton")
-                btn.Size = UDim2.new(1, 0, 0, 28)
+                btn.Size = UDim2.new(1, 0, 0, 25)
                 btn.BackgroundColor3 = Theme.Surface
                 btn.Text = btnText
                 btn.TextColor3 = Theme.Text
-                btn.TextSize = 10.5
+                btn.TextSize = 9.5
                 btn.Font = Enum.Font.GothamBold
-                makeCorner(btn, 6)
-                local bstroke = makeStroke(btn, Theme.Border, 1)
+                makeCorner(btn, 5)
+                makeStroke(btn, Theme.Border, 1)
                 btn.Parent = contentHolder
 
                 btn.MouseButton1Click:Connect(callback)
@@ -923,33 +908,33 @@ function MiRaGe:CreateWindow(config)
                 callback = callback or (type(toggleConfig) == "table" and toggleConfig.Callback) or function() end
 
                 local row = Instance.new("Frame")
-                row.Size = UDim2.new(1, 0, 0, 28)
+                row.Size = UDim2.new(1, 0, 0, 24)
                 row.BackgroundTransparency = 1
                 row.Parent = contentHolder
 
                 local tLbl = Instance.new("TextLabel")
-                tLbl.Size = UDim2.new(1, -40, 1, 0)
+                tLbl.Size = UDim2.new(1, -36, 1, 0)
                 tLbl.BackgroundTransparency = 1
                 tLbl.Text = tName
                 tLbl.TextColor3 = Theme.Text
-                tLbl.TextSize = 10.5
+                tLbl.TextSize = 9.5
                 tLbl.Font = Enum.Font.GothamSemibold
                 tLbl.TextXAlignment = Enum.TextXAlignment.Left
                 tLbl.Parent = row
 
                 local switch = Instance.new("Frame")
-                switch.Size = UDim2.new(0, 32, 0, 18)
-                switch.Position = UDim2.new(1, -32, 0.5, -9)
+                switch.Size = UDim2.new(0, 28, 0, 16)
+                switch.Position = UDim2.new(1, -28, 0.5, -8)
                 switch.BackgroundColor3 = defaultVal and Theme.Accent or Theme.Input
-                makeCorner(switch, 9)
+                makeCorner(switch, 8)
                 makeStroke(switch, Theme.Border, 1)
                 switch.Parent = row
 
                 local dot = Instance.new("Frame")
-                dot.Size = UDim2.new(0, 12, 0, 12)
-                dot.Position = defaultVal and UDim2.new(1, -15, 0.5, -6) or UDim2.new(0, 3, 0.5, -6)
+                dot.Size = UDim2.new(0, 10, 0, 10)
+                dot.Position = defaultVal and UDim2.new(1, -13, 0.5, -5) or UDim2.new(0, 3, 0.5, -5)
                 dot.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-                makeCorner(dot, 6)
+                makeCorner(dot, 5)
                 dot.Parent = switch
 
                 local state = defaultVal
@@ -963,7 +948,7 @@ function MiRaGe:CreateWindow(config)
                 function ToggleObj:Set(newVal)
                     state = newVal
                     fastTween(switch, {BackgroundColor3 = state and Theme.Accent or Theme.Input}, 0.2)
-                    fastTween(dot, {Position = state and UDim2.new(1, -15, 0.5, -6) or UDim2.new(0, 3, 0.5, -6)}, 0.2)
+                    fastTween(dot, {Position = state and UDim2.new(1, -13, 0.5, -5) or UDim2.new(0, 3, 0.5, -5)}, 0.2)
                     pcall(callback, state)
                 end
 
@@ -984,43 +969,43 @@ function MiRaGe:CreateWindow(config)
                 callback = callback or function() end
 
                 local row = Instance.new("Frame")
-                row.Size = UDim2.new(1, 0, 0, 38)
+                row.Size = UDim2.new(1, 0, 0, 32)
                 row.BackgroundTransparency = 1
                 row.Parent = contentHolder
 
                 local title = Instance.new("TextLabel")
-                title.Size = UDim2.new(1, -45, 0, 14)
+                title.Size = UDim2.new(1, -40, 0, 12)
                 title.BackgroundTransparency = 1
                 title.Text = sName
                 title.TextColor3 = Theme.Text
-                title.TextSize = 10
+                title.TextSize = 9
                 title.Font = Enum.Font.GothamSemibold
                 title.TextXAlignment = Enum.TextXAlignment.Left
                 title.Parent = row
 
                 local valLbl = Instance.new("TextLabel")
-                valLbl.Size = UDim2.new(0, 45, 0, 14)
-                valLbl.Position = UDim2.new(1, -45, 0, 0)
+                valLbl.Size = UDim2.new(0, 40, 0, 12)
+                valLbl.Position = UDim2.new(1, -40, 0, 0)
                 valLbl.BackgroundTransparency = 1
                 valLbl.Text = tostring(defVal) .. valSuffix
                 valLbl.TextColor3 = Theme.Accent
-                valLbl.TextSize = 10
+                valLbl.TextSize = 9
                 valLbl.Font = Enum.Font.GothamBold
                 valLbl.TextXAlignment = Enum.TextXAlignment.Right
                 valLbl.Parent = row
 
                 local track = Instance.new("Frame")
-                track.Size = UDim2.new(1, 0, 0, 5)
-                track.Position = UDim2.new(0, 0, 0, 22)
+                track.Size = UDim2.new(1, 0, 0, 4)
+                track.Position = UDim2.new(0, 0, 0, 18)
                 track.BackgroundColor3 = Theme.Input
-                makeCorner(track, 2.5)
+                makeCorner(track, 2)
                 track.Parent = row
 
                 local fill = Instance.new("Frame")
                 local initPct = math.clamp((defVal - minVal) / (maxVal - minVal), 0, 1)
                 fill.Size = UDim2.new(initPct, 0, 1, 0)
                 fill.BackgroundColor3 = Theme.Accent
-                makeCorner(fill, 2.5)
+                makeCorner(fill, 2)
                 fill.Parent = track
 
                 local curVal = defVal
@@ -1074,32 +1059,32 @@ function MiRaGe:CreateWindow(config)
                 callback = callback or function() end
 
                 local row = Instance.new("Frame")
-                row.Size = UDim2.new(1, 0, 0, 46)
+                row.Size = UDim2.new(1, 0, 0, 38)
                 row.BackgroundTransparency = 1
                 row.Parent = contentHolder
 
                 local iLbl = Instance.new("TextLabel")
-                iLbl.Size = UDim2.new(1, 0, 0, 14)
+                iLbl.Size = UDim2.new(1, 0, 0, 12)
                 iLbl.BackgroundTransparency = 1
                 iLbl.Text = iName
                 iLbl.TextColor3 = Theme.TextSub
-                iLbl.TextSize = 9.5
+                iLbl.TextSize = 8.5
                 iLbl.Font = Enum.Font.GothamBold
                 iLbl.TextXAlignment = Enum.TextXAlignment.Left
                 iLbl.Parent = row
 
                 local box = Instance.new("TextBox")
-                box.Size = UDim2.new(1, 0, 0, 26)
-                box.Position = UDim2.new(0, 0, 0, 18)
+                box.Size = UDim2.new(1, 0, 0, 22)
+                box.Position = UDim2.new(0, 0, 0, 14)
                 box.BackgroundColor3 = Theme.Input
                 box.Text = tostring(defaultVal)
                 box.PlaceholderText = placeholder
                 box.TextColor3 = Theme.Text
                 box.PlaceholderColor3 = Theme.TextDim
-                box.TextSize = 10.5
+                box.TextSize = 9.5
                 box.Font = Enum.Font.Gotham
                 box.ClearTextOnFocus = false
-                makeCorner(box, 6)
+                makeCorner(box, 5)
                 makeStroke(box, Theme.Border, 1)
                 box.Parent = row
 
@@ -1122,57 +1107,57 @@ function MiRaGe:CreateWindow(config)
                 callback = callback or function() end
 
                 local dropFrame = Instance.new("Frame")
-                dropFrame.Size = UDim2.new(1, 0, 0, 46)
+                dropFrame.Size = UDim2.new(1, 0, 0, 38)
                 dropFrame.BackgroundTransparency = 1
                 dropFrame.ClipsDescendants = true
                 dropFrame.Parent = contentHolder
 
                 local dLbl = Instance.new("TextLabel")
-                dLbl.Size = UDim2.new(1, 0, 0, 14)
+                dLbl.Size = UDim2.new(1, 0, 0, 12)
                 dLbl.BackgroundTransparency = 1
                 dLbl.Text = dName
                 dLbl.TextColor3 = Theme.TextSub
-                dLbl.TextSize = 9.5
+                dLbl.TextSize = 8.5
                 dLbl.Font = Enum.Font.GothamBold
                 dLbl.TextXAlignment = Enum.TextXAlignment.Left
                 dLbl.Parent = dropFrame
 
                 local box = Instance.new("TextButton")
-                box.Size = UDim2.new(1, 0, 0, 26)
-                box.Position = UDim2.new(0, 0, 0, 18)
+                box.Size = UDim2.new(1, 0, 0, 22)
+                box.Position = UDim2.new(0, 0, 0, 14)
                 box.BackgroundColor3 = Theme.Input
                 box.Text = ""
-                makeCorner(box, 6)
+                makeCorner(box, 5)
                 makeStroke(box, Theme.Border, 1)
                 box.Parent = dropFrame
 
                 local selectedText = Instance.new("TextLabel")
-                selectedText.Size = UDim2.new(1, -26, 1, 0)
-                selectedText.Position = UDim2.new(0, 8, 0, 0)
+                selectedText.Size = UDim2.new(1, -22, 1, 0)
+                selectedText.Position = UDim2.new(0, 6, 0, 0)
                 selectedText.BackgroundTransparency = 1
-                selectedText.Text = isMulti and (type(defaultVal) == "table" and table.concat(defaultVal, ", ") or "None") or tostring(defaultVal)
+                selectedText.Text = isMulti and (type(defaultVal) == "table" and table.concat(defaultVal, ", ") or "None") or tostring(defaultVal or "")
                 selectedText.TextColor3 = Theme.Text
-                selectedText.TextSize = 10
+                selectedText.TextSize = 9
                 selectedText.Font = Enum.Font.GothamSemibold
                 selectedText.TextXAlignment = Enum.TextXAlignment.Left
                 selectedText.Parent = box
 
                 local arrow = Instance.new("TextLabel")
-                arrow.Size = UDim2.new(0, 18, 1, 0)
-                arrow.Position = UDim2.new(1, -20, 0, 0)
+                arrow.Size = UDim2.new(0, 16, 1, 0)
+                arrow.Position = UDim2.new(1, -16, 0, 0)
                 arrow.BackgroundTransparency = 1
                 arrow.Text = "▼"
                 arrow.TextColor3 = Theme.TextSub
-                arrow.TextSize = 8.5
+                arrow.TextSize = 8
                 arrow.Parent = box
 
                 local optionList = Instance.new("ScrollingFrame")
-                optionList.Size = UDim2.new(1, 0, 0, 90)
-                optionList.Position = UDim2.new(0, 0, 0, 48)
+                optionList.Size = UDim2.new(1, 0, 0, 80)
+                optionList.Position = UDim2.new(0, 0, 0, 40)
                 optionList.BackgroundColor3 = Theme.Surface
                 optionList.ScrollBarThickness = 2
-                optionList.CanvasSize = UDim2.new(0, 0, 0, #options * 24)
-                makeCorner(optionList, 6)
+                optionList.CanvasSize = UDim2.new(0, 0, 0, #options * 22)
+                makeCorner(optionList, 5)
                 makeStroke(optionList, Theme.Border, 1)
                 optionList.Parent = dropFrame
 
@@ -1190,12 +1175,12 @@ function MiRaGe:CreateWindow(config)
 
                     for _, opt in ipairs(options) do
                         local optBtn = Instance.new("TextButton")
-                        optBtn.Size = UDim2.new(1, 0, 0, 24)
+                        optBtn.Size = UDim2.new(1, 0, 0, 22)
                         optBtn.BackgroundColor3 = Theme.Surface
                         optBtn.BackgroundTransparency = 1
                         optBtn.Text = "  " .. tostring(opt)
                         optBtn.TextColor3 = Theme.TextSub
-                        optBtn.TextSize = 10
+                        optBtn.TextSize = 9
                         optBtn.Font = Enum.Font.Gotham
                         optBtn.TextXAlignment = Enum.TextXAlignment.Left
                         optBtn.Parent = optionList
@@ -1214,7 +1199,7 @@ function MiRaGe:CreateWindow(config)
                                 selected = opt
                                 selectedText.Text = tostring(opt)
                                 isOpen = false
-                                fastTween(dropFrame, {Size = UDim2.new(1, 0, 0, 46)}, 0.2)
+                                fastTween(dropFrame, {Size = UDim2.new(1, 0, 0, 38)}, 0.18)
                                 arrow.Text = "▼"
                                 pcall(callback, selected)
                             end
@@ -1227,7 +1212,7 @@ function MiRaGe:CreateWindow(config)
                 box.MouseButton1Click:Connect(function()
                     isOpen = not isOpen
                     arrow.Text = isOpen and "▲" or "▼"
-                    fastTween(dropFrame, {Size = isOpen and UDim2.new(1, 0, 0, 142) or UDim2.new(1, 0, 0, 46)}, 0.2)
+                    fastTween(dropFrame, {Size = isOpen and UDim2.new(1, 0, 0, 126) or UDim2.new(1, 0, 0, 38)}, 0.18)
                 end)
 
                 local DropdownObj = {}
@@ -1251,27 +1236,27 @@ function MiRaGe:CreateWindow(config)
                 callback = callback or function() end
 
                 local card = Instance.new("Frame")
-                card.Size = UDim2.new(1, 0, 0, 46)
+                card.Size = UDim2.new(1, 0, 0, 38)
                 card.BackgroundColor3 = Theme.Input
-                makeCorner(card, 6)
+                makeCorner(card, 5)
                 makeStroke(card, Theme.Border, 1)
                 card.Parent = contentHolder
 
                 local tAvatar = Instance.new("ImageLabel")
-                tAvatar.Size = UDim2.new(0, 32, 0, 32)
-                tAvatar.Position = UDim2.new(0, 6, 0.5, -16)
+                tAvatar.Size = UDim2.new(0, 26, 0, 26)
+                tAvatar.Position = UDim2.new(0, 5, 0.5, -13)
                 tAvatar.BackgroundColor3 = Theme.Surface
                 tAvatar.Image = "rbxassetid://0"
-                makeCorner(tAvatar, 16)
+                makeCorner(tAvatar, 13)
                 tAvatar.Parent = card
 
                 local selectBtn = Instance.new("TextButton")
-                selectBtn.Size = UDim2.new(1, -44, 1, 0)
-                selectBtn.Position = UDim2.new(0, 42, 0, 0)
+                selectBtn.Size = UDim2.new(1, -38, 1, 0)
+                selectBtn.Position = UDim2.new(0, 36, 0, 0)
                 selectBtn.BackgroundTransparency = 1
                 selectBtn.Text = "Select Target Player..."
                 selectBtn.TextColor3 = Theme.Text
-                selectBtn.TextSize = 11
+                selectBtn.TextSize = 9.5
                 selectBtn.Font = Enum.Font.GothamBold
                 selectBtn.TextXAlignment = Enum.TextXAlignment.Left
                 selectBtn.Parent = card
@@ -1313,16 +1298,16 @@ function MiRaGe:CreateWindow(config)
                 box.Size = UDim2.new(1, 0, 0, 0)
                 box.AutomaticSize = Enum.AutomaticSize.Y
                 box.BackgroundColor3 = Theme.Input
-                makeCorner(box, 6)
-                makePadding(box, 6, 6, 8, 8)
+                makeCorner(box, 5)
+                makePadding(box, 5, 5, 6, 6)
                 box.Parent = contentHolder
 
                 local tLbl = Instance.new("TextLabel")
-                tLbl.Size = UDim2.new(1, 0, 0, 14)
+                tLbl.Size = UDim2.new(1, 0, 0, 12)
                 tLbl.BackgroundTransparency = 1
                 tLbl.Text = title
                 tLbl.TextColor3 = Theme.Text
-                tLbl.TextSize = 10
+                tLbl.TextSize = 9
                 tLbl.Font = Enum.Font.GothamBold
                 tLbl.TextXAlignment = Enum.TextXAlignment.Left
                 tLbl.Parent = box
@@ -1330,11 +1315,11 @@ function MiRaGe:CreateWindow(config)
                 local dLbl = Instance.new("TextLabel")
                 dLbl.Size = UDim2.new(1, 0, 0, 0)
                 dLbl.AutomaticSize = Enum.AutomaticSize.Y
-                dLbl.Position = UDim2.new(0, 0, 0, 15)
+                dLbl.Position = UDim2.new(0, 0, 0, 13)
                 dLbl.BackgroundTransparency = 1
                 dLbl.Text = desc
                 dLbl.TextColor3 = Theme.TextSub
-                dLbl.TextSize = 9.5
+                dLbl.TextSize = 8.5
                 dLbl.Font = Enum.Font.Gotham
                 dLbl.TextWrapped = true
                 dLbl.TextXAlignment = Enum.TextXAlignment.Left
@@ -1355,42 +1340,42 @@ function MiRaGe:CreateWindow(config)
             -- PROGRESS BAR
             function Section:AddProgressBar(title)
                 local box = Instance.new("Frame")
-                box.Size = UDim2.new(1, 0, 0, 38)
+                box.Size = UDim2.new(1, 0, 0, 32)
                 box.BackgroundTransparency = 1
                 box.Parent = contentHolder
 
                 local tLbl = Instance.new("TextLabel")
-                tLbl.Size = UDim2.new(1, -50, 0, 14)
+                tLbl.Size = UDim2.new(1, -40, 0, 12)
                 tLbl.BackgroundTransparency = 1
                 tLbl.Text = title or "Progress"
                 tLbl.TextColor3 = Theme.Text
-                tLbl.TextSize = 10
+                tLbl.TextSize = 9
                 tLbl.Font = Enum.Font.GothamBold
                 tLbl.TextXAlignment = Enum.TextXAlignment.Left
                 tLbl.Parent = box
 
                 local pctLbl = Instance.new("TextLabel")
-                pctLbl.Size = UDim2.new(0, 50, 0, 14)
-                pctLbl.Position = UDim2.new(1, -50, 0, 0)
+                pctLbl.Size = UDim2.new(0, 40, 0, 12)
+                pctLbl.Position = UDim2.new(1, -40, 0, 0)
                 pctLbl.BackgroundTransparency = 1
                 pctLbl.Text = "0%"
                 pctLbl.TextColor3 = Theme.Accent
-                pctLbl.TextSize = 10
+                pctLbl.TextSize = 9
                 pctLbl.Font = Enum.Font.GothamBold
                 pctLbl.TextXAlignment = Enum.TextXAlignment.Right
                 pctLbl.Parent = box
 
                 local track = Instance.new("Frame")
-                track.Size = UDim2.new(1, 0, 0, 5)
-                track.Position = UDim2.new(0, 0, 0, 20)
+                track.Size = UDim2.new(1, 0, 0, 4)
+                track.Position = UDim2.new(0, 0, 0, 16)
                 track.BackgroundColor3 = Theme.Input
-                makeCorner(track, 2.5)
+                makeCorner(track, 2)
                 track.Parent = box
 
                 local fill = Instance.new("Frame")
                 fill.Size = UDim2.new(0, 0, 1, 0)
                 fill.BackgroundColor3 = Theme.Accent
-                makeCorner(fill, 2.5)
+                makeCorner(fill, 2)
                 fill.Parent = track
                 local fgrad = Instance.new("UIGradient")
                 fgrad.Color = Theme.Grad1
@@ -1399,7 +1384,7 @@ function MiRaGe:CreateWindow(config)
                 return {
                     Set = function(_, pct, customText)
                         local clamped = math.clamp(pct, 0, 1)
-                        fastTween(fill, {Size = UDim2.new(clamped, 0, 1, 0)}, 0.25)
+                        fastTween(fill, {Size = UDim2.new(clamped, 0, 1, 0)}, 0.2)
                         pctLbl.Text = customText or (math.floor(clamped * 100) .. "%")
                     end
                 }
@@ -1408,42 +1393,42 @@ function MiRaGe:CreateWindow(config)
             -- CONSOLE LOG TERMINAL
             function Section:AddConsole(consoleTitle)
                 local cFrame = Instance.new("Frame")
-                cFrame.Size = UDim2.new(1, 0, 0, 130)
+                cFrame.Size = UDim2.new(1, 0, 0, 110)
                 cFrame.BackgroundColor3 = Color3.fromRGB(4, 6, 10)
-                makeCorner(cFrame, 6)
+                makeCorner(cFrame, 5)
                 makeStroke(cFrame, Theme.Border, 1)
                 cFrame.Parent = contentHolder
 
                 local cheader = Instance.new("Frame")
-                cheader.Size = UDim2.new(1, 0, 0, 20)
+                cheader.Size = UDim2.new(1, 0, 0, 18)
                 cheader.BackgroundTransparency = 1
                 cheader.Parent = cFrame
 
                 local ctitle = Instance.new("TextLabel")
-                ctitle.Size = UDim2.new(1, -50, 1, 0)
-                ctitle.Position = UDim2.new(0, 6, 0, 0)
+                ctitle.Size = UDim2.new(1, -45, 1, 0)
+                ctitle.Position = UDim2.new(0, 5, 0, 0)
                 ctitle.BackgroundTransparency = 1
                 ctitle.Text = consoleTitle or "Console Logs"
                 ctitle.TextColor3 = Theme.TextSub
-                ctitle.TextSize = 9
+                ctitle.TextSize = 8.5
                 ctitle.Font = Enum.Font.GothamBold
                 ctitle.TextXAlignment = Enum.TextXAlignment.Left
                 ctitle.Parent = cheader
 
                 local clearBtn = Instance.new("TextButton")
-                clearBtn.Size = UDim2.new(0, 36, 0, 15)
-                clearBtn.Position = UDim2.new(1, -40, 0.5, -7)
+                clearBtn.Size = UDim2.new(0, 32, 0, 14)
+                clearBtn.Position = UDim2.new(1, -36, 0.5, -7)
                 clearBtn.BackgroundColor3 = Theme.Card
                 clearBtn.Text = "Clear"
                 clearBtn.TextColor3 = Theme.TextSub
-                clearBtn.TextSize = 8
+                clearBtn.TextSize = 7.5
                 clearBtn.Font = Enum.Font.Gotham
                 makeCorner(clearBtn, 3)
                 clearBtn.Parent = cheader
 
                 local logScroll = Instance.new("ScrollingFrame")
-                logScroll.Size = UDim2.new(1, -8, 1, -24)
-                logScroll.Position = UDim2.new(0, 4, 0, 20)
+                logScroll.Size = UDim2.new(1, -6, 1, -20)
+                logScroll.Position = UDim2.new(0, 3, 0, 18)
                 logScroll.BackgroundTransparency = 1
                 logScroll.ScrollBarThickness = 2
                 logScroll.ScrollBarImageColor3 = Theme.Accent
@@ -1473,11 +1458,11 @@ function MiRaGe:CreateWindow(config)
                     end
 
                     local line = Instance.new("TextLabel")
-                    line.Size = UDim2.new(1, 0, 0, 14)
+                    line.Size = UDim2.new(1, 0, 0, 13)
                     line.BackgroundTransparency = 1
                     line.Text = string.format("[%s] %s", timeStr, tostring(msg))
                     line.TextColor3 = color
-                    line.TextSize = 9
+                    line.TextSize = 8.5
                     line.Font = Enum.Font.Code
                     line.TextXAlignment = Enum.TextXAlignment.Left
                     line.TextWrapped = true
