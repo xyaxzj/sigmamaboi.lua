@@ -1086,29 +1086,83 @@ local success, errorMessage = pcall(function()
         local slotNum = tonumber(slot) or 1
         local isMax = false
 
-        -- 1. Cek Model di Workspace
         pcall(function()
+            -- 1. Scan semua objek di workspace (Pad, Stand, Slot, Model, Part)
             for _, obj in ipairs(workspace:GetDescendants()) do
-                if obj:IsA("Model") or obj:IsA("Folder") then
-                    local sAttr = obj:GetAttribute("Slot") or obj:GetAttribute("slot") or obj:GetAttribute("SlotIndex")
-                    local nameLower = string.lower(obj.Name)
-                    if tonumber(sAttr) == slotNum or string.find(nameLower, "slot" .. slotNum) or string.find(nameLower, "slot_" .. slotNum) then
-                        local lvl = obj:GetAttribute("Level") or obj:GetAttribute("level") or obj:GetAttribute("Lvl")
-                        local maxLvl = obj:GetAttribute("MaxLevel") or obj:GetAttribute("maxLevel") or obj:GetAttribute("MaxLvl")
-                        local maxFlag = obj:GetAttribute("IsMax") or obj:GetAttribute("Max") or obj:GetAttribute("IsMaxLevel")
-                        if maxFlag == true or (lvl and maxLvl and tonumber(lvl) >= tonumber(maxLvl)) then
+                local matchesSlot = false
+                
+                local sAttr = obj:GetAttribute("Slot") or obj:GetAttribute("slot") or obj:GetAttribute("SlotIndex") or obj:GetAttribute("SlotNum") or obj:GetAttribute("Pad") or obj:GetAttribute("Id") or obj:GetAttribute("Index")
+                if tonumber(sAttr) == slotNum then
+                    matchesSlot = true
+                end
+
+                if not matchesSlot then
+                    local sVal = obj:FindFirstChild("Slot") or obj:FindFirstChild("slot") or obj:FindFirstChild("SlotIndex") or obj:FindFirstChild("Pad")
+                    if sVal and (sVal:IsA("ValueBase") or sVal:IsA("IntValue") or sVal:IsA("NumberValue") or sVal:IsA("StringValue")) and tonumber(sVal.Value) == slotNum then
+                        matchesSlot = true
+                    end
+                end
+
+                if not matchesSlot then
+                    local nLower = string.lower(obj.Name)
+                    if nLower == tostring(slotNum) 
+                        or nLower == "slot" .. slotNum 
+                        or nLower == "slot_" .. slotNum 
+                        or nLower == "slot " .. slotNum
+                        or nLower == "pad" .. slotNum 
+                        or nLower == "pad_" .. slotNum 
+                        or nLower == "spot" .. slotNum
+                        or nLower == "stand" .. slotNum
+                        or nLower == "stand_" .. slotNum
+                        or string.find(nLower, "^slot[_%s]*" .. slotNum .. "$")
+                        or string.find(nLower, "^pad[_%s]*" .. slotNum .. "$") then
+                        matchesSlot = true
+                    end
+                end
+
+                if matchesSlot then
+                    local function checkMaxAttrs(inst)
+                        if not inst then return false end
+                        local lvl = inst:GetAttribute("Level") or inst:GetAttribute("level") or inst:GetAttribute("Lvl")
+                        local maxLvl = inst:GetAttribute("MaxLevel") or inst:GetAttribute("maxLevel") or inst:GetAttribute("MaxLvl")
+                        local maxFlag = inst:GetAttribute("IsMax") or inst:GetAttribute("Max") or inst:GetAttribute("IsMaxLevel") or inst:GetAttribute("isMax")
+                        if maxFlag == true or maxFlag == 1 or maxFlag == "true" then return true end
+                        if lvl and maxLvl and tonumber(lvl) >= tonumber(maxLvl) and tonumber(maxLvl) > 0 then return true end
+                        if lvl and tonumber(lvl) >= 100 then return true end
+                        return false
+                    end
+
+                    if checkMaxAttrs(obj) or checkMaxAttrs(obj.Parent) then
+                        isMax = true
+                        return
+                    end
+
+                    for _, desc in ipairs(obj:GetDescendants()) do
+                        if desc:IsA("TextLabel") and desc.Visible then
+                            local txt = string.lower(desc.Text)
+                            if string.find(txt, "max") or string.find(txt, "max lvl") or string.find(txt, "max level") or string.find(txt, "lvl max") or string.find(txt, "%(max%)") then
+                                isMax = true
+                                return
+                            end
+                            local curL, maxL = string.match(txt, "(%d+)%s*/%s*(%d+)")
+                            if curL and maxL and tonumber(curL) >= tonumber(maxL) and tonumber(maxL) > 1 then
+                                isMax = true
+                                return
+                            end
+                        end
+                    end
+                end
+            end
+
+            -- 2. Cek pesan popup "Max Lvl!" di PlayerGui
+            local pGui = localPlayer:FindFirstChild("PlayerGui")
+            if pGui then
+                for _, desc in ipairs(pGui:GetDescendants()) do
+                    if desc:IsA("TextLabel") and desc.Visible then
+                        local txt = string.lower(desc.Text)
+                        if string.find(txt, "max lvl") or string.find(txt, "max level") then
                             isMax = true
                             return
-                        end
-
-                        for _, desc in ipairs(obj:GetDescendants()) do
-                            if desc:IsA("TextLabel") and desc.Visible then
-                                local txt = string.lower(desc.Text)
-                                if string.find(txt, "max") or string.find(txt, "max lvl") or string.find(txt, "max level") or string.find(txt, "lvl max") then
-                                    isMax = true
-                                    return
-                                end
-                            end
                         end
                     end
                 end
@@ -1119,45 +1173,53 @@ local success, errorMessage = pcall(function()
     end
 
     local function swapMaxedSlot(slotNum)
+        slotNum = tonumber(slotNum) or 1
         local character = localPlayer.Character
         local humanoid = character and character:FindFirstChildOfClass("Humanoid")
         local backpack = localPlayer:FindFirstChild("Backpack")
         if not humanoid or not backpack or not rev_S_Interact then return false end
 
-        -- 1. Pickup brainrot max level dari slot
+        -- 1. Bersihkan pegangan tangan (unequip semua tool)
+        for _, t in ipairs(character:GetChildren()) do
+            if t:IsA("Tool") then t.Parent = backpack end
+        end
         humanoid:UnequipTools()
-        task.wait(0.15)
-        pcall(function() rev_S_Interact:FireServer(slotNum) end)
         task.wait(0.2)
 
-        -- 2. Cari pengganti dari BaseCart atau Inventory (yang belum Max)
+        -- 2. Pickup brainrot max level dari slot
+        pcall(function() rev_S_Interact:FireServer(slotNum) end)
+        task.wait(0.25)
+
+        -- 3. Cari pengganti dari BaseCart atau Inventory
         local toolToPlace = nil
         local toolName = ""
 
-        -- Prioritas 1: Dari BaseCart jika ada antrean
+        -- Prioritas 1: Dari antrean BaseCart
         for bName, qty in pairs(BaseCart) do
             if qty > 0 then
                 for _, t in ipairs(getAllTools()) do
                     if isTradeable(t) and getFullItemName(t) == bName then
-                        toolToPlace = t
-                        toolName = bName
-                        BaseCart[bName] = BaseCart[bName] - 1
-                        break
+                        if not TargetBaseLevel or getToolLevel(t) == TargetBaseLevel then
+                            toolToPlace = t
+                            toolName = bName
+                            BaseCart[bName] = BaseCart[bName] - 1
+                            break
+                        end
                     end
                 end
                 if toolToPlace then break end
             end
         end
 
-        -- Prioritas 2: Dari Backpack / Inventory yang belum Max
+        -- Prioritas 2: Dari Backpack / Inventory (yang belum Max & sesuai level filter)
         if not toolToPlace then
             for _, t in ipairs(getAllTools()) do
                 if isTradeable(t) then
                     if not (SkipPlaceFavorites and isToolFavorite(t)) then
                         local name = getFullItemName(t)
-                        local lvl = t:GetAttribute("Level") or 1
+                        local lvl = getToolLevel(t)
                         local maxLvl = t:GetAttribute("MaxLevel") or 100
-                        if tonumber(lvl) < tonumber(maxLvl) and not string.find(string.lower(name), "max") then
+                        if (not TargetBaseLevel or lvl == TargetBaseLevel) and tonumber(lvl) < tonumber(maxLvl) and not string.find(string.lower(name), "max") then
                             toolToPlace = t
                             toolName = name
                             break
@@ -1167,14 +1229,14 @@ local success, errorMessage = pcall(function()
             end
         end
 
-        -- 3. Equip dan pasang ke base slot
+        -- 4. Equip dan pasang ke base slot
         if toolToPlace then
             if toolToPlace.Parent ~= character then
                 humanoid:EquipTool(toolToPlace)
-                task.wait(0.2)
+                task.wait(0.25)
             end
             pcall(function() rev_S_Interact:FireServer(slotNum) end)
-            task.wait(0.2)
+            task.wait(0.25)
             if updateBaseCartDisplay then updateBaseCartDisplay() end
             if ConsoleStats then
                 ConsoleStats:Log(string.format("🔄 Slot %d MAX LEVEL! Replaced with: %s", slotNum, toolName), "success")
@@ -1183,8 +1245,9 @@ local success, errorMessage = pcall(function()
             return true
         else
             if ConsoleStats then
-                ConsoleStats:Log(string.format("⚠️ Slot %d MAX LEVEL! No replacement items available.", slotNum), "warn")
+                ConsoleStats:Log(string.format("⚠️ Slot %d MAX LEVEL! No replacement Lv. %s items found.", slotNum, tostring(TargetBaseLevel or 1)), "warn")
             end
+            Library:Notify("No Replacement", string.format("Slot %d is Max! No Lv. %s items in backpack.", slotNum, tostring(TargetBaseLevel or 1)), 3)
             return false
         end
     end
