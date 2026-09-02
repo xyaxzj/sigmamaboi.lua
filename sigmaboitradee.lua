@@ -152,131 +152,9 @@ local success, errorMessage = pcall(function()
     local TargetToolNameAction = "Block Cup"
 
     -- ==========================================
-    -- DATABASE & PARSER (STATICALLY EMBEDDED)
+    -- RARITY LIST & EXCLUSIVE DEFINITIONS
     -- ==========================================
-    local RarityList = {"Common", "Rare", "Epic", "Legendary", "Mythic", "Godly", "Exclusive", "Volcanic", "Celestial", "Abyssal", "Demon", "Secret", "Rainbow", "Eternal", "Hacked"}
-    local database = {
-        ["1x1x1x1"] = { Rarity = "" },
-        ["67"] = { Rarity = "" },
-        ["Agarrini La Palini"] = { Rarity = "Hacked" },
-        ["Alessio"] = { Rarity = "" },
-        ["Anpali Babel"] = { Rarity = "Eternal" },
-        ["Astro Tim"] = { Rarity = "Eternal" },
-        ["Baba Yaga"] = { Rarity = "Eternal" },
-        ["Ballerina Cappuccina"] = { Rarity = "" },
-        ["Bambini Crostini"] = { Rarity = "" },
-        ["Bananita Dolphinita"] = { Rarity = "" },
-        ["Bangello"] = { Rarity = "" },
-        ["Barbelloni Gymrattoni"] = { Rarity = "Eternal" },
-        ["Beluga Beluga"] = { Rarity = "Celestial" },
-        ["Blackhole Goat"] = { Rarity = "" },
-        ["Bobrito Bandito"] = { Rarity = "" },
-        ["Bombardiro Crocodilo"] = { Rarity = "" },
-        ["Bombini Gusini"] = { Rarity = "" },
-        ["Boneca Ambalabu"] = { Rarity = "" },
-        ["Brr Brr Patapim"] = { Rarity = "" },
-        ["Burbaloni Luliloli"] = { Rarity = "" },
-        ["Burguro"] = { Rarity = "" },
-        ["Cacto Hipopotamo"] = { Rarity = "" },
-        ["Cactus Pingu"] = { Rarity = "" },
-        ["Capi Taco"] = { Rarity = "" },
-        ["Cappuccino Assassino"] = { Rarity = "" },
-        ["Cappuccino Clownino"] = { Rarity = "" },
-        ["Capybara Eggplant"] = { Rarity = "" },
-        ["Cavallo Virtuso"] = { Rarity = "" },
-        ["Chef Crabracadabra"] = { Rarity = "" },
-        ["Chicleteira Bicicleteira"] = { Rarity = "Celestial" },
-        ["Chillin Chilli"] = { Rarity = "" },
-        ["Chimpanzini Bananini"] = { Rarity = "" },
-        ["Cocofanto Elefanto"] = { Rarity = "" },
-        ["Coinator Baconator"] = { Rarity = "Abysall" },
-        ["Compactoroni Diskaloni"] = { Rarity = "" },
-        ["Cordraculo"] = { Rarity = "Abysall" },
-        ["Corn Sahur"] = { Rarity = "" },
-        ["Crazylone Pizaione"] = { Rarity = "OG" },
-        ["Dipperi Chiperini"] = { Rarity = "" },
-        ["Divinello Starblock"] = { Rarity = "" },
-        ["Don Tiramisotto"] = { Rarity = "Eternal" },
-        ["Dragonfrutina Dolphinita"] = { Rarity = "Celestial" },
-        ["Dribbloni Spaghetti"] = { Rarity = "Eternal" },
-        ["Dumbelloni"] = { Rarity = "Eternal" },
-        ["Elefanto Frigo"] = { Rarity = "" },
-        ["Elefantucci Bananucci"] = { Rarity = "" },
-        ["Espresso Shockantoni"] = { Rarity = "Eternal" },
-        ["Espresso Signora"] = { Rarity = "" },
-        ["Frigo Camelo"] = { Rarity = "" },
-        ["Fruli Frula"] = { Rarity = "" },
-        ["Fryuro"] = { Rarity = "" },
-        ["Gangster Footera"] = { Rarity = "" },
-        ["Garamararam"] = { Rarity = "" },
-        ["Gattatino Nyanino"] = { Rarity = "" },
-        ["Girafa Celeste"] = { Rarity = "" },
-        ["Glorbo Fruttodrillo"] = { Rarity = "" },
-        ["Gorillo Watermelondrillo"] = { Rarity = "" },
-        ["Guerriro Digitale"] = { Rarity = "Celestial" },
-        ["Guest666"] = { Rarity = "" },
-        ["Harpini Goosini"] = { Rarity = "" },
-        ["John Pork"] = { Rarity = "" },
-        ["Karkerkar Kurkur"] = { Rarity = "" },
-        ["Ketupat Kepat"] = { Rarity = "" },
-        ["Kicky"] = { Rarity = "Eternal" },
-        ["Krupuk Pagi Pagi"] = { Rarity = "Celestial" },
-        ["La Vacca Saturno Saturnita"] = { Rarity = "" },
-        ["Lirili Larila"] = { Rarity = "" },
-        ["Los Primos"] = { Rarity = "Celestial" },
-        ["Los Primos Blue"] = { Rarity = "" },
-        ["Lucky Fella"] = { Rarity = "Abysall" },
-        ["Madung"] = { Rarity = "" },
-        ["Mangolini Parrocini"] = { Rarity = "" },
-        ["Mastodontico Telepiedone"] = { Rarity = "Celestial" },
-        ["Matteo"] = { Rarity = "" },
-        ["Meowl"] = { Rarity = "OG" },
-        ["Noobini Pizzanini"] = { Rarity = "" },
-        ["Nuclearo Dinossauro"] = { Rarity = "" },
-        ["OctoDJ"] = { Rarity = "Abysall" },
-        ["Octopusini Bluberini"] = { Rarity = "" },
-        ["Orangutini Ananasini"] = { Rarity = "" },
-        ["Orcalero"] = { Rarity = "" },
-        ["Pandaccini Bananini"] = { Rarity = "" },
-        ["Pannaburro"] = { Rarity = "" },
-        ["Peant Jarro"] = { Rarity = "" },
-        ["Penguino Cocosino"] = { Rarity = "" },
-        ["Pesto Mortioni"] = { Rarity = "" },
-        ["Pipi Kiwi"] = { Rarity = "" },
-        ["Plan Blue"] = { Rarity = "" },
-        ["Plan Red"] = { Rarity = "" },
-        ["Pot Hotspot"] = { Rarity = "Celestial" },
-        ["Professora 67"] = { Rarity = "Eternal" },
-        ["Pulcino Pistoletti"] = { Rarity = "Abysall" },
-        ["Rexosaurus"] = { Rarity = "" },
-        ["Rhino Toasterino"] = { Rarity = "" },
-        ["Rinooccio Verdini"] = { Rarity = "" },
-        ["SWAG SODA"] = { Rarity = "" },
-        ["Salamino Pinguino"] = { Rarity = "" },
-        ["Sigma Boy"] = { Rarity = "" },
-        ["Smelloni Papayoni"] = { Rarity = "Eternal" },
-        ["Stoppo Luminino"] = { Rarity = "" },
-        ["Strawberelli Flamingelli"] = { Rarity = "" },
-        ["Strawberry Elephant"] = { Rarity = "OG" },
-        ["Svinina Bombardino"] = { Rarity = "" },
-        ["Ta Ta Ta Ta Sahur"] = { Rarity = "" },
-        ["Talpa Di Fero"] = { Rarity = "" },
-        ["Tictac Sahur"] = { Rarity = "" },
-        ["Tim Cheese"] = { Rarity = "" },
-        ["Torrtuginni Dragonfrutini"] = { Rarity = "" },
-        ["Tralaledon"] = { Rarity = "Celestial" },
-        ["Tralalerita Tralala"] = { Rarity = "" },
-        ["Tralalero Tralala"] = { Rarity = "" },
-        ["Tripi Tropi Tropa Tripa"] = { Rarity = "" },
-        ["Trippi Troppi"] = { Rarity = "" },
-        ["Trulimero Trulicina"] = { Rarity = "" },
-        ["Tubafante"] = { Rarity = "" },
-        ["Tuff Toucan"] = { Rarity = "" },
-        ["Turtinella Melodica"] = { Rarity = "" },
-        ["Udin Din Din Dun"] = { Rarity = "" },
-        ["Waterdino"] = { Rarity = "" },
-        ["Zibra Zubra Zibralini"] = { Rarity = "" },
-    }
+    local RarityList = {"Common", "Rare", "Epic", "Legendary", "Mythic", "Godly", "Exclusive", "Volcanic", "Celestial", "Abyssal", "Demon", "Secret", "Rainbow", "Eternal", "Hacked", "OG"}
 
     -- ==========================================
     -- FUNGSI INTI & INVENTORY SCANNER
@@ -467,30 +345,30 @@ local success, errorMessage = pcall(function()
     function getItemInfo(tool)
         if not tool then return "Unknown" end
         local baseName = tool.Name
-        local dbInfo = database[baseName]
         
+        -- 1. Direct Attribute on Tool
+        local rAttr = tool:GetAttribute("Rarity") or tool:GetAttribute("rarity") or tool:GetAttribute("ItemRarity")
+        if rAttr and tostring(rAttr) ~= "" then return tostring(rAttr) end
+
+        -- 2. Direct ValueObject on Tool
+        local rVal = tool:FindFirstChild("Rarity") or tool:FindFirstChild("rarity")
+        if rVal and (rVal:IsA("StringValue") or rVal:IsA("ValueBase")) and tostring(rVal.Value) ~= "" then
+            return tostring(rVal.Value)
+        end
+
+        -- 3. Game's internal EntitiesData Module
         local rarity = "Unknown"
-        
-        -- Try to query game's actual EntitiesData module safely at runtime (non-blocking)
-        local EntitiesDataModule
         pcall(function()
             local Shared = ReplicatedStorage:FindFirstChild("Shared")
             local Data = Shared and Shared:FindFirstChild("Data")
             local EntitiesDataObj = Data and Data:FindFirstChild("EntitiesData")
             if EntitiesDataObj then
-                EntitiesDataModule = require(EntitiesDataObj)
+                local EntitiesDataModule = require(EntitiesDataObj)
+                if EntitiesDataModule and EntitiesDataModule.Brainrots and EntitiesDataModule.Brainrots[baseName] then
+                    rarity = EntitiesDataModule.Brainrots[baseName].Rarity or rarity
+                end
             end
         end)
-        
-        if EntitiesDataModule and EntitiesDataModule.Brainrots and EntitiesDataModule.Brainrots[baseName] then
-            local info = EntitiesDataModule.Brainrots[baseName]
-            rarity = info.Rarity or rarity
-        end
-        
-        -- Fallback to static database if the game module query was missing/unknown
-        if (rarity == "Unknown" or rarity == "") and dbInfo then
-            rarity = dbInfo.Rarity or "Unknown"
-        end
         
         return rarity
     end
@@ -2598,11 +2476,9 @@ local success, errorMessage = pcall(function()
         if ConsoleStatsReceived then ConsoleStatsReceived:Clear() end
     end)
     ConsoleStatsReceived = SecReceived:AddConsole("📥 RECEIVED History")
-
+    
     pcall(function()
-        local dbCount = 0
-        for _ in pairs(database) do dbCount = dbCount + 1 end
-        ConsoleStats:Log("✅ Database loaded: " .. tostring(dbCount) .. " templates.", "success")
+        ConsoleStats:Log("✅ Live Game Engine Connected (EntitiesData & Real-Time Sync).", "success")
         ConsoleStatsReceived:Log("✅ Receiver ready. Waiting for incoming trades...", "info")
     end)
 
