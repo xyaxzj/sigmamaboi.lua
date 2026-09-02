@@ -1,9 +1,9 @@
 -- ==========================================================
--- MOCTA ULTIMATE HUB V2.5.0 (THE COMPLETE ARSENAL)
+-- MOCTA ULTIMATE HUB V2.5.1 (THE COMPLETE ARSENAL)
 -- Build: Trade, Sell, Base, Action Center, Auto-Upgrade & Swap
 -- ==========================================================
 
-local SCRIPT_VERSION = "v2.5.0"
+local SCRIPT_VERSION = "v2.5.1"
 local SCRIPT_URL = "https://raw.githubusercontent.com/xyaxzj/sigmamaboi.lua/refs/heads/main/sigmaboitradee.lua"
 
 local success, errorMessage = pcall(function()
@@ -540,10 +540,15 @@ local success, errorMessage = pcall(function()
         local mutValue = getToolMutation(tool)
         if mutValue then displayName = displayName .. " [" .. mutValue .. "]" end
 
-        local pct = getExclusivePercent(tool)
-        if pct then
-            displayName = displayName .. " (" .. pct .. ")"
+        local rarity = getItemInfo(tool)
+        if rarity == "Exclusive" then
+            -- Item Rarity Exclusive: TIDAK pakai Level!
+            local pct = getExclusivePercent(tool)
+            if pct then
+                displayName = displayName .. " (" .. pct .. ")"
+            end
         else
+            -- Semua Brainrot Non-Exclusive: Tampilkan Level!
             local lvl = getToolLevel(tool)
             displayName = displayName .. " (Lv." .. tostring(lvl or 1) .. ")"
         end
