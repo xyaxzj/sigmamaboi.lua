@@ -78,6 +78,9 @@ local success, errorMessage = pcall(function()
     local P2TradesCompleted = 0
     local TotalItemsSent = 0
     local ConsoleStats
+    local ConsoleStatsReceived
+    local NetSentCPS = 0
+    local NetReceivedCPS = 0
     _G.TradeLogsMode = "Detailed"
     local CumulativeSent = {}
     local CumulativeReceived = {}
@@ -1872,18 +1875,23 @@ local success, errorMessage = pcall(function()
         end
         local batchCpsStr = tostring(batchCPSVal)
 
+        -- Akumulasi CPS ke Net Session Tracker
+        local batchCPSNum = tonumber(tostring(batchCPSVal)) or 0
+        NetSentCPS = NetSentCPS + batchCPSNum
+
+        local ts = os.date("%H:%M:%S")
         if ConsoleStats then
             if _G.TradeLogsMode == "Documentation" then
                 local details = getCumulativeDetails(playerSent)
-                ConsoleStats:Log("Total Sent to " .. target.Name .. ": " .. details, "success")
+                ConsoleStats:Log(string.format("[%s] 📤 Total Sent to %s: %s", ts, target.Name, details), "success")
             elseif _G.TradeLogsMode == "Both" then
                 local detailed = groupItems(names)
                 local cumulative = getCumulativeDetails(playerSent)
-                ConsoleStats:Log("Send: " .. detailed .. " (CPS: " .. batchCpsStr .. ") to " .. target.Name, "success")
-                ConsoleStats:Log("Total Sent to " .. target.Name .. ": " .. cumulative, "info")
+                ConsoleStats:Log(string.format("[%s] 📤 Send → %s | %s | CPS: %s", ts, target.Name, detailed, batchCpsStr), "success")
+                ConsoleStats:Log(string.format("[%s] 📝 Cumulative → %s: %s", ts, target.Name, cumulative), "info")
             else -- Detailed
                 local details = groupItems(names)
-                ConsoleStats:Log("Send: " .. details .. " (CPS: " .. batchCpsStr .. ") to " .. target.Name, "success")
+                ConsoleStats:Log(string.format("[%s] 📤 Send → %s | %s | CPS: %s", ts, target.Name, details, batchCpsStr), "success")
             end
         end
         
@@ -2010,19 +2018,30 @@ local success, errorMessage = pcall(function()
                                 end
                                 local recCpsStr = tostring(recCPSVal)
 
-                                if _G.TradeLogsMode == "Documentation" then
-                                    local details = getCumulativeDetails(playerRec)
-                                    ConsoleStats:Log("Total Received from " .. partnerName .. ": " .. details, "info")
-                                elseif _G.TradeLogsMode == "Both" then
-                                    local detailed = groupItems(receivedNames)
-                                    local cumulative = getCumulativeDetails(playerRec)
-                                    ConsoleStats:Log("Receive: " .. detailed .. " (CPS: " .. recCpsStr .. ") from " .. partnerName, "info")
-                                    ConsoleStats:Log("Total Received from " .. partnerName .. ": " .. cumulative, "info")
-                                else -- Detailed
-                                    ConsoleStats:Log("Receive: " .. groupItems(receivedNames) .. " (CPS: " .. recCpsStr .. ") from " .. partnerName, "info")
+                                -- Akumulasi ke Net Session Tracker
+                                local recCPSNum = tonumber(tostring(recCPSVal)) or 0
+                                NetReceivedCPS = NetReceivedCPS + recCPSNum
+
+                                local ts = os.date("%H:%M:%S")
+                                local logTarget = ConsoleStatsReceived or ConsoleStats
+                                if logTarget then
+                                    if _G.TradeLogsMode == "Documentation" then
+                                        local details = getCumulativeDetails(playerRec)
+                                        logTarget:Log(string.format("[%s] 📥 Total Received from %s: %s", ts, partnerName, details), "info")
+                                    elseif _G.TradeLogsMode == "Both" then
+                                        local detailed = groupItems(receivedNames)
+                                        local cumulative = getCumulativeDetails(playerRec)
+                                        logTarget:Log(string.format("[%s] 📥 Receive ← %s | %s | CPS: %s", ts, partnerName, detailed, recCpsStr), "info")
+                                        logTarget:Log(string.format("[%s] 📃 Cumulative ← %s: %s", ts, partnerName, cumulative), "info")
+                                    else -- Detailed
+                                        logTarget:Log(string.format("[%s] 📥 Receive ← %s | %s | CPS: %s", ts, partnerName, groupItems(receivedNames), recCpsStr), "info")
+                                    end
                                 end
                             else
-                                ConsoleStats:Log("Receive: Incoming trade completed successfully.", "info")
+                                local logTarget = ConsoleStatsReceived or ConsoleStats
+                                if logTarget then
+                                    logTarget:Log(string.format("[%s] ✔️ Trade accepted (no items detected).", os.date("%H:%M:%S")), "info")
+                                end
                             end
                         end
                     end
@@ -2035,38 +2054,63 @@ local success, errorMessage = pcall(function()
     end)
 
     -- ==========================================
-    -- TAB 8: DASHBOARD
+    -- TAB 8: DASHBOARD (DUAL-PANEL LOG)
     -- ==========================================
     local TabStats = Window:MakeTab("📊")
-    local SecStats = TabStats:AddSection("Statistics")
-    local StatsDisplay = SecStats:AddParagraph("Current Session", "Calculating...")
-    SecStats:AddDropdown({Name = "Console Log Mode", Options = {"Detailed", "Documentation", "Both"}, Default = "Detailed"}, function(val)
-        _G.TradeLogsMode = val
-    end)
-    SecStats:AddButton("🧹 Clear Console Logs", function()
-        if ConsoleStats then
-            ConsoleStats:Clear()
-        end
-    end)
-    ConsoleStats = SecStats:AddConsole("Trade History Logs")
-    pcall(function()
-        local dbCount = 0
-        for _ in pairs(database) do dbCount = dbCount + 1 end
-        ConsoleStats:Log("Static database embedded successfully.", "success")
-        ConsoleStats:Log("Loaded " .. tostring(dbCount) .. " entity templates.", "info")
-    end)
-    
+
+    -- === SESSION SUMMARY ===
+    local SecSummary = TabStats:AddSection("📈 Session Summary")
+    local StatsDisplay = SecSummary:AddParagraph("Current Session", "Calculating...")
+
+    -- Net CPS Tracking (shared variable sudah dideklarasikan di atas)
+    local SessionSentNames = {}
+    local SessionReceivedNames = {}
+
     updateStatsDisplay = function()
         local elapsedTime = tick() - SessionStartTime
-        local str = "Uptime: " .. formatTime(elapsedTime) .. "\n"
-        str = str .. "Total P1 Transactions (Send): " .. P1TradesCompleted .. " times\n"
-        str = str .. "Total P2 Transactions (Receive): " .. P2TradesCompleted .. " times\n"
-        str = str .. "Total Items Sent: " .. TotalItemsSent .. " items"
-        
+        local netCPS = NetReceivedCPS - NetSentCPS
+        local netStr
+        if netCPS > 0 then
+            netStr = "+" .. string.format("%.2f", netCPS) .. " CPS ✅ (profit)"
+        elseif netCPS < 0 then
+            netStr = string.format("%.2f", netCPS) .. " CPS ⚠️ (loss)"
+        else
+            netStr = "0 CPS ➖ (even)"
+        end
+        local str = "⏱️ Uptime: " .. formatTime(elapsedTime) .. "\n"
+        str = str .. "📤 Trades Sent: " .. P1TradesCompleted .. " tx | Items: " .. TotalItemsSent .. "\n"
+        str = str .. "📥 Trades Received: " .. P2TradesCompleted .. " tx\n"
+        str = str .. "📊 Total CPS Sent: " .. string.format("%.2f", NetSentCPS) .. "\n"
+        str = str .. "📊 Total CPS Received: " .. string.format("%.2f", NetReceivedCPS) .. "\n"
+        str = str .. "⚡ Net Session: " .. netStr
         StatsDisplay:Set("Real-Time Statistics", str)
     end
 
     task.spawn(function() while task.wait(1) do if updateStatsDisplay then updateStatsDisplay() end end end)
+
+    -- === DUAL PANEL: SENT LOG ===
+    local SecSent = TabStats:AddSection("📤 SENT Log")
+    SecSent:AddDropdown({Name = "Log Mode (Sent)", Options = {"Detailed", "Documentation", "Both"}, Default = "Detailed"}, function(val)
+        _G.TradeLogsMode = val
+    end)
+    SecSent:AddButton("🧹 Clear SENT Log", function()
+        if ConsoleStats then ConsoleStats:Clear() end
+    end)
+    ConsoleStats = SecSent:AddConsole("📤 SENT History")
+
+    -- === DUAL PANEL: RECEIVED LOG ===
+    local SecReceived = TabStats:AddSection("📥 RECEIVED Log")
+    SecReceived:AddButton("🧹 Clear RECEIVED Log", function()
+        if ConsoleStatsReceived then ConsoleStatsReceived:Clear() end
+    end)
+    ConsoleStatsReceived = SecReceived:AddConsole("📥 RECEIVED History")
+
+    pcall(function()
+        local dbCount = 0
+        for _ in pairs(database) do dbCount = dbCount + 1 end
+        ConsoleStats:Log("✅ Database loaded: " .. tostring(dbCount) .. " templates.", "success")
+        ConsoleStatsReceived:Log("✅ Receiver ready. Waiting for incoming trades...", "info")
+    end)
 
     -- ==========================================
     -- TAB 9: SETTINGS
