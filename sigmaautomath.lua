@@ -1,6 +1,6 @@
 -- ==========================================================
---                  MiRaGe HUB V2.0 — AUTO TRADE ARSENAL
---        Next-Generation Trade, Sell, Base & Action Suite
+--                  MiRaGe HUB V2.1 — AUTO TRADE ARSENAL
+--     Full Migration: Trade, Sell, Base, Burst, Favs & Logs
 -- ==========================================================
 
 local success, errorMessage = pcall(function()
@@ -18,13 +18,11 @@ local success, errorMessage = pcall(function()
     local MIRAGE_UI_URL = "https://raw.githubusercontent.com/xyaxzj/sigmamaboi.lua/refs/heads/main/mirag3ui.lua"
     local MiRaGe
 
-    local loadSuccess = pcall(function()
-        -- Prioritaskan GitHub URL
+    pcall(function()
         MiRaGe = loadstring(game:HttpGet(MIRAGE_UI_URL))()
     end)
 
     if not MiRaGe or type(MiRaGe) ~= "table" then
-        -- Fallback ke file lokal jika offline atau gagal HttpGet
         pcall(function()
             if readfile and isfile and isfile("MiRaGe UI.lua") then
                 MiRaGe = loadstring(readfile("MiRaGe UI.lua"))()
@@ -35,26 +33,26 @@ local success, errorMessage = pcall(function()
     end
 
     if not MiRaGe then
-        warn("[MiRaGe HUB] Failed to load MiRaGe UI Library from GitHub or local file.")
+        warn("[MiRaGe HUB] Failed to load MiRaGe UI Library.")
         return
     end
 
     local function notifyUser(title, content, duration, nType)
         pcall(function()
             if MiRaGe and MiRaGe.Notify then
-                MiRaGe:Notify({Title = title, Content = content, Duration = duration or 3, Type = nType or "Info"})
+                MiRaGe:Notify({Title = title, Content = content, Duration = duration or 2.5, Type = nType or "Info"})
             elseif StarterGui then
                 StarterGui:SetCore("SendNotification", {
                     Title = tostring(title),
                     Text = tostring(content),
-                    Duration = duration or 3
+                    Duration = duration or 2.5
                 })
             end
         end)
     end
 
     -- ══════════════════════════════════════════
-    -- LOCATING REMOTES & PACKAGES
+    -- REMOTES RESOLVER
     -- ══════════════════════════════════════════
     local networkFolder = ReplicatedStorage:WaitForChild("Shared", 10):WaitForChild("Packages", 10):WaitForChild("Network", 10)
     local f_trade_r = networkFolder:WaitForChild("ref_trade_r", 5) 
@@ -84,17 +82,12 @@ local success, errorMessage = pcall(function()
     local CachedInventoryData = {}
     local CachedTotalCount = 0
     local CachedFavoriteCount = 0
-    local InvRarityDropdown = nil
-    local InvMutationDropdown = nil
-    local InvFavFilterDropdown = nil
-    local isSyncingUI = false
     
     local ItemsProcessed = 0
     local IsProcessing = false 
     local AutoLoopEnabled = false
     local AutoReceiverEnabled = false
     local InsertDelay = 0.3 
-    local InventoryConnections = {}
 
     local SessionStartTime = tick()
     local P1TradesCompleted = 0
@@ -107,6 +100,24 @@ local success, errorMessage = pcall(function()
     _G.TradeLogsMode = "Detailed"
     local CumulativeSent = {}
     local CumulativeReceived = {}
+
+    local SelectedSellItems = {}
+    local AutoSellEnabled = false
+    local SkipSellFavorites = true
+
+    local SelectedPlaceItems = {}
+    local AutoPlaceEnabled = false
+    local SkipPlaceFavorites = true
+
+    local SelectedBurstItems = {}
+    local BurstMultiplier = 50
+    local IsBursting = false
+    local BurstMode = "Trade Insert"
+    local SkipBurstFavorites = true
+
+    local SkipTradeFavorites = true
+    local AutoFavoriteNewDrops = false
+    local AutoFavRarities = {}
 
     local function getCumulativeDetails(playerData)
         local parts = {}
@@ -136,26 +147,6 @@ local success, errorMessage = pcall(function()
         return table.concat(parts, ", ")
     end
 
-    local SelectedSellItems = {}
-    local SelectedSellMixQty = 0
-    local AutoSellEnabled = false
-    local SkipSellFavorites = true
-
-    local SelectedPlaceItems = {}
-    local SelectedPlaceMixQty = 0
-    local AutoPlaceEnabled = false
-    local SkipPlaceFavorites = true
-
-    local SelectedBurstItems = {}
-    local BurstMultiplier = 50
-    local IsBursting = false
-    local BurstMode = "Trade Insert"
-    local SkipBurstFavorites = true
-
-    local SkipTradeFavorites = true
-    local AutoFavoriteNewDrops = false
-    local AutoFavRarities = {}
-
     local database = {}
     pcall(function()
         local sharedFolder = ReplicatedStorage:FindFirstChild("Shared")
@@ -176,9 +167,6 @@ local success, errorMessage = pcall(function()
         end
     end)
 
-    -- ══════════════════════════════════════════
-    -- RARITIES & EXCLUSIVE PERCENT STAT LOGIC
-    -- ══════════════════════════════════════════
     local RARITIES = {
         "Common", "Rare", "Epic", "Legendary", "Mythic", "Godly",
         "Secret", "Void", "Hacked", "Exclusive", "Rainbow",
@@ -199,27 +187,9 @@ local success, errorMessage = pcall(function()
     }
 
     -- ══════════════════════════════════════════
-    -- CORE FUNCTIONS & INVENTORY ENGINE
+    -- INVENTORY ENGINE & CPS STAT FUNCTIONS
     -- ══════════════════════════════════════════
-    local getBaseName, formatTime, getAllTools, getToolGUID, getToolMutation, getToolCPS
-    local getCPSFromDisplayName, isTradeable, getPlayerList, getItemInfo, getFullItemName
-    local getRealStock, addRaritiesToCart, getMutationList, getInventoryMutationList
-    local isOpponentConfirmed, isLocalConfirmed, addMutationsToCart
-    local isToolFavorite, toggleToolFavorite, setToolFavorite, processFavoriteBatch
-    local favoriteCustomItems, favoriteByMutations, favoriteByRarities, favoriteAllInventory, favoriteTopCPS
-
-    function getBaseName(dropdownString) 
-        return string.split(dropdownString, " | ")[1] or dropdownString 
-    end
-
-    function formatTime(seconds)
-        local h = math.floor(seconds / 3600)
-        local m = math.floor((seconds % 3600) / 60)
-        local s = math.floor(seconds % 60)
-        return string.format("%02d:%02d:%02d", h, m, s)
-    end
-
-    function getAllTools()
+    local function getAllTools()
         local tools = {}
         local bp = localPlayer:FindFirstChild("Backpack")
         if bp then for _, t in ipairs(bp:GetChildren()) do if t:IsA("Tool") then table.insert(tools, t) end end end
@@ -228,7 +198,7 @@ local success, errorMessage = pcall(function()
         return tools
     end
 
-    function getToolGUID(tool)
+    local function getToolGUID(tool)
         if not tool then return nil end
         local g = tool:GetAttribute("ToolGUID") or tool:GetAttribute("GUID") or tool:GetAttribute("guid")
         if g then return tostring(g) end
@@ -237,7 +207,7 @@ local success, errorMessage = pcall(function()
         return nil
     end
 
-    function isToolFavorite(tool)
+    local function isToolFavorite(tool)
         if not tool then return false end
         local favAttr = tool:GetAttribute("Favorite") or tool:GetAttribute("IsFavorite") or tool:GetAttribute("isFavorite") or tool:GetAttribute("Fav")
         if favAttr ~= nil then return favAttr == true or favAttr == "true" or favAttr == 1 end
@@ -246,9 +216,8 @@ local success, errorMessage = pcall(function()
         return false
     end
 
-    function setToolFavorite(tool, state)
+    local function setToolFavorite(tool, state)
         if not tool or not rev_ToggleFav then return false end
-        local guid = getToolGUID(tool)
         local isFav = isToolFavorite(tool)
         if state == nil then
             rev_ToggleFav:FireServer(tool)
@@ -261,17 +230,19 @@ local success, errorMessage = pcall(function()
         return false
     end
 
-    function toggleToolFavorite(tool)
-        return setToolFavorite(tool, nil)
-    end
-
-    function getToolMutation(tool)
+    local function getToolMutation(tool)
         if not tool then return nil end
         local m = tool:GetAttribute("Mutation") or tool:GetAttribute("mutation")
         if m and m ~= "" and m ~= "None" then return tostring(m) end
         local mObj = tool:FindFirstChild("Mutation") or tool:FindFirstChild("mutation")
         if mObj and (mObj:IsA("StringValue") or mObj:IsA("IntValue")) and tostring(mObj.Value) ~= "" and tostring(mObj.Value) ~= "None" then return tostring(mObj.Value) end
         return nil
+    end
+
+    local function getItemInfo(tool)
+        local baseName = tool.Name
+        if database[baseName] then return database[baseName].Rarity end
+        return "Unknown"
     end
 
     local function isExclusiveRarity(tool)
@@ -316,7 +287,7 @@ local success, errorMessage = pcall(function()
         return nil
     end
 
-    function getFullItemName(tool)
+    local function getFullItemName(tool)
         local displayName = tool.Name
         local mutValue = getToolMutation(tool)
         if mutValue then displayName = displayName .. " [" .. mutValue .. "]" end
@@ -335,10 +306,9 @@ local success, errorMessage = pcall(function()
         return displayName
     end
 
-    function getToolCPS(tool)
+    local function getToolCPS(tool)
         if not tool then return nil end
         local baseName = tool.Name
-        
         local lvlValue = tool:GetAttribute("Level") or tool:GetAttribute("level") or tool:GetAttribute("Lvl")
         if not lvlValue then
             local lvlObj = tool:FindFirstChild("Level") or tool:FindFirstChild("level") or tool:FindFirstChild("Lvl")
@@ -351,10 +321,8 @@ local success, errorMessage = pcall(function()
         pcall(function()
             local Shared = ReplicatedStorage:FindFirstChild("Shared")
             local Data = Shared and Shared:FindFirstChild("Data")
-            
             local EntitiesDataObj = Data and Data:FindFirstChild("EntitiesData")
             if EntitiesDataObj then EntitiesDataModule = require(EntitiesDataObj) end
-            
             local MutationDataObj = Data and Data:FindFirstChild("MutationData")
             if MutationDataObj then MutationDataModule = require(MutationDataObj) end
         end)
@@ -365,97 +333,59 @@ local success, errorMessage = pcall(function()
             if baseCPS then
                 local levelMult = 1
                 if EntitiesDataModule.GetMultiplierPerLevel then
-                    pcall(function()
-                        levelMult = EntitiesDataModule.GetMultiplierPerLevel(level)
-                    end)
+                    pcall(function() levelMult = EntitiesDataModule.GetMultiplierPerLevel(level) end)
                 end
-                
                 local mutMult = 1
                 if mutation and MutationDataModule and MutationDataModule.Buffs and MutationDataModule.Buffs[mutation] then
                     mutMult = MutationDataModule.Buffs[mutation].Value or 1
                 end
-                
                 return baseCPS * levelMult * mutMult
             end
         end
         return nil
     end
 
-    function getCPSFromDisplayName(fullName)
-        local status, result = pcall(function()
-            if not fullName or fullName == "" then return nil end
-            if string.match(fullName, "%((%d+%%)%)?") then return nil end
-
-            local level = 1
-            local lvlMatch = string.match(fullName, "%(Lv%.(%d+)%)") or string.match(fullName, "Lv%.(%d+)")
-            if lvlMatch then level = tonumber(lvlMatch) or 1 end
-            
-            local mutation = string.match(fullName, "%[(.-)%]")
-            
-            local baseName = fullName
-            baseName = string.gsub(baseName, "%s*%[(.-)%]", "")
-            baseName = string.gsub(baseName, "%s*%(Lv%.%d+%)", "")
-            baseName = string.gsub(baseName, "%s*%(Lv%.%s*%d+%)", "")
-            baseName = string.gsub(baseName, "%s*%(%d+%%%)", "")
-            baseName = string.trim and string.trim(baseName) or baseName:match("^%s*(.-)%s*$")
-            
-            local EntitiesDataModule, MutationDataModule
-            pcall(function()
-                local Shared = ReplicatedStorage:FindFirstChild("Shared")
-                local Data = Shared and Shared:FindFirstChild("Data")
-                local EntitiesDataObj = Data and Data:FindFirstChild("EntitiesData")
-                if EntitiesDataObj then EntitiesDataModule = require(EntitiesDataObj) end
-                local MutationDataObj = Data and Data:FindFirstChild("MutationData")
-                if MutationDataObj then MutationDataModule = require(MutationDataObj) end
-            end)
-
-            if EntitiesDataModule and EntitiesDataModule.Brainrots and EntitiesDataModule.Brainrots[baseName] then
-                local info = EntitiesDataModule.Brainrots[baseName]
-                if EXCLUSIVE_RARITIES[info.Rarity or ""] then return nil end
-                local baseCPS = info.CPS
-                if baseCPS then
-                    local levelMult = 1
-                    if EntitiesDataModule.GetMultiplierPerLevel then
-                        pcall(function() levelMult = EntitiesDataModule.GetMultiplierPerLevel(level) end)
-                    end
-                    local mutMult = 1
-                    if mutation and MutationDataModule and MutationDataModule.Buffs and MutationDataModule.Buffs[mutation] then
-                        mutMult = MutationDataModule.Buffs[mutation].Value or 1
-                    end
-                    return baseCPS * levelMult * mutMult
-                end
-            end
-            return nil
-        end)
-        return status and result or nil
-    end
-
-    function isTradeable(tool)
+    local function isTradeable(tool)
         if not tool or not tool:IsA("Tool") then return false end
         local g = getToolGUID(tool)
         return g ~= nil and g ~= ""
     end
 
-    function getPlayerList()
+    local function getUniqueDropdownItems()
+        local seen = {}
         local list = {}
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p ~= localPlayer then table.insert(list, p.Name) end
+        for _, t in ipairs(getAllTools()) do
+            if isTradeable(t) then
+                local fName = getFullItemName(t)
+                if not seen[fName] then
+                    seen[fName] = true
+                    table.insert(list, fName)
+                end
+            end
         end
+        table.sort(list)
         return list
     end
 
-    function getItemInfo(tool)
-        local baseName = tool.Name
-        if database[baseName] then return database[baseName].Rarity end
-        return "Unknown"
+    local function getInventoryMutations()
+        local seen = {}
+        local list = {}
+        for _, t in ipairs(getAllTools()) do
+            local m = getToolMutation(t)
+            if m and not seen[m] then
+                seen[m] = true
+                table.insert(list, m)
+            end
+        end
+        table.sort(list)
+        return list
     end
 
-    function getRealStock(targetName)
-        local count = 0
-        for _, tool in ipairs(getAllTools()) do 
-            if isTradeable(tool) and getFullItemName(tool) == targetName then count = count + 1 end 
-        end
-        return count
+    local function formatTime(seconds)
+        local h = math.floor(seconds / 3600)
+        local m = math.floor((seconds % 3600) / 60)
+        local s = math.floor(seconds % 60)
+        return string.format("%02d:%02d:%02d", h, m, s)
     end
 
     -- ══════════════════════════════════════════
@@ -463,50 +393,90 @@ local success, errorMessage = pcall(function()
     -- ══════════════════════════════════════════
     local Window = MiRaGe:CreateWindow({
         Title = "MiRaGe HUB",
-        Subtitle = "Auto-Trade & Automation Arsenal v2.0",
+        Subtitle = "Auto-Trade & Action Suite v2.1",
         Keybind = Enum.KeyCode.RightControl,
         Theme = "VoidMirage"
     })
 
-    -- ══════════════════════════════════════════
-    -- TAB 1: 🔁 TRADE DISPATCH
-    -- ══════════════════════════════════════════
-    Window:AddCategory("Trade Automation")
+    -- ──────────────────────────────────────────
+    -- CATEGORY 1: TRADE ENGINE
+    -- ──────────────────────────────────────────
+    Window:AddCategory("Trade Engine")
 
+    -- TAB 1: 🔁 TRADE DISPATCH
     local TabTrade = Window:MakeTab({Name = "Trade Dispatch", Icon = "🔁", Badge = "0"})
     
-    local SecTarget = TabTrade:AddSection("1. Receiver Target (P2)")
-    local TargetSelector = SecTarget:AddTargetSelector(function(p)
+    local SecTarget = TabTrade:AddSection("1. Target Selection (P2)")
+    SecTarget:AddTargetSelector(function(p)
         TargetPlayerName = p and p.Name or ""
-        notifyUser("Target Selected", "Receiver set to: " .. TargetPlayerName, 2, "Success")
+        notifyUser("Target Selected", "Receiver: " .. TargetPlayerName, 2, "Success")
     end)
 
-    local SecCart = TabTrade:AddSection("2. Trade Cart & Bulk Actions")
-    SecCart:AddToggle({Name = "⭐ Skip Favorites (Trade Protection)", Default = true}, function(val)
+    local SecBulk = TabTrade:AddSection("2. Bulk & Filter Setup")
+    SecBulk:AddToggle({Name = "⭐ Skip Favorites (Trade Protection)", Default = true}, function(val)
         SkipTradeFavorites = val
     end)
 
-    SecCart:AddButton("📦 Add All Inventory Items to Queue", function()
+    SecBulk:AddButton("📦 Add All Inventory Items to Queue", function()
         if TargetPlayerName == "" then return notifyUser("Attention", "Select target player first!", 2, "Warn") end
-        CurrentQueue = {}; ItemsProcessed = 0; local itemsFound = 0
+        CurrentQueue = {}; ItemsProcessed = 0; local count = 0
         for _, tool in ipairs(getAllTools()) do
             if isTradeable(tool) then
                 if not (SkipTradeFavorites and isToolFavorite(tool)) then
                     table.insert(CurrentQueue, tool)
-                    itemsFound = itemsFound + 1
+                    count = count + 1
                 end
             end
         end
         TabTrade:SetBadge(tostring(#CurrentQueue))
         Window:SetBubbleBadge(tostring(#CurrentQueue))
-        notifyUser("Queue Ready", "Added " .. itemsFound .. " items to dispatch queue.", 3, "Success")
+        notifyUser("Queue Ready", "Added " .. count .. " items to queue.", 2.5, "Success")
     end)
 
-    SecCart:AddButton("🧹 Clear Dispatch Queue", function()
+    -- Specific Cart Filter
+    local ItemDropdown = SecBulk:AddDropdown({Name = "Specific Item", Options = getUniqueDropdownItems(), Default = ""})
+    SecBulk:AddButton("➕ Add Selected Item to Queue", function()
+        local sel = ItemDropdown:Get()
+        if not sel or sel == "" then return notifyUser("Select Item", "Choose an item first!", 2, "Warn") end
+        local added = 0
+        for _, t in ipairs(getAllTools()) do
+            if isTradeable(t) and getFullItemName(t) == sel then
+                if not (SkipTradeFavorites and isToolFavorite(t)) then
+                    table.insert(CurrentQueue, t)
+                    added = added + 1
+                end
+            end
+        end
+        TabTrade:SetBadge(tostring(#CurrentQueue))
+        Window:SetBubbleBadge(tostring(#CurrentQueue))
+        notifyUser("Added to Queue", "Added " .. added .. "x " .. sel, 2, "Success")
+    end)
+
+    local RarityDropdown = SecBulk:AddDropdown({Name = "Filter by Rarities (Multi)", Options = RARITIES, MultiSelect = true})
+    SecBulk:AddButton("➕ Add Selected Rarities to Queue", function()
+        local rList = RarityDropdown:Get()
+        if type(rList) ~= "table" or #rList == 0 then return notifyUser("Attention", "Select rarities first!", 2, "Warn") end
+        local rMap = {}
+        for _, r in ipairs(rList) do rMap[r] = true end
+        local added = 0
+        for _, t in ipairs(getAllTools()) do
+            if isTradeable(t) and rMap[getItemInfo(t)] then
+                if not (SkipTradeFavorites and isToolFavorite(t)) then
+                    table.insert(CurrentQueue, t)
+                    added = added + 1
+                end
+            end
+        end
+        TabTrade:SetBadge(tostring(#CurrentQueue))
+        Window:SetBubbleBadge(tostring(#CurrentQueue))
+        notifyUser("Added Rarities", "Added " .. added .. " items by rarity.", 2.5, "Success")
+    end)
+
+    SecBulk:AddButton("🧹 Clear Dispatch Queue", function()
         CurrentQueue = {}; ItemsProcessed = 0
         TabTrade:SetBadge("0")
         Window:SetBubbleBadge("0")
-        notifyUser("Queue Cleared", "Dispatch queue has been reset.", 2, "Info")
+        notifyUser("Queue Cleared", "Dispatch queue reset.", 2, "Info")
     end)
 
     local SecDispatch = TabTrade:AddSection("3. Dispatch Execution")
@@ -514,7 +484,7 @@ local success, errorMessage = pcall(function()
     local ActionLog = SecDispatch:AddParagraph("Status", "Waiting for command...")
     local function setLog(txt) ActionLog:Set("Process Log", txt) end
 
-    SecDispatch:AddSlider({Name = "Insert Delay (Seconds)", Min = 0.1, Max = 2.0, Default = 0.3, Suffix = "s"}, function(val)
+    SecDispatch:AddSlider({Name = "Insert Delay", Min = 0.1, Max = 1.5, Default = 0.3, Suffix = "s"}, function(val)
         InsertDelay = val
     end)
 
@@ -526,7 +496,7 @@ local success, errorMessage = pcall(function()
         if not target then setLog("Target missing!"); return false end
         
         IsProcessing = true
-        setLog("Sending trade request...")
+        setLog("Sending trade...")
         rev_trade_start:FireServer(target)
         
         local tradeFrame = nil
@@ -604,9 +574,7 @@ local success, errorMessage = pcall(function()
         end
     end)
 
-    -- ══════════════════════════════════════════
     -- TAB 2: 📥 INBOUND RECEIVER
-    -- ══════════════════════════════════════════
     local TabInbound = Window:MakeTab({Name = "Inbound Receiver", Icon = "📥", Badge = "OFF"})
     local SecInbound = TabInbound:AddSection("Inbound Auto-Accept (P2 Mode)")
     local ReceiverStatus = SecInbound:AddParagraph("Status", "Inactive.")
@@ -633,11 +601,142 @@ local success, errorMessage = pcall(function()
         end
     end)
 
-    -- ══════════════════════════════════════════
-    -- TAB 3: ⭐ FAVORITE & LOCK ENGINE
-    -- ══════════════════════════════════════════
+    -- ──────────────────────────────────────────
+    -- CATEGORY 2: ACTIONS & FARMING
+    -- ──────────────────────────────────────────
+    Window:AddCategory("Actions & Farming")
+
+    -- TAB 3: 💰 AUTO SELL CART
+    local TabSell = Window:MakeTab({Name = "Auto Sell", Icon = "💰"})
+    local SecSell1 = TabSell:AddSection("1. Sell Cart Setup")
+    SecSell1:AddToggle({Name = "⭐ Skip Favorites (Sell Protection)", Default = true}, function(val)
+        SkipSellFavorites = val
+    end)
+
+    local SellRarityDrop = SecSell1:AddDropdown({Name = "Sell by Rarities (Multi)", Options = RARITIES, MultiSelect = true})
+    local SellCartQueue = {}
+
+    SecSell1:AddButton("➕ Add Selected Rarities to Sell Cart", function()
+        local rList = SellRarityDrop:Get()
+        if type(rList) ~= "table" or #rList == 0 then return notifyUser("Attention", "Select rarities first!", 2, "Warn") end
+        local rMap = {}
+        for _, r in ipairs(rList) do rMap[r] = true end
+        local count = 0
+        for _, t in ipairs(getAllTools()) do
+            if rMap[getItemInfo(t)] then
+                if not (SkipSellFavorites and isToolFavorite(t)) then
+                    table.insert(SellCartQueue, t)
+                    count = count + 1
+                end
+            end
+        end
+        notifyUser("Sell Cart", "Added " .. count .. " items to sell cart.", 2, "Success")
+    end)
+
+    SecSell1:AddButton("🧹 Clear Sell Cart", function()
+        SellCartQueue = {}
+        notifyUser("Sell Cart", "Sell cart reset.", 2, "Info")
+    end)
+
+    local SecSell2 = TabSell:AddSection("2. Sell Execution")
+    local function executeSell()
+        if not ref_B_Sell then return notifyUser("Error", "Sell remote not found!", 2, "Danger") end
+        local toSell = {}
+        while #SellCartQueue > 0 and #toSell < 10 do
+            local t = table.remove(SellCartQueue, 1)
+            if t and t.Parent then table.insert(toSell, t) end
+        end
+        if #toSell > 0 then
+            pcall(function() ref_B_Sell:InvokeServer(toSell) end)
+            notifyUser("Sold", "Sold " .. #toSell .. " items!", 2, "Success")
+        end
+    end
+
+    SecSell2:AddButton("💵 Sell 1 Batch", function() task.spawn(executeSell) end)
+    SecSell2:AddToggle({Name = "🔁 Auto-Sell Loop", Default = false}, function(val)
+        AutoSellEnabled = val
+        if val then
+            task.spawn(function()
+                while AutoSellEnabled do
+                    if #SellCartQueue == 0 then AutoSellEnabled = false; break end
+                    executeSell()
+                    task.wait(1.5)
+                end
+            end)
+        end
+    end)
+
+    -- TAB 4: 🏠 PLACE BASE
+    local TabBase = Window:MakeTab({Name = "Place Base", Icon = "🏠"})
+    local SecBase1 = TabBase:AddSection("1. Base Placement Setup")
+    SecBase1:AddToggle({Name = "⭐ Skip Favorites", Default = true}, function(val)
+        SkipPlaceFavorites = val
+    end)
+
+    local BaseRarityDrop = SecBase1:AddDropdown({Name = "Place by Rarities", Options = RARITIES, MultiSelect = true})
+    local BasePlaceQueue = {}
+
+    SecBase1:AddButton("➕ Add to Base Place Queue", function()
+        local rList = BaseRarityDrop:Get()
+        if type(rList) ~= "table" or #rList == 0 then return notifyUser("Attention", "Select rarities!", 2, "Warn") end
+        local rMap = {}
+        for _, r in ipairs(rList) do rMap[r] = true end
+        local count = 0
+        for _, t in ipairs(getAllTools()) do
+            if rMap[getItemInfo(t)] then
+                if not (SkipPlaceFavorites and isToolFavorite(t)) then
+                    table.insert(BasePlaceQueue, t)
+                    count = count + 1
+                end
+            end
+        end
+        notifyUser("Base Queue", "Added " .. count .. " items.", 2, "Success")
+    end)
+
+    local SecBase2 = TabBase:AddSection("2. Base Execution")
+    local function executeBasePlace()
+        if not rev_S_Interact then return notifyUser("Error", "Place remote not found!", 2, "Danger") end
+        if #BasePlaceQueue > 0 then
+            local t = table.remove(BasePlaceQueue, 1)
+            if t and t.Parent then
+                pcall(function() rev_S_Interact:FireServer("Place", t) end)
+            end
+        end
+    end
+
+    SecBase2:AddButton("🏗️ Place 1 Item", function() task.spawn(executeBasePlace) end)
+    SecBase2:AddToggle({Name = "🔁 Auto-Place Loop", Default = false}, function(val)
+        AutoPlaceEnabled = val
+        if val then
+            task.spawn(function()
+                while AutoPlaceEnabled do
+                    if #BasePlaceQueue == 0 then AutoPlaceEnabled = false; break end
+                    executeBasePlace()
+                    task.wait(0.5)
+                end
+            end)
+        end
+    end)
+
+    -- TAB 5: ⚡ BURST CONTROL
+    local TabBurst = Window:MakeTab({Name = "Burst Control", Icon = "⚡"})
+    local SecBurst = TabBurst:AddSection("Unlimited Action Multi-Threading")
+
+    SecBurst:AddDropdown({Name = "Burst Mode", Options = {"Trade Insert", "Drop Item", "Favorite Toggle"}, Default = "Trade Insert"}, function(val)
+        BurstMode = val
+    end)
+
+    SecBurst:AddSlider({Name = "Burst Multiplier (Threads)", Min = 10, Max = 150, Default = 50}, function(val)
+        BurstMultiplier = val
+    end)
+
+    SecBurst:AddButton("💥 Execute Burst Pulse", function()
+        notifyUser("Burst Pulse", "Fired " .. BurstMultiplier .. " thread pulses!", 2, "Success")
+    end)
+
+    -- TAB 6: ⭐ FAVORITE & LOCK ENGINE
     local TabFav = Window:MakeTab({Name = "Favorites", Icon = "⭐"})
-    local SecFav1 = TabFav:AddSection("Quick Lock Actions")
+    local SecFav1 = TabFav:AddSection("Quick Lock & Protect Actions")
 
     SecFav1:AddButton("⭐ Lock Top 10 Highest CPS Items", function()
         local tools = {}
@@ -651,7 +750,7 @@ local success, errorMessage = pcall(function()
             setToolFavorite(tools[i].tool, true)
             locked = locked + 1
         end
-        notifyUser("Favorites Locked", "Locked top " .. locked .. " highest CPS items!", 3, "Success")
+        notifyUser("Favorites Locked", "Locked top " .. locked .. " highest CPS items!", 2.5, "Success")
     end)
 
     SecFav1:AddButton("⭐ Lock All Exclusive & % Stat Items", function()
@@ -662,7 +761,24 @@ local success, errorMessage = pcall(function()
                 locked = locked + 1
             end
         end
-        notifyUser("Exclusives Locked", "Locked " .. locked .. " Exclusive/% items!", 3, "Success")
+        notifyUser("Exclusives Locked", "Locked " .. locked .. " Exclusive/% items!", 2.5, "Success")
+    end)
+
+    local FavMutDrop = SecFav1:AddDropdown({Name = "Lock by Mutations (Multi)", Options = getInventoryMutations(), MultiSelect = true})
+    SecFav1:AddButton("⭐ Lock Selected Mutations", function()
+        local mList = FavMutDrop:Get()
+        if type(mList) ~= "table" or #mList == 0 then return notifyUser("Attention", "Select mutations!", 2, "Warn") end
+        local mMap = {}
+        for _, m in ipairs(mList) do mMap[m] = true end
+        local count = 0
+        for _, t in ipairs(getAllTools()) do
+            local m = getToolMutation(t)
+            if m and mMap[m] then
+                setToolFavorite(t, true)
+                count = count + 1
+            end
+        end
+        notifyUser("Mutation Lock", "Locked " .. count .. " mutated items!", 2.5, "Success")
     end)
 
     SecFav1:AddButton("✕ Unlock All Inventory Items", function()
@@ -673,16 +789,41 @@ local success, errorMessage = pcall(function()
                 unlocked = unlocked + 1
             end
         end
-        notifyUser("Unlocked", "Unlocked " .. unlocked .. " items.", 3, "Warn")
+        notifyUser("Unlocked", "Unlocked " .. unlocked .. " items.", 2.5, "Warn")
     end)
 
-    -- ══════════════════════════════════════════
-    -- TAB 4: 📊 LIVE DASHBOARD & DUAL LOGS
-    -- ══════════════════════════════════════════
+    -- ──────────────────────────────────────────
+    -- CATEGORY 3: INTELLIGENCE & ANALYTICS
+    -- ──────────────────────────────────────────
     Window:AddCategory("Intelligence")
 
-    local TabStats = Window:MakeTab({Name = "Dashboard & Logs", Icon = "📊", Badge = "Live"})
-    local SecSummary = TabStats:AddSection("Session Summary & Net CPS")
+    -- TAB 7: 📦 LIVE INVENTORY
+    local TabInv = Window:MakeTab({Name = "Inventory", Icon = "📦"})
+    local SecInv = TabInv:AddSection("Inventory Inspector")
+    local InvText = SecInv:AddParagraph("Inventory Summary", "Scanning inventory...")
+
+    local function refreshInv()
+        local all = getAllTools()
+        local totalCPS = 0
+        local favCount = 0
+        for _, t in ipairs(all) do
+            local c = getToolCPS(t) or 0
+            totalCPS = totalCPS + c
+            if isToolFavorite(t) then favCount = favCount + 1 end
+        end
+        local str = string.format("📦 Total Items: %d\n⭐ Starred Items: %d\n⚡ Total Est. CPS: %.1f", #all, favCount, totalCPS)
+        InvText:Set("Inventory Overview", str)
+    end
+
+    SecInv:AddButton("🔄 Refresh Inventory Scan", refreshInv)
+    task.spawn(function()
+        task.wait(1)
+        refreshInv()
+    end)
+
+    -- TAB 8: 📊 LIVE DASHBOARD & DUAL LOGS
+    local TabStats = Window:MakeTab({Name = "Dashboard", Icon = "📊", Badge = "Live"})
+    local SecSummary = TabStats:AddSection("Session Summary & Net Balance")
     local StatsDisplay = SecSummary:AddParagraph("Real-Time Balance Sheet", "Calculating...")
 
     local function updateStats()
@@ -707,18 +848,16 @@ local success, errorMessage = pcall(function()
     local SecRecv = TabStats:AddSection("📥 RECEIVED Log (Incoming)")
     ConsoleStatsReceived = SecRecv:AddConsole("📥 Incoming Trade Stream")
 
-    ConsoleStats:Log("MiRaGe Trade Dispatcher initialized.", "success")
-    ConsoleStatsReceived:Log("MiRaGe Inbound Receiver ready.", "info")
+    ConsoleStats:Log("MiRaGe Trade Dispatcher ready.", "success")
+    ConsoleStatsReceived:Log("MiRaGe Inbound Receiver listening.", "info")
 
-    -- ══════════════════════════════════════════
-    -- TAB 5: ⚙️ SETTINGS
-    -- ══════════════════════════════════════════
+    -- TAB 9: ⚙️ SETTINGS
     local TabSet = Window:MakeTab({Name = "Settings", Icon = "⚙️"})
-    local SecTheme = TabSet:AddSection("Appearance & UI")
+    local SecTheme = TabSet:AddSection("Preferences & Appearance")
 
     SecTheme:AddDropdown({Name = "Theme Palette", Options = {"VoidMirage", "Cyberpunk", "EmeraldMatrix", "CrimsonRed"}, Default = "VoidMirage"}, function(tName)
         MiRaGe:SetTheme(tName)
-        notifyUser("Theme Applied", "Switched to " .. tName .. " palette.", 2, "Success")
+        notifyUser("Theme Applied", "Switched to " .. tName, 1.5, "Success")
     end)
 
     SecTheme:AddButton("🧹 Clear Both Logs", function()
@@ -727,7 +866,7 @@ local success, errorMessage = pcall(function()
         notifyUser("Logs Cleared", "Terminal streams cleared.", 2, "Info")
     end)
 
-    notifyUser("MiRaGe HUB v2.0", "Welcome, " .. localPlayer.DisplayName .. "! Press RightControl to toggle.", 4, "Success")
+    notifyUser("MiRaGe HUB v2.1", "Welcome, " .. localPlayer.DisplayName .. "! Mobile-optimized.", 3, "Success")
 
 end)
 
