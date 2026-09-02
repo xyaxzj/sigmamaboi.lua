@@ -381,32 +381,17 @@ local function getAdminMachineNextEventText()
     return nil
 end
 
--- Menghitung Jadwal Fase Back To School (Rotasi 1 Jam)
+-- Menghitung Jadwal Siklus Back To School (1 Jam Sekali)
 local function getBackToSchoolPhaseSchedule()
     local now = os.time()
     local date = os.date("*t", now)
     local minute = date.min
     local second = date.sec
 
-    local currentPhase = ""
-    local nextPhase = ""
-    local remainingInPhase = 0
+    -- Sisa waktu menuju jam berikutnya (Siklus 1 Jam)
+    local remainingToNextHour = ((60 - minute) * 60) - second
 
-    if minute < 20 then
-        currentPhase = "📚 Math Event (Fase 1)"
-        nextPhase = "🏃 P.E. Class (Fase 2)"
-        remainingInPhase = ((20 - minute) * 60) - second
-    elseif minute < 40 then
-        currentPhase = "🏃 P.E. Class (Fase 2)"
-        nextPhase = "🏋️ Lift Machine / Steal Homework (Fase 3)"
-        remainingInPhase = ((40 - minute) * 60) - second
-    else
-        currentPhase = "🏋️ Lift Machine / Steal Homework (Fase 3)"
-        nextPhase = "📚 Math Event (Fase 1 Jam Baru)"
-        remainingInPhase = ((60 - minute) * 60) - second
-    end
-
-    return currentPhase, nextPhase, remainingInPhase
+    return remainingToNextHour
 end
 
 -- Pembaca Data Terpadu
@@ -870,7 +855,7 @@ local function refreshView()
     end
 
     local liveList, adminNextEventStr, machineStock = getUnifiedWeatherData()
-    local currentPhase, nextPhase, remainingInPhase = getBackToSchoolPhaseSchedule()
+    local remainingToNextHour = getBackToSchoolPhaseSchedule()
 
     -- Update Floating Pill Text
     if #liveList > 0 then
@@ -882,14 +867,14 @@ local function refreshView()
         FloatingPill.Text = string.format("⏳ %s", adminNextEventStr)
         FloatingPill.TextColor3 = Color3.fromRGB(100, 220, 255)
     else
-        FloatingPill.Text = string.format("⏳ Next: %s", formatTime(remainingInPhase))
+        FloatingPill.Text = string.format("⏳ Next BTS: %s", formatTime(remainingToNextHour))
         FloatingPill.TextColor3 = Color3.fromRGB(130, 180, 255)
     end
 
     -- ==================== TAB 1: LIVE AKTIF ====================
     if activeTab == "Live" then
         if #liveList == 0 then
-            local bannerSub = string.format("Fase Saat Ini: %s\n%s", currentPhase, adminNextEventStr or "Menunggu spawn event berikutnya.")
+            local bannerSub = adminNextEventStr and string.format("Info Mesin Server: %s", adminNextEventStr) or string.format("Siklus Back to School berikutnya: %s lagi.", formatTime(remainingToNextHour))
             renderBannerCard("☁️ STATUS CUACA: STANDBY", bannerSub, 1)
         else
             for idx, item in ipairs(liveList) do
@@ -911,14 +896,31 @@ local function refreshView()
     elseif activeTab == "Upcoming" then
         local orderIndex = 1
 
-        -- 1. Prediksi Berdasarkan Jadwal Fase Back To School (Rotasi 1 Jam)
-        renderHeaderSection("🎓 JADWAL 3 MINI-EVENT BACK TO SCHOOL:", orderIndex)
+        -- 1. Siklus 1 Jam Back to School (Pool 3 Event: Math, PE, StealHomework)
+        renderHeaderSection("🎓 BACK TO SCHOOL (1 JAM SEKALI):", orderIndex)
         orderIndex = orderIndex + 1
 
-        local phaseBannerTitle = string.format("⏳ FASE BERIKUTNYA: %s", formatTime(remainingInPhase))
-        local phaseBannerSub = string.format("Sekarang: %s\nBerikutnya: %s (%s lagi)", currentPhase, nextPhase, formatTime(remainingInPhase))
-        renderBannerCard(phaseBannerTitle, phaseBannerSub, orderIndex)
+        local nextHourTime = os.date("%H:00:00", os.time() + remainingToNextHour)
+        local btsBannerTitle = string.format("⏳ SPAWN BTS BERIKUTNYA: %s", formatTime(remainingToNextHour))
+        local btsBannerSub = string.format("Spawn setiap jam (Pukul %s WIB).\nServer akan memilih 1 dari 3 mini-event di bawah:", nextHourTime)
+        renderBannerCard(btsBannerTitle, btsBannerSub, orderIndex)
         orderIndex = orderIndex + 1
+
+        -- Tampilkan 3 Pool Mini-Event Back to School
+        local btsPool = {"MathEvent", "PEClass", "StealHomework"}
+        for _, pName in ipairs(btsPool) do
+            local meta = getMetadata(pName)
+            renderCompactCard(
+                meta.Title,
+                "🎓 BTS POOL",
+                Color3.fromRGB(255, 200, 50),
+                string.format("🎲 %s", meta.Desc),
+                Color3.fromRGB(255, 220, 100),
+                meta.Image,
+                orderIndex
+            )
+            orderIndex = orderIndex + 1
+        end
 
         -- 2. Countdown dari Admin Machine
         if adminNextEventStr then
@@ -947,24 +949,9 @@ local function refreshView()
             end
         end
 
-        -- 4. Daftar Pool 31 Event Resmi Game
-        renderHeaderSection("🌟 POOL 31 EVENT RESMI (WEATHERDATA):", orderIndex)
+        -- 4. Daftar Pool Event Cuaca Global Lainnya
+        renderHeaderSection("🌟 POOL CUACA SPESIAL LAINNYA:", orderIndex)
         orderIndex = orderIndex + 1
-
-        local schoolList = {"MathEvent", "PEClass", "LiftMachine", "StealHomework"}
-        for _, pName in ipairs(schoolList) do
-            local meta = getMetadata(pName)
-            renderCompactCard(
-                meta.Title,
-                meta.Tag,
-                Color3.fromRGB(255, 200, 50),
-                string.format("🎓 %s • %s", meta.Category, meta.Desc),
-                Color3.fromRGB(255, 220, 100),
-                meta.Image,
-                orderIndex
-            )
-            orderIndex = orderIndex + 1
-        end
 
         local otherList = {
             "LuckMachine", "LuckCircles", "MultiplierReactor", "Pinata",
