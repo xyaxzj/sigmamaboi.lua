@@ -31,7 +31,7 @@ _G.autoMathEvent = true      -- true: Otomatis selesaikan soal math & perbesar j
 _G.autoPEClass = true        -- true: Otomatis hapus Model angka PEClass & Ball
 _G.autoSellAll = true        -- true: Otomatis jual semua brainrot berkala
 _G.sellInterval = 5          -- Interval waktu (detik) Auto Sell All
-_G.debugConsoleLog = true    -- true: Tampilkan log di Developer Console (F9)
+_G.debugConsoleLog = false    -- true: Tampilkan log di Developer Console (F9)
 
 print("--------------------------------------------------")
 print("🚀 [INIT] Memuat KALB Perfect Math, PEClass & Auto Sell...")
