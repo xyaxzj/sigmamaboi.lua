@@ -1,6 +1,6 @@
 -- ==========================================================
---                  MiRaGe HUB V2.1 — AUTO TRADE ARSENAL
---     Full Migration: Trade, Sell, Base, Burst, Favs & Logs
+--                  MiRaGe HUB V2.2 — COMPLETE ARSENAL
+--     Full 1:1 Migration: Trade, Sell, Base, Burst, Favs, Inv
 -- ==========================================================
 
 local success, errorMessage = pcall(function()
@@ -79,10 +79,6 @@ local success, errorMessage = pcall(function()
     local SellCart = {}      -- Sell
     local BaseCart = {}      -- Place Base
     
-    local CachedInventoryData = {}
-    local CachedTotalCount = 0
-    local CachedFavoriteCount = 0
-    
     local ItemsProcessed = 0
     local IsProcessing = false 
     local AutoLoopEnabled = false
@@ -118,6 +114,13 @@ local success, errorMessage = pcall(function()
     local SkipTradeFavorites = true
     local AutoFavoriteNewDrops = false
     local AutoFavRarities = {}
+    local IsFavProcessing = false
+    local CancelFavProcess = false
+    local FavDelay = 0.3
+
+    local function getBaseName(dropdownString) 
+        return string.split(dropdownString, " | ")[1] or dropdownString 
+    end
 
     local function getCumulativeDetails(playerData)
         local parts = {}
@@ -216,16 +219,38 @@ local success, errorMessage = pcall(function()
         return false
     end
 
-    local function setToolFavorite(tool, state)
-        if not tool or not rev_ToggleFav then return false end
-        local isFav = isToolFavorite(tool)
-        if state == nil then
-            rev_ToggleFav:FireServer(tool)
-            return true
+    local function getFavRemote()
+        if rev_ToggleFav and rev_ToggleFav.Parent then return rev_ToggleFav end
+        pcall(function()
+            rev_ToggleFav = ReplicatedStorage.Shared.Packages.Network.rev_ToggleFav
+        end)
+        if rev_ToggleFav then return rev_ToggleFav end
+        for _, v in pairs(ReplicatedStorage:GetDescendants()) do
+            if (v.Name == "rev_ToggleFav" or v.Name == "ToggleFav") and v:IsA("RemoteEvent") then
+                rev_ToggleFav = v
+                return rev_ToggleFav
+            end
         end
-        if (state and not isFav) or (not state and isFav) then
-            rev_ToggleFav:FireServer(tool)
-            return true
+        return nil
+    end
+
+    local function toggleToolFavorite(tool)
+        if not tool then return false end
+        local remote = getFavRemote()
+        if not remote then return false end
+        local guid = getToolGUID(tool)
+        if not guid then return false end
+        local ok = pcall(function()
+            remote:FireServer(tostring(guid))
+        end)
+        return ok
+    end
+
+    local function setToolFavorite(tool, desiredState)
+        if not tool then return false end
+        local isFav = isToolFavorite(tool)
+        if desiredState == nil or (desiredState and not isFav) or (not desiredState and isFav) then
+            return toggleToolFavorite(tool)
         end
         return false
     end
@@ -345,10 +370,65 @@ local success, errorMessage = pcall(function()
         return nil
     end
 
+    local function getCPSFromDisplayName(fullName)
+        local status, result = pcall(function()
+            if not fullName or fullName == "" then return nil end
+            if string.match(fullName, "%((%d+%%)%)?") then return nil end
+
+            local level = 1
+            local lvlMatch = string.match(fullName, "%(Lv%.(%d+)%)") or string.match(fullName, "Lv%.(%d+)")
+            if lvlMatch then level = tonumber(lvlMatch) or 1 end
+            local mutation = string.match(fullName, "%[(.-)%]")
+            
+            local baseName = fullName
+            baseName = string.gsub(baseName, "%s*%[(.-)%]", "")
+            baseName = string.gsub(baseName, "%s*%(Lv%.%d+%)", "")
+            baseName = string.gsub(baseName, "%s*%(%d+%%%)", "")
+            baseName = string.trim and string.trim(baseName) or baseName:match("^%s*(.-)%s*$")
+            
+            local EntitiesDataModule, MutationDataModule
+            pcall(function()
+                local Shared = ReplicatedStorage:FindFirstChild("Shared")
+                local Data = Shared and Shared:FindFirstChild("Data")
+                local EntitiesDataObj = Data and Data:FindFirstChild("EntitiesData")
+                if EntitiesDataObj then EntitiesDataModule = require(EntitiesDataObj) end
+                local MutationDataObj = Data and Data:FindFirstChild("MutationData")
+                if MutationDataObj then MutationDataModule = require(MutationDataObj) end
+            end)
+
+            if EntitiesDataModule and EntitiesDataModule.Brainrots and EntitiesDataModule.Brainrots[baseName] then
+                local info = EntitiesDataModule.Brainrots[baseName]
+                if EXCLUSIVE_RARITIES[info.Rarity or ""] then return nil end
+                local baseCPS = info.CPS
+                if baseCPS then
+                    local levelMult = 1
+                    if EntitiesDataModule.GetMultiplierPerLevel then
+                        pcall(function() levelMult = EntitiesDataModule.GetMultiplierPerLevel(level) end)
+                    end
+                    local mutMult = 1
+                    if mutation and MutationDataModule and MutationDataModule.Buffs and MutationDataModule.Buffs[mutation] then
+                        mutMult = MutationDataModule.Buffs[mutation].Value or 1
+                    end
+                    return baseCPS * levelMult * mutMult
+                end
+            end
+            return nil
+        end)
+        return status and result or nil
+    end
+
     local function isTradeable(tool)
         if not tool or not tool:IsA("Tool") then return false end
         local g = getToolGUID(tool)
         return g ~= nil and g ~= ""
+    end
+
+    local function getRealStock(targetName)
+        local count = 0
+        for _, tool in ipairs(getAllTools()) do 
+            if isTradeable(tool) and getFullItemName(tool) == targetName then count = count + 1 end 
+        end
+        return count
     end
 
     local function getUniqueDropdownItems()
@@ -381,6 +461,82 @@ local success, errorMessage = pcall(function()
         return list
     end
 
+    local function addMutationsToCart(TargetCart, SelectedOptions, QtyLimit, IsMax)
+        if type(SelectedOptions) ~= "table" then SelectedOptions = {SelectedOptions} end
+        local activeMutations = {}
+        for _, opt in pairs(SelectedOptions) do
+            local cleanMut = getBaseName(opt)
+            if cleanMut ~= "" and cleanMut ~= "[NO MUTATION]" then activeMutations[cleanMut] = true end
+        end
+        local matchingItems = {}
+        for _, tool in ipairs(getAllTools()) do
+            if isTradeable(tool) then
+                local mut = getToolMutation(tool)
+                if mut and activeMutations[mut] then matchingItems[getFullItemName(tool)] = true end
+            end
+        end
+        for itemName, _ in pairs(matchingItems) do
+            local rs = getRealStock(itemName)
+            local cur = TargetCart[itemName] or 0
+            if IsMax then TargetCart[itemName] = rs elseif QtyLimit > 0 then TargetCart[itemName] = (cur + QtyLimit > rs) and rs or (cur + QtyLimit) end
+        end
+    end
+
+    local function addRaritiesToCart(TargetCart, SelectedOptions, QtyLimit, IsMax)
+        if type(SelectedOptions) ~= "table" then SelectedOptions = {SelectedOptions} end
+        local activeRarities = {}
+        for _, r in pairs(SelectedOptions) do if r ~= "" then activeRarities[r] = true end end
+        local matchingItems = {}
+        for _, tool in ipairs(getAllTools()) do
+            if isTradeable(tool) then
+                local rarity = getItemInfo(tool)
+                if activeRarities[rarity] then matchingItems[getFullItemName(tool)] = true end
+            end
+        end
+        for itemName, _ in pairs(matchingItems) do
+            local rs = getRealStock(itemName)
+            local cur = TargetCart[itemName] or 0
+            if IsMax then TargetCart[itemName] = rs elseif QtyLimit > 0 then TargetCart[itemName] = (cur + QtyLimit > rs) and rs or (cur + QtyLimit) end
+        end
+    end
+
+    local function processFavoriteBatch(toolsToProcess, desiredState, operationName)
+        if not toolsToProcess or #toolsToProcess == 0 then
+            notifyUser("Favorite Manager", "No matching items in inventory.", 2, "Warn")
+            return 0
+        end
+        if IsFavProcessing then
+            notifyUser("Favorite Busy", "Process already running!", 2, "Warn")
+            return 0
+        end
+        local remote = getFavRemote()
+        if not remote then return 0 end
+
+        local total = #toolsToProcess
+        notifyUser("Favorite", "Processing " .. total .. " items...", 2, "Info")
+        IsFavProcessing = true
+        CancelFavProcess = false
+
+        task.spawn(function()
+            local count = 0
+            for _, tool in ipairs(toolsToProcess) do
+                if CancelFavProcess then break end
+                local guid = getToolGUID(tool)
+                if guid then
+                    pcall(function() remote:FireServer(tostring(guid)) end)
+                    count = count + 1
+                end
+                task.wait(FavDelay)
+            end
+            IsFavProcessing = false
+            notifyUser("Favorite Done", "Processed " .. count .. " / " .. total .. " items.", 2.5, "Success")
+            if ConsoleStats then
+                ConsoleStats:Log("⭐ Favorite: Processed " .. count .. " items (" .. tostring(operationName or "Batch") .. ")", "success")
+            end
+        end)
+        return total
+    end
+
     local function formatTime(seconds)
         local h = math.floor(seconds / 3600)
         local m = math.floor((seconds % 3600) / 60)
@@ -393,7 +549,7 @@ local success, errorMessage = pcall(function()
     -- ══════════════════════════════════════════
     local Window = MiRaGe:CreateWindow({
         Title = "MiRaGe HUB",
-        Subtitle = "Auto-Trade & Action Suite v2.1",
+        Subtitle = "Auto-Trade & Action Suite v2.2",
         Keybind = Enum.KeyCode.RightControl,
         Theme = "VoidMirage"
     })
@@ -403,10 +559,10 @@ local success, errorMessage = pcall(function()
     -- ──────────────────────────────────────────
     Window:AddCategory("Trade Engine")
 
-    -- TAB 1: 🔁 TRADE DISPATCH
-    local TabTrade = Window:MakeTab({Name = "Trade Dispatch", Icon = "🔁", Badge = "0"})
+    -- TAB 1: 🛒 TRADE CART & DISPATCH
+    local TabTrade = Window:MakeTab({Name = "Trade Cart", Icon = "🛒", Badge = "0"})
     
-    local SecTarget = TabTrade:AddSection("1. Target Selection (P2)")
+    local SecTarget = TabTrade:AddSection("1. Receiver Target (P2)")
     SecTarget:AddTargetSelector(function(p)
         TargetPlayerName = p and p.Name or ""
         notifyUser("Target Selected", "Receiver: " .. TargetPlayerName, 2, "Success")
@@ -433,7 +589,6 @@ local success, errorMessage = pcall(function()
         notifyUser("Queue Ready", "Added " .. count .. " items to queue.", 2.5, "Success")
     end)
 
-    -- Specific Cart Filter
     local ItemDropdown = SecBulk:AddDropdown({Name = "Specific Item", Options = getUniqueDropdownItems(), Default = ""})
     SecBulk:AddButton("➕ Add Selected Item to Queue", function()
         local sel = ItemDropdown:Get()
@@ -469,7 +624,7 @@ local success, errorMessage = pcall(function()
         end
         TabTrade:SetBadge(tostring(#CurrentQueue))
         Window:SetBubbleBadge(tostring(#CurrentQueue))
-        notifyUser("Added Rarities", "Added " .. added .. " items by rarity.", 2.5, "Success")
+        notifyUser("Added Rarities", "Added " .. added .. " items.", 2.5, "Success")
     end)
 
     SecBulk:AddButton("🧹 Clear Dispatch Queue", function()
@@ -866,7 +1021,7 @@ local success, errorMessage = pcall(function()
         notifyUser("Logs Cleared", "Terminal streams cleared.", 2, "Info")
     end)
 
-    notifyUser("MiRaGe HUB v2.1", "Welcome, " .. localPlayer.DisplayName .. "! Mobile-optimized.", 3, "Success")
+    notifyUser("MiRaGe HUB v2.2", "Welcome, " .. localPlayer.DisplayName .. "! All tabs active.", 3, "Success")
 
 end)
 
