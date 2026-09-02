@@ -123,6 +123,7 @@ local success, errorMessage = pcall(function()
 
     local SelectedPlaceItems = {}
     local SelectedPlaceMixQty = 0
+    local TargetBaseLevel = nil
     local StartSlot = 1
     local MaxSlots = 30
     local CurrentPlaceSlot = 1
@@ -494,7 +495,7 @@ local success, errorMessage = pcall(function()
         return rarity
     end
 
-    function addRaritiesToCart(TargetCart, SelectedRarities, QtyLimit, IsMax)
+    function addRaritiesToCart(TargetCart, SelectedRarities, QtyLimit, IsMax, LevelFilter)
         if type(SelectedRarities) ~= "table" then SelectedRarities = {SelectedRarities} end
         local activeRarities = {}
         for _, r in pairs(SelectedRarities) do
@@ -505,12 +506,21 @@ local success, errorMessage = pcall(function()
             if isTradeable(tool) then
                 local rarity = getItemInfo(tool)
                 if activeRarities[rarity] then
-                    matchingItems[getFullItemName(tool)] = true
+                    if not LevelFilter or getToolLevel(tool) == LevelFilter then
+                        matchingItems[getFullItemName(tool)] = true
+                    end
                 end
             end
         end
         for itemName, _ in pairs(matchingItems) do
-            local rs = getRealStock(itemName)
+            local rs = 0
+            for _, tool in ipairs(getAllTools()) do
+                if isTradeable(tool) and getFullItemName(tool) == itemName then
+                    if not LevelFilter or getToolLevel(tool) == LevelFilter then
+                        rs = rs + 1
+                    end
+                end
+            end
             local cur = TargetCart[itemName] or 0
             if IsMax then
                 TargetCart[itemName] = rs
@@ -626,6 +636,20 @@ local success, errorMessage = pcall(function()
         return displayName
     end
 
+    local function getToolLevel(tool)
+        if not tool then return 1 end
+        local lvlValue = tool:GetAttribute("Level") or tool:GetAttribute("level") or tool:GetAttribute("Lvl")
+        if not lvlValue then
+            local lvlObj = tool:FindFirstChild("Level") or tool:FindFirstChild("level") or tool:FindFirstChild("Lvl")
+            if lvlObj and (lvlObj:IsA("IntValue") or lvlObj:IsA("NumberValue") or lvlObj:IsA("StringValue")) then lvlValue = lvlObj.Value end
+        end
+        if lvlValue then return tonumber(lvlValue) or 1 end
+        local fullName = getFullItemName(tool)
+        local m = string.match(fullName, "%(Lv%.(%d+)%)") or string.match(fullName, "Lv%.(%d+)")
+        if m then return tonumber(m) or 1 end
+        return 1
+    end
+
     function getRealStock(targetName)
         local count = 0
         for _, tool in ipairs(getAllTools()) do 
@@ -667,7 +691,7 @@ local success, errorMessage = pcall(function()
         return p1Confirm and p1Confirm.Visible or false
     end
 
-    function addMutationsToCart(TargetCart, SelectedOptions, QtyLimit, IsMax)
+    function addMutationsToCart(TargetCart, SelectedOptions, QtyLimit, IsMax, LevelFilter)
         if type(SelectedOptions) ~= "table" then SelectedOptions = {SelectedOptions} end
         local activeMutations = {}
         for _, opt in pairs(SelectedOptions) do
@@ -678,11 +702,22 @@ local success, errorMessage = pcall(function()
         for _, tool in ipairs(getAllTools()) do
             if isTradeable(tool) then
                 local mut = getToolMutation(tool)
-                if mut and activeMutations[mut] then matchingItems[getFullItemName(tool)] = true end
+                if mut and activeMutations[mut] then
+                    if not LevelFilter or getToolLevel(tool) == LevelFilter then
+                        matchingItems[getFullItemName(tool)] = true
+                    end
+                end
             end
         end
         for itemName, _ in pairs(matchingItems) do
-            local rs = getRealStock(itemName)
+            local rs = 0
+            for _, tool in ipairs(getAllTools()) do
+                if isTradeable(tool) and getFullItemName(tool) == itemName then
+                    if not LevelFilter or getToolLevel(tool) == LevelFilter then
+                        rs = rs + 1
+                    end
+                end
+            end
             local cur = TargetCart[itemName] or 0
             if IsMax then TargetCart[itemName] = rs elseif QtyLimit > 0 then TargetCart[itemName] = (cur + QtyLimit > rs) and rs or (cur + QtyLimit) end
         end
@@ -1573,6 +1608,16 @@ local success, errorMessage = pcall(function()
     local BaseMutationDropdown = SecBase1:AddMultiDropdown({Name = "Select Mutation (Base)", Options = getMutationList(), Default = {}}, function() end)
     local PlaceItemDropdown = SecBase1:AddMultiDropdown({Name = "Select Custom Brainrot", Options = {"[ANY ASSET]"}, Default = {}}, function(Options) SelectedPlaceItems = Options end)
     local qtyInputBase = SecBase1:AddInput({Name = "Amount to place:", Placeholder = "Enter amount..."}, function() end)
+    local lvlInputBase = SecBase1:AddInput({Name = "Filter Level (e.g. 1):", Placeholder = "Default: blank (all). Type 1 for Lv. 1 only..."}, function(Text)
+        local num = tonumber(Text)
+        if num and num > 0 then
+            TargetBaseLevel = num
+            Library:Notify("Level Filter", "Base placement locked to Level " .. num .. " only.", 2)
+        else
+            TargetBaseLevel = nil
+            Library:Notify("Level Filter", "Base placement level filter cleared (All levels).", 2)
+        end
+    end)
     local BaseRarityDropdown = SecBase1:AddMultiDropdown({Name = "Select Rarity (Base)", Options = RarityList, Default = {}}, function() end)
     
     local BaseCartStatus = SecBase1:AddParagraph("🛒 Base Cart", "Empty.")
@@ -1604,18 +1649,27 @@ local success, errorMessage = pcall(function()
                 end 
             end
             local totalCpsStr = tostring(totalCPS)
-            BaseCartStatus:Set("🛒 Base Cart", total == 0 and "Empty." or text .. "\nTotal Items: " .. total .. "  │  Total CPS: " .. totalCpsStr)
+            local lvlNote = TargetBaseLevel and (" [Only Lv. " .. TargetBaseLevel .. "]") or ""
+            BaseCartStatus:Set("🛒 Base Cart" .. lvlNote, total == 0 and "Empty." or text .. "\nTotal Items: " .. total .. "  │  Total CPS: " .. totalCpsStr)
         end)
     end
     
     SecBase1:AddButton("➕ Add Custom by Amount", function() 
         pcall(function()
             local SelectedPlaceMixQty = tonumber(qtyInputBase:Get()) or 0
+            local lvlFilter = TargetBaseLevel
             local lst = type(SelectedPlaceItems) == "table" and SelectedPlaceItems or {SelectedPlaceItems}
             for _, optionStr in pairs(lst) do 
                 local itemName = getBaseName(optionStr); 
                 if itemName ~= "" and itemName ~= "[ANY ASSET]" and SelectedPlaceMixQty > 0 then 
-                    local rs = getRealStock(itemName); 
+                    local rs = 0
+                    for _, t in ipairs(getAllTools()) do
+                        if isTradeable(t) and getFullItemName(t) == itemName then
+                            if not lvlFilter or getToolLevel(t) == lvlFilter then
+                                rs = rs + 1
+                            end
+                        end
+                    end
                     local cur = BaseCart[itemName] or 0; 
                     BaseCart[itemName] = (cur + SelectedPlaceMixQty > rs) and rs or (cur + SelectedPlaceMixQty) 
                 end 
@@ -1625,11 +1679,20 @@ local success, errorMessage = pcall(function()
     end)
     SecBase1:AddButton("➕ Add Custom All Stock (Max)", function() 
         pcall(function()
+            local lvlFilter = TargetBaseLevel
             local lst = type(SelectedPlaceItems) == "table" and SelectedPlaceItems or {SelectedPlaceItems}
             for _, optionStr in pairs(lst) do 
                 local itemName = getBaseName(optionStr); 
                 if itemName ~= "" and itemName ~= "[ANY ASSET]" then 
-                    BaseCart[itemName] = getRealStock(itemName) 
+                    local rs = 0
+                    for _, t in ipairs(getAllTools()) do
+                        if isTradeable(t) and getFullItemName(t) == itemName then
+                            if not lvlFilter or getToolLevel(t) == lvlFilter then
+                                rs = rs + 1
+                            end
+                        end
+                    end
+                    BaseCart[itemName] = rs 
                 end 
             end
             updateBaseCartDisplay() 
@@ -1638,14 +1701,14 @@ local success, errorMessage = pcall(function()
     SecBase1:AddButton("✨ Add Mutation (by Amount)", function() 
         pcall(function()
             local SelectedPlaceMixQty = tonumber(qtyInputBase:Get()) or 0
-            addMutationsToCart(BaseCart, BaseMutationDropdown:Get(), SelectedPlaceMixQty, false)
+            addMutationsToCart(BaseCart, BaseMutationDropdown:Get(), SelectedPlaceMixQty, false, TargetBaseLevel)
             updateBaseCartDisplay()
         end)
     end)
     SecBase1:AddButton("✨ Add Mutation (Max Stock)", function() 
         pcall(function()
             local SelectedPlaceMixQty = tonumber(qtyInputBase:Get()) or 0
-            addMutationsToCart(BaseCart, BaseMutationDropdown:Get(), SelectedPlaceMixQty, true)
+            addMutationsToCart(BaseCart, BaseMutationDropdown:Get(), SelectedPlaceMixQty, true, TargetBaseLevel)
             updateBaseCartDisplay()
         end)
     end)
@@ -1653,14 +1716,14 @@ local success, errorMessage = pcall(function()
         pcall(function()
             local qty = tonumber(qtyInputBase:Get()) or 0
             local selectedRarities = BaseRarityDropdown:Get()
-            addRaritiesToCart(BaseCart, selectedRarities, qty, false)
+            addRaritiesToCart(BaseCart, selectedRarities, qty, false, TargetBaseLevel)
             updateBaseCartDisplay()
         end)
     end)
     SecBase1:AddButton("⭐ Add by Rarity (Max Stock)", function() 
         pcall(function()
             local selectedRarities = BaseRarityDropdown:Get()
-            addRaritiesToCart(BaseCart, selectedRarities, 0, true)
+            addRaritiesToCart(BaseCart, selectedRarities, 0, true, TargetBaseLevel)
             updateBaseCartDisplay()
         end)
     end)
@@ -1670,12 +1733,14 @@ local success, errorMessage = pcall(function()
         local tools = {}
         for _, tool in ipairs(getAllTools()) do
             if isTradeable(tool) then
-                local cps = getToolCPS(tool)
-                table.insert(tools, {
-                    tool = tool,
-                    name = getFullItemName(tool),
-                    cps = cps or 0
-                })
+                if not TargetBaseLevel or getToolLevel(tool) == TargetBaseLevel then
+                    local cps = getToolCPS(tool)
+                    table.insert(tools, {
+                        tool = tool,
+                        name = getFullItemName(tool),
+                        cps = cps or 0
+                    })
+                end
             end
         end
         
@@ -1703,7 +1768,7 @@ local success, errorMessage = pcall(function()
         end
         
         updateBaseCartDisplay()
-        Library:Notify("Base Cart", "Auto-loaded top " .. added .. " highest CPS items.", 3)
+        Library:Notify("Base Cart", "Auto-loaded top " .. added .. " highest CPS items" .. (TargetBaseLevel and (" (Lv. " .. TargetBaseLevel .. ")") or "") .. ".", 3)
     end)
     
     local SecBase2 = TabBase:AddSection("2. Base Coordinate Settings")
@@ -1726,7 +1791,12 @@ local success, errorMessage = pcall(function()
                     for itemName, qtyNeeded in pairs(BaseCart) do
                         if qtyNeeded > 0 and CurrentPlaceSlot <= MaxSlots then
                             local itemToPlace = nil
-                            for _, t in ipairs(getAllTools()) do if getFullItemName(t) == itemName then itemToPlace = t; break end end
+                            for _, t in ipairs(getAllTools()) do 
+                                if getFullItemName(t) == itemName and (not TargetBaseLevel or getToolLevel(t) == TargetBaseLevel) then 
+                                    itemToPlace = t
+                                    break 
+                                end 
+                            end
                             if itemToPlace then
                                 if itemToPlace.Parent ~= character then humanoid:EquipTool(itemToPlace); task.wait(0.15) end
                                 pcall(function() rev_S_Interact:FireServer(CurrentPlaceSlot) end)
