@@ -13,27 +13,29 @@ local success, errorMessage = pcall(function()
     local UserInputService = game:GetService("UserInputService")
 
     -- ══════════════════════════════════════════
-    -- LOAD MiRaGe UI LIBRARY
+    -- LOAD MiRaGe UI LIBRARY (GITHUB / LOCAL)
     -- ══════════════════════════════════════════
+    local MIRAGE_UI_URL = "https://raw.githubusercontent.com/xyaxzj/sigmamaboi.lua/refs/heads/main/mirag3ui.lua"
     local MiRaGe
+
     local loadSuccess = pcall(function()
-        if readfile and isfile and isfile("MiRaGe UI.lua") then
-            MiRaGe = loadstring(readfile("MiRaGe UI.lua"))()
-        else
-            MiRaGe = loadstring(readfile("c:\\UI\\MiRaGe UI.lua"))()
-        end
+        -- Prioritaskan GitHub URL
+        MiRaGe = loadstring(game:HttpGet(MIRAGE_UI_URL))()
     end)
 
     if not MiRaGe or type(MiRaGe) ~= "table" then
-        -- Fallback: load directly from local file path or notify
-        local ok, lib = pcall(function()
-            return loadstring(readfile("MiRaGe UI.lua"))()
+        -- Fallback ke file lokal jika offline atau gagal HttpGet
+        pcall(function()
+            if readfile and isfile and isfile("MiRaGe UI.lua") then
+                MiRaGe = loadstring(readfile("MiRaGe UI.lua"))()
+            elseif readfile then
+                MiRaGe = loadstring(readfile("c:\\UI\\MiRaGe UI.lua"))()
+            end
         end)
-        if ok and lib then MiRaGe = lib end
     end
 
     if not MiRaGe then
-        warn("[MiRaGe HUB] Failed to load MiRaGe UI Library. Please ensure MiRaGe UI.lua exists.")
+        warn("[MiRaGe HUB] Failed to load MiRaGe UI Library from GitHub or local file.")
         return
     end
 
