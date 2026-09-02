@@ -1,8 +1,9 @@
 -- ==========================================================
--- MOCTA ULTIMATE HUB V1.8 (THE COMPLETE ARSENAL)
--- Build: Trade, Sell, Base, Action Center (Unlimited Burst)
+-- MOCTA ULTIMATE HUB V2.5.0 (THE COMPLETE ARSENAL)
+-- Build: Trade, Sell, Base, Action Center, Auto-Upgrade & Swap
 -- ==========================================================
 
+local SCRIPT_VERSION = "v2.5.0"
 local SCRIPT_URL = "https://raw.githubusercontent.com/xyaxzj/sigmamaboi.lua/refs/heads/main/sigmaboitradee.lua"
 
 local success, errorMessage = pcall(function()
@@ -165,20 +166,6 @@ local success, errorMessage = pcall(function()
     local isOpponentConfirmed, isLocalConfirmed, addMutationsToCart
     local isToolFavorite, toggleToolFavorite, setToolFavorite, processFavoriteBatch
     local favoriteCustomItems, favoriteByMutations, favoriteByRarities, favoriteAllInventory, favoriteTopCPS
-
-    -- Rarity yang diklasifikasikan sebagai Exclusive (tidak pakai Lv & CPS, tapi pakai % stat)
-    local EXCLUSIVE_RARITIES = {
-        Exclusive = true,
-        Volcanic = true,
-        Celestial = true,
-        Abyssal = true,
-        Demon = true,
-        Secret = true,
-        Rainbow = true,
-        Eternal = true,
-        Hacked = true,
-        OG = true,
-    }
 
     function getBaseName(dropdownString) 
         return string.split(dropdownString, " | ")[1] or dropdownString 
@@ -547,18 +534,16 @@ local success, errorMessage = pcall(function()
         -- Clean any pre-existing Lv or Mutation tags in tool.Name to avoid duplicates
         displayName = string.gsub(displayName, "%s*%(Lv%.%d+%)", "")
         displayName = string.gsub(displayName, "%s*%[.*%]", "")
+        displayName = string.gsub(displayName, "%s*%(%d+%%%s*stat%)", "")
+        displayName = string.gsub(displayName, "%s*%(%d+%%%)", "")
         
         local mutValue = getToolMutation(tool)
         if mutValue then displayName = displayName .. " [" .. mutValue .. "]" end
 
-        if isExclusiveRarity(tool) then
-            -- Exclusive: tampilkan % stat
-            local pct = getExclusivePercent(tool)
-            if pct then
-                displayName = displayName .. " (" .. pct .. ")"
-            end
+        local pct = getExclusivePercent(tool)
+        if pct then
+            displayName = displayName .. " (" .. pct .. ")"
         else
-            -- Non-Exclusive: ALWAYS tampilkan level
             local lvl = getToolLevel(tool)
             displayName = displayName .. " (Lv." .. tostring(lvl or 1) .. ")"
         end
@@ -1183,9 +1168,9 @@ local success, errorMessage = pcall(function()
     if not Library or type(Library) ~= "table" then return end
 
     Window = Library:CreateWindow({
-        Name = "Mocta Ultimate Hub V1.8",
+        Name = "Mocta Ultimate Hub " .. SCRIPT_VERSION,
         LogoText = "🛒",
-        Footer = "v1.8",
+        Footer = "Mocta Hub " .. SCRIPT_VERSION .. " │ Live Engine",
         ConfigName = "MoctaTrade"
     })
 
@@ -2122,6 +2107,7 @@ local success, errorMessage = pcall(function()
     end)
     
     local SecInv = TabInventory:AddSection("Information")
+    SecInv:AddParagraph("📌 Script Version", "Mocta Ultimate Hub " .. SCRIPT_VERSION .. " (Build 2026.09.02)")
     local FullInventoryLabel = SecInv:AddParagraph("Item List & Total", "Syncing...")
     SecInv:AddButton("🔄 Manual Update Inventory Data", function() updateInventoryDisplay() end)
 
@@ -2487,6 +2473,7 @@ local success, errorMessage = pcall(function()
     -- ==========================================
     local TabSettings = Window:MakeTab("⚙️")
     local SecSet = TabSettings:AddSection("System")
+    SecSet:AddParagraph("📌 Version Information", "Current Version: " .. SCRIPT_VERSION .. "\nStatus: 🟢 Connected to Live Game Engine\nFeatures: Level System, Auto-Upgrade & Auto-Swap")
     HUDToggle = SecSet:AddToggle({Name = "📺 Show Status HUD", Default = true}, function(state)
         TradeHUD:SetVisible(state)
     end)
