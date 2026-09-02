@@ -613,41 +613,78 @@ local success, errorMessage = pcall(function()
         return nil
     end
 
+    local function getToolLevel(tool)
+        if not tool then return 1 end
+        
+        -- 1. Direct Attributes
+        for _, attrName in ipairs({"Level", "level", "Lvl", "lvl", "ItemLevel", "LevelValue", "lv"}) do
+            local v = tool:GetAttribute(attrName)
+            if v and tonumber(v) then return tonumber(v) end
+        end
+        
+        -- 2. Direct Child ValueObjects
+        for _, valName in ipairs({"Level", "level", "Lvl", "lvl", "ItemLevel"}) do
+            local obj = tool:FindFirstChild(valName)
+            if obj and (obj:IsA("ValueBase") or obj:IsA("IntValue") or obj:IsA("NumberValue") or obj:IsA("StringValue")) then
+                if tonumber(obj.Value) then return tonumber(obj.Value) end
+            end
+        end
+
+        -- 3. Inside Sub-folders (Config, Values, Stats, Data, etc.)
+        for _, folderName in ipairs({"Values", "Config", "Configuration", "Stats", "Data", "Attributes", "Info"}) do
+            local folder = tool:FindFirstChild(folderName)
+            if folder then
+                for _, valName in ipairs({"Level", "level", "Lvl", "lvl"}) do
+                    local v = folder:GetAttribute(valName)
+                    if v and tonumber(v) then return tonumber(v) end
+                    local obj = folder:FindFirstChild(valName)
+                    if obj and (obj:IsA("ValueBase") or obj:IsA("IntValue") or obj:IsA("NumberValue")) then
+                        if tonumber(obj.Value) then return tonumber(obj.Value) end
+                    end
+                end
+            end
+        end
+
+        -- 4. Inside BillboardGui / SurfaceGui
+        for _, desc in ipairs(tool:GetDescendants()) do
+            if desc:IsA("TextLabel") and desc.Visible then
+                local txt = desc.Text
+                local m = string.match(txt, "Lv%.%s*(%d+)") or string.match(txt, "Level:%s*(%d+)") or string.match(txt, "Level%s*(%d+)")
+                if m and tonumber(m) then return tonumber(m) end
+            end
+        end
+
+        -- 5. From tool name string matching
+        local m = string.match(tool.Name, "%(Lv%.(%d+)%)") or string.match(tool.Name, "Lv%.(%d+)")
+        if m and tonumber(m) then return tonumber(m) end
+
+        -- Default fallback
+        return 1
+    end
+
     function getFullItemName(tool)
+        if not tool then return "Unknown" end
         local displayName = tool.Name
+        
+        -- Clean any pre-existing Lv or Mutation tags in tool.Name to avoid duplicates
+        displayName = string.gsub(displayName, "%s*%(Lv%.%d+%)", "")
+        displayName = string.gsub(displayName, "%s*%[.*%]", "")
+        
         local mutValue = getToolMutation(tool)
         if mutValue then displayName = displayName .. " [" .. mutValue .. "]" end
 
         if isExclusiveRarity(tool) then
-            -- Exclusive: tampilkan % stat, TIDAK pakai Lv.
+            -- Exclusive: tampilkan % stat
             local pct = getExclusivePercent(tool)
             if pct then
                 displayName = displayName .. " (" .. pct .. ")"
             end
         else
-            -- Non-Exclusive: tampilkan level seperti biasa
-            local lvlValue = tool:GetAttribute("Level") or tool:GetAttribute("level") or tool:GetAttribute("Lvl")
-            if not lvlValue then
-                local lvlObj = tool:FindFirstChild("Level") or tool:FindFirstChild("level") or tool:FindFirstChild("Lvl")
-                if lvlObj and (lvlObj:IsA("IntValue") or lvlObj:IsA("NumberValue") or lvlObj:IsA("StringValue")) then lvlValue = lvlObj.Value end
-            end
-            if lvlValue then displayName = displayName .. " (Lv." .. tostring(lvlValue) .. ")" end
+            -- Non-Exclusive: ALWAYS tampilkan level
+            local lvl = getToolLevel(tool)
+            displayName = displayName .. " (Lv." .. tostring(lvl or 1) .. ")"
         end
         return displayName
-    end
-
-    local function getToolLevel(tool)
-        if not tool then return 1 end
-        local lvlValue = tool:GetAttribute("Level") or tool:GetAttribute("level") or tool:GetAttribute("Lvl")
-        if not lvlValue then
-            local lvlObj = tool:FindFirstChild("Level") or tool:FindFirstChild("level") or tool:FindFirstChild("Lvl")
-            if lvlObj and (lvlObj:IsA("IntValue") or lvlObj:IsA("NumberValue") or lvlObj:IsA("StringValue")) then lvlValue = lvlObj.Value end
-        end
-        if lvlValue then return tonumber(lvlValue) or 1 end
-        local fullName = getFullItemName(tool)
-        local m = string.match(fullName, "%(Lv%.(%d+)%)") or string.match(fullName, "Lv%.(%d+)")
-        if m then return tonumber(m) or 1 end
-        return 1
     end
 
     function getRealStock(targetName)
@@ -2166,6 +2203,16 @@ local success, errorMessage = pcall(function()
         end
     end)
 
+    InvLevelFilterDropdown = SecInvFilter:AddDropdown({
+        Name = "Filter by Level",
+        Options = {"All Levels", "Lv. 1 Only", "Lv. > 1 (Upgraded)", "Max Level Only"},
+        Default = "All Levels"
+    }, function()
+        if refreshInventoryText then
+            refreshInventoryText()
+        end
+    end)
+
     InvRarityDropdown = SecInvFilter:AddMultiDropdown({
         Name = "Filter by Rarity",
         Options = RarityList,
@@ -2188,6 +2235,7 @@ local success, errorMessage = pcall(function()
     
     SecInvFilter:AddButton("🧹 Clear Filters", function()
         pcall(function() InvFavFilterDropdown:Set("All Items") end)
+        pcall(function() InvLevelFilterDropdown:Set("All Levels") end)
         pcall(function() InvRarityDropdown:Set({}) end)
         pcall(function() InvMutationDropdown:Set({}) end)
         if refreshInventoryText then
@@ -2591,6 +2639,11 @@ local success, errorMessage = pcall(function()
         if InvFavFilterDropdown then
             favFilterOpt = InvFavFilterDropdown:Get() or "All Items"
         end
+
+        local lvlFilterOpt = "All Levels"
+        if InvLevelFilterDropdown then
+            lvlFilterOpt = InvLevelFilterDropdown:Get() or "All Levels"
+        end
         
         local hasRarityFilter = false
         for _, r in pairs(selectedRarities) do
@@ -2610,7 +2663,8 @@ local success, errorMessage = pcall(function()
         end
         
         local hasFavFilter = (favFilterOpt ~= "All Items")
-        local isFiltered = hasRarityFilter or hasMutationFilter or hasFavFilter
+        local hasLvlFilter = (lvlFilterOpt ~= "All Levels")
+        local isFiltered = hasRarityFilter or hasMutationFilter or hasFavFilter or hasLvlFilter
         
         local categorizedItems = {}
         local categoryTotals = {}
@@ -2629,13 +2683,16 @@ local success, errorMessage = pcall(function()
         local itemFilterPassed = {}
         local itemCPSMap = {}
         local itemFavMap = {}
+        local itemLevelMap = {}
         local totalFavCount = 0
         
-        -- Run the single-pass tool loop first to sum and cache CPS and favorite state for all tools
+        -- Run the single-pass tool loop first to sum and cache CPS, Level, and favorite state for all tools
         for _, tool in ipairs(getAllTools()) do
             if isTradeable(tool) then
                 local fullName = getFullItemName(tool)
                 local toolCPS = getToolCPS(tool)
+                local toolLvl = getToolLevel(tool)
+                itemLevelMap[fullName] = toolLvl
                 if toolCPS then
                     totalCPSVal = totalCPSVal + toolCPS
                     itemCPSMap[fullName] = toolCPS
@@ -2651,10 +2708,12 @@ local success, errorMessage = pcall(function()
         for itemName, amount in pairs(CachedInventoryData) do
             local itemRarity = "Unknown"
             local itemMutation = nil
+            local itemLvl = itemLevelMap[itemName] or 1
             for _, tool in ipairs(getAllTools()) do
                 if isTradeable(tool) and getFullItemName(tool) == itemName then
                     itemRarity = getItemInfo(tool)
                     itemMutation = getToolMutation(tool)
+                    itemLvl = getToolLevel(tool)
                     break
                 end
             end
@@ -2695,8 +2754,18 @@ local success, errorMessage = pcall(function()
             elseif favFilterOpt == "⚪ Only Non-Favorites" then
                 favPass = not isFav
             end
+
+            -- Level filter match check
+            local lvlPass = true
+            if lvlFilterOpt == "Lv. 1 Only" then
+                lvlPass = (itemLvl == 1)
+            elseif lvlFilterOpt == "Lv. > 1 (Upgraded)" then
+                lvlPass = (itemLvl > 1)
+            elseif lvlFilterOpt == "Max Level Only" then
+                lvlPass = (itemLvl >= 100 or string.find(string.lower(itemName), "max"))
+            end
             
-            if rarityPass and mutationPass and favPass then
+            if rarityPass and mutationPass and favPass and lvlPass then
                 itemFilterPassed[itemName] = true
                 local category = "🏆 " .. string.upper(itemRarity) .. (itemMutation and (" " .. string.upper(itemMutation)) or "") .. " ITEMS"
                 if not categorizedItems[category] then
