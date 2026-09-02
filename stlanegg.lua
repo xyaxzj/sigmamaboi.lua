@@ -1,17 +1,17 @@
 -- ==============================================================================
--- 🌦️ KALB WEATHER RADAR & EVENT PREDICTOR PRO (COMPACT & ACCURATE V2)
+-- 🌦️ KALB WEATHER RADAR & EVENT PREDICTOR PRO (COMPACT & FLAWLESS V3)
 -- ==============================================================================
 -- 📋 Evaluasi & Perbaikan Logika:
--- 1. ⏱️ Akurasi Status Waktu (Live vs Upcoming):
---    - Nilai timestamp di tabel 'Events' adalah WAKTU SELESAI (End Time).
---    - Jika waktu sekarang < EndTime -> Status: 🔥 SEDANG AKTIF (LIVE) dengan hitung mundur sisa waktu!
---    - Event berikutnya yang memiliki EndTime lebih besar -> Status: 🔮 JADWAL SELANJUTNYA (UPCOMING)!
--- 2. 🧠 Deep Upvalue & Modules Inspector:
---    - Membaca Upvalue 1 (Events & Timestamp) dan Upvalue 2 (Modules & Active flag)
--- 3. 📱 UI Compact & Anti-Penuh Layar:
---    - Ukuran ramping (280x290px), tidak menutupi layar gameplay HP/PC
---    - Fitur Minimize / Floating Pill: Bisa dikecilkan jadi tombol mengambang kecil!
---    - Touch & Mouse Draggable lancar.
+-- 1. 🧹 Fix Bug Text Duplikasi:
+--    - Membersihkan seluruh anak ScrollContainer sebelum render ulang (tidak akan numpuk ke bawah lagi).
+-- 2. 🔮 Tab Jadwal (Next) Informatif & Lengkap:
+--    - Menampilkan Hitung Mundur Pasti Waktu Roll Cuaca Berikutnya (Waktu & Jam WIB).
+--    - Menampilkan Pool Rotasi Event (Back to School & Special Weather) yang berpotensi muncul.
+--    - Jika server mengirimkan antrean event berjadwal, nama event akan otomatis tampil di atas.
+-- 3. ⚡ Tab Live (Aktif):
+--    - Menampilkan event yang sedang berlangsung detik ini beserta sisa waktu dan deskripsi.
+-- 4. 📱 UI Compact & Floating Pill:
+--    - Ramping (280x290px), tidak menutupi layar, tombol minimize jadi pil mengambang.
 -- ==============================================================================
 
 if not game:IsLoaded() then game.Loaded:Wait() end
@@ -33,120 +33,136 @@ if not lp then
 end
 
 -- ==============================================================================
--- 📚 DATABASE METADATA EVENT CUACA
+-- 📚 DATABASE METADATA EVENT CUACA & ROTATION POOL
 -- ==============================================================================
 local WEATHER_METADATA = {
     MathEvent = {
         Title = "Math Event",
+        Category = "🎓 Back To School",
         Color = Color3.fromRGB(80, 220, 120),
         Tag = "📚 Math",
         Image = "rbxassetid://107322383678822",
-        Desc = "Soal matematika di arena!"
+        Desc = "Soal matematika berhadiah brainrot!"
     },
     PEClass = {
         Title = "P.E. Class",
+        Category = "🎓 Back To School",
         Color = Color3.fromRGB(255, 120, 60),
         Tag = "🏃 Dodgeball",
         Image = "rbxassetid://122131198867323",
-        Desc = "Hindari bola dodgeball!"
+        Desc = "Dodgeball rintangan & bertahan di arena!"
     },
     LiftMachine = {
         Title = "Lift Machine",
+        Category = "🎓 Back To School",
         Color = Color3.fromRGB(255, 200, 50),
         Tag = "🏋️ Workout",
         Image = "rbxassetid://122131198867323",
-        Desc = "Angkat beban untuk boost kick!"
+        Desc = "Angkat beban untuk boost kick power!"
     },
-    MutationPortal = {
-        Title = "Mutation Portal",
-        Color = Color3.fromRGB(198, 55, 255),
-        Tag = "🌀 Mutation",
-        Image = "rbxassetid://124425758292547",
-        Desc = "Reroll mutasi brainrot!"
-    },
-    Phantom = {
-        Title = "Phantom Event",
-        Color = Color3.fromRGB(199, 196, 187),
-        Tag = "👻 3% Chance",
-        Image = "rbxassetid://101689222190339",
-        Desc = "Phantom lucky block!"
-    },
-    MultiplierReactor = {
-        Title = "Multiplier Reactor",
-        Color = Color3.fromRGB(198, 55, 255),
-        Tag = "⚡ Multiplier",
-        Image = "rbxassetid://118706576986202",
-        Desc = "Reaktor pengali lucky block!"
-    },
-    Pinata = {
-        Title = "Giant Piñata",
-        Color = Color3.fromRGB(255, 80, 180),
-        Tag = "🪅 Piñata",
-        Image = "rbxassetid://79129712986846",
-        Desc = "Pecahkan piñata raksasa!"
-    },
-    Gym = {
-        Title = "Gym Workout",
-        Color = Color3.fromRGB(255, 60, 60),
-        Tag = "💪 Gym",
-        Image = "rbxassetid://122131198867323",
-        Desc = "Multiplier circle di map!"
-    },
-    Bacon = {
-        Title = "Bacon Event",
-        Color = Color3.fromRGB(219, 133, 20),
-        Tag = "🥓 5% Chance",
-        Image = "rbxassetid://108280271882625",
-        Desc = "Bacon lucky block!"
-    },
-    Wet = {
-        Title = "Wet Event",
-        Color = Color3.fromRGB(30, 144, 255),
-        Tag = "💧 10% Chance",
-        Image = "rbxassetid://115218894315544",
-        Desc = "Wet lucky block!"
-    },
-    Disco = {
-        Title = "Disco Party",
-        Color = Color3.fromRGB(255, 50, 200),
-        Tag = "🪩 Disco",
-        Image = "rbxassetid://120074370025048",
-        Desc = "Pesta disco & musik phonk!"
+    LuckCircles = {
+        Title = "Luck Circles",
+        Category = "🍀 Server Boost",
+        Color = Color3.fromRGB(100, 235, 120),
+        Tag = "🟢 Server Luck",
+        Image = "rbxassetid://107322383678822",
+        Desc = "Lingkaran keberuntungan pelipatganda drop!"
     },
     LuckMachine = {
         Title = "Luck Machine",
+        Category = "🍀 Server Boost",
         Color = Color3.fromRGB(198, 55, 255),
-        Tag = "🍀 Luck",
+        Tag = "🍀 Luck Machine",
         Image = "rbxassetid://107322383678822",
-        Desc = "Squat untuk boost server luck!"
+        Desc = "Squat untuk melipatgandakan server luck!"
+    },
+    MutationPortal = {
+        Title = "Mutation Portal",
+        Category = "🌟 Special Event",
+        Color = Color3.fromRGB(198, 55, 255),
+        Tag = "🌀 Mutation",
+        Image = "rbxassetid://124425758292547",
+        Desc = "Reroll mutasi brainrot saat melewati portal!"
+    },
+    MultiplierReactor = {
+        Title = "Multiplier Reactor",
+        Category = "🌟 Special Event",
+        Color = Color3.fromRGB(198, 55, 255),
+        Tag = "⚡ Multiplier",
+        Image = "rbxassetid://118706576986202",
+        Desc = "Tendang block melewati reaktor pengali!"
+    },
+    Pinata = {
+        Title = "Giant Piñata",
+        Category = "🌟 Special Event",
+        Color = Color3.fromRGB(255, 80, 180),
+        Tag = "🪅 Piñata",
+        Image = "rbxassetid://79129712986846",
+        Desc = "Pecahkan piñata raksasa bersama pemain!"
+    },
+    Disco = {
+        Title = "Disco Party",
+        Category = "🌟 Special Event",
+        Color = Color3.fromRGB(255, 50, 200),
+        Tag = "🪩 Disco Party",
+        Image = "rbxassetid://120074370025048",
+        Desc = "Musik Phonk & pesta disco di server!"
     },
     LightningEvent = {
         Title = "Lightning Strike",
+        Category = "⚡ Speed Event",
         Color = Color3.fromRGB(255, 240, 60),
         Tag = "⚡ 2x Speed",
         Image = "rbxassetid://107052076487974",
-        Desc = "2x Kick & Run Speed!"
+        Desc = "2x Kick Speed & Run Speed diaktifkan!"
+    },
+    Phantom = {
+        Title = "Phantom Event",
+        Category = "📦 Lucky Block",
+        Color = Color3.fromRGB(199, 196, 187),
+        Tag = "👻 3% Chance",
+        Image = "rbxassetid://101689222190339",
+        Desc = "3% chance lucky block berubah jadi Phantom!"
+    },
+    Bacon = {
+        Title = "Bacon Event",
+        Category = "📦 Lucky Block",
+        Color = Color3.fromRGB(219, 133, 20),
+        Tag = "🥓 5% Chance",
+        Image = "rbxassetid://108280271882625",
+        Desc = "5% chance lucky block berubah jadi Bacon!"
+    },
+    Wet = {
+        Title = "Wet Event",
+        Category = "📦 Lucky Block",
+        Color = Color3.fromRGB(30, 144, 255),
+        Tag = "💧 10% Chance",
+        Image = "rbxassetid://115218894315544",
+        Desc = "10% chance lucky block berubah jadi Wet!"
     },
     Alien = {
         Title = "Alien Event",
+        Category = "📦 Lucky Block",
         Color = Color3.fromRGB(175, 16, 255),
         Tag = "👽 5% Chance",
         Image = "rbxassetid://130233388559569",
-        Desc = "Alien lucky block!"
+        Desc = "5% chance lucky block berubah jadi Alien!"
+    },
+    Gym = {
+        Title = "Gym Workout",
+        Category = "💪 Admin Abuse",
+        Color = Color3.fromRGB(255, 60, 60),
+        Tag = "💪 Gym",
+        Image = "rbxassetid://122131198867323",
+        Desc = "Multiplier circle latihan menyebar di arena!"
     },
     Concert = {
         Title = "Concert Event",
+        Category = "🎤 Live Event",
         Color = Color3.fromRGB(255, 100, 255),
         Tag = "🎤 Concert",
         Image = "rbxassetid://120074370025048",
-        Desc = "Konser musik spektakuler!"
-    },
-    ["Block Cup Party"] = {
-        Title = "Block Cup Party",
-        Color = Color3.fromRGB(255, 180, 0),
-        Tag = "🏆 Block Cup",
-        Image = "rbxassetid://118706576986202",
-        Desc = "Pesta kejuaraan Block Cup!"
+        Desc = "Konser musik spektakuler di panggung utama!"
     }
 }
 
@@ -161,6 +177,7 @@ local function getMetadata(name)
     end
     return {
         Title = tostring(name),
+        Category = "🌦️ Weather",
         Color = Color3.fromRGB(140, 160, 255),
         Tag = "🌦️ Event",
         Image = "rbxassetid://107322383678822",
@@ -305,16 +322,12 @@ local function inspectClientWeatherData()
     for idx, item in ipairs(sortedEvents) do
         local diff = item.EndTime - now
         if diff > 0 then
-            -- Event sedang aktif (belum mencapai EndTime)
             table.insert(liveList, {
                 Name = item.Name,
                 EndTime = item.EndTime,
                 Remaining = diff,
                 IsModuleActive = (activeModules[item.Name] == true)
             })
-        else
-            -- Jika ada event yang baru selesai tapi terdaftar berikutnya
-            -- (Bisa dimasukkan ke riwayat jika diperlukan)
         end
     end
 
@@ -334,7 +347,7 @@ local function inspectClientWeatherData()
         end
     end
 
-    -- Event dengan EndTime di masa depan setelah Live Event adalah Upcoming Event
+    -- Jika server memiliki lebih dari 1 event dalam antrean Events
     if #sortedEvents >= 2 then
         for i = 2, #sortedEvents do
             local prevEnd = sortedEvents[i-1].EndTime
@@ -545,7 +558,7 @@ UICorner_TabBar.CornerRadius = UDim.new(0, 6)
 UICorner_TabBar.Parent = TabBar
 
 local tabButtons = {}
-local activeTab = "Live" -- Default buka tab Live agar langsung kelihatan statusnya!
+local activeTab = "Live"
 
 local function createTabBtn(name, text, index)
     local btn = Instance.new("TextButton")
@@ -695,10 +708,72 @@ local function renderCompactCard(title, tagText, tagColor, statusText, statusCol
     return card
 end
 
--- Refresh Tampilan Tab
+-- Banner Card untuk Info Next Roll
+local function renderBannerCard(titleText, subText, order)
+    local banner = Instance.new("Frame")
+    banner.Name = "EventCard"
+    banner.Size = UDim2.new(1, 0, 0, 56)
+    banner.BackgroundColor3 = Color3.fromRGB(28, 36, 62)
+    banner.BorderSizePixel = 0
+    banner.LayoutOrder = order or 1
+    banner.Parent = ScrollContainer
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = banner
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(80, 130, 240)
+    stroke.Thickness = 1
+    stroke.Parent = banner
+
+    local tLbl = Instance.new("TextLabel")
+    tLbl.Size = UDim2.new(1, -16, 0, 18)
+    tLbl.Position = UDim2.new(0, 8, 0, 8)
+    tLbl.BackgroundTransparency = 1
+    tLbl.Text = titleText
+    tLbl.TextColor3 = Color3.fromRGB(100, 220, 255)
+    tLbl.Font = Enum.Font.GothamBold
+    tLbl.TextSize = 11
+    tLbl.TextXAlignment = Enum.TextXAlignment.Left
+    tLbl.Parent = banner
+
+    local sLbl = Instance.new("TextLabel")
+    sLbl.Size = UDim2.new(1, -16, 0, 22)
+    sLbl.Position = UDim2.new(0, 8, 0, 28)
+    sLbl.BackgroundTransparency = 1
+    sLbl.Text = subText
+    sLbl.TextColor3 = Color3.fromRGB(180, 200, 240)
+    sLbl.Font = Enum.Font.GothamMedium
+    sLbl.TextSize = 9.5
+    sLbl.TextXAlignment = Enum.TextXAlignment.Left
+    sLbl.TextWrapped = true
+    sLbl.Parent = banner
+
+    return banner
+end
+
+-- Header Section Card
+local function renderHeaderSection(headerText, order)
+    local hdr = Instance.new("TextLabel")
+    hdr.Name = "EventCard"
+    hdr.Size = UDim2.new(1, 0, 0, 20)
+    hdr.BackgroundTransparency = 1
+    hdr.Text = headerText
+    hdr.TextColor3 = Color3.fromRGB(130, 160, 230)
+    hdr.Font = Enum.Font.GothamBold
+    hdr.TextSize = 10
+    hdr.TextXAlignment = Enum.TextXAlignment.Left
+    hdr.LayoutOrder = order or 1
+    hdr.Parent = ScrollContainer
+    return hdr
+end
+
+-- Refresh Tampilan Tab (Pembersihan Bersih 100%)
 local function refreshView()
+    -- 1. Bersihkan seluruh elemen lama agar TIDAK ADA duplikasi
     for _, child in ipairs(ScrollContainer:GetChildren()) do
-        if child:IsA("Frame") and child.Name == "EventCard" then
+        if not child:IsA("UIListLayout") then
             child:Destroy()
         end
     end
@@ -717,10 +792,11 @@ local function refreshView()
         FloatingPill.TextColor3 = Color3.fromRGB(130, 180, 255)
     end
 
+    -- TAB 1: LIVE (AKTIF)
     if activeTab == "Live" then
         if #liveList == 0 then
             local empty = Instance.new("TextLabel")
-            empty.Name = "EventCard"
+            empty.Name = "EmptyLabel"
             empty.Size = UDim2.new(1, 0, 0, 70)
             empty.BackgroundTransparency = 1
             empty.Text = "☁️ Tidak ada event cuaca yang aktif.\n(Menunggu event berikutnya)"
@@ -734,7 +810,7 @@ local function refreshView()
                 local statusStr = string.format("🔴 AKTIF! Sisa Waktu: %s", formatTime(item.Remaining))
                 renderCompactCard(
                     meta.Title,
-                    "🔥 LIVE",
+                    meta.Tag,
                     Color3.fromRGB(255, 80, 80),
                     statusStr,
                     Color3.fromRGB(255, 120, 120),
@@ -744,35 +820,18 @@ local function refreshView()
             end
         end
 
+    -- TAB 2: JADWAL (NEXT) & POOL ROTASI
     elseif activeTab == "Upcoming" then
-        if #upcomingList == 0 then
-            -- Jika tidak ada upcoming bertingkat, tampilkan estimasi setelah Live Event selesai
-            if #liveList > 0 then
-                local first = liveList[1]
-                local empty = Instance.new("TextLabel")
-                empty.Name = "EventCard"
-                empty.Size = UDim2.new(1, 0, 0, 70)
-                empty.BackgroundTransparency = 1
-                empty.Text = string.format("⏳ Event berikutnya akan dimulai setelah\n'%s' selesai (%s lagi)", first.Name, formatTime(first.Remaining))
-                empty.TextColor3 = Color3.fromRGB(100, 210, 255)
-                empty.Font = Enum.Font.GothamMedium
-                empty.TextSize = 10.5
-                empty.Parent = ScrollContainer
-            else
-                local empty = Instance.new("TextLabel")
-                empty.Name = "EventCard"
-                empty.Size = UDim2.new(1, 0, 0, 70)
-                empty.BackgroundTransparency = 1
-                empty.Text = "🔍 Memindai jadwal berikutnya...\n(Menunggu data event dari server)"
-                empty.TextColor3 = Color3.fromRGB(130, 150, 190)
-                empty.Font = Enum.Font.GothamMedium
-                empty.TextSize = 11
-                empty.Parent = ScrollContainer
-            end
-        else
-            for idx, item in ipairs(upcomingList) do
+        local orderIndex = 1
+
+        -- 1. Jika ada Antrean Terjadwal dari Server
+        if #upcomingList > 0 then
+            renderHeaderSection("📅 EVENT BERIKUTNYA TERJADWAL:", orderIndex)
+            orderIndex = orderIndex + 1
+
+            for _, item in ipairs(upcomingList) do
                 local meta = getMetadata(item.Name)
-                local statusStr = string.format("⏳ Mulai dalam: %s (%s WIB)", formatTime(item.StartsIn), os.date("%H:%M:%S", item.StartTime))
+                local statusStr = string.format("⏳ Mulai dlm: %s (%s WIB)", formatTime(item.StartsIn), os.date("%H:%M:%S", item.StartTime))
                 renderCompactCard(
                     meta.Title,
                     meta.Tag,
@@ -780,15 +839,54 @@ local function refreshView()
                     statusStr,
                     Color3.fromRGB(100, 220, 255),
                     meta.Image,
-                    idx
+                    orderIndex
                 )
+                orderIndex = orderIndex + 1
+            end
+        else
+            -- 2. Banner Hitung Mundur Roll Cuaca Berikutnya
+            if #liveList > 0 then
+                local first = liveList[1]
+                local bannerTitle = string.format("🎲 ROLL CUACA BERIKUTNYA: %s", formatTime(first.Remaining))
+                local bannerSub = string.format("Event baru di-roll server pukul %s WIB (setelah '%s' selesai).", os.date("%H:%M:%S", first.EndTime), first.Name)
+                renderBannerCard(bannerTitle, bannerSub, orderIndex)
+                orderIndex = orderIndex + 1
+            else
+                renderBannerCard("🎲 ROLL CUACA: STANDBY", "Server sedang menyiapkan event cuaca baru...", orderIndex)
+                orderIndex = orderIndex + 1
             end
         end
 
+        -- 3. Daftar Pool Rotasi Event yang Berpotensi Muncul
+        renderHeaderSection("🌟 POOL ROTASI EVENT CUACA:", orderIndex)
+        orderIndex = orderIndex + 1
+
+        local poolList = {
+            "MathEvent", "PEClass", "LiftMachine",
+            "MutationPortal", "LuckMachine", "MultiplierReactor",
+            "Pinata", "Disco", "LightningEvent", "Phantom", "Bacon", "Wet", "Alien"
+        }
+
+        for _, pName in ipairs(poolList) do
+            local meta = getMetadata(pName)
+            local statusStr = string.format("🎲 %s • %s", meta.Category, meta.Desc)
+            renderCompactCard(
+                meta.Title,
+                meta.Tag,
+                meta.Color,
+                statusStr,
+                Color3.fromRGB(160, 180, 220),
+                meta.Image,
+                orderIndex
+            )
+            orderIndex = orderIndex + 1
+        end
+
+    -- TAB 3: RIWAYAT
     elseif activeTab == "History" then
         if #weatherHistoryLog == 0 then
             local empty = Instance.new("TextLabel")
-            empty.Name = "EventCard"
+            empty.Name = "EmptyLabel"
             empty.Size = UDim2.new(1, 0, 0, 70)
             empty.BackgroundTransparency = 1
             empty.Text = "📜 Belum ada riwayat cuaca di sesi ini."
@@ -852,4 +950,4 @@ task.spawn(function()
 end)
 
 print("--------------------------------------------------")
-print("✅ [KALB] Weather Radar Pro V2 (Compact & Accurate) Siap Digunakan!")
+print("✅ [KALB] Weather Radar Pro V3 (Flawless & Clean) Siap Digunakan!")
