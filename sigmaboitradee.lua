@@ -40,11 +40,15 @@ local success, errorMessage = pcall(function()
 
     local ref_B_Sell = nil
     local rev_S_Interact = nil
+    local ref_B_Upgrade = nil
+    local rev_B_Upgrade = nil
     
     for _, v in pairs(ReplicatedStorage:GetDescendants()) do
         if v.Name == "ref_B_Sell" and v:IsA("RemoteFunction") then ref_B_Sell = v end
         if v.Name == "rev_S_Interact" and v:IsA("RemoteEvent") then rev_S_Interact = v end
         if not rev_ToggleFav and v.Name == "rev_ToggleFav" and v:IsA("RemoteEvent") then rev_ToggleFav = v end
+        if (v.Name == "ref_B_Upgrade" or v.Name == "B_Upgrade") and v:IsA("RemoteFunction") then ref_B_Upgrade = v end
+        if (v.Name == "rev_B_Upgrade" or v.Name == "B_Upgrade") and v:IsA("RemoteEvent") then rev_B_Upgrade = v end
     end
 
     -- ==========================================
@@ -122,6 +126,8 @@ local success, errorMessage = pcall(function()
     local StartSlot = 1
     local MaxSlots = 30
     local CurrentPlaceSlot = 1
+    local AutoUpgradeEnabled = false
+    local UpgradeDelay = 0.1
 
     -- Variabel Favorite Manager
     local SelectedFavItems = {}
@@ -953,6 +959,59 @@ local success, errorMessage = pcall(function()
         return processFavoriteBatch(toolsToProcess, desiredState, "Top " .. limit .. " CPS")
     end
 
+    local function upgradeBrainrotSlot(slot)
+        local ok = false
+        pcall(function()
+            local shared = ReplicatedStorage:FindFirstChild("Shared")
+            local packages = shared and shared:FindFirstChild("Packages")
+            local net = packages and packages:FindFirstChild("Network")
+            if net then
+                if net:IsA("ModuleScript") then
+                    local netMod = require(net)
+                    if netMod and netMod.FireServer then
+                        netMod:FireServer("B_Upgrade", slot)
+                        ok = true
+                    end
+                elseif net:FindFirstChild("rev_B_Upgrade") then
+                    net.rev_B_Upgrade:FireServer(slot)
+                    ok = true
+                elseif net:FindFirstChild("ref_B_Upgrade") then
+                    net.ref_B_Upgrade:InvokeServer(slot)
+                    ok = true
+                elseif net:FindFirstChild("B_Upgrade") then
+                    local b = net.B_Upgrade
+                    if b:IsA("RemoteEvent") then b:FireServer(slot)
+                    elseif b:IsA("RemoteFunction") then b:InvokeServer(slot) end
+                    ok = true
+                end
+            end
+        end)
+        if ok then return true end
+
+        if rev_B_Upgrade then
+            pcall(function() rev_B_Upgrade:FireServer(slot) end)
+            return true
+        elseif ref_B_Upgrade then
+            pcall(function() ref_B_Upgrade:InvokeServer(slot) end)
+            return true
+        end
+
+        pcall(function()
+            for _, v in pairs(ReplicatedStorage:GetDescendants()) do
+                if (v.Name == "B_Upgrade" or v.Name == "rev_B_Upgrade") and v:IsA("RemoteEvent") then
+                    rev_B_Upgrade = v
+                    v:FireServer(slot)
+                    return true
+                elseif (v.Name == "B_Upgrade" or v.Name == "ref_B_Upgrade") and v:IsA("RemoteFunction") then
+                    ref_B_Upgrade = v
+                    v:InvokeServer(slot)
+                    return true
+                end
+            end
+        end)
+        return false
+    end
+
     local updateInventoryDisplay
     local updateStatsDisplay 
 
@@ -1548,6 +1607,49 @@ local success, errorMessage = pcall(function()
                 if humanoid then humanoid:UnequipTools() end; task.wait(0.2)
                 for i = StartSlot, MaxSlots do if not PickupToggle:Get() then break end; pcall(function() rev_S_Interact:FireServer(i) end); task.wait(0.15) end
                 Library:Notify("Done", "Clean sweep Pickup complete!", 3); PickupToggle:Set(false)
+            end)
+        end
+    end)
+
+    local SecBase4 = TabBase:AddSection("4. Base Auto-Upgrade")
+    local upgradeDelayInput = SecBase4:AddInput({Name = "Upgrade Delay (Seconds):", Placeholder = "Default: 0.1"}, function(Text)
+        local num = tonumber(Text)
+        if num and num >= 0.01 then UpgradeDelay = num end
+    end)
+
+    SecBase4:AddButton("⚡ Upgrade All Placed Once", function()
+        task.spawn(function()
+            local minS = StartSlot or 1
+            local maxS = MaxSlots or 30
+            Library:Notify("Upgrading", "Upgrading placed brainrots (Slots " .. minS .. "-" .. maxS .. ")...", 2)
+            local upgraded = 0
+            for s = minS, maxS do
+                local ok = upgradeBrainrotSlot(s)
+                if ok then upgraded = upgraded + 1 end
+                task.wait(UpgradeDelay or 0.1)
+            end
+            Library:Notify("Done", "Upgrade pass complete! Fired on " .. upgraded .. " slots.", 3)
+            if ConsoleStats then
+                ConsoleStats:Log("⚡ Upgrade Pass: Fired B_Upgrade on slots " .. minS .. "-" .. maxS, "success")
+            end
+        end)
+    end)
+
+    local AutoUpgradeToggle
+    AutoUpgradeToggle = SecBase4:AddToggle({Name = "⚡ Start Auto-Upgrade Loop", Default = false}, function(Value)
+        AutoUpgradeEnabled = Value
+        if AutoUpgradeEnabled then
+            task.spawn(function()
+                while AutoUpgradeEnabled do
+                    local minS = StartSlot or 1
+                    local maxS = MaxSlots or 30
+                    for s = minS, maxS do
+                        if not AutoUpgradeEnabled then break end
+                        upgradeBrainrotSlot(s)
+                        task.wait(UpgradeDelay or 0.1)
+                    end
+                    task.wait(0.5)
+                end
             end)
         end
     end)
