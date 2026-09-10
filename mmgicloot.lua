@@ -29,7 +29,7 @@ if not game:IsLoaded() then game.Loaded:Wait() end
 _G.antiLag = true            -- true: Aktifkan Anti-Lag / FPS Boost Ekstrem (Potato Mode)
 _G.autoMathEvent = true      -- true: Otomatis selesaikan soal math & perbesar jawaban benar
 _G.autoPEClass = true        -- true: Otomatis hapus Model angka PEClass & Ball
-_G.autoSellAll = true        -- true: Otomatis jual semua brainrot berkala
+_G.autoSellAll = false        -- true: Otomatis jual semua brainrot berkala
 _G.sellInterval = 5          -- Interval waktu (detik) Auto Sell All
 _G.debugConsoleLog = false    -- true: Tampilkan log di Developer Console (F9)
 
