@@ -193,7 +193,7 @@ local success, errorMessage = pcall(function()
     local AutoB2SActive1 = false
     local AutoB2SActive2 = false
     local AutoB2SActive3 = false
-    local B2SDelay = 1.0
+    local B2SDelay = 5.0
     local B2SCount1 = 0
     local B2SCount2 = 0
     local B2SCount3 = 0
@@ -930,7 +930,7 @@ local success, errorMessage = pcall(function()
     -- SECTION: B2S AUTO CRAFT (3 RECIPES)
     -- ══════════════════════════════════════════
     local SecB2S = TabEvent:AddSection("Back to School Auto Craft")
-    local RawB2SStatusLabel = SecB2S:AddParagraph("B2S Craft Status", "⚡ Status: ALL IDLE\n🔨 Craft #1: 0  │  Craft #2: 0  │  Craft #3: 0\n⏱️ Interval: 1.0s\n📡 Target: rev_b2s_Craft")
+    local RawB2SStatusLabel = SecB2S:AddParagraph("B2S Craft Status", "⚡ Status: ALL IDLE\n🔨 Craft #1: 0  │  Craft #2: 0  │  Craft #3: 0\n⏱️ Interval: 5.0s\n📡 Target: rev_b2s_Craft")
     B2SStatusLabel = applyDynamicParagraph(RawB2SStatusLabel, "B2S Craft Status")
 
     local function updateB2SStatusText()
@@ -1003,11 +1003,11 @@ local success, errorMessage = pcall(function()
     SecB2S:AddSlider({
         Name = "Craft Interval (Seconds)",
         Min = 0.5,
-        Max = 10,
-        Default = 1,
+        Max = 20,
+        Default = 5,
         Step = 0.5
     }, function(val)
-        B2SDelay = tonumber(val) or 1
+        B2SDelay = tonumber(val) or 5
         updateB2SStatusText()
     end)
 
