@@ -1,1 +1,919 @@
-loadstring(game:HttpGet("https://raw.githubusercontent.com/xyaxzj/sigmamaboi.lua/refs/heads/main/sigmaboitradee.lua"))()
+-- ==========================================================
+--        MOCTA ULTIMATE INVENTORY VIEWER V1.0 (STANDALONE)
+--   Dedicated Single-Tab Inventory Scanner, Sorter & Analyzer
+--   Source Logic: Adopted 1:1 from Mocta Hub Auto Trade V2.5
+-- ==========================================================
+
+local SCRIPT_VERSION = "v1.0"
+
+if not game:IsLoaded() then game.Loaded:Wait() end
+
+local success, errorMessage = pcall(function()
+
+    local StarterGui = game:GetService("StarterGui")
+    local Players = game:GetService("Players")
+    local localPlayer = Players.LocalPlayer
+    local RunService = game:GetService("RunService")
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local HttpService = game:GetService("HttpService")
+
+    while not localPlayer do
+        task.wait(0.1)
+        localPlayer = Players.LocalPlayer
+    end
+
+    -- ══════════════════════════════════════════
+    -- LOAD UI LIBRARY (SIGMA V4 / NcHO)
+    -- ══════════════════════════════════════════
+    local Library = nil
+    local pcallLoad = pcall(function()
+        if readfile and isfile and isfile("UI sigma.lua") then
+            Library = loadstring(readfile("UI sigma.lua"))()
+        elseif readfile and isfile and isfile("c:\\UI\\UI sigma.lua") then
+            Library = loadstring(readfile("c:\\UI\\UI sigma.lua"))()
+        else
+            Library = loadstring(game:HttpGet('https://github.com/xyaxzj/sigmamaboi.lua/raw/main/NcHO.lua'))()
+        end
+    end)
+
+    if not Library or type(Library) ~= "table" then
+        -- Fallback URL
+        pcall(function()
+            Library = loadstring(game:HttpGet('https://raw.githubusercontent.com/xyaxzj/sigmamaboi.lua/refs/heads/main/NcHO.lua'))()
+        end)
+    end
+
+    if not Library or type(Library) ~= "table" then
+        warn("[Inventory Viewer] Failed to load UI Library!")
+        return
+    end
+
+    local function notifyUser(title, content, duration, nType)
+        pcall(function()
+            if Library and Library.Notify then
+                Library:Notify({
+                    Title = title,
+                    Content = content,
+                    Duration = duration or 3,
+                    Type = nType or "Info"
+                })
+            elseif StarterGui then
+                StarterGui:SetCore("SendNotification", {
+                    Title = tostring(title),
+                    Text = tostring(content),
+                    Duration = duration or 3
+                })
+            end
+        end)
+    end
+
+    -- ══════════════════════════════════════════
+    -- REMOTES RESOLVER
+    -- ══════════════════════════════════════════
+    local rev_ToggleFav = nil
+    local function getFavRemote()
+        if rev_ToggleFav and rev_ToggleFav.Parent then return rev_ToggleFav end
+        pcall(function()
+            rev_ToggleFav = ReplicatedStorage.Shared.Packages.Network.rev_ToggleFav
+        end)
+        if rev_ToggleFav then return rev_ToggleFav end
+
+        pcall(function()
+            local net = ReplicatedStorage:FindFirstChild("Shared") and ReplicatedStorage.Shared:FindFirstChild("Packages") and ReplicatedStorage.Shared.Packages:FindFirstChild("Network")
+            if net then
+                rev_ToggleFav = net:FindFirstChild("rev_ToggleFav") or net:FindFirstChild("ToggleFav")
+            end
+        end)
+        if rev_ToggleFav then return rev_ToggleFav end
+
+        for _, v in pairs(ReplicatedStorage:GetDescendants()) do
+            if (v.Name == "rev_ToggleFav" or v.Name == "ToggleFav") and v:IsA("RemoteEvent") then
+                rev_ToggleFav = v
+                return rev_ToggleFav
+            end
+        end
+        return nil
+    end
+
+    -- ══════════════════════════════════════════
+    -- RARITIES & EXCLUSIVE DEFINITIONS
+    -- ══════════════════════════════════════════
+    local RARITIES = {
+        "Common", "Rare", "Epic", "Legendary", "Mythic", "Godly",
+        "Exclusive", "Volcanic", "Celestial", "Abyssal", "Demon",
+        "Secret", "Rainbow", "Eternal", "Hacked", "OG"
+    }
+
+    local EXCLUSIVE_RARITIES = {
+        Exclusive = true,
+        Volcanic = true,
+        Celestial = true,
+        Abyssal = true,
+        Demon = true,
+        Secret = true,
+        Rainbow = true,
+        Eternal = true,
+        Hacked = true,
+        OG = true,
+    }
+
+    -- ══════════════════════════════════════════
+    -- SYSTEM VARIABLES & CACHE
+    -- ══════════════════════════════════════════
+    local CachedInventoryData = {}
+    local CachedTotalCount = 0
+    local CachedFavoriteCount = 0
+    local CachedUniqueCount = 0
+    local LastFormattedInventoryText = ""
+
+    local InvRarityDropdown = nil
+    local InvMutationDropdown = nil
+    local InvFavFilterDropdown = nil
+    local InvLevelFilterDropdown = nil
+    local isSyncingUI = false
+    local InventoryConnections = {}
+    local IsFavProcessing = false
+    local CancelFavProcess = false
+    local FavDelay = 0.3
+
+    -- ══════════════════════════════════════════
+    -- HELPER FUNCTIONS
+    -- ══════════════════════════════════════════
+    local function getBaseName(dropdownString) 
+        return string.split(dropdownString, " | ")[1] or dropdownString 
+    end
+
+    local function getAllTools()
+        local tools = {}
+        local bp = localPlayer:FindFirstChild("Backpack")
+        if bp then for _, t in ipairs(bp:GetChildren()) do if t:IsA("Tool") then table.insert(tools, t) end end end
+        local char = localPlayer.Character
+        if char then for _, t in ipairs(char:GetChildren()) do if t:IsA("Tool") then table.insert(tools, t) end end end
+        return tools
+    end
+
+    local function getToolGUID(tool) 
+        if not tool then return nil end
+        local g = tool:GetAttribute("guid") or tool:GetAttribute("GUID") or tool:GetAttribute("ToolGUID") or tool:GetAttribute("uid")
+        if g then return tostring(g) end
+        local gObj = tool:FindFirstChild("ToolGUID") or tool:FindFirstChild("GUID") or tool:FindFirstChild("guid")
+        if gObj and gObj:IsA("StringValue") and gObj.Value ~= "" then return gObj.Value end
+        return nil
+    end
+
+    local function isTradeable(tool) 
+        return tool and tool:IsA("Tool") and getToolGUID(tool) ~= nil 
+    end
+
+    local function getToolMutation(tool)
+        if not tool then return nil end
+        local m = tool:GetAttribute("Mutation") or tool:GetAttribute("Variant") or (tool:FindFirstChild("Mutation") and tool:FindFirstChild("Mutation").Value)
+        return m and tostring(m) or nil
+    end
+
+    local function getExclusivePercent(tool)
+        if not tool then return nil end
+        local statAttr = tool:GetAttribute("KickPowerMultiplier")
+            or tool:GetAttribute("Multiplier")
+            or tool:GetAttribute("Percent")
+            or tool:GetAttribute("Value")
+            or tool:GetAttribute("StatValue")
+            or tool:GetAttribute("Power")
+            or tool:GetAttribute("Boost")
+        if statAttr then
+            local num = tonumber(statAttr)
+            if num then
+                if num > 0 and num <= 50 then
+                    return string.format("%.0f%%", num * 100)
+                else
+                    return string.format("%.0f%%", num)
+                end
+            end
+        end
+
+        for _, child in ipairs(tool:GetChildren()) do
+            local lname = child.Name:lower()
+            if (lname == "value" or lname == "percent" or lname == "multiplier" or lname == "kickpowermultiplier" or lname == "boost" or lname == "power")
+                and (child:IsA("NumberValue") or child:IsA("IntValue")) then
+                local num = tonumber(child.Value)
+                if num then
+                    if num > 0 and num <= 50 then
+                        return string.format("%.0f%%", num * 100)
+                    else
+                        return string.format("%.0f%%", num)
+                    end
+                end
+            end
+        end
+        return nil
+    end
+
+    local function getItemInfo(tool)
+        if not tool then return "Unknown" end
+        local baseName = tool.Name
+        
+        -- 1. Direct Attribute
+        local rAttr = tool:GetAttribute("Rarity") or tool:GetAttribute("rarity") or tool:GetAttribute("ItemRarity")
+        if rAttr and tostring(rAttr) ~= "" then return tostring(rAttr) end
+
+        -- 2. Direct ValueObject
+        local rVal = tool:FindFirstChild("Rarity") or tool:FindFirstChild("rarity")
+        if rVal and (rVal:IsA("StringValue") or rVal:IsA("ValueBase")) and tostring(rVal.Value) ~= "" then
+            return tostring(rVal.Value)
+        end
+
+        -- 3. Game internal EntitiesData Module
+        local rarity = "Unknown"
+        pcall(function()
+            local Shared = ReplicatedStorage:FindFirstChild("Shared")
+            local Data = Shared and Shared:FindFirstChild("Data")
+            local EntitiesDataObj = Data and Data:FindFirstChild("EntitiesData")
+            if EntitiesDataObj then
+                local EntitiesDataModule = require(EntitiesDataObj)
+                if EntitiesDataModule and EntitiesDataModule.Brainrots and EntitiesDataModule.Brainrots[baseName] then
+                    rarity = EntitiesDataModule.Brainrots[baseName].Rarity or rarity
+                end
+            end
+        end)
+        
+        return rarity
+    end
+
+    local function isExclusiveRarity(tool)
+        if not tool then return false end
+        local rarity = getItemInfo(tool)
+        return EXCLUSIVE_RARITIES[rarity] == true
+    end
+
+    local function getToolLevel(tool)
+        if not tool then return 1 end
+        
+        -- 1. Direct Attributes
+        for _, attrName in ipairs({"Level", "level", "Lvl", "lvl", "ItemLevel", "LevelValue", "lv"}) do
+            local v = tool:GetAttribute(attrName)
+            if v and tonumber(v) then return tonumber(v) end
+        end
+        
+        -- 2. Direct Child ValueObjects
+        for _, valName in ipairs({"Level", "level", "Lvl", "lvl", "ItemLevel"}) do
+            local obj = tool:FindFirstChild(valName)
+            if obj and (obj:IsA("ValueBase") or obj:IsA("IntValue") or obj:IsA("NumberValue") or obj:IsA("StringValue")) then
+                if tonumber(obj.Value) then return tonumber(obj.Value) end
+            end
+        end
+
+        -- 3. Inside Sub-folders
+        for _, folderName in ipairs({"Values", "Config", "Configuration", "Stats", "Data", "Attributes", "Info"}) do
+            local folder = tool:FindFirstChild(folderName)
+            if folder then
+                for _, valName in ipairs({"Level", "level", "Lvl", "lvl"}) do
+                    local v = folder:GetAttribute(valName)
+                    if v and tonumber(v) then return tonumber(v) end
+                    local obj = folder:FindFirstChild(valName)
+                    if obj and (obj:IsA("ValueBase") or obj:IsA("IntValue") or obj:IsA("NumberValue")) then
+                        if tonumber(obj.Value) then return tonumber(obj.Value) end
+                    end
+                end
+            end
+        end
+
+        -- 4. Inside BillboardGui / SurfaceGui
+        for _, desc in ipairs(tool:GetDescendants()) do
+            if desc:IsA("TextLabel") and desc.Visible then
+                local txt = desc.Text
+                local m = string.match(txt, "Lv%.%s*(%d+)") or string.match(txt, "Level:%s*(%d+)") or string.match(txt, "Level%s*(%d+)")
+                if m and tonumber(m) then return tonumber(m) end
+            end
+        end
+
+        -- 5. From tool name string matching
+        local m = string.match(tool.Name, "%(Lv%.(%d+)%)") or string.match(tool.Name, "Lv%.(%d+)")
+        if m and tonumber(m) then return tonumber(m) end
+
+        return 1
+    end
+
+    local function getFullItemName(tool)
+        if not tool then return "Unknown" end
+        local displayName = tool.Name
+        
+        -- Bersihkan tag Lv / Mutation lama agar tidak double
+        displayName = string.gsub(displayName, "%s*%(Lv%.%d+%)", "")
+        displayName = string.gsub(displayName, "%s*%[.*%]", "")
+        displayName = string.gsub(displayName, "%s*%(%d+%%%s*stat%)", "")
+        displayName = string.gsub(displayName, "%s*%(%d+%%%)", "")
+        
+        local mutValue = getToolMutation(tool)
+        if mutValue then displayName = displayName .. " [" .. mutValue .. "]" end
+
+        local rarity = getItemInfo(tool)
+        if rarity == "Exclusive" then
+            local pct = getExclusivePercent(tool)
+            if pct then
+                displayName = displayName .. " (" .. pct .. ")"
+            end
+        else
+            local lvl = getToolLevel(tool)
+            displayName = displayName .. " (Lv." .. tostring(lvl or 1) .. ")"
+        end
+        return displayName
+    end
+
+    local function getToolCPS(tool)
+        if not tool then return nil end
+        local baseName = tool.Name
+        local level = getToolLevel(tool) or 1
+        local mutation = getToolMutation(tool)
+        
+        local EntitiesDataModule, MutationDataModule
+        pcall(function()
+            local Shared = ReplicatedStorage:FindFirstChild("Shared")
+            local Data = Shared and Shared:FindFirstChild("Data")
+            
+            local EntitiesDataObj = Data and Data:FindFirstChild("EntitiesData")
+            if EntitiesDataObj then EntitiesDataModule = require(EntitiesDataObj) end
+            
+            local MutationDataObj = Data and Data:FindFirstChild("MutationData")
+            if MutationDataObj then MutationDataModule = require(MutationDataObj) end
+        end)
+        
+        if EntitiesDataModule and EntitiesDataModule.Brainrots and EntitiesDataModule.Brainrots[baseName] then
+            local info = EntitiesDataModule.Brainrots[baseName]
+            if EXCLUSIVE_RARITIES[info.Rarity or ""] then
+                return nil
+            end
+            local baseCPS = info.CPS
+            if baseCPS then
+                local levelMult = 1
+                if EntitiesDataModule.GetMultiplierPerLevel then
+                    pcall(function()
+                        levelMult = EntitiesDataModule.GetMultiplierPerLevel(level)
+                    end)
+                end
+                
+                local mutMult = 1
+                if mutation and MutationDataModule and MutationDataModule.Buffs and MutationDataModule.Buffs[mutation] then
+                    mutMult = MutationDataModule.Buffs[mutation].Value or 1
+                end
+                
+                return baseCPS * levelMult * mutMult
+            end
+        end
+        return nil
+    end
+
+    local function isToolFavorite(tool)
+        if not tool then return false end
+        for _, attr in ipairs({"Favorite", "favorite", "Fav", "fav", "Favorited", "favorited", "IsFavorite", "isFavorite", "IsFav", "isFav"}) do
+            local val = tool:GetAttribute(attr)
+            if val ~= nil then
+                return (val == true or val == 1 or val == "true")
+            end
+        end
+        
+        for _, name in ipairs({"Favorite", "Fav", "IsFavorite", "Favorited"}) do
+            local obj = tool:FindFirstChild(name)
+            if obj and (obj:IsA("BoolValue") or obj:IsA("IntValue") or obj:IsA("ValueBase")) then
+                return (obj.Value == true or obj.Value == 1 or obj.Value == "true")
+            end
+        end
+        return false
+    end
+
+    local function getInventoryMutationList()
+        local mutCounts = {}
+        for _, tool in ipairs(getAllTools()) do
+            if isTradeable(tool) then
+                local m = getToolMutation(tool) or "No Mutation"
+                mutCounts[m] = (mutCounts[m] or 0) + 1
+            end
+        end
+        local list = {}
+        for k, v in pairs(mutCounts) do
+            table.insert(list, k .. " | Stock: " .. v)
+        end
+        table.sort(list)
+        return list
+    end
+
+    local function processFavoriteBatch(toolsToProcess, desiredState, operationName)
+        if not toolsToProcess or #toolsToProcess == 0 then
+            notifyUser("Favorite Manager", "No matching items found in inventory.", 2.5, "Warning")
+            return 0
+        end
+        if IsFavProcessing then
+            notifyUser("Favorite Busy", "Process already running! Please wait.", 2.5, "Warning")
+            return 0
+        end
+        local remote = getFavRemote()
+        if not remote then
+            notifyUser("Error", "Favorite remote (rev_ToggleFav) not found!", 3, "Error")
+            return 0
+        end
+
+        local total = #toolsToProcess
+        notifyUser("Favorite", "Processing " .. total .. " items (" .. tostring(operationName or "Batch") .. ")...", 2, "Info")
+        IsFavProcessing = true
+        CancelFavProcess = false
+
+        task.spawn(function()
+            local count = 0
+            for _, tool in ipairs(toolsToProcess) do
+                if CancelFavProcess then break end
+                local guid = getToolGUID(tool)
+                if guid then
+                    pcall(function() remote:FireServer(tostring(guid)) end)
+                    count = count + 1
+                end
+                task.wait(FavDelay)
+            end
+            IsFavProcessing = false
+            CancelFavProcess = false
+            notifyUser("Favorite Done", "Processed " .. count .. " / " .. total .. " items.", 3, "Success")
+            if updateInventoryDisplay then updateInventoryDisplay() end
+        end)
+        return total
+    end
+
+    -- ══════════════════════════════════════════
+    -- CREATE WINDOW & SINGLE INVENTORY TAB
+    -- ══════════════════════════════════════════
+    local Window = Library:CreateWindow({
+        Name = "Inventory Viewer",
+        LogoText = "🎒",
+        Footer = "Mocta Inventory Suite " .. SCRIPT_VERSION .. " │ Live Scanner",
+        ConfigName = "MoctaInventory_Config"
+    })
+
+    -- HANYA ADA 1 TAB TUNGGAL: INVENTORY VIEWER
+    local TabInventory = Window:MakeTab({
+        Icon = "🎒",
+        Name = "Inventory"
+    })
+
+    -- SECTION 1: OVERVIEW & STATS
+    local SecOverview = TabInventory:AddSection("Overview & Statistics")
+    local OverviewLabel = SecOverview:AddParagraph("📊 Inventory Overview", "Scanning items...")
+
+    -- SECTION 2: FILTER SETTINGS
+    local SecInvFilter = TabInventory:AddSection("Filter Settings")
+    
+    InvFavFilterDropdown = SecInvFilter:AddDropdown({
+        Name = "Filter by Favorite Status",
+        Options = {"All Items", "⭐ Only Favorites", "⚪ Only Non-Favorites"},
+        Default = "All Items"
+    }, function()
+        if refreshInventoryText then refreshInventoryText() end
+    end)
+
+    InvLevelFilterDropdown = SecInvFilter:AddDropdown({
+        Name = "Filter by Level",
+        Options = {"All Levels", "Lv. 1 Only", "Lv. > 1 (Upgraded)", "Max Level Only"},
+        Default = "All Levels"
+    }, function()
+        if refreshInventoryText then refreshInventoryText() end
+    end)
+
+    InvRarityDropdown = SecInvFilter:AddMultiDropdown({
+        Name = "Filter by Rarity",
+        Options = RARITIES,
+        Default = {}
+    }, function()
+        if refreshInventoryText then refreshInventoryText() end
+    end)
+    
+    InvMutationDropdown = SecInvFilter:AddMultiDropdown({
+        Name = "Filter by Mutation",
+        Options = {},
+        Default = {}
+    }, function()
+        if refreshInventoryText then refreshInventoryText() end
+    end)
+    
+    SecInvFilter:AddButton("🧹 Clear All Filters", function()
+        pcall(function() InvFavFilterDropdown:Set("All Items") end)
+        pcall(function() InvLevelFilterDropdown:Set("All Levels") end)
+        pcall(function() InvRarityDropdown:Set({}) end)
+        pcall(function() InvMutationDropdown:Set({}) end)
+        notifyUser("Filters Reset", "All filters set back to default.", 1.5, "Info")
+        if refreshInventoryText then refreshInventoryText() end
+    end)
+
+    -- SECTION 3: ITEM LIST & BREAKDOWN
+    local SecInv = TabInventory:AddSection("Item Breakdown (Categorized)")
+    local FullInventoryLabel = SecInv:AddParagraph("Item List & Total", "Syncing with inventory...")
+
+    -- SECTION 4: ACTIONS & TOOLS
+    local SecTools = TabInventory:AddSection("Quick Tools & Management")
+
+    SecTools:AddButton("🔄 Manual Refresh Scan", function()
+        if updateInventoryDisplay then updateInventoryDisplay() end
+        notifyUser("Refreshed", "Inventory scan refreshed.", 1.5, "Success")
+    end)
+
+    SecTools:AddButton("📋 Copy Inventory to Clipboard", function()
+        if LastFormattedInventoryText and LastFormattedInventoryText ~= "" then
+            local copied = false
+            if setclipboard then
+                pcall(function() setclipboard(LastFormattedInventoryText) copied = true end)
+            elseif toclipboard then
+                pcall(function() toclipboard(LastFormattedInventoryText) copied = true end)
+            end
+            if copied then
+                notifyUser("Copied", "Inventory text copied to clipboard!", 2.5, "Success")
+            else
+                notifyUser("Notice", "Clipboard function not supported by executor.", 3, "Warning")
+            end
+        else
+            notifyUser("Attention", "Inventory list is empty.", 2, "Warning")
+        end
+    end)
+
+    SecTools:AddButton("⭐ Lock Top 10 Highest CPS", function()
+        local tools = {}
+        for _, t in ipairs(getAllTools()) do
+            if isTradeable(t) then
+                local cps = getToolCPS(t)
+                table.insert(tools, {tool = t, cps = cps or 0})
+            end
+        end
+        table.sort(tools, function(a, b) return a.cps > b.cps end)
+        local toLock = {}
+        for i = 1, math.min(10, #tools) do
+            if not isToolFavorite(tools[i].tool) then
+                table.insert(toLock, tools[i].tool)
+            end
+        end
+        processFavoriteBatch(toLock, true, "Top 10 CPS")
+    end)
+
+    SecTools:AddButton("⭐ Lock All Exclusive & % Stat Items", function()
+        local toLock = {}
+        for _, t in ipairs(getAllTools()) do
+            if isTradeable(t) and isExclusiveRarity(t) and not isToolFavorite(t) then
+                table.insert(toLock, t)
+            end
+        end
+        processFavoriteBatch(toLock, true, "Exclusive Items")
+    end)
+
+    SecTools:AddButton("⭐ Favorite All Inventory", function()
+        local toLock = {}
+        for _, t in ipairs(getAllTools()) do
+            if isTradeable(t) and not isToolFavorite(t) then
+                table.insert(toLock, t)
+            end
+        end
+        processFavoriteBatch(toLock, true, "All Inventory")
+    end)
+
+    SecTools:AddButton("💔 Unfavorite All Inventory", function()
+        local toUnlock = {}
+        for _, t in ipairs(getAllTools()) do
+            if isTradeable(t) and isToolFavorite(t) then
+                table.insert(toUnlock, t)
+            end
+        end
+        processFavoriteBatch(toUnlock, false, "Unlock All")
+    end)
+
+    -- ══════════════════════════════════════════
+    -- INVENTORY SYNC ENGINE
+    -- ══════════════════════════════════════════
+    local refreshInventoryText
+    refreshInventoryText = function()
+        if not CachedInventoryData then return end
+        
+        local selectedRarities = {}
+        if InvRarityDropdown then
+            selectedRarities = InvRarityDropdown:Get()
+            if type(selectedRarities) ~= "table" then selectedRarities = {selectedRarities} end
+        end
+        
+        local selectedMutations = {}
+        if InvMutationDropdown then
+            selectedMutations = InvMutationDropdown:Get()
+            if type(selectedMutations) ~= "table" then selectedMutations = {selectedMutations} end
+        end
+        
+        local favFilterOpt = "All Items"
+        if InvFavFilterDropdown then
+            favFilterOpt = InvFavFilterDropdown:Get() or "All Items"
+        end
+
+        local lvlFilterOpt = "All Levels"
+        if InvLevelFilterDropdown then
+            lvlFilterOpt = InvLevelFilterDropdown:Get() or "All Levels"
+        end
+        
+        local hasRarityFilter = false
+        for _, r in pairs(selectedRarities) do
+            if r ~= "" then hasRarityFilter = true; break end
+        end
+        
+        local hasMutationFilter = false
+        for _, m in pairs(selectedMutations) do
+            local cleanM = getBaseName(m)
+            if cleanM ~= "" then hasMutationFilter = true; break end
+        end
+        
+        local hasFavFilter = (favFilterOpt ~= "All Items")
+        local hasLvlFilter = (lvlFilterOpt ~= "All Levels")
+        local isFiltered = hasRarityFilter or hasMutationFilter or hasFavFilter or hasLvlFilter
+        
+        local categorizedItems = {}
+        local categoryTotals = {}
+        local filteredTotalCount = 0
+        
+        local InfiniteMath
+        pcall(function()
+            local Shared = ReplicatedStorage:FindFirstChild("Shared")
+            local Utility = Shared and Shared:FindFirstChild("Utility")
+            local IMObj = Utility and Utility:FindFirstChild("InfiniteMath")
+            if IMObj then InfiniteMath = require(IMObj) end
+        end)
+        
+        local totalCPSVal = InfiniteMath and InfiniteMath.new(0) or 0
+        local filteredCPSVal = InfiniteMath and InfiniteMath.new(0) or 0
+        
+        local itemFilterPassed = {}
+        local itemCPSMap = {}
+        local itemFavMap = {}
+        local itemLevelMap = {}
+        local itemRarityMap = {}
+        local itemMutationMap = {}
+        local totalFavCount = 0
+        
+        -- Pass 1: Scan all tools once and build lookup cache
+        for _, tool in ipairs(getAllTools()) do
+            if isTradeable(tool) then
+                local fullName = getFullItemName(tool)
+                local toolCPS = getToolCPS(tool)
+                local toolLvl = getToolLevel(tool)
+                local toolRarity = getItemInfo(tool)
+                local toolMutation = getToolMutation(tool)
+
+                itemLevelMap[fullName] = toolLvl
+                itemRarityMap[fullName] = toolRarity
+                itemMutationMap[fullName] = toolMutation
+
+                if toolCPS then
+                    pcall(function()
+                        totalCPSVal = totalCPSVal + toolCPS
+                    end)
+                    itemCPSMap[fullName] = toolCPS
+                end
+                if isToolFavorite(tool) then
+                    itemFavMap[fullName] = true
+                    totalFavCount = totalFavCount + 1
+                end
+            end
+        end
+        CachedFavoriteCount = totalFavCount
+        
+        -- Pass 2: Filter and categorize items
+        for itemName, amount in pairs(CachedInventoryData) do
+            local itemRarity = itemRarityMap[itemName] or "Unknown"
+            local itemMutation = itemMutationMap[itemName]
+            local itemLvl = itemLevelMap[itemName] or 1
+            local filterMut = itemMutation or "No Mutation"
+            local isFav = itemFavMap[itemName] == true
+            
+            -- Rarity filter match
+            local rarityPass = true
+            if hasRarityFilter then
+                local found = false
+                for _, r in pairs(selectedRarities) do
+                    if r == itemRarity then found = true; break end
+                end
+                if not found then rarityPass = false end
+            end
+            
+            -- Mutation filter match
+            local mutationPass = true
+            if hasMutationFilter then
+                local found = false
+                for _, m in pairs(selectedMutations) do
+                    local cleanM = getBaseName(m)
+                    if cleanM == filterMut then found = true; break end
+                end
+                if not found then mutationPass = false end
+            end
+
+            -- Favorite filter match
+            local favPass = true
+            if favFilterOpt == "⭐ Only Favorites" then
+                favPass = isFav
+            elseif favFilterOpt == "⚪ Only Non-Favorites" then
+                favPass = not isFav
+            end
+
+            -- Level filter match
+            local lvlPass = true
+            if lvlFilterOpt == "Lv. 1 Only" then
+                lvlPass = (itemLvl == 1)
+            elseif lvlFilterOpt == "Lv. > 1 (Upgraded)" then
+                lvlPass = (itemLvl > 1)
+            elseif lvlFilterOpt == "Max Level Only" then
+                lvlPass = (itemLvl >= 100 or string.find(string.lower(itemName), "max"))
+            end
+            
+            if rarityPass and mutationPass and favPass and lvlPass then
+                itemFilterPassed[itemName] = true
+                local category = "🏆 " .. string.upper(itemRarity) .. (itemMutation and (" " .. string.upper(itemMutation)) or "") .. " ITEMS"
+                if not categorizedItems[category] then
+                    categorizedItems[category] = {}
+                    categoryTotals[category] = 0
+                end
+                
+                local itemCPS = itemCPSMap[itemName]
+                table.insert(categorizedItems[category], {
+                    name = itemName, 
+                    qty = amount, 
+                    rarity = itemRarity, 
+                    cps = itemCPS,
+                    isFav = isFav
+                })
+                categoryTotals[category] = categoryTotals[category] + amount
+                filteredTotalCount = filteredTotalCount + amount
+            end
+        end
+        
+        -- Pass 3: Calculate filtered CPS
+        for _, tool in ipairs(getAllTools()) do
+            if isTradeable(tool) then
+                local fullName = getFullItemName(tool)
+                if itemFilterPassed[fullName] then
+                    local toolCPS = itemCPSMap[fullName]
+                    if toolCPS then
+                        pcall(function()
+                            filteredCPSVal = filteredCPSVal + toolCPS
+                        end)
+                    end
+                end
+            end
+        end
+        
+        local totalCpsStr = tostring(totalCPSVal)
+        local filteredCpsStr = tostring(filteredCPSVal)
+        
+        -- Update Overview Statistics Label
+        local overviewText = string.format("📦 Total Stock: %d items  │  ⭐ Favorites: %d items\n🧬 Unique Variants: %d items  │  ⚡ Total CPS: %s",
+            CachedTotalCount, CachedFavoriteCount, CachedUniqueCount, totalCpsStr)
+        if isFiltered then
+            overviewText = overviewText .. string.format("\n🎯 Showing: %d / %d (Filtered)  │  ⚡ Filtered CPS: %s",
+                filteredTotalCount, CachedTotalCount, filteredCpsStr)
+        end
+        OverviewLabel:Set("📊 Inventory Overview", overviewText)
+
+        -- Update Minimized status in Sigma UI
+        pcall(function()
+            Window:SetMinimizedText(string.format("%d Items | ⭐ %d", CachedTotalCount, CachedFavoriteCount))
+            Window:SetMinimizedGlow("Success")
+        end)
+
+        -- Build Formatted Item List
+        local displayString = ""
+        if isFiltered then
+            displayString = string.format("Showing %d / %d Items (Filtered)  │  ⭐ %d Favorites\n", filteredTotalCount, CachedTotalCount, CachedFavoriteCount)
+            displayString = displayString .. "Filtered CPS: " .. filteredCpsStr .. "  │  Total CPS: " .. totalCpsStr .. "\n\n"
+            if filteredTotalCount == 0 then
+                displayString = displayString .. "No items match the selected filters."
+            end
+        else
+            displayString = string.format("Total All Items: %d (⭐ %d Favorites)\n", CachedTotalCount, CachedFavoriteCount)
+            displayString = displayString .. "Total CPS: " .. totalCpsStr .. "\n\n"
+            if CachedTotalCount == 0 then
+                displayString = displayString .. "Inventory is completely empty."
+            end
+        end
+        
+        if filteredTotalCount > 0 then
+            local sortedCategories = {}
+            for cat, _ in pairs(categorizedItems) do table.insert(sortedCategories, cat) end
+            table.sort(sortedCategories)
+            for _, cat in ipairs(sortedCategories) do
+                displayString = displayString .. "=== " .. cat .. " (Total: " .. categoryTotals[cat] .. ") ===\n"
+                table.sort(categorizedItems[cat], function(x, y)
+                    local a = x.cps
+                    local b = y.cps
+                    local typeA = typeof(a)
+                    local typeB = typeof(b)
+                    if typeA == typeB then
+                        if typeA == "nil" then
+                            return x.name < y.name
+                        end
+                        if a == b then
+                            return x.name < y.name
+                        end
+                        return a > b
+                    elseif typeA == "table" or typeA == "userdata" then
+                        return true
+                    elseif typeB == "table" or typeB == "userdata" then
+                        return false
+                    else
+                        if a ~= nil and b == nil then
+                            return true
+                        elseif a == nil and b ~= nil then
+                            return false
+                        else
+                            return x.name < y.name
+                        end
+                    end
+                end)
+                for _, item in ipairs(categorizedItems[cat]) do 
+                    local cpsStr = item.cps and (" │ CPS: " .. tostring(item.cps)) or ""
+                    local favPrefix = item.isFav and "⭐ " or ""
+                    displayString = displayString .. string.format(" • %s%s (Stock: %d%s)\n", favPrefix, item.name, item.qty, cpsStr) 
+                end
+                displayString = displayString .. "\n"
+            end
+        end
+        
+        LastFormattedInventoryText = displayString
+        if FullInventoryLabel then
+            FullInventoryLabel:Set("Item List & Total", displayString)
+        end
+    end
+
+    local updateInventoryDisplay
+    updateInventoryDisplay = function()
+        if isSyncingUI then return end
+        isSyncingUI = true
+        task.spawn(function()
+            task.wait(0.5) 
+            local inventoryData = {}; local totalCount = 0; local uniqueCount = 0
+            for _, tool in pairs(getAllTools()) do  
+                if isTradeable(tool) then
+                    local displayName = getFullItemName(tool)  
+                    if not inventoryData[displayName] then
+                        uniqueCount = uniqueCount + 1
+                    end
+                    inventoryData[displayName] = (inventoryData[displayName] or 0) + 1  
+                    totalCount = totalCount + 1  
+                end
+            end  
+            CachedInventoryData = inventoryData
+            CachedTotalCount = totalCount
+            CachedUniqueCount = uniqueCount
+            
+            local invMutList = getInventoryMutationList()
+            if InvMutationDropdown then
+                InvMutationDropdown:Refresh(invMutList)
+            end
+            
+            refreshInventoryText()
+            isSyncingUI = false 
+        end)
+    end
+
+    -- ══════════════════════════════════════════
+    -- REAL-TIME INVENTORY EVENT LISTENERS
+    -- ══════════════════════════════════════════
+    local function connectInventory()
+        for _, conn in ipairs(InventoryConnections) do
+            pcall(function() conn:Disconnect() end)
+        end
+        table.clear(InventoryConnections)
+
+        local backpack = localPlayer:WaitForChild("Backpack", 5)
+        if backpack then
+            table.insert(InventoryConnections, backpack.ChildAdded:Connect(function(child)
+                if child:IsA("Tool") then updateInventoryDisplay() end
+            end))
+            table.insert(InventoryConnections, backpack.ChildRemoved:Connect(function(child)
+                if child:IsA("Tool") then updateInventoryDisplay() end
+            end))
+        end
+
+        local function hookCharacter(char)
+            if not char then return end
+            table.insert(InventoryConnections, char.ChildAdded:Connect(function(child)
+                if child:IsA("Tool") then updateInventoryDisplay() end
+            end))
+            table.insert(InventoryConnections, char.ChildRemoved:Connect(function(child)
+                if child:IsA("Tool") then updateInventoryDisplay() end
+            end))
+        end
+
+        if localPlayer.Character then
+            hookCharacter(localPlayer.Character)
+        end
+        table.insert(InventoryConnections, localPlayer.CharacterAdded:Connect(function(char)
+            hookCharacter(char)
+            task.wait(1)
+            updateInventoryDisplay()
+        end))
+    end
+
+    -- Connect listeners and perform initial scan
+    connectInventory()
+    updateInventoryDisplay()
+
+    notifyUser("Inventory Viewer", "Loaded successfully! 1 Tab active.", 3, "Success")
+
+end)
+
+if not success then
+    warn("[Inventory Viewer Error]:", errorMessage)
+end
