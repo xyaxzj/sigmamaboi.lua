@@ -138,12 +138,40 @@ local success, errorMessage = pcall(function()
     -- ══════════════════════════════════════════
     -- SYSTEM VARIABLES & CACHE
     -- ══════════════════════════════════════════
+    -- ══════════════════════════════════════════
+    -- MATERIAL CRAFT DEFINITIONS
+    -- ══════════════════════════════════════════
+    local MATERIAL_CRAFT_ITEMS = {
+        "Cucumbro Nerdino",
+        "Stoppo Luminino",
+        "Peant Jarro",
+        "Burguro",
+        "Karkerkar Kurkur",
+        "SWAG SODA",
+        "Professor Penneroni",
+        "Pot Hostpot"
+    }
+
+    local MATERIAL_CRAFT_OPTIONS = {
+        "🔨 All Material Craft (Merged Qty)",
+        "All Items (Normal)",
+        "Cucumbro Nerdino",
+        "Stoppo Luminino",
+        "Peant Jarro",
+        "Burguro",
+        "Karkerkar Kurkur",
+        "SWAG SODA",
+        "Professor Penneroni",
+        "Pot Hostpot"
+    }
+
     local CachedInventoryData = {}
     local CachedTotalCount = 0
     local CachedFavoriteCount = 0
     local CachedUniqueCount = 0
     local LastFormattedInventoryText = ""
 
+    local InvMaterialCraftDropdown = nil
     local InvRarityDropdown = nil
     local InvMutationDropdown = nil
     local InvFavFilterDropdown = nil
@@ -154,6 +182,13 @@ local success, errorMessage = pcall(function()
     local CancelFavProcess = false
     local FavDelay = 0.3
 
+    -- Claw Machine Event Variables
+    local AutoClawActive = false
+    local ClawDelay = 6
+    local ClawRequestCount = 0
+    local ClawLoopRunning = false
+    local ClawStatusLabel = nil
+
     -- Forward declarations
     local refreshInventoryText
     local updateInventoryDisplay
@@ -162,8 +197,70 @@ local success, errorMessage = pcall(function()
     -- ══════════════════════════════════════════
     -- HELPER FUNCTIONS (1:1 DARI AUTO TRADE.LUA)
     -- ══════════════════════════════════════════
+    local function getCleanBaseName(rawName)
+        if not rawName then return "" end
+        local n = tostring(rawName)
+        n = string.gsub(n, "%s*%[.-%]", "")
+        n = string.gsub(n, "%s*%(.-%)", "")
+        n = string.match(n, "^%s*(.-)%s*$") or n
+        return n
+    end
+
+    local function matchMaterialCraft(rawName)
+        if not rawName then return nil end
+        local clean = string.lower(getCleanBaseName(rawName))
+        for _, mat in ipairs(MATERIAL_CRAFT_ITEMS) do
+            if clean == string.lower(mat) then
+                return mat
+            end
+        end
+        -- Aliases & smart fallback for variations
+        if string.find(clean, "cucumbro", 1, true) and string.find(clean, "nerdino", 1, true) then
+            return "Cucumbro Nerdino"
+        end
+        if string.find(clean, "stoppo", 1, true) and string.find(clean, "luminino", 1, true) then
+            return "Stoppo Luminino"
+        end
+        if (string.find(clean, "peant", 1, true) or string.find(clean, "peanut", 1, true)) and string.find(clean, "jarro", 1, true) then
+            return "Peant Jarro"
+        end
+        if string.find(clean, "burguro", 1, true) then
+            return "Burguro"
+        end
+        if string.find(clean, "karkerkar", 1, true) or string.find(clean, "kurkur", 1, true) then
+            return "Karkerkar Kurkur"
+        end
+        if string.find(clean, "swag", 1, true) and string.find(clean, "soda", 1, true) then
+            return "SWAG SODA"
+        end
+        if string.find(clean, "penneroni", 1, true) then
+            return "Professor Penneroni"
+        end
+        if string.find(clean, "hostpot", 1, true) or string.find(clean, "hotspot", 1, true) then
+            return "Pot Hostpot"
+        end
+        return nil
+    end
+
     local function getBaseName(dropdownString) 
         return string.split(dropdownString, " | ")[1] or dropdownString 
+    end
+
+    local function getClawRemote()
+        local ok, res = pcall(function()
+            return ReplicatedStorage.Shared.Packages.Network.rev_ClawMachine_Request
+        end)
+        if ok and res then return res end
+
+        local ok2, res2 = pcall(function()
+            local shared = ReplicatedStorage:FindFirstChild("Shared")
+            local packages = shared and shared:FindFirstChild("Packages")
+            local network = packages and packages:FindFirstChild("Network")
+            return network and network:FindFirstChild("rev_ClawMachine_Request")
+        end)
+        if ok2 and res2 then return res2 end
+
+        return nil
     end
 
     local function getAllTools()
@@ -469,6 +566,14 @@ local success, errorMessage = pcall(function()
     -- SECTION 2: FILTER SETTINGS
     local SecInvFilter = TabInventory:AddSection("Filter Settings")
     
+    InvMaterialCraftDropdown = SecInvFilter:AddDropdown({
+        Name = "Filter by Material Craft",
+        Options = MATERIAL_CRAFT_OPTIONS,
+        Default = "🔨 All Material Craft (Merged Qty)"
+    }, function()
+        if refreshInventoryText then refreshInventoryText() end
+    end)
+
     InvFavFilterDropdown = SecInvFilter:AddDropdown({
         Name = "Filter by Favorite Status",
         Options = {"All Items", "⭐ Only Favorites", "⚪ Only Non-Favorites"},
@@ -502,11 +607,12 @@ local success, errorMessage = pcall(function()
     end)
     
     SecInvFilter:AddButton("🧹 Clear All Filters", function()
+        pcall(function() InvMaterialCraftDropdown:Set("🔨 All Material Craft (Merged Qty)") end)
         pcall(function() InvFavFilterDropdown:Set("All Items") end)
         pcall(function() InvLevelFilterDropdown:Set("All Levels") end)
         pcall(function() InvRarityDropdown:Set({}) end)
         pcall(function() InvMutationDropdown:Set({}) end)
-        notifyUser("Filters Reset", "All filters set back to default.", 1.5, "Info")
+        notifyUser("Filters Reset", "All filters set back to default (Material Craft).", 1.5, "Info")
         if refreshInventoryText then refreshInventoryText() end
     end)
 
@@ -516,6 +622,14 @@ local success, errorMessage = pcall(function()
 
     -- SECTION 4: ACTIONS & TOOLS
     local SecTools = TabInventory:AddSection("Quick Tools & Management")
+
+    SecTools:AddButton("🔨 Quick View Material Craft", function()
+        if InvMaterialCraftDropdown then
+            pcall(function() InvMaterialCraftDropdown:Set("🔨 All Material Craft (Merged Qty)") end)
+        end
+        if refreshInventoryText then refreshInventoryText() end
+        notifyUser("Material Craft", "Showing consolidated craft materials.", 2, "Info")
+    end)
 
     SecTools:AddButton("🔄 Manual Refresh Scan", function()
         if updateInventoryDisplay then updateInventoryDisplay() end
@@ -680,6 +794,108 @@ local success, errorMessage = pcall(function()
     local OverviewLabel = applyDynamicParagraph(RawOverviewLabel, "Inventory Overview")
     local FullInventoryLabel = applyDynamicParagraph(RawFullInventoryLabel, "Item List & Total")
 
+    -- ══════════════════════════════════════════
+    -- TAB 2: EVENT (CLAW MACHINE)
+    -- ══════════════════════════════════════════
+    local TabEvent = Window:MakeTab("🎪")
+
+    local SecClaw = TabEvent:AddSection("Claw Machine Event")
+    local RawClawStatusLabel = SecClaw:AddParagraph("Claw Machine Status", "⚡ Status: IDLE / OFF\n🎯 Requests Sent: 0\n⏱️ Loop Interval: 6.0s\n📡 Target: rev_ClawMachine_Request")
+    ClawStatusLabel = applyDynamicParagraph(RawClawStatusLabel, "Claw Machine Status")
+
+    local function startClawLoop()
+        if ClawLoopRunning then return end
+        ClawLoopRunning = true
+        task.spawn(function()
+            while AutoClawActive do
+                local ok, err = pcall(function()
+                    local remote = getClawRemote()
+                    if remote then
+                        remote:FireServer()
+                    else
+                        error("rev_ClawMachine_Request not found")
+                    end
+                end)
+                if ok then
+                    ClawRequestCount = ClawRequestCount + 1
+                end
+                if ClawStatusLabel then
+                    local statusTxt = string.format("⚡ Status: RUNNING\n🎯 Requests Sent: %d\n⏱️ Loop Interval: %.1fs\n🕒 Last Request: %s",
+                        ClawRequestCount, ClawDelay, os.date("%H:%M:%S"))
+                    if not ok and err then
+                        statusTxt = statusTxt .. "\n⚠️ Warning: " .. tostring(err)
+                    end
+                    ClawStatusLabel:Set("Claw Machine Status", statusTxt)
+                end
+                task.wait(ClawDelay)
+            end
+            ClawLoopRunning = false
+            if ClawStatusLabel then
+                ClawStatusLabel:Set("Claw Machine Status", string.format("⏸️ Status: STOPPED\n🎯 Requests Sent: %d\n⏱️ Configured Interval: %.1fs",
+                    ClawRequestCount, ClawDelay))
+            end
+        end)
+    end
+
+    SecClaw:AddToggle({
+        Name = "Auto Claw Machine (Loop 6s)",
+        Default = false
+    }, function(state)
+        AutoClawActive = state
+        if state then
+            notifyUser("Claw Event", "Auto Claw started! Firing every " .. tostring(ClawDelay) .. "s.", 2.5, "Success")
+            startClawLoop()
+        else
+            notifyUser("Claw Event", "Auto Claw stopped.", 2, "Info")
+            if ClawStatusLabel then
+                ClawStatusLabel:Set("Claw Machine Status", string.format("⏸️ Status: STOPPED\n🎯 Requests Sent: %d\n⏱️ Loop Interval: %.1fs", ClawRequestCount, ClawDelay))
+            end
+        end
+    end)
+
+    SecClaw:AddSlider({
+        Name = "Loop Interval (Seconds)",
+        Min = 1,
+        Max = 30,
+        Default = 6,
+        Step = 1
+    }, function(val)
+        ClawDelay = tonumber(val) or 6
+        if ClawStatusLabel and not AutoClawActive then
+            ClawStatusLabel:Set("Claw Machine Status", string.format("⚡ Status: IDLE / OFF\n🎯 Requests Sent: %d\n⏱️ Loop Interval: %.1fs", ClawRequestCount, ClawDelay))
+        end
+    end)
+
+    SecClaw:AddButton("⚡ Grab Once (FireServer)", function()
+        local ok, err = pcall(function()
+            local remote = getClawRemote()
+            if remote then
+                remote:FireServer()
+            else
+                error("rev_ClawMachine_Request not found")
+            end
+        end)
+        if ok then
+            ClawRequestCount = ClawRequestCount + 1
+            notifyUser("Claw Event", "Grab request sent! (Total: " .. ClawRequestCount .. ")", 2, "Success")
+            if ClawStatusLabel then
+                ClawStatusLabel:Set("Claw Machine Status", string.format("⚡ Status: %s\n🎯 Requests Sent: %d\n⏱️ Loop Interval: %.1fs\n🕒 Last Manual: %s",
+                    AutoClawActive and "RUNNING" or "IDLE", ClawRequestCount, ClawDelay, os.date("%H:%M:%S")))
+            end
+        else
+            notifyUser("Error", "Failed: " .. tostring(err), 3, "Error")
+        end
+    end)
+
+    SecClaw:AddButton("🔄 Reset Counter", function()
+        ClawRequestCount = 0
+        notifyUser("Claw Event", "Counter reset to 0.", 1.5, "Info")
+        if ClawStatusLabel then
+            ClawStatusLabel:Set("Claw Machine Status", string.format("⚡ Status: %s\n🎯 Requests Sent: 0\n⏱️ Loop Interval: %.1fs",
+                AutoClawActive and "RUNNING" or "IDLE", ClawDelay))
+        end
+    end)
+
     -- Fungsi untuk merapikan dan membuka tinggi semua section
     fixAllSectionHeights = function()
         pcall(function()
@@ -701,12 +917,33 @@ local success, errorMessage = pcall(function()
         end)
     end
 
+    -- Re-fix section heights when tabs are clicked
+    task.defer(function()
+        pcall(function()
+            for _, ti in ipairs(Window.Tabs or {}) do
+                if ti.Ico then
+                    ti.Ico.MouseButton1Click:Connect(function()
+                        task.delay(0.05, fixAllSectionHeights)
+                        task.delay(0.2, fixAllSectionHeights)
+                    end)
+                end
+            end
+        end)
+    end)
+
     -- ══════════════════════════════════════════
     -- INVENTORY SYNC ENGINE
     -- ══════════════════════════════════════════
     refreshInventoryText = function()
         if not CachedInventoryData then return end
         
+        local craftFilterOpt = "🔨 All Material Craft (Merged Qty)"
+        if InvMaterialCraftDropdown then
+            pcall(function()
+                craftFilterOpt = InvMaterialCraftDropdown:Get() or "🔨 All Material Craft (Merged Qty)"
+            end)
+        end
+
         local selectedRarities = {}
         if InvRarityDropdown then
             pcall(function()
@@ -775,6 +1012,13 @@ local success, errorMessage = pcall(function()
         local itemMutationMap = {}
         local totalFavCount = 0
         
+        local craftCounts = {}
+        local craftFavCounts = {}
+        for _, mat in ipairs(MATERIAL_CRAFT_ITEMS) do
+            craftCounts[mat] = 0
+            craftFavCounts[mat] = 0
+        end
+
         -- Pass 1: Scan tools sekali dan cache ke map
         for _, tool in ipairs(getAllTools()) do
             if isTradeable(tool) then
@@ -783,6 +1027,7 @@ local success, errorMessage = pcall(function()
                 local toolLvl = getToolLevel(tool)
                 local toolRarity = getItemInfo(tool)
                 local toolMutation = getToolMutation(tool)
+                local isFav = isToolFavorite(tool)
 
                 itemLevelMap[fullName] = toolLvl
                 itemRarityMap[fullName] = toolRarity
@@ -794,13 +1039,86 @@ local success, errorMessage = pcall(function()
                     end)
                     itemCPSMap[fullName] = toolCPS
                 end
-                if isToolFavorite(tool) then
+                if isFav then
                     itemFavMap[fullName] = true
                     totalFavCount = totalFavCount + 1
+                end
+
+                local matName = matchMaterialCraft(tool.Name) or matchMaterialCraft(fullName)
+                if matName then
+                    craftCounts[matName] = (craftCounts[matName] or 0) + 1
+                    if isFav then
+                        craftFavCounts[matName] = (craftFavCounts[matName] or 0) + 1
+                    end
                 end
             end
         end
         CachedFavoriteCount = totalFavCount
+
+        -- ══════════════════════════════════════════
+        -- MATERIAL CRAFT VIEW (CONSOLIDATED / JUST QTY)
+        -- ══════════════════════════════════════════
+        if craftFilterOpt ~= "All Items (Normal)" then
+            local isAllCraft = (craftFilterOpt == "🔨 All Material Craft (Merged Qty)")
+            local targetItems = isAllCraft and MATERIAL_CRAFT_ITEMS or { craftFilterOpt }
+            
+            local totalTargetQty = 0
+            for _, mat in ipairs(targetItems) do
+                local q = craftCounts[mat] or 0
+                if favFilterOpt == "⭐ Only Favorites" then
+                    q = craftFavCounts[mat] or 0
+                elseif favFilterOpt == "⚪ Only Non-Favorites" then
+                    q = math.max(0, (craftCounts[mat] or 0) - (craftFavCounts[mat] or 0))
+                end
+                totalTargetQty = totalTargetQty + q
+            end
+
+            -- Update Overview Statistics Label
+            local overviewText = string.format("📦 Total Stock: %d items  │  ⭐ Favorites: %d items\n🔨 Material Craft: %d items (Consolidated)",
+                CachedTotalCount, CachedFavoriteCount, totalTargetQty)
+            if favFilterOpt ~= "All Items" then
+                overviewText = overviewText .. "  │  " .. favFilterOpt
+            end
+            if OverviewLabel then
+                OverviewLabel:Set("Inventory Overview", overviewText)
+            end
+
+            -- Update Minimized status in Sigma UI
+            pcall(function()
+                Window:SetMinimizedText(string.format("🔨 Craft: %d Items", totalTargetQty))
+                Window:SetMinimizedGlow("Success")
+            end)
+
+            -- Build Formatted Item List (Just pure quantity per name, no mutations, all merged)
+            local displayString = "🔨 MATERIAL CRAFT (CONSOLIDATED / JUST QTY)\n"
+            if isAllCraft then
+                displayString = displayString .. string.format("Filter: All 8 Craft Materials  │  Total Qty: %d\n", totalTargetQty)
+            else
+                displayString = displayString .. string.format("Filter: %s  │  Total Qty: %d\n", craftFilterOpt, totalTargetQty)
+            end
+            if favFilterOpt ~= "All Items" then
+                displayString = displayString .. "Status Filter: " .. favFilterOpt .. "\n"
+            end
+            displayString = displayString .. "\n"
+
+            for _, mat in ipairs(targetItems) do
+                local q = craftCounts[mat] or 0
+                if favFilterOpt == "⭐ Only Favorites" then
+                    q = craftFavCounts[mat] or 0
+                elseif favFilterOpt == "⚪ Only Non-Favorites" then
+                    q = math.max(0, (craftCounts[mat] or 0) - (craftFavCounts[mat] or 0))
+                end
+                displayString = displayString .. string.format(" • %s: %dx\n", mat, q)
+            end
+
+            LastFormattedInventoryText = displayString
+            if FullInventoryLabel then
+                FullInventoryLabel:Set("Item List & Total", displayString)
+            end
+
+            task.defer(fixAllSectionHeights)
+            return
+        end
         
         -- Pass 2: Filter dan kategorikan item
         for itemName, amount in pairs(CachedInventoryData) do
@@ -1049,7 +1367,7 @@ local success, errorMessage = pcall(function()
     task.delay(0.6, fixAllSectionHeights)
     task.delay(1.2, fixAllSectionHeights)
 
-    notifyUser("Inventory Viewer", "Loaded successfully! 1 Tab active.", 3, "Success")
+    notifyUser("Inventory Viewer", "Loaded successfully! 2 Tabs active (Inventory & Event).", 3, "Success")
 
 end)
 
