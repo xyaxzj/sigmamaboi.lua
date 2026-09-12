@@ -140,7 +140,7 @@ local success, errorMessage = pcall(function()
     local AutoFavToggle = nil
     local AutoFavEnabled = false
     local AutoFavMode = "Selected Rarities & Mutations"
-    local AutoFavRarities = {"Godly", "Exclusive", "Volcanic", "Celestial", "Abyssal", "Demon", "Secret", "Rainbow", "Eternal", "Hacked"}
+    local AutoFavRarities = {"Godly", "Exclusive", "Volcanic", "Celestial", "Abyssal", "Demon", "Secret", "Rainbow", "Eternal", "Hacked", "Cosmic", "OG"}
     local AutoFavMutations = {}
     local AutoFavMutationDropdown = nil
     local SkipTradeFavorites = false
@@ -155,7 +155,21 @@ local success, errorMessage = pcall(function()
     -- ==========================================
     -- RARITY LIST & EXCLUSIVE DEFINITIONS
     -- ==========================================
-    local RarityList = {"Common", "Rare", "Epic", "Legendary", "Mythic", "Godly", "Exclusive", "Volcanic", "Celestial", "Abyssal", "Demon", "Secret", "Rainbow", "Eternal", "Hacked", "OG"}
+    local RarityList = {"Common", "Rare", "Epic", "Legendary", "Mythic", "Godly", "Exclusive", "Volcanic", "Celestial", "Abyssal", "Demon", "Secret", "Rainbow", "Eternal", "Hacked", "Cosmic", "OG"}
+
+    local EXCLUSIVE_RARITIES = {
+        Exclusive = true,
+        Volcanic = true,
+        Celestial = true,
+        Abyssal = true,
+        Demon = true,
+        Secret = true,
+        Rainbow = true,
+        Eternal = true,
+        Hacked = true,
+        Cosmic = true,
+        OG = true,
+    }
 
     -- ==========================================
     -- FUNGSI INTI & INVENTORY SCANNER
@@ -541,11 +555,14 @@ local success, errorMessage = pcall(function()
         if mutValue then displayName = displayName .. " [" .. mutValue .. "]" end
 
         local rarity = getItemInfo(tool)
-        if rarity == "Exclusive" then
-            -- Item Rarity Exclusive: TIDAK pakai Level!
+        if rarity == "Exclusive" or isExclusiveRarity(tool) then
+            -- Item Rarity Exclusive / High-tier: pakai % jika ada
             local pct = getExclusivePercent(tool)
             if pct then
                 displayName = displayName .. " (" .. pct .. ")"
+            else
+                local lvl = getToolLevel(tool)
+                displayName = displayName .. " (Lv." .. tostring(lvl or 1) .. ")"
             end
         else
             -- Semua Brainrot Non-Exclusive: Tampilkan Level!
@@ -2042,7 +2059,7 @@ local success, errorMessage = pcall(function()
     SecFav3:AddMultiDropdown({
         Name = "Auto-Fav Rarities", 
         Options = RarityList, 
-        Default = {"Godly", "Exclusive", "Volcanic", "Celestial", "Abyssal", "Demon", "Secret", "Rainbow", "Eternal", "Hacked"}
+        Default = {"Godly", "Exclusive", "Volcanic", "Celestial", "Abyssal", "Demon", "Secret", "Rainbow", "Eternal", "Hacked", "Cosmic", "OG"}
     }, function(val)
         AutoFavRarities = val
     end)
