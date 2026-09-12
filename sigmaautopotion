@@ -15,6 +15,7 @@ local success, errorMessage = pcall(function()
     local localPlayer = Players.LocalPlayer
     local RunService = game:GetService("RunService")
     local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local TextService = game:GetService("TextService")
 
     while not localPlayer do
         task.wait(0.1)
@@ -156,6 +157,7 @@ local success, errorMessage = pcall(function()
     -- Forward declarations
     local refreshInventoryText
     local updateInventoryDisplay
+    local fixAllSectionHeights
 
     -- ══════════════════════════════════════════
     -- HELPER FUNCTIONS (1:1 DARI AUTO TRADE.LUA)
@@ -233,17 +235,14 @@ local success, errorMessage = pcall(function()
         if not tool then return "Unknown" end
         local baseName = tool.Name
         
-        -- 1. Direct Attribute
         local rAttr = tool:GetAttribute("Rarity") or tool:GetAttribute("rarity") or tool:GetAttribute("ItemRarity")
         if rAttr and tostring(rAttr) ~= "" then return tostring(rAttr) end
 
-        -- 2. Direct ValueObject
         local rVal = tool:FindFirstChild("Rarity") or tool:FindFirstChild("rarity")
         if rVal and (rVal:IsA("StringValue") or rVal:IsA("ValueBase")) and tostring(rVal.Value) ~= "" then
             return tostring(rVal.Value)
         end
 
-        -- 3. Game internal EntitiesData Module
         local rarity = "Unknown"
         pcall(function()
             local Shared = ReplicatedStorage:FindFirstChild("Shared")
@@ -269,13 +268,11 @@ local success, errorMessage = pcall(function()
     local function getToolLevel(tool)
         if not tool then return 1 end
         
-        -- 1. Direct Attributes
         for _, attrName in ipairs({"Level", "level", "Lvl", "lvl", "ItemLevel", "LevelValue", "lv"}) do
             local v = tool:GetAttribute(attrName)
             if v and tonumber(v) then return tonumber(v) end
         end
         
-        -- 2. Direct Child ValueObjects
         for _, valName in ipairs({"Level", "level", "Lvl", "lvl", "ItemLevel"}) do
             local obj = tool:FindFirstChild(valName)
             if obj and (obj:IsA("ValueBase") or obj:IsA("IntValue") or obj:IsA("NumberValue") or obj:IsA("StringValue")) then
@@ -283,7 +280,6 @@ local success, errorMessage = pcall(function()
             end
         end
 
-        -- 3. Inside Sub-folders
         for _, folderName in ipairs({"Values", "Config", "Configuration", "Stats", "Data", "Attributes", "Info"}) do
             local folder = tool:FindFirstChild(folderName)
             if folder then
@@ -298,7 +294,6 @@ local success, errorMessage = pcall(function()
             end
         end
 
-        -- 4. Inside BillboardGui / SurfaceGui
         for _, desc in ipairs(tool:GetDescendants()) do
             if desc:IsA("TextLabel") and desc.Visible then
                 local txt = desc.Text
@@ -307,7 +302,6 @@ local success, errorMessage = pcall(function()
             end
         end
 
-        -- 5. From tool name string matching
         local m = string.match(tool.Name, "%(Lv%.(%d+)%)") or string.match(tool.Name, "Lv%.(%d+)")
         if m and tonumber(m) then return tonumber(m) end
 
@@ -318,7 +312,6 @@ local success, errorMessage = pcall(function()
         if not tool then return "Unknown" end
         local displayName = tool.Name
         
-        -- Bersihkan tag Lv / Mutation lama agar tidak double
         displayName = string.gsub(displayName, "%s*%(Lv%.%d+%)", "")
         displayName = string.gsub(displayName, "%s*%[.*%]", "")
         displayName = string.gsub(displayName, "%s*%(%d+%%%s*stat%)", "")
@@ -471,7 +464,7 @@ local success, errorMessage = pcall(function()
 
     -- SECTION 1: OVERVIEW & STATS
     local SecOverview = TabInventory:AddSection("Overview & Statistics")
-    local OverviewLabel = SecOverview:AddParagraph("Inventory Overview", "Scanning items...")
+    local RawOverviewLabel = SecOverview:AddParagraph("Inventory Overview", "Scanning items...")
 
     -- SECTION 2: FILTER SETTINGS
     local SecInvFilter = TabInventory:AddSection("Filter Settings")
@@ -519,7 +512,7 @@ local success, errorMessage = pcall(function()
 
     -- SECTION 3: ITEM LIST & BREAKDOWN
     local SecInv = TabInventory:AddSection("Item Breakdown (Categorized)")
-    local FullInventoryLabel = SecInv:AddParagraph("Item List & Total", "Syncing with inventory...")
+    local RawFullInventoryLabel = SecInv:AddParagraph("Item List & Total", "Syncing with inventory...")
 
     -- SECTION 4: ACTIONS & TOOLS
     local SecTools = TabInventory:AddSection("Quick Tools & Management")
@@ -594,6 +587,119 @@ local success, errorMessage = pcall(function()
         end
         processFavoriteBatch(toUnlock, false, "Unlock All")
     end)
+
+    -- ══════════════════════════════════════════
+    -- DYNAMIC AUTO-RESIZING ENGINE FOR SECTIONS
+    -- ══════════════════════════════════════════
+    -- Memaksa frame paragraf dan section mengembang secara presisi di mobile/PC
+    local function applyDynamicParagraph(rawParaObj, sectionTitle)
+        local foundPFrame = nil
+        local foundPDesc = nil
+        local foundPTitle = nil
+
+        -- Cari PFrame di dalam ScreenGui
+        pcall(function()
+            local sg = game:GetService("CoreGui"):FindFirstChild("SigmaUI") or (gethui and gethui():FindFirstChild("SigmaUI")) or localPlayer.PlayerGui:FindFirstChild("SigmaUI")
+            if sg then
+                for _, desc in ipairs(sg:GetDescendants()) do
+                    if desc:IsA("TextLabel") and desc.Text == sectionTitle then
+                        foundPTitle = desc
+                        foundPFrame = desc.Parent
+                        for _, child in ipairs(foundPFrame:GetChildren()) do
+                            if child:IsA("TextLabel") and child ~= desc then
+                                foundPDesc = child
+                                break
+                            end
+                        end
+                        break
+                    end
+                end
+            end
+        end)
+
+        return {
+            Set = function(_, newTitle, newContent)
+                pcall(function()
+                    rawParaObj:Set(newTitle, newContent)
+                end)
+                
+                -- Jika frame belum tercari, coba cari lagi
+                if not foundPFrame then
+                    pcall(function()
+                        local sg = game:GetService("CoreGui"):FindFirstChild("SigmaUI") or (gethui and gethui():FindFirstChild("SigmaUI")) or localPlayer.PlayerGui:FindFirstChild("SigmaUI")
+                        if sg then
+                            for _, desc in ipairs(sg:GetDescendants()) do
+                                if desc:IsA("TextLabel") and desc.Text == newTitle then
+                                    foundPTitle = desc
+                                    foundPFrame = desc.Parent
+                                    for _, child in ipairs(foundPFrame:GetChildren()) do
+                                        if child:IsA("TextLabel") and child ~= desc then
+                                            foundPDesc = child
+                                            break
+                                        end
+                                    end
+                                    break
+                                end
+                            end
+                        end
+                    end)
+                end
+
+                if foundPFrame and foundPDesc then
+                    pcall(function()
+                        foundPFrame.AutomaticSize = Enum.AutomaticSize.Y
+                        foundPDesc.AutomaticSize = Enum.AutomaticSize.Y
+                        foundPDesc.TextWrapped = true
+
+                        -- Hitung tinggi eksak teks menggunakan TextService
+                        local width = math.max(300, foundPFrame.AbsoluteSize.X - 24)
+                        local sz = TextService:GetTextSize(
+                            tostring(newContent),
+                            foundPDesc.TextSize or 11,
+                            foundPDesc.Font or Enum.Font.Gotham,
+                            Vector2.new(width, 1000000)
+                        )
+                        local targetH = math.max(48, sz.Y + 36)
+                        foundPFrame.Size = UDim2.new(1, 0, 0, targetH)
+
+                        -- Update SecFrame induk agar tidak terpotong ClipsDescendants
+                        local inner = foundPFrame.Parent
+                        local secFrame = inner and inner.Parent
+                        if secFrame and secFrame:IsA("Frame") then
+                            local innerLayout = inner:FindFirstChildOfClass("UIListLayout")
+                            local layoutH = innerLayout and innerLayout.AbsoluteContentSize.Y or targetH
+                            local secH = math.max(layoutH + 46, targetH + 46)
+                            secFrame.Size = UDim2.new(1, -18, 0, secH)
+                        end
+                    end)
+                end
+            end
+        }
+    end
+
+    local OverviewLabel = applyDynamicParagraph(RawOverviewLabel, "Inventory Overview")
+    local FullInventoryLabel = applyDynamicParagraph(RawFullInventoryLabel, "Item List & Total")
+
+    -- Fungsi untuk merapikan dan membuka tinggi semua section
+    fixAllSectionHeights = function()
+        pcall(function()
+            for _, sec in ipairs(Window.Sections or {}) do
+                local sFrame = sec.Frame
+                if sFrame then
+                    local inner = sFrame:FindFirstChildWhichIsA("Frame")
+                    if inner then
+                        local layout = inner:FindFirstChildOfClass("UIListLayout")
+                        if layout then
+                            local contentH = layout.AbsoluteContentSize.Y + 46
+                            if contentH > 50 then
+                                sFrame.Size = UDim2.new(1, -18, 0, contentH)
+                            end
+                        end
+                    end
+                end
+            end
+        end)
+    end
 
     -- ══════════════════════════════════════════
     -- INVENTORY SYNC ENGINE
@@ -861,6 +967,9 @@ local success, errorMessage = pcall(function()
         if FullInventoryLabel then
             FullInventoryLabel:Set("Item List & Total", displayString)
         end
+
+        -- Pastikan semua section terbuka dan tidak terpotong
+        task.defer(fixAllSectionHeights)
     end
 
     updateInventoryDisplay = function()
@@ -935,6 +1044,10 @@ local success, errorMessage = pcall(function()
     -- Connect listeners and perform initial scan
     connectInventory()
     updateInventoryDisplay()
+
+    -- Post-launch: perbaiki tinggi semua section setelah jendela selesai animasi buka
+    task.delay(0.6, fixAllSectionHeights)
+    task.delay(1.2, fixAllSectionHeights)
 
     notifyUser("Inventory Viewer", "Loaded successfully! 1 Tab active.", 3, "Success")
 
