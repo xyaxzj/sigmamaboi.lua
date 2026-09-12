@@ -189,6 +189,19 @@ local success, errorMessage = pcall(function()
     local ClawLoopRunning = false
     local ClawStatusLabel = nil
 
+    -- B2S Craft Event Variables
+    local AutoB2SActive1 = false
+    local AutoB2SActive2 = false
+    local AutoB2SActive3 = false
+    local B2SDelay = 1.0
+    local B2SCount1 = 0
+    local B2SCount2 = 0
+    local B2SCount3 = 0
+    local B2SLoopRunning1 = false
+    local B2SLoopRunning2 = false
+    local B2SLoopRunning3 = false
+    local B2SStatusLabel = nil
+
     -- Forward declarations
     local refreshInventoryText
     local updateInventoryDisplay
@@ -257,6 +270,23 @@ local success, errorMessage = pcall(function()
             local packages = shared and shared:FindFirstChild("Packages")
             local network = packages and packages:FindFirstChild("Network")
             return network and network:FindFirstChild("rev_ClawMachine_Request")
+        end)
+        if ok2 and res2 then return res2 end
+
+        return nil
+    end
+
+    local function getB2SRemote()
+        local ok, res = pcall(function()
+            return ReplicatedStorage.Shared.Packages.Network.rev_b2s_Craft
+        end)
+        if ok and res then return res end
+
+        local ok2, res2 = pcall(function()
+            local shared = ReplicatedStorage:FindFirstChild("Shared")
+            local packages = shared and shared:FindFirstChild("Packages")
+            local network = packages and packages:FindFirstChild("Network")
+            return network and network:FindFirstChild("rev_b2s_Craft")
         end)
         if ok2 and res2 then return res2 end
 
@@ -894,6 +924,168 @@ local success, errorMessage = pcall(function()
             ClawStatusLabel:Set("Claw Machine Status", string.format("⚡ Status: %s\n🎯 Requests Sent: 0\n⏱️ Loop Interval: %.1fs",
                 AutoClawActive and "RUNNING" or "IDLE", ClawDelay))
         end
+    end)
+
+    -- ══════════════════════════════════════════
+    -- SECTION: B2S AUTO CRAFT (3 RECIPES)
+    -- ══════════════════════════════════════════
+    local SecB2S = TabEvent:AddSection("Back to School Auto Craft")
+    local RawB2SStatusLabel = SecB2S:AddParagraph("B2S Craft Status", "⚡ Status: ALL IDLE\n🔨 Craft #1: 0  │  Craft #2: 0  │  Craft #3: 0\n⏱️ Interval: 1.0s\n📡 Target: rev_b2s_Craft")
+    B2SStatusLabel = applyDynamicParagraph(RawB2SStatusLabel, "B2S Craft Status")
+
+    local function updateB2SStatusText()
+        if not B2SStatusLabel then return end
+        local activeList = {}
+        if AutoB2SActive1 then table.insert(activeList, "#1") end
+        if AutoB2SActive2 then table.insert(activeList, "#2") end
+        if AutoB2SActive3 then table.insert(activeList, "#3") end
+
+        local statusStr = (#activeList > 0) and ("RUNNING (" .. table.concat(activeList, ", ") .. ")") or "ALL IDLE"
+        local txt = string.format("⚡ Status: %s\n🔨 Craft #1: %d  │  Craft #2: %d  │  Craft #3: %d\n⏱️ Interval: %.1fs  │  🕒 Last: %s",
+            statusStr, B2SCount1, B2SCount2, B2SCount3, B2SDelay, os.date("%H:%M:%S"))
+        B2SStatusLabel:Set("B2S Craft Status", txt)
+    end
+
+    local function fireB2SCraft(id)
+        local ok, err = pcall(function()
+            local remote = getB2SRemote()
+            if remote then
+                remote:FireServer(id)
+                if id == 1 then B2SCount1 = B2SCount1 + 1
+                elseif id == 2 then B2SCount2 = B2SCount2 + 1
+                elseif id == 3 then B2SCount3 = B2SCount3 + 1
+                end
+            else
+                error("rev_b2s_Craft remote not found")
+            end
+        end)
+        updateB2SStatusText()
+        return ok, err
+    end
+
+    local function startB2SLoop(id)
+        if id == 1 then
+            if B2SLoopRunning1 then return end
+            B2SLoopRunning1 = true
+            task.spawn(function()
+                while AutoB2SActive1 do
+                    fireB2SCraft(1)
+                    task.wait(B2SDelay)
+                end
+                B2SLoopRunning1 = false
+                updateB2SStatusText()
+            end)
+        elseif id == 2 then
+            if B2SLoopRunning2 then return end
+            B2SLoopRunning2 = true
+            task.spawn(function()
+                while AutoB2SActive2 do
+                    fireB2SCraft(2)
+                    task.wait(B2SDelay)
+                end
+                B2SLoopRunning2 = false
+                updateB2SStatusText()
+            end)
+        elseif id == 3 then
+            if B2SLoopRunning3 then return end
+            B2SLoopRunning3 = true
+            task.spawn(function()
+                while AutoB2SActive3 do
+                    fireB2SCraft(3)
+                    task.wait(B2SDelay)
+                end
+                B2SLoopRunning3 = false
+                updateB2SStatusText()
+            end)
+        end
+    end
+
+    SecB2S:AddSlider({
+        Name = "Craft Interval (Seconds)",
+        Min = 0.5,
+        Max = 10,
+        Default = 1,
+        Step = 0.5
+    }, function(val)
+        B2SDelay = tonumber(val) or 1
+        updateB2SStatusText()
+    end)
+
+    SecB2S:AddToggle({
+        Name = "Auto Craft #1 (rev_b2s_Craft 1)",
+        Default = false
+    }, function(state)
+        AutoB2SActive1 = state
+        if state then
+            notifyUser("B2S Craft", "Auto Craft #1 started (Loop: " .. tostring(B2SDelay) .. "s)!", 2, "Success")
+            startB2SLoop(1)
+        else
+            notifyUser("B2S Craft", "Auto Craft #1 stopped.", 1.5, "Info")
+            updateB2SStatusText()
+        end
+    end)
+
+    SecB2S:AddToggle({
+        Name = "Auto Craft #2 (rev_b2s_Craft 2)",
+        Default = false
+    }, function(state)
+        AutoB2SActive2 = state
+        if state then
+            notifyUser("B2S Craft", "Auto Craft #2 started (Loop: " .. tostring(B2SDelay) .. "s)!", 2, "Success")
+            startB2SLoop(2)
+        else
+            notifyUser("B2S Craft", "Auto Craft #2 stopped.", 1.5, "Info")
+            updateB2SStatusText()
+        end
+    end)
+
+    SecB2S:AddToggle({
+        Name = "Auto Craft #3 (rev_b2s_Craft 3)",
+        Default = false
+    }, function(state)
+        AutoB2SActive3 = state
+        if state then
+            notifyUser("B2S Craft", "Auto Craft #3 started (Loop: " .. tostring(B2SDelay) .. "s)!", 2, "Success")
+            startB2SLoop(3)
+        else
+            notifyUser("B2S Craft", "Auto Craft #3 stopped.", 1.5, "Info")
+            updateB2SStatusText()
+        end
+    end)
+
+    SecB2S:AddButton("⚡ Craft #1 Once", function()
+        local ok, err = fireB2SCraft(1)
+        if ok then
+            notifyUser("B2S Craft", "Craft #1 sent to server!", 1.5, "Success")
+        else
+            notifyUser("Error", "Failed Craft #1: " .. tostring(err), 2.5, "Error")
+        end
+    end)
+
+    SecB2S:AddButton("⚡ Craft #2 Once", function()
+        local ok, err = fireB2SCraft(2)
+        if ok then
+            notifyUser("B2S Craft", "Craft #2 sent to server!", 1.5, "Success")
+        else
+            notifyUser("Error", "Failed Craft #2: " .. tostring(err), 2.5, "Error")
+        end
+    end)
+
+    SecB2S:AddButton("⚡ Craft #3 Once", function()
+        local ok, err = fireB2SCraft(3)
+        if ok then
+            notifyUser("B2S Craft", "Craft #3 sent to server!", 1.5, "Success")
+        else
+            notifyUser("Error", "Failed Craft #3: " .. tostring(err), 2.5, "Error")
+        end
+    end)
+
+    SecB2S:AddButton("🔄 Reset Craft Counters", function()
+        B2SCount1 = 0
+        B2SCount2 = 0
+        B2SCount3 = 0
+        notifyUser("B2S Craft", "All craft counters reset to 0.", 1.5, "Info")
+        updateB2SStatusText()
     end)
 
     -- Fungsi untuk merapikan dan membuka tinggi semua section
