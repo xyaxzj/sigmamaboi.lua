@@ -15,7 +15,6 @@ local success, errorMessage = pcall(function()
     local localPlayer = Players.LocalPlayer
     local RunService = game:GetService("RunService")
     local ReplicatedStorage = game:GetService("ReplicatedStorage")
-    local HttpService = game:GetService("HttpService")
 
     while not localPlayer do
         task.wait(0.1)
@@ -26,7 +25,7 @@ local success, errorMessage = pcall(function()
     -- LOAD UI LIBRARY (SIGMA V4 / NcHO)
     -- ══════════════════════════════════════════
     local Library = nil
-    local pcallLoad = pcall(function()
+    pcall(function()
         if readfile and isfile and isfile("UI sigma.lua") then
             Library = loadstring(readfile("UI sigma.lua"))()
         elseif readfile and isfile and isfile("c:\\UI\\UI sigma.lua") then
@@ -37,7 +36,6 @@ local success, errorMessage = pcall(function()
     end)
 
     if not Library or type(Library) ~= "table" then
-        -- Fallback URL
         pcall(function()
             Library = loadstring(game:HttpGet('https://raw.githubusercontent.com/xyaxzj/sigmamaboi.lua/refs/heads/main/NcHO.lua'))()
         end)
@@ -46,6 +44,25 @@ local success, errorMessage = pcall(function()
     if not Library or type(Library) ~= "table" then
         warn("[Inventory Viewer] Failed to load UI Library!")
         return
+    end
+
+    -- Defensif: cegah crash bug TabIco.Tag = TabLbl pada NcHO.lua
+    if Library.CreateWindow then
+        local rawCreateWindow = Library.CreateWindow
+        Library.CreateWindow = function(self, cfg)
+            local win = rawCreateWindow(self, cfg)
+            if win and win.MakeTab then
+                local rawMakeTab = win.MakeTab
+                win.MakeTab = function(wSelf, iconOrCfg)
+                    local icon = iconOrCfg
+                    if type(iconOrCfg) == "table" then
+                        icon = iconOrCfg.Icon or "🎒"
+                    end
+                    return rawMakeTab(wSelf, icon)
+                end
+            end
+            return win
+        end
     end
 
     local function notifyUser(title, content, duration, nType)
@@ -98,7 +115,7 @@ local success, errorMessage = pcall(function()
     -- ══════════════════════════════════════════
     -- RARITIES & EXCLUSIVE DEFINITIONS
     -- ══════════════════════════════════════════
-    local RARITIES = {
+    local RarityList = {
         "Common", "Rare", "Epic", "Legendary", "Mythic", "Godly",
         "Exclusive", "Volcanic", "Celestial", "Abyssal", "Demon",
         "Secret", "Rainbow", "Eternal", "Hacked", "OG"
@@ -136,8 +153,12 @@ local success, errorMessage = pcall(function()
     local CancelFavProcess = false
     local FavDelay = 0.3
 
+    -- Forward declarations
+    local refreshInventoryText
+    local updateInventoryDisplay
+
     -- ══════════════════════════════════════════
-    -- HELPER FUNCTIONS
+    -- HELPER FUNCTIONS (1:1 DARI AUTO TRADE.LUA)
     -- ══════════════════════════════════════════
     local function getBaseName(dropdownString) 
         return string.split(dropdownString, " | ")[1] or dropdownString 
@@ -436,7 +457,7 @@ local success, errorMessage = pcall(function()
     end
 
     -- ══════════════════════════════════════════
-    -- CREATE WINDOW & SINGLE INVENTORY TAB
+    -- CREATE WINDOW & SINGLE TAB (INVENTORY)
     -- ══════════════════════════════════════════
     local Window = Library:CreateWindow({
         Name = "Inventory Viewer",
@@ -445,15 +466,12 @@ local success, errorMessage = pcall(function()
         ConfigName = "MoctaInventory_Config"
     })
 
-    -- HANYA ADA 1 TAB TUNGGAL: INVENTORY VIEWER
-    local TabInventory = Window:MakeTab({
-        Icon = "🎒",
-        Name = "Inventory"
-    })
+    -- Menggunakan string icon tunggal "🎒" agar 100% kompatibel dengan NcHO.lua
+    local TabInventory = Window:MakeTab("🎒")
 
     -- SECTION 1: OVERVIEW & STATS
     local SecOverview = TabInventory:AddSection("Overview & Statistics")
-    local OverviewLabel = SecOverview:AddParagraph("📊 Inventory Overview", "Scanning items...")
+    local OverviewLabel = SecOverview:AddParagraph("Inventory Overview", "Scanning items...")
 
     -- SECTION 2: FILTER SETTINGS
     local SecInvFilter = TabInventory:AddSection("Filter Settings")
@@ -476,7 +494,7 @@ local success, errorMessage = pcall(function()
 
     InvRarityDropdown = SecInvFilter:AddMultiDropdown({
         Name = "Filter by Rarity",
-        Options = RARITIES,
+        Options = RarityList,
         Default = {}
     }, function()
         if refreshInventoryText then refreshInventoryText() end
@@ -580,30 +598,37 @@ local success, errorMessage = pcall(function()
     -- ══════════════════════════════════════════
     -- INVENTORY SYNC ENGINE
     -- ══════════════════════════════════════════
-    local refreshInventoryText
     refreshInventoryText = function()
         if not CachedInventoryData then return end
         
         local selectedRarities = {}
         if InvRarityDropdown then
-            selectedRarities = InvRarityDropdown:Get()
-            if type(selectedRarities) ~= "table" then selectedRarities = {selectedRarities} end
+            pcall(function()
+                selectedRarities = InvRarityDropdown:Get()
+                if type(selectedRarities) ~= "table" then selectedRarities = {selectedRarities} end
+            end)
         end
         
         local selectedMutations = {}
         if InvMutationDropdown then
-            selectedMutations = InvMutationDropdown:Get()
-            if type(selectedMutations) ~= "table" then selectedMutations = {selectedMutations} end
+            pcall(function()
+                selectedMutations = InvMutationDropdown:Get()
+                if type(selectedMutations) ~= "table" then selectedMutations = {selectedMutations} end
+            end)
         end
         
         local favFilterOpt = "All Items"
         if InvFavFilterDropdown then
-            favFilterOpt = InvFavFilterDropdown:Get() or "All Items"
+            pcall(function()
+                favFilterOpt = InvFavFilterDropdown:Get() or "All Items"
+            end)
         end
 
         local lvlFilterOpt = "All Levels"
         if InvLevelFilterDropdown then
-            lvlFilterOpt = InvLevelFilterDropdown:Get() or "All Levels"
+            pcall(function()
+                lvlFilterOpt = InvLevelFilterDropdown:Get() or "All Levels"
+            end)
         end
         
         local hasRarityFilter = false
@@ -644,7 +669,7 @@ local success, errorMessage = pcall(function()
         local itemMutationMap = {}
         local totalFavCount = 0
         
-        -- Pass 1: Scan all tools once and build lookup cache
+        -- Pass 1: Scan tools sekali dan cache ke map
         for _, tool in ipairs(getAllTools()) do
             if isTradeable(tool) then
                 local fullName = getFullItemName(tool)
@@ -671,7 +696,7 @@ local success, errorMessage = pcall(function()
         end
         CachedFavoriteCount = totalFavCount
         
-        -- Pass 2: Filter and categorize items
+        -- Pass 2: Filter dan kategorikan item
         for itemName, amount in pairs(CachedInventoryData) do
             local itemRarity = itemRarityMap[itemName] or "Unknown"
             local itemMutation = itemMutationMap[itemName]
@@ -679,7 +704,7 @@ local success, errorMessage = pcall(function()
             local filterMut = itemMutation or "No Mutation"
             local isFav = itemFavMap[itemName] == true
             
-            -- Rarity filter match
+            -- Rarity filter
             local rarityPass = true
             if hasRarityFilter then
                 local found = false
@@ -689,7 +714,7 @@ local success, errorMessage = pcall(function()
                 if not found then rarityPass = false end
             end
             
-            -- Mutation filter match
+            -- Mutation filter
             local mutationPass = true
             if hasMutationFilter then
                 local found = false
@@ -700,7 +725,7 @@ local success, errorMessage = pcall(function()
                 if not found then mutationPass = false end
             end
 
-            -- Favorite filter match
+            -- Favorite filter
             local favPass = true
             if favFilterOpt == "⭐ Only Favorites" then
                 favPass = isFav
@@ -708,7 +733,7 @@ local success, errorMessage = pcall(function()
                 favPass = not isFav
             end
 
-            -- Level filter match
+            -- Level filter
             local lvlPass = true
             if lvlFilterOpt == "Lv. 1 Only" then
                 lvlPass = (itemLvl == 1)
@@ -739,7 +764,7 @@ local success, errorMessage = pcall(function()
             end
         end
         
-        -- Pass 3: Calculate filtered CPS
+        -- Pass 3: Hitung filtered CPS
         for _, tool in ipairs(getAllTools()) do
             if isTradeable(tool) then
                 local fullName = getFullItemName(tool)
@@ -764,7 +789,9 @@ local success, errorMessage = pcall(function()
             overviewText = overviewText .. string.format("\n🎯 Showing: %d / %d (Filtered)  │  ⚡ Filtered CPS: %s",
                 filteredTotalCount, CachedTotalCount, filteredCpsStr)
         end
-        OverviewLabel:Set("📊 Inventory Overview", overviewText)
+        if OverviewLabel then
+            OverviewLabel:Set("Inventory Overview", overviewText)
+        end
 
         -- Update Minimized status in Sigma UI
         pcall(function()
@@ -836,12 +863,11 @@ local success, errorMessage = pcall(function()
         end
     end
 
-    local updateInventoryDisplay
     updateInventoryDisplay = function()
         if isSyncingUI then return end
         isSyncingUI = true
         task.spawn(function()
-            task.wait(0.5) 
+            task.wait(0.3) 
             local inventoryData = {}; local totalCount = 0; local uniqueCount = 0
             for _, tool in pairs(getAllTools()) do  
                 if isTradeable(tool) then
@@ -859,7 +885,7 @@ local success, errorMessage = pcall(function()
             
             local invMutList = getInventoryMutationList()
             if InvMutationDropdown then
-                InvMutationDropdown:Refresh(invMutList)
+                pcall(function() InvMutationDropdown:Refresh(invMutList) end)
             end
             
             refreshInventoryText()
