@@ -37,7 +37,6 @@ local success, errorMessage = pcall(function()
     local f_trade_r = networkFolder:WaitForChild("ref_trade_r", 5) 
     local r_trade_i = networkFolder:WaitForChild("rev_trade_i", 5) 
     local rev_trade_start = networkFolder:WaitForChild("rev_trade_start", 5) 
-    local rev_trade_n = networkFolder:FindFirstChild("rev_trade_n") or networkFolder:WaitForChild("rev_trade_n", 5)
     local rev_ToggleFav = networkFolder:FindFirstChild("rev_ToggleFav") or networkFolder:WaitForChild("rev_ToggleFav", 5)
 
     local ref_B_Sell = nil
@@ -49,7 +48,6 @@ local success, errorMessage = pcall(function()
         if v.Name == "ref_B_Sell" and v:IsA("RemoteFunction") then ref_B_Sell = v end
         if v.Name == "rev_S_Interact" and v:IsA("RemoteEvent") then rev_S_Interact = v end
         if not rev_ToggleFav and v.Name == "rev_ToggleFav" and v:IsA("RemoteEvent") then rev_ToggleFav = v end
-        if not rev_trade_n and v.Name == "rev_trade_n" and v:IsA("RemoteEvent") then rev_trade_n = v end
         if (v.Name == "ref_B_Upgrade" or v.Name == "B_Upgrade") and v:IsA("RemoteFunction") then ref_B_Upgrade = v end
         if (v.Name == "rev_B_Upgrade" or v.Name == "B_Upgrade") and v:IsA("RemoteEvent") then rev_B_Upgrade = v end
     end
@@ -2254,48 +2252,47 @@ local success, errorMessage = pcall(function()
     local SecInbound = TabInbound:AddSection("Inbound Control")
     local ReceiverLog = SecInbound:AddParagraph("Status", "Inactive.")
 
-    -- Listener event rev_trade_n (Instan Auto-Accept saat sinyal trade request masuk)
-    local lastAcceptedSender = nil
-    local lastAcceptTime = 0
+    local InboundSenderInput = "9339367796"
+    local InboundDropdown = nil
 
-    local function handleIncomingTradeRequest(senderUserId, timestamp)
-        if not AutoReceiverEnabled or not senderUserId then return end
-        local now = os.clock()
-        if lastAcceptedSender == senderUserId and (now - lastAcceptTime < 0.5) then return end
-        lastAcceptedSender = senderUserId
-        lastAcceptTime = now
-
-        pcall(function()
-            ReceiverLog:Set("Status", string.format("⚡ Auto-Accepting Trade dari %s...", tostring(senderUserId)))
-            if rev_trade_start then
-                rev_trade_start:FireServer(senderUserId)
-            else
-                local ev = ReplicatedStorage:FindFirstChild("rev_trade_start", true)
-                if ev then ev:FireServer(senderUserId) end
+    local function getSenderTargetUserId()
+        local numId = tonumber(InboundSenderInput)
+        if numId and numId > 0 then return numId end
+        if InboundSenderInput and InboundSenderInput ~= "" then
+            local p = Players:FindFirstChild(InboundSenderInput)
+            if p then return p.UserId end
+            for _, pl in ipairs(Players:GetPlayers()) do
+                if string.lower(pl.Name) == string.lower(InboundSenderInput) or string.lower(pl.DisplayName) == string.lower(InboundSenderInput) then
+                    return pl.UserId
+                end
             end
-        end)
+        end
+        if TargetPlayerName and TargetPlayerName ~= "" then
+            local p = Players:FindFirstChild(TargetPlayerName)
+            if p then return p.UserId end
+        end
+        return 9339367796
     end
 
-    if rev_trade_n then
-        rev_trade_n.OnClientEvent:Connect(handleIncomingTradeRequest)
-    end
+    SecInbound:AddInput({Name = "Sender UserId / Name (P1):", Placeholder = "Default: 9339367796"}, function(v)
+        if v and v ~= "" then
+            InboundSenderInput = tostring(v)
+            ReceiverLog:Set("Status", "Target Sender diatur: " .. tostring(v))
+        end
+    end)
 
-    if networkFolder then
-        networkFolder.ChildAdded:Connect(function(child)
-            if child.Name == "rev_trade_n" and child:IsA("RemoteEvent") then
-                rev_trade_n = child
-                rev_trade_n.OnClientEvent:Connect(handleIncomingTradeRequest)
-            elseif child.Name == "rev_trade_start" and child:IsA("RemoteEvent") then
-                rev_trade_start = child
-            end
-        end)
-    end
+    InboundDropdown = SecInbound:AddDropdown({Name = "Quick Select Sender (P1)", Options = getPlayerList(), Default = ""}, function(Opt)
+        if Opt and Opt ~= "" then
+            InboundSenderInput = tostring(Opt)
+            ReceiverLog:Set("Status", "Target Sender dipilih: " .. tostring(Opt))
+        end
+    end)
 
     SecInbound:AddToggle({Name = "🤖 Auto-Accept", Default = false}, function(Value)
         AutoReceiverEnabled = Value
         updateTradeHUD()
         if AutoReceiverEnabled then
-            ReceiverLog:Set("Status", "🟢 Active (Listening rev_trade_n)...")
+            ReceiverLog:Set("Status", "🟢 Active (Auto-Accepting via rev_trade_start)...")
             task.spawn(function()
                 while AutoReceiverEnabled do
                     local tradeFrame = nil
@@ -2311,6 +2308,15 @@ local success, errorMessage = pcall(function()
                     end
 
                     if not (tradeFrame and tradeFrame.Visible) then
+                        -- Eksekusi langsung rev_trade_start ke Target Sender (Default: 9339367796)
+                        local targetUserId = getSenderTargetUserId()
+                        if targetUserId and rev_trade_start then
+                            pcall(function()
+                                rev_trade_start:FireServer(targetUserId)
+                            end)
+                        end
+
+                        -- Fallback pendeteksi jika ada popup request trade dari pemain lain di GUI
                         if pGui then
                             for _, gui in ipairs(pGui:GetChildren()) do
                                 if gui:IsA("ScreenGui") and gui.Enabled and gui.Name ~= "Sigma UI" and gui.Name ~= "Rayfield" and gui.Name ~= "MiRaGe_Suite_v2" then
@@ -2342,9 +2348,6 @@ local success, errorMessage = pcall(function()
                                     if string.find(txt, "trade") or string.find(txt, "request") or string.find(txt, "invited") then
                                         for _, p in ipairs(Players:GetPlayers()) do
                                             if p ~= localPlayer and (string.find(desc.Text, p.Name) or string.find(desc.Text, p.DisplayName)) then
-                                                if f_trade_r then
-                                                    pcall(function() f_trade_r:InvokeServer(p.UserId) end)
-                                                end
                                                 if rev_trade_start then
                                                     pcall(function() rev_trade_start:FireServer(p.UserId) end)
                                                 end
@@ -2834,6 +2837,7 @@ local success, errorMessage = pcall(function()
             if AutoFavMutationDropdown then AutoFavMutationDropdown:Refresh(mutList) end
             
             PlayerDropdown:Refresh(getPlayerList())
+            if InboundDropdown then InboundDropdown:Refresh(getPlayerList()) end
             
             local invMutList = getInventoryMutationList()
             if InvMutationDropdown then
