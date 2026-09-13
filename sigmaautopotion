@@ -6,6 +6,7 @@ local playerGui = lp:WaitForChild("PlayerGui", 10)
 
 _G.autoUseBarbell = true
 _G.autoClaimX2 = true
+_G.autoBuyBigJupiter = true
 
 ---------------------------------------------------------
 -- 1. UBAH MAP JADI POTATO (PUTIH & PLASTIC)
@@ -160,6 +161,22 @@ local activeBarbellName = "Mencari Tool..."
 local function isBigJupiter(tool)
     if not tool or not tool:IsA("Tool") then return false end
     return string.find(string.lower(tool.Name), "big jupiter") ~= nil
+end
+
+local function playerOwnsBigJupiter()
+    local char = lp.Character
+    if char and isBigJupiter(char:FindFirstChildOfClass("Tool")) then
+        return true
+    end
+    local backpack = lp:FindFirstChild("Backpack")
+    if backpack then
+        for _, tool in ipairs(backpack:GetChildren()) do
+            if isBigJupiter(tool) then
+                return true
+            end
+        end
+    end
+    return false
 end
 
 local function isBarbellTool(tool)
@@ -702,6 +719,125 @@ local function getRebirthStat()
     return val
 end
 
+---------------------------------------------------------
+-- MEKANIK AUTO BUY BIG JUPITER (MINIMAL $100S)
+---------------------------------------------------------
+local function hasMin100S(cashStr)
+    if not cashStr or cashStr == "" or cashStr == "Tidak Terdeteksi" or cashStr == "Menghitung..." then
+        return false
+    end
+    
+    local clean = string.lower(cashStr):gsub("%$", ""):gsub("%s+", "")
+    local numStr, suf = string.match(clean, "([%d%.,]+)%s*([a-z]*)")
+    if not numStr then return false end
+    
+    if string.find(numStr, ",") and string.find(numStr, "%.") then
+        numStr = numStr:gsub(",", "")
+    elseif string.find(numStr, ",") then
+        if string.match(numStr, ",%d%d?$") then
+            numStr = numStr:gsub(",", ".")
+        else
+            numStr = numStr:gsub(",", "")
+        end
+    end
+    
+    local num = tonumber(numStr)
+    if not num then return false end
+    
+    suf = suf or ""
+    if suf ~= "" then
+        suf = string.match(suf, "^[a-z]+") or ""
+    end
+    
+    local suffixTiers = {
+        ["k"] = 1,
+        ["m"] = 2,
+        ["b"] = 3,
+        ["t"] = 4,
+        ["qa"] = 5,
+        ["qd"] = 5,
+        ["q"] = 5,
+        ["quad"] = 5,
+        ["quadrillion"] = 5,
+        ["qi"] = 6,
+        ["qn"] = 6,
+        ["quin"] = 6,
+        ["quintillion"] = 6,
+        ["s"] = 7,
+        ["sx"] = 7,
+        ["sex"] = 7,
+        ["sextillion"] = 7,
+        ["sp"] = 8,
+        ["sep"] = 8,
+        ["sept"] = 8,
+        ["septillion"] = 8,
+        ["oc"] = 9,
+        ["oct"] = 9,
+        ["o"] = 9,
+        ["octillion"] = 9,
+        ["no"] = 10,
+        ["non"] = 10,
+        ["n"] = 10,
+        ["nonillion"] = 10,
+        ["dc"] = 11,
+        ["dec"] = 11,
+        ["d"] = 11,
+        ["decillion"] = 11,
+        ["ud"] = 12,
+        ["dd"] = 13,
+        ["td"] = 14,
+    }
+    
+    local tier = suffixTiers[suf] or 0
+    if tier > 7 then
+        return true
+    elseif tier == 7 then
+        return num >= 100
+    elseif tier == 0 and num >= 1e23 then
+        return true
+    end
+    
+    return false
+end
+
+local lastBuyJupiterAttempt = 0
+local function checkAndBuyBigJupiter(cashStr)
+    if not _G.autoBuyBigJupiter then return end
+    if playerOwnsBigJupiter() then return end
+    
+    local now = os.clock()
+    if now - lastBuyJupiterAttempt < 2.0 then return end
+    
+    if hasMin100S(cashStr) then
+        lastBuyJupiterAttempt = now
+        pcall(function()
+            local rep = game:GetService("ReplicatedStorage")
+            local shared = rep:FindFirstChild("Shared")
+            local packages = shared and shared:FindFirstChild("Packages")
+            local network = packages and packages:FindFirstChild("Network")
+            local event = (network and network:FindFirstChild("rev_Shop_Buy"))
+                or rep:FindFirstChild("rev_Shop_Buy", true)
+            
+            if event then
+                event:FireServer("WeightShop", "Big Jupiter")
+            else
+                rep.Shared.Packages.Network.rev_Shop_Buy:FireServer(
+                    "WeightShop",
+                    "Big Jupiter"
+                )
+            end
+            
+            pcall(function()
+                StarterGui:SetCore("SendNotification", {
+                    Title = "Auto Buy Big Jupiter",
+                    Text = "Membeli Big Jupiter (Cash: " .. tostring(cashStr) .. ")",
+                    Duration = 4
+                })
+            end)
+        end)
+    end
+end
+
 -- 4. Loop Update Statistik (FPS, Waktu & Cash tiap 1 detik, Kick Power tiap 60 detik)
 local startTime = os.time()
 local cachedCashStat = "Menghitung..."
@@ -739,6 +875,7 @@ end
 task.spawn(function()
     task.wait(2) -- Jeda awal agar UI game selesai dimuat sepenuhnya
     cachedCashStat = getCashStat()
+    checkAndBuyBigJupiter(cachedCashStat)
     cachedKickPower = getKickPower()
     cachedSpeedStat = getSpeedStat() -- Hanya dibaca sekali di awal eksekusi
     cachedRebirthStat = getRebirthStat() -- Hanya dibaca sekali di awal eksekusi
@@ -747,6 +884,7 @@ task.spawn(function()
     while task.wait(1) do
         kickPowerUpdateCounter = kickPowerUpdateCounter + 1
         cachedCashStat = getCashStat() -- Perbarui Cash tiap 1 detik secara real-time
+        checkAndBuyBigJupiter(cachedCashStat)
         
         -- Perbarui Kick Power hanya setelah 60 detik (1 menit)
         if kickPowerUpdateCounter >= 60 then
