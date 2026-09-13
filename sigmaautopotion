@@ -596,48 +596,37 @@ local function getKickPower()
 end
 
 local function getCashStat()
-    local cash = nil
+    local text = nil
     pcall(function()
-        -- 1. Sesuai hierarki PlayerGui -> HUD -> BottomLeft -> CoinFrame -> InsideFrame -> CoinLabel
-        local hud = playerGui:FindFirstChild("HUD")
-        if hud and hud:IsA("ScreenGui") then
-            local bottomLeft = hud:FindFirstChild("BottomLeft")
-            if bottomLeft and bottomLeft:IsA("Frame") then
-                local coinFrame = bottomLeft:FindFirstChild("CoinFrame")
-                local insideFrame = coinFrame and coinFrame:FindFirstChild("InsideFrame")
-                local coinLabel = insideFrame and insideFrame:FindFirstChild("CoinLabel")
+        -- 1. Jalur hierarki PlayerGui -> HUD -> BottomLeft -> CoinFrame -> InsideFrame -> CoinLabel
+        local hud = playerGui:FindFirstChild("HUD") or playerGui:FindFirstChild("HUD", true)
+        if hud then
+            local bottomLeft = hud:FindFirstChild("BottomLeft", true)
+            if bottomLeft then
+                local coinFrame = bottomLeft:FindFirstChild("CoinFrame", true)
+                local insideFrame = (coinFrame and coinFrame:FindFirstChild("InsideFrame", true)) or bottomLeft:FindFirstChild("InsideFrame", true)
+                local coinLabel = (insideFrame or coinFrame or bottomLeft):FindFirstChild("CoinLabel", true)
                 if coinLabel and coinLabel:IsA("TextLabel") and coinLabel.Text ~= "" then
-                    cash = coinLabel.Text
+                    text = coinLabel.Text
                     return
                 end
             end
-        end
-
-        -- 2. Fallback pencarian rekursif jika nama ScreenGui bukan HUD
-        for _, gui in ipairs(playerGui:GetChildren()) do
-            if gui:IsA("ScreenGui") and gui.Name ~= "AFKBlackscreen" then
-                local bottomLeft = gui:FindFirstChild("BottomLeft", true)
-                if bottomLeft and bottomLeft:IsA("Frame") then
-                    local coinFrame = bottomLeft:FindFirstChild("CoinFrame")
-                    local insideFrame = coinFrame and coinFrame:FindFirstChild("InsideFrame")
-                    local coinLabel = insideFrame and insideFrame:FindFirstChild("CoinLabel")
-                    if coinLabel and coinLabel:IsA("TextLabel") and coinLabel.Text ~= "" then
-                        cash = coinLabel.Text
-                        break
-                    end
-                end
+            
+            local directCoin = hud:FindFirstChild("CoinLabel", true)
+            if directCoin and directCoin:IsA("TextLabel") and directCoin.Text ~= "" then
+                text = directCoin.Text
+                return
             end
         end
 
-        -- 3. Fallback langsung mencari CoinLabel di PlayerGui
-        if not cash then
-            local coinLabel = playerGui:FindFirstChild("CoinLabel", true)
-            if coinLabel and coinLabel:IsA("TextLabel") and coinLabel.Text ~= "" then
-                cash = coinLabel.Text
-            end
+        -- 2. Pencarian rekursif CoinLabel di seluruh PlayerGui
+        local coinLabel = playerGui:FindFirstChild("CoinLabel", true)
+        if coinLabel and coinLabel:IsA("TextLabel") and coinLabel.Text ~= "" then
+            text = coinLabel.Text
+            return
         end
     end)
-    return cash or "Tidak Terdeteksi"
+    return text or "Tidak Terdeteksi"
 end
 
 local function getSpeedStat()
