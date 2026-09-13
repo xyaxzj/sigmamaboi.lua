@@ -155,6 +155,44 @@ local tempPauseBarbell = false
 ---------------------------------------------------------
 -- MEKANIK 1: AUTO USE BARBELL
 ---------------------------------------------------------
+local activeBarbellName = "Mencari Tool..."
+
+local function isBarbellTool(tool)
+    if not tool or not tool:IsA("Tool") then return false end
+    local name = tool.Name
+    return string.match(name, "Barbell$") ~= nil or string.find(string.lower(name), "barbell") ~= nil
+end
+
+local function getBarbellName()
+    local char = lp.Character
+    if char then
+        local currentTool = char:FindFirstChildOfClass("Tool")
+        if isBarbellTool(currentTool) then
+            activeBarbellName = currentTool.Name
+            return activeBarbellName
+        end
+    end
+    
+    local backpack = lp:FindFirstChild("Backpack")
+    if backpack then
+        for _, tool in ipairs(backpack:GetChildren()) do
+            if isBarbellTool(tool) then
+                activeBarbellName = tool.Name
+                return activeBarbellName
+            end
+        end
+    end
+    
+    if char then
+        local currentTool = char:FindFirstChildOfClass("Tool")
+        if currentTool then
+            return currentTool.Name
+        end
+    end
+    
+    return activeBarbellName ~= "Mencari Tool..." and activeBarbellName or "Tidak Ada Barbell"
+end
+
 task.spawn(function()
     while true do
         task.wait(0.2) -- Frekuensi cek diubah ke 0.2 detik agar lebih ringan
@@ -168,13 +206,15 @@ task.spawn(function()
 
         local currentTool = char:FindFirstChildOfClass("Tool")
         
-        if currentTool and string.match(currentTool.Name, "Barbell$") then
+        if isBarbellTool(currentTool) then
+            activeBarbellName = currentTool.Name
             currentTool:Activate()
             task.wait(0.3) -- Jeda ekstra setelah aktivasi agar tidak terjadi spam paket data ke server
         else
             if backpack then
                 for _, tool in ipairs(backpack:GetChildren()) do
-                    if tool:IsA("Tool") and string.match(tool.Name, "Barbell$") then
+                    if isBarbellTool(tool) then
+                        activeBarbellName = tool.Name
                         hum:EquipTool(tool)
                         task.wait(0.2) 
                         tool:Activate()
@@ -353,28 +393,59 @@ end)
 -- MEKANIK 5: AFK BLACKSCREEN (STATS MONITOR)
 ---------------------------------------------------------
 local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
 
--- 1. Buat ScreenGui Hitam Fullscreen
+-- Safe Parent Resolver (Mendukung gethui/CoreGui/PlayerGui)
+local function getSafeGuiParent()
+    if gethui then
+        local ok, h = pcall(gethui)
+        if ok and h then return h end
+    end
+    local ok, core = pcall(function() return CoreGui end)
+    if ok and core then return core end
+    return playerGui
+end
+
+-- Bersihkan ScreenGui lama jika ada
+pcall(function()
+    local parent = getSafeGuiParent()
+    local old = parent:FindFirstChild("AFKBlackscreen") or playerGui:FindFirstChild("AFKBlackscreen")
+    if old then old:Destroy() end
+end)
+
+-- Sembunyikan CoreGui bawaan Roblox (Topbar, Chat, Playerlist, dll.)
+pcall(function()
+    StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, false)
+end)
+
+-- 1. Buat ScreenGui Hitam Fullscreen dengan DisplayOrder tertinggi
 local blackScreenGui = Instance.new("ScreenGui")
 blackScreenGui.Name = "AFKBlackscreen"
-blackScreenGui.IgnoreGuiInset = true
-blackScreenGui.Parent = playerGui
+blackScreenGui.DisplayOrder = 2147483647 -- Prioritas layer render maksimum agar selalu berada di atas seluruh UI game!
+blackScreenGui.IgnoreGuiInset = true -- Menutupi full layar tanpa celah inset/topbar
+blackScreenGui.ResetOnSpawn = false -- GUI tidak akan hilang atau ter-reset saat karakter respawn/teleport
+blackScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+blackScreenGui.Parent = getSafeGuiParent()
 
 local blackFrame = Instance.new("Frame")
 blackFrame.Size = UDim2.new(1, 0, 1, 0)
+blackFrame.Position = UDim2.new(0, 0, 0, 0)
 blackFrame.BackgroundColor3 = Color3.new(0, 0, 0)
 blackFrame.BorderSizePixel = 0
+blackFrame.Active = true -- Menyerap klik mouse agar tidak tembus ke tombol UI di belakangnya
+blackFrame.ZIndex = 2147483646
 blackFrame.Parent = blackScreenGui
 
 local infoLabel = Instance.new("TextLabel")
-infoLabel.Size = UDim2.new(0.8, 0, 0.4, 0)
-infoLabel.Position = UDim2.new(0.1, 0, 0.3, 0)
+infoLabel.Size = UDim2.new(1, 0, 1, 0)
+infoLabel.Position = UDim2.new(0, 0, 0, 0)
 infoLabel.BackgroundTransparency = 1
 infoLabel.TextColor3 = Color3.new(1, 1, 1)
 infoLabel.Font = Enum.Font.Code
 infoLabel.TextSize = 22
 infoLabel.TextXAlignment = Enum.TextXAlignment.Center
 infoLabel.TextYAlignment = Enum.TextYAlignment.Center
+infoLabel.ZIndex = 2147483647
 infoLabel.Text = "Menghitung Statistik AFK..."
 infoLabel.Parent = blackFrame
 
@@ -559,10 +630,12 @@ local kickPowerUpdateCounter = 0
 
 local function updateMonitorText()
     local elapsedSeconds = os.time() - startTime
+    local currentToolName = getBarbellName()
     
     infoLabel.Text = string.format(
         "=== ACCOUNT STATS MONITOR ===\n\n" ..
         "User : %s\n" ..
+        "Tool Barbell : %s\n" ..
         "Fps : %d\n" ..
         "Waktu Afk : %d Detik\n" ..
         "%s\n" ..
@@ -570,6 +643,7 @@ local function updateMonitorText()
         "%s\n\n" ..
         "=============================",
         lp.Name,
+        currentToolName,
         fps,
         elapsedSeconds,
         cachedSpeedStat,
