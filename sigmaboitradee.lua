@@ -37,6 +37,7 @@ local success, errorMessage = pcall(function()
     local f_trade_r = networkFolder:WaitForChild("ref_trade_r", 5) 
     local r_trade_i = networkFolder:WaitForChild("rev_trade_i", 5) 
     local rev_trade_start = networkFolder:WaitForChild("rev_trade_start", 5) 
+    local rev_trade_n = networkFolder:FindFirstChild("rev_trade_n") or networkFolder:WaitForChild("rev_trade_n", 5)
     local rev_ToggleFav = networkFolder:FindFirstChild("rev_ToggleFav") or networkFolder:WaitForChild("rev_ToggleFav", 5)
 
     local ref_B_Sell = nil
@@ -48,6 +49,7 @@ local success, errorMessage = pcall(function()
         if v.Name == "ref_B_Sell" and v:IsA("RemoteFunction") then ref_B_Sell = v end
         if v.Name == "rev_S_Interact" and v:IsA("RemoteEvent") then rev_S_Interact = v end
         if not rev_ToggleFav and v.Name == "rev_ToggleFav" and v:IsA("RemoteEvent") then rev_ToggleFav = v end
+        if not rev_trade_n and v.Name == "rev_trade_n" and v:IsA("RemoteEvent") then rev_trade_n = v end
         if (v.Name == "ref_B_Upgrade" or v.Name == "B_Upgrade") and v:IsA("RemoteFunction") then ref_B_Upgrade = v end
         if (v.Name == "rev_B_Upgrade" or v.Name == "B_Upgrade") and v:IsA("RemoteEvent") then rev_B_Upgrade = v end
     end
@@ -2251,11 +2253,49 @@ local success, errorMessage = pcall(function()
     local TabInbound = Window:MakeTab("📥")
     local SecInbound = TabInbound:AddSection("Inbound Control")
     local ReceiverLog = SecInbound:AddParagraph("Status", "Inactive.")
+
+    -- Listener event rev_trade_n (Instan Auto-Accept saat sinyal trade request masuk)
+    local lastAcceptedSender = nil
+    local lastAcceptTime = 0
+
+    local function handleIncomingTradeRequest(senderUserId, timestamp)
+        if not AutoReceiverEnabled or not senderUserId then return end
+        local now = os.clock()
+        if lastAcceptedSender == senderUserId and (now - lastAcceptTime < 0.5) then return end
+        lastAcceptedSender = senderUserId
+        lastAcceptTime = now
+
+        pcall(function()
+            ReceiverLog:Set("Status", string.format("⚡ Auto-Accepting Trade dari %s...", tostring(senderUserId)))
+            if rev_trade_start then
+                rev_trade_start:FireServer(senderUserId)
+            else
+                local ev = ReplicatedStorage:FindFirstChild("rev_trade_start", true)
+                if ev then ev:FireServer(senderUserId) end
+            end
+        end)
+    end
+
+    if rev_trade_n then
+        rev_trade_n.OnClientEvent:Connect(handleIncomingTradeRequest)
+    end
+
+    if networkFolder then
+        networkFolder.ChildAdded:Connect(function(child)
+            if child.Name == "rev_trade_n" and child:IsA("RemoteEvent") then
+                rev_trade_n = child
+                rev_trade_n.OnClientEvent:Connect(handleIncomingTradeRequest)
+            elseif child.Name == "rev_trade_start" and child:IsA("RemoteEvent") then
+                rev_trade_start = child
+            end
+        end)
+    end
+
     SecInbound:AddToggle({Name = "🤖 Auto-Accept", Default = false}, function(Value)
         AutoReceiverEnabled = Value
         updateTradeHUD()
         if AutoReceiverEnabled then
-            ReceiverLog:Set("Status", "🟢 Active...")
+            ReceiverLog:Set("Status", "🟢 Active (Listening rev_trade_n)...")
             task.spawn(function()
                 while AutoReceiverEnabled do
                     local tradeFrame = nil
