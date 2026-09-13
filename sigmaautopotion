@@ -1,1568 +1,599 @@
--- ==========================================================
---        MOCTA ULTIMATE INVENTORY VIEWER V1.0 (STANDALONE)
---   Dedicated Single-Tab Inventory Scanner, Sorter & Analyzer
---   Source Logic: Adopted 1:1 from Mocta Hub Auto Trade V2.5
--- ==========================================================
+local Players = game:GetService("Players")
+local Lighting = game:GetService("Lighting")
+local StarterGui = game:GetService("StarterGui")
+local lp = Players.LocalPlayer
+local playerGui = lp:WaitForChild("PlayerGui", 10)
 
-local SCRIPT_VERSION = "v1.0"
+_G.autoUseBarbell = true
+_G.autoClaimX2 = true
 
-if not game:IsLoaded() then game.Loaded:Wait() end
-
-local success, errorMessage = pcall(function()
-
-    local StarterGui = game:GetService("StarterGui")
-    local Players = game:GetService("Players")
-    local localPlayer = Players.LocalPlayer
-    local RunService = game:GetService("RunService")
-    local ReplicatedStorage = game:GetService("ReplicatedStorage")
-    local TextService = game:GetService("TextService")
-
-    while not localPlayer do
-        task.wait(0.1)
-        localPlayer = Players.LocalPlayer
-    end
-
-    -- ══════════════════════════════════════════
-    -- LOAD UI LIBRARY (SIGMA V4 / NcHO)
-    -- ══════════════════════════════════════════
-    local Library = nil
+---------------------------------------------------------
+-- 1. UBAH MAP JADI POTATO (PUTIH & PLASTIC)
+---------------------------------------------------------
+for _, v in ipairs(workspace:GetDescendants()) do
     pcall(function()
-        if readfile and isfile and isfile("UI sigma.lua") then
-            Library = loadstring(readfile("UI sigma.lua"))()
-        elseif readfile and isfile and isfile("c:\\UI\\UI sigma.lua") then
-            Library = loadstring(readfile("c:\\UI\\UI sigma.lua"))()
-        else
-            Library = loadstring(game:HttpGet('https://github.com/xyaxzj/sigmamaboi.lua/raw/main/NcHO.lua'))()
+        if v:IsA("BasePart") then
+            v.Material = Enum.Material.Plastic
+            v.Reflectance = 0
+            v.CastShadow = false
+            v.Color = Color3.new(1, 1, 1) -- Mengubah warna map jadi putih bersih
+            
+            if v:IsA("MeshPart") then
+                v.TextureID = ""
+            end
+        elseif v:IsA("Decal") or v:IsA("Texture") or v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Beam") or v:IsA("Fire") or v:IsA("Smoke") or v:IsA("Sparkles") or v:IsA("SpecialMesh") then
+            v:Destroy()
         end
     end)
+end
 
-    if not Library or type(Library) ~= "table" then
-        pcall(function()
-            Library = loadstring(game:HttpGet('https://raw.githubusercontent.com/xyaxzj/sigmamaboi.lua/refs/heads/main/NcHO.lua'))()
-        end)
+---------------------------------------------------------
+-- 2. MUSNAHKAN EFEK LIGHTING & LANGIT
+---------------------------------------------------------
+Lighting.GlobalShadows = false
+Lighting.FogEnd = 9e9
+for _, v in ipairs(Lighting:GetDescendants()) do
+    if v:IsA("PostEffect") or v:IsA("BlurEffect") or v:IsA("SunRaysEffect") or v:IsA("ColorCorrectionEffect") or v:IsA("BloomEffect") or v:IsA("DepthOfFieldEffect") or v:IsA("Sky") then
+        pcall(function() v:Destroy() end)
     end
+end
 
-    if not Library or type(Library) ~= "table" then
-        warn("[Inventory Viewer] Failed to load UI Library!")
-        return
-    end
-
-    -- Defensif: cegah crash bug TabIco.Tag = TabLbl pada NcHO.lua
-    if Library.CreateWindow then
-        local rawCreateWindow = Library.CreateWindow
-        Library.CreateWindow = function(self, cfg)
-            local win = rawCreateWindow(self, cfg)
-            if win and win.MakeTab then
-                local rawMakeTab = win.MakeTab
-                win.MakeTab = function(wSelf, iconOrCfg)
-                    local icon = iconOrCfg
-                    if type(iconOrCfg) == "table" then
-                        icon = iconOrCfg.Icon or "🎒"
-                    end
-                    return rawMakeTab(wSelf, icon)
-                end
-            end
-            return win
+---------------------------------------------------------
+-- 3. HAPUS FOLDER PLOT 1 SAMPAI 5
+---------------------------------------------------------
+local plotsFolder = workspace:FindFirstChild("Plots")
+if plotsFolder then
+    for i = 1, 5 do
+        local plot = plotsFolder:FindFirstChild("Plot" .. tostring(i))
+        if plot then
+            pcall(function() plot:Destroy() end)
         end
     end
+end
 
-    local function notifyUser(title, content, duration, nType)
-        pcall(function()
-            if Library and Library.Notify then
-                Library:Notify({
-                    Title = title,
-                    Content = content,
-                    Duration = duration or 3,
-                    Type = nType or "Info"
-                })
-            elseif StarterGui then
-                StarterGui:SetCore("SendNotification", {
-                    Title = tostring(title),
-                    Text = tostring(content),
-                    Duration = duration or 3
-                })
-            end
-        end)
-    end
-
-    -- ══════════════════════════════════════════
-    -- REMOTES RESOLVER
-    -- ══════════════════════════════════════════
-    local rev_ToggleFav = nil
-    local function getFavRemote()
-        if rev_ToggleFav and rev_ToggleFav.Parent then return rev_ToggleFav end
-        pcall(function()
-            rev_ToggleFav = ReplicatedStorage.Shared.Packages.Network.rev_ToggleFav
-        end)
-        if rev_ToggleFav then return rev_ToggleFav end
-
-        pcall(function()
-            local net = ReplicatedStorage:FindFirstChild("Shared") and ReplicatedStorage.Shared:FindFirstChild("Packages") and ReplicatedStorage.Shared.Packages:FindFirstChild("Network")
-            if net then
-                rev_ToggleFav = net:FindFirstChild("rev_ToggleFav") or net:FindFirstChild("ToggleFav")
-            end
-        end)
-        if rev_ToggleFav then return rev_ToggleFav end
-
-        for _, v in pairs(ReplicatedStorage:GetDescendants()) do
-            if (v.Name == "rev_ToggleFav" or v.Name == "ToggleFav") and v:IsA("RemoteEvent") then
-                rev_ToggleFav = v
-                return rev_ToggleFav
-            end
-        end
-        return nil
-    end
-
-    -- ══════════════════════════════════════════
-    -- RARITIES & EXCLUSIVE DEFINITIONS
-    -- ══════════════════════════════════════════
-    local RarityList = {
-        "Common", "Rare", "Epic", "Legendary", "Mythic", "Godly",
-        "Exclusive", "Volcanic", "Celestial", "Abyssal", "Demon",
-        "Secret", "Rainbow", "Eternal", "Hacked", "OG"
-    }
-
-    local EXCLUSIVE_RARITIES = {
-        Exclusive = true,
-        Volcanic = true,
-        Celestial = true,
-        Abyssal = true,
-        Demon = true,
-        Secret = true,
-        Rainbow = true,
-        Eternal = true,
-        Hacked = true,
-        OG = true,
-    }
-
-    -- ══════════════════════════════════════════
-    -- SYSTEM VARIABLES & CACHE
-    -- ══════════════════════════════════════════
-    -- ══════════════════════════════════════════
-    -- MATERIAL CRAFT DEFINITIONS
-    -- ══════════════════════════════════════════
-    local MATERIAL_CRAFT_ITEMS = {
-        "Cucumbro Nerdino",
-        "Stoppo Luminino",
-        "Peant Jarro",
-        "Burguro",
-        "Karkerkar Kurkur",
-        "SWAG SODA",
-        "Professor Penneroni",
-        "Pot Hostpot"
-    }
-
-    local MATERIAL_CRAFT_OPTIONS = {
-        "🔨 All Material Craft (Merged Qty)",
-        "All Items (Normal)",
-        "Cucumbro Nerdino",
-        "Stoppo Luminino",
-        "Peant Jarro",
-        "Burguro",
-        "Karkerkar Kurkur",
-        "SWAG SODA",
-        "Professor Penneroni",
-        "Pot Hostpot"
-    }
-
-    local CachedInventoryData = {}
-    local CachedTotalCount = 0
-    local CachedFavoriteCount = 0
-    local CachedUniqueCount = 0
-    local LastFormattedInventoryText = ""
-
-    local InvMaterialCraftDropdown = nil
-    local InvRarityDropdown = nil
-    local InvMutationDropdown = nil
-    local InvFavFilterDropdown = nil
-    local InvLevelFilterDropdown = nil
-    local isSyncingUI = false
-    local InventoryConnections = {}
-    local IsFavProcessing = false
-    local CancelFavProcess = false
-    local FavDelay = 0.3
-
-    -- Claw Machine Event Variables
-    local AutoClawActive = false
-    local ClawDelay = 6
-    local ClawRequestCount = 0
-    local ClawLoopRunning = false
-    local ClawStatusLabel = nil
-
-    -- B2S Craft Event Variables
-    local AutoB2SActive1 = false
-    local AutoB2SActive2 = false
-    local AutoB2SActive3 = false
-    local B2SDelay = 5.0
-    local B2SCount1 = 0
-    local B2SCount2 = 0
-    local B2SCount3 = 0
-    local B2SLoopRunning1 = false
-    local B2SLoopRunning2 = false
-    local B2SLoopRunning3 = false
-    local B2SStatusLabel = nil
-
-    -- Forward declarations
-    local refreshInventoryText
-    local updateInventoryDisplay
-    local fixAllSectionHeights
-
-    -- ══════════════════════════════════════════
-    -- HELPER FUNCTIONS (1:1 DARI AUTO TRADE.LUA)
-    -- ══════════════════════════════════════════
-    local function getCleanBaseName(rawName)
-        if not rawName then return "" end
-        local n = tostring(rawName)
-        n = string.gsub(n, "%s*%[.-%]", "")
-        n = string.gsub(n, "%s*%(.-%)", "")
-        n = string.match(n, "^%s*(.-)%s*$") or n
-        return n
-    end
-
-    local function matchMaterialCraft(rawName)
-        if not rawName then return nil end
-        local clean = string.lower(getCleanBaseName(rawName))
-        for _, mat in ipairs(MATERIAL_CRAFT_ITEMS) do
-            if clean == string.lower(mat) then
-                return mat
-            end
-        end
-        -- Aliases & smart fallback for variations
-        if string.find(clean, "cucumbro", 1, true) and string.find(clean, "nerdino", 1, true) then
-            return "Cucumbro Nerdino"
-        end
-        if string.find(clean, "stoppo", 1, true) and string.find(clean, "luminino", 1, true) then
-            return "Stoppo Luminino"
-        end
-        if (string.find(clean, "peant", 1, true) or string.find(clean, "peanut", 1, true)) and string.find(clean, "jarro", 1, true) then
-            return "Peant Jarro"
-        end
-        if string.find(clean, "burguro", 1, true) then
-            return "Burguro"
-        end
-        if string.find(clean, "karkerkar", 1, true) or string.find(clean, "kurkur", 1, true) then
-            return "Karkerkar Kurkur"
-        end
-        if string.find(clean, "swag", 1, true) and string.find(clean, "soda", 1, true) then
-            return "SWAG SODA"
-        end
-        if string.find(clean, "penneroni", 1, true) then
-            return "Professor Penneroni"
-        end
-        if string.find(clean, "hostpot", 1, true) or string.find(clean, "hotspot", 1, true) then
-            return "Pot Hostpot"
-        end
-        return nil
-    end
-
-    local function getBaseName(dropdownString) 
-        return string.split(dropdownString, " | ")[1] or dropdownString 
-    end
-
-    local function getClawRemote()
-        local ok, res = pcall(function()
-            return ReplicatedStorage.Shared.Packages.Network.rev_ClawMachine_Request
-        end)
-        if ok and res then return res end
-
-        local ok2, res2 = pcall(function()
-            local shared = ReplicatedStorage:FindFirstChild("Shared")
-            local packages = shared and shared:FindFirstChild("Packages")
-            local network = packages and packages:FindFirstChild("Network")
-            return network and network:FindFirstChild("rev_ClawMachine_Request")
-        end)
-        if ok2 and res2 then return res2 end
-
-        return nil
-    end
-
-    local function getB2SRemote()
-        local ok, res = pcall(function()
-            return ReplicatedStorage.Shared.Packages.Network.rev_b2s_Craft
-        end)
-        if ok and res then return res end
-
-        local ok2, res2 = pcall(function()
-            local shared = ReplicatedStorage:FindFirstChild("Shared")
-            local packages = shared and shared:FindFirstChild("Packages")
-            local network = packages and packages:FindFirstChild("Network")
-            return network and network:FindFirstChild("rev_b2s_Craft")
-        end)
-        if ok2 and res2 then return res2 end
-
-        return nil
-    end
-
-    local function getAllTools()
-        local tools = {}
-        local bp = localPlayer:FindFirstChild("Backpack")
-        if bp then for _, t in ipairs(bp:GetChildren()) do if t:IsA("Tool") then table.insert(tools, t) end end end
-        local char = localPlayer.Character
-        if char then for _, t in ipairs(char:GetChildren()) do if t:IsA("Tool") then table.insert(tools, t) end end end
-        return tools
-    end
-
-    local function getToolGUID(tool) 
-        if not tool then return nil end
-        local g = tool:GetAttribute("guid") or tool:GetAttribute("GUID") or tool:GetAttribute("ToolGUID") or tool:GetAttribute("uid")
-        if g then return tostring(g) end
-        local gObj = tool:FindFirstChild("ToolGUID") or tool:FindFirstChild("GUID") or tool:FindFirstChild("guid")
-        if gObj and gObj:IsA("StringValue") and gObj.Value ~= "" then return gObj.Value end
-        return nil
-    end
-
-    local function isTradeable(tool) 
-        return tool and tool:IsA("Tool") and getToolGUID(tool) ~= nil 
-    end
-
-    local function getToolMutation(tool)
-        if not tool then return nil end
-        local m = tool:GetAttribute("Mutation") or tool:GetAttribute("Variant") or (tool:FindFirstChild("Mutation") and tool:FindFirstChild("Mutation").Value)
-        return m and tostring(m) or nil
-    end
-
-    local function getExclusivePercent(tool)
-        if not tool then return nil end
-        local statAttr = tool:GetAttribute("KickPowerMultiplier")
-            or tool:GetAttribute("Multiplier")
-            or tool:GetAttribute("Percent")
-            or tool:GetAttribute("Value")
-            or tool:GetAttribute("StatValue")
-            or tool:GetAttribute("Power")
-            or tool:GetAttribute("Boost")
-        if statAttr then
-            local num = tonumber(statAttr)
-            if num then
-                if num > 0 and num <= 50 then
-                    return string.format("%.0f%%", num * 100)
-                else
-                    return string.format("%.0f%%", num)
-                end
-            end
-        end
-
-        for _, child in ipairs(tool:GetChildren()) do
-            local lname = child.Name:lower()
-            if (lname == "value" or lname == "percent" or lname == "multiplier" or lname == "kickpowermultiplier" or lname == "boost" or lname == "power")
-                and (child:IsA("NumberValue") or child:IsA("IntValue")) then
-                local num = tonumber(child.Value)
-                if num then
-                    if num > 0 and num <= 50 then
-                        return string.format("%.0f%%", num * 100)
-                    else
-                        return string.format("%.0f%%", num)
-                    end
-                end
-            end
-        end
-        return nil
-    end
-
-    local function getItemInfo(tool)
-        if not tool then return "Unknown" end
-        local baseName = tool.Name
-        
-        local rAttr = tool:GetAttribute("Rarity") or tool:GetAttribute("rarity") or tool:GetAttribute("ItemRarity")
-        if rAttr and tostring(rAttr) ~= "" then return tostring(rAttr) end
-
-        local rVal = tool:FindFirstChild("Rarity") or tool:FindFirstChild("rarity")
-        if rVal and (rVal:IsA("StringValue") or rVal:IsA("ValueBase")) and tostring(rVal.Value) ~= "" then
-            return tostring(rVal.Value)
-        end
-
-        local rarity = "Unknown"
-        pcall(function()
-            local Shared = ReplicatedStorage:FindFirstChild("Shared")
-            local Data = Shared and Shared:FindFirstChild("Data")
-            local EntitiesDataObj = Data and Data:FindFirstChild("EntitiesData")
-            if EntitiesDataObj then
-                local EntitiesDataModule = require(EntitiesDataObj)
-                if EntitiesDataModule and EntitiesDataModule.Brainrots and EntitiesDataModule.Brainrots[baseName] then
-                    rarity = EntitiesDataModule.Brainrots[baseName].Rarity or rarity
-                end
-            end
-        end)
-        
-        return rarity
-    end
-
-    local function isExclusiveRarity(tool)
-        if not tool then return false end
-        local rarity = getItemInfo(tool)
-        return EXCLUSIVE_RARITIES[rarity] == true
-    end
-
-    local function getToolLevel(tool)
-        if not tool then return 1 end
-        
-        for _, attrName in ipairs({"Level", "level", "Lvl", "lvl", "ItemLevel", "LevelValue", "lv"}) do
-            local v = tool:GetAttribute(attrName)
-            if v and tonumber(v) then return tonumber(v) end
+---------------------------------------------------------
+-- 4. PEMBANTAIAN PLAYER (REMOVE PLAYER LAIN)
+---------------------------------------------------------
+local function musnahkanPlayer(player)
+    if player ~= lp then
+        -- 1. Hapus jika wujud karakternya saat ini sudah ada di map
+        if player.Character then
+            pcall(function() player.Character:Destroy() end)
         end
         
-        for _, valName in ipairs({"Level", "level", "Lvl", "lvl", "ItemLevel"}) do
-            local obj = tool:FindFirstChild(valName)
-            if obj and (obj:IsA("ValueBase") or obj:IsA("IntValue") or obj:IsA("NumberValue") or obj:IsA("StringValue")) then
-                if tonumber(obj.Value) then return tonumber(obj.Value) end
-            end
-        end
-
-        for _, folderName in ipairs({"Values", "Config", "Configuration", "Stats", "Data", "Attributes", "Info"}) do
-            local folder = tool:FindFirstChild(folderName)
-            if folder then
-                for _, valName in ipairs({"Level", "level", "Lvl", "lvl"}) do
-                    local v = folder:GetAttribute(valName)
-                    if v and tonumber(v) then return tonumber(v) end
-                    local obj = folder:FindFirstChild(valName)
-                    if obj and (obj:IsA("ValueBase") or obj:IsA("IntValue") or obj:IsA("NumberValue")) then
-                        if tonumber(obj.Value) then return tonumber(obj.Value) end
-                    end
-                end
-            end
-        end
-
-        for _, desc in ipairs(tool:GetDescendants()) do
-            if desc:IsA("TextLabel") and desc.Visible then
-                local txt = desc.Text
-                local m = string.match(txt, "Lv%.%s*(%d+)") or string.match(txt, "Level:%s*(%d+)") or string.match(txt, "Level%s*(%d+)")
-                if m and tonumber(m) then return tonumber(m) end
-            end
-        end
-
-        local m = string.match(tool.Name, "%(Lv%.(%d+)%)") or string.match(tool.Name, "Lv%.(%d+)")
-        if m and tonumber(m) then return tonumber(m) end
-
-        return 1
+        -- 2. Hapus objek Player fisik beserta datanya dari game.Players di sisi client
+        pcall(function() player:Destroy() end)
     end
+end
 
-    local function getFullItemName(tool)
-        if not tool then return "Unknown" end
-        local displayName = tool.Name
-        
-        displayName = string.gsub(displayName, "%s*%(Lv%.%d+%)", "")
-        displayName = string.gsub(displayName, "%s*%[.*%]", "")
-        displayName = string.gsub(displayName, "%s*%(%d+%%%s*stat%)", "")
-        displayName = string.gsub(displayName, "%s*%(%d+%%%)", "")
-        
-        local mutValue = getToolMutation(tool)
-        if mutValue then displayName = displayName .. " [" .. mutValue .. "]" end
+-- Eksekusi ke player yang sudah ada di server sekarang
+for _, player in ipairs(Players:GetPlayers()) do
+    musnahkanPlayer(player)
+end
 
-        local rarity = getItemInfo(tool)
-        if rarity == "Exclusive" then
-            local pct = getExclusivePercent(tool)
-            if pct then
-                displayName = displayName .. " (" .. pct .. ")"
-            end
-        else
-            local lvl = getToolLevel(tool)
-            displayName = displayName .. " (Lv." .. tostring(lvl or 1) .. ")"
+-- Eksekusi ke player yang baru join ke server nanti
+Players.PlayerAdded:Connect(function(player)
+    task.defer(function()
+        musnahkanPlayer(player)
+    end)
+end)
+
+-- Perangkap Ekstrem & Pembersihan Karakter (Mendeteksi Humanoid secara rekursif)
+local function periksaDanHapus(descendant)
+    if descendant:IsA("Humanoid") then
+        local charModel = descendant.Parent
+        if charModel and charModel:IsA("Model") and charModel.Name ~= lp.Name then
+            pcall(function() charModel:Destroy() end)
         end
-        return displayName
     end
+end
 
-    local function getToolCPS(tool)
-        if not tool then return nil end
-        local baseName = tool.Name
-        local level = getToolLevel(tool) or 1
-        local mutation = getToolMutation(tool)
-        
-        local EntitiesDataModule, MutationDataModule
-        pcall(function()
-            local Shared = ReplicatedStorage:FindFirstChild("Shared")
-            local Data = Shared and Shared:FindFirstChild("Data")
-            
-            local EntitiesDataObj = Data and Data:FindFirstChild("EntitiesData")
-            if EntitiesDataObj then EntitiesDataModule = require(EntitiesDataObj) end
-            
-            local MutationDataObj = Data and Data:FindFirstChild("MutationData")
-            if MutationDataObj then MutationDataModule = require(MutationDataObj) end
-        end)
-        
-        if EntitiesDataModule and EntitiesDataModule.Brainrots and EntitiesDataModule.Brainrots[baseName] then
-            local info = EntitiesDataModule.Brainrots[baseName]
-            if EXCLUSIVE_RARITIES[info.Rarity or ""] then
-                return nil
-            end
-            local baseCPS = info.CPS
-            if baseCPS then
-                local levelMult = 1
-                if EntitiesDataModule.GetMultiplierPerLevel then
-                    pcall(function()
-                        levelMult = EntitiesDataModule.GetMultiplierPerLevel(level)
-                    end)
-                end
-                
-                local mutMult = 1
-                if mutation and MutationDataModule and MutationDataModule.Buffs and MutationDataModule.Buffs[mutation] then
-                    mutMult = MutationDataModule.Buffs[mutation].Value or 1
-                end
-                
-                return baseCPS * levelMult * mutMult
-            end
-        end
-        return nil
+-- Bersihkan karakter player lain yang sudah terlanjur ada di workspace (Direct children agar tidak timeout/lag)
+for _, child in ipairs(workspace:GetChildren()) do
+    if child:IsA("Model") and child.Name ~= lp.Name and child:FindFirstChildOfClass("Humanoid") then
+        pcall(function() child:Destroy() end)
     end
+end
 
-    local function isToolFavorite(tool)
-        if not tool then return false end
-        for _, attr in ipairs({"Favorite", "favorite", "Fav", "fav", "Favorited", "favorited", "IsFavorite", "isFavorite", "IsFav", "isFav"}) do
-            local val = tool:GetAttribute(attr)
-            if val ~= nil then
-                return (val == true or val == 1 or val == "true")
-            end
-        end
-        
-        for _, name in ipairs({"Favorite", "Fav", "IsFavorite", "Favorited"}) do
-            local obj = tool:FindFirstChild(name)
-            if obj and (obj:IsA("BoolValue") or obj:IsA("IntValue") or obj:IsA("ValueBase")) then
-                return (obj.Value == true or obj.Value == 1 or obj.Value == "true")
-            end
-        end
-        return false
-    end
+-- Pasang listener real-time untuk mendeteksi humanoid baru yang di-load
+workspace.DescendantAdded:Connect(function(descendant)
+    task.defer(periksaDanHapus, descendant)
+end)
 
-    local function getInventoryMutationList()
-        local mutCounts = {}
-        for _, tool in ipairs(getAllTools()) do
-            if isTradeable(tool) then
-                local m = getToolMutation(tool) or "No Mutation"
-                mutCounts[m] = (mutCounts[m] or 0) + 1
-            end
-        end
-        local list = {}
-        for k, v in pairs(mutCounts) do
-            table.insert(list, k .. " | Stock: " .. v)
-        end
-        table.sort(list)
-        return list
-    end
-
-    local function processFavoriteBatch(toolsToProcess, desiredState, operationName)
-        if not toolsToProcess or #toolsToProcess == 0 then
-            notifyUser("Favorite Manager", "No matching items found in inventory.", 2.5, "Warning")
-            return 0
-        end
-        if IsFavProcessing then
-            notifyUser("Favorite Busy", "Process already running! Please wait.", 2.5, "Warning")
-            return 0
-        end
-        local remote = getFavRemote()
-        if not remote then
-            notifyUser("Error", "Favorite remote (rev_ToggleFav) not found!", 3, "Error")
-            return 0
-        end
-
-        local total = #toolsToProcess
-        notifyUser("Favorite", "Processing " .. total .. " items (" .. tostring(operationName or "Batch") .. ")...", 2, "Info")
-        IsFavProcessing = true
-        CancelFavProcess = false
-
-        task.spawn(function()
-            local count = 0
-            for _, tool in ipairs(toolsToProcess) do
-                if CancelFavProcess then break end
-                local guid = getToolGUID(tool)
-                if guid then
-                    pcall(function() remote:FireServer(tostring(guid)) end)
-                    count = count + 1
-                end
-                task.wait(FavDelay)
-            end
-            IsFavProcessing = false
-            CancelFavProcess = false
-            notifyUser("Favorite Done", "Processed " .. count .. " / " .. total .. " items.", 3, "Success")
-            if updateInventoryDisplay then updateInventoryDisplay() end
-        end)
-        return total
-    end
-
-    -- ══════════════════════════════════════════
-    -- CREATE WINDOW & SINGLE TAB (INVENTORY)
-    -- ══════════════════════════════════════════
-    local Window = Library:CreateWindow({
-        Name = "Inventory Viewer",
-        LogoText = "🎒",
-        Footer = "Mocta Inventory Suite " .. SCRIPT_VERSION .. " │ Live Scanner",
-        ConfigName = "MoctaInventory_Config"
+---------------------------------------------------------
+-- 5. NOTIFIKASI
+---------------------------------------------------------
+pcall(function()
+    StarterGui:SetCore("SendNotification", {
+        Title = "Ultimate Boost Aktif!",
+        Text = "Map potato, Plot hilang, dan Player lain gaib total!",
+        Duration = 5
     })
+end)
 
-    -- Menggunakan string icon tunggal "🎒" agar 100% kompatibel dengan NcHO.lua
-    local TabInventory = Window:MakeTab("🎒")
-
-    -- SECTION 1: OVERVIEW & STATS
-    local SecOverview = TabInventory:AddSection("Overview & Statistics")
-    local RawOverviewLabel = SecOverview:AddParagraph("Inventory Overview", "Scanning items...")
-
-    -- SECTION 2: FILTER SETTINGS
-    local SecInvFilter = TabInventory:AddSection("Filter Settings")
+---------------------------------------------------------
+-- FUNGSI KLIK GAIB (BACKGROUND)
+---------------------------------------------------------
+local function klikGaib(guiObj)
+    -- Daftar event yang biasa dipakai developer untuk tombol
+    local targetEvents = {
+        "Activated",
+        "MouseButton1Click",
+        "MouseButton1Down",
+        "MouseButton1Up",
+        "TouchTap"
+    }
     
-    InvMaterialCraftDropdown = SecInvFilter:AddDropdown({
-        Name = "Filter by Material Craft",
-        Options = MATERIAL_CRAFT_OPTIONS,
-        Default = "🔨 All Material Craft (Merged Qty)"
-    }, function()
-        if refreshInventoryText then refreshInventoryText() end
-    end)
-
-    InvFavFilterDropdown = SecInvFilter:AddDropdown({
-        Name = "Filter by Favorite Status",
-        Options = {"All Items", "⭐ Only Favorites", "⚪ Only Non-Favorites"},
-        Default = "All Items"
-    }, function()
-        if refreshInventoryText then refreshInventoryText() end
-    end)
-
-    InvLevelFilterDropdown = SecInvFilter:AddDropdown({
-        Name = "Filter by Level",
-        Options = {"All Levels", "Lv. 1 Only", "Lv. > 1 (Upgraded)", "Max Level Only"},
-        Default = "All Levels"
-    }, function()
-        if refreshInventoryText then refreshInventoryText() end
-    end)
-
-    InvRarityDropdown = SecInvFilter:AddMultiDropdown({
-        Name = "Filter by Rarity",
-        Options = RarityList,
-        Default = {}
-    }, function()
-        if refreshInventoryText then refreshInventoryText() end
-    end)
-    
-    InvMutationDropdown = SecInvFilter:AddMultiDropdown({
-        Name = "Filter by Mutation",
-        Options = {},
-        Default = {}
-    }, function()
-        if refreshInventoryText then refreshInventoryText() end
-    end)
-    
-    SecInvFilter:AddButton("🧹 Clear All Filters", function()
-        pcall(function() InvMaterialCraftDropdown:Set("🔨 All Material Craft (Merged Qty)") end)
-        pcall(function() InvFavFilterDropdown:Set("All Items") end)
-        pcall(function() InvLevelFilterDropdown:Set("All Levels") end)
-        pcall(function() InvRarityDropdown:Set({}) end)
-        pcall(function() InvMutationDropdown:Set({}) end)
-        notifyUser("Filters Reset", "All filters set back to default (Material Craft).", 1.5, "Info")
-        if refreshInventoryText then refreshInventoryText() end
-    end)
-
-    -- SECTION 3: ITEM LIST & BREAKDOWN
-    local SecInv = TabInventory:AddSection("Item Breakdown (Categorized)")
-    local RawFullInventoryLabel = SecInv:AddParagraph("Item List & Total", "Syncing with inventory...")
-
-    -- SECTION 4: ACTIONS & TOOLS
-    local SecTools = TabInventory:AddSection("Quick Tools & Management")
-
-    SecTools:AddButton("🔨 Quick View Material Craft", function()
-        if InvMaterialCraftDropdown then
-            pcall(function() InvMaterialCraftDropdown:Set("🔨 All Material Craft (Merged Qty)") end)
-        end
-        if refreshInventoryText then refreshInventoryText() end
-        notifyUser("Material Craft", "Showing consolidated craft materials.", 2, "Info")
-    end)
-
-    SecTools:AddButton("🔄 Manual Refresh Scan", function()
-        if updateInventoryDisplay then updateInventoryDisplay() end
-        notifyUser("Refreshed", "Inventory scan refreshed.", 1.5, "Success")
-    end)
-
-    SecTools:AddButton("📋 Copy Inventory to Clipboard", function()
-        if LastFormattedInventoryText and LastFormattedInventoryText ~= "" then
-            local copied = false
-            if setclipboard then
-                pcall(function() setclipboard(LastFormattedInventoryText) copied = true end)
-            elseif toclipboard then
-                pcall(function() toclipboard(LastFormattedInventoryText) copied = true end)
-            end
-            if copied then
-                notifyUser("Copied", "Inventory text copied to clipboard!", 2.5, "Success")
-            else
-                notifyUser("Notice", "Clipboard function not supported by executor.", 3, "Warning")
-            end
-        else
-            notifyUser("Attention", "Inventory list is empty.", 2, "Warning")
-        end
-    end)
-
-    SecTools:AddButton("⭐ Lock Top 10 Highest CPS", function()
-        local tools = {}
-        for _, t in ipairs(getAllTools()) do
-            if isTradeable(t) then
-                local cps = getToolCPS(t)
-                table.insert(tools, {tool = t, cps = cps or 0})
-            end
-        end
-        table.sort(tools, function(a, b) return a.cps > b.cps end)
-        local toLock = {}
-        for i = 1, math.min(10, #tools) do
-            if not isToolFavorite(tools[i].tool) then
-                table.insert(toLock, tools[i].tool)
-            end
-        end
-        processFavoriteBatch(toLock, true, "Top 10 CPS")
-    end)
-
-    SecTools:AddButton("⭐ Lock All Exclusive & % Stat Items", function()
-        local toLock = {}
-        for _, t in ipairs(getAllTools()) do
-            if isTradeable(t) and isExclusiveRarity(t) and not isToolFavorite(t) then
-                table.insert(toLock, t)
-            end
-        end
-        processFavoriteBatch(toLock, true, "Exclusive Items")
-    end)
-
-    SecTools:AddButton("⭐ Favorite All Inventory", function()
-        local toLock = {}
-        for _, t in ipairs(getAllTools()) do
-            if isTradeable(t) and not isToolFavorite(t) then
-                table.insert(toLock, t)
-            end
-        end
-        processFavoriteBatch(toLock, true, "All Inventory")
-    end)
-
-    SecTools:AddButton("💔 Unfavorite All Inventory", function()
-        local toUnlock = {}
-        for _, t in ipairs(getAllTools()) do
-            if isTradeable(t) and isToolFavorite(t) then
-                table.insert(toUnlock, t)
-            end
-        end
-        processFavoriteBatch(toUnlock, false, "Unlock All")
-    end)
-
-    -- ══════════════════════════════════════════
-    -- DYNAMIC AUTO-RESIZING ENGINE FOR SECTIONS
-    -- ══════════════════════════════════════════
-    -- Memaksa frame paragraf dan section mengembang secara presisi di mobile/PC
-    local function applyDynamicParagraph(rawParaObj, sectionTitle)
-        local foundPFrame = nil
-        local foundPDesc = nil
-        local foundPTitle = nil
-
-        -- Cari PFrame di dalam ScreenGui
-        pcall(function()
-            local sg = game:GetService("CoreGui"):FindFirstChild("SigmaUI") or (gethui and gethui():FindFirstChild("SigmaUI")) or localPlayer.PlayerGui:FindFirstChild("SigmaUI")
-            if sg then
-                for _, desc in ipairs(sg:GetDescendants()) do
-                    if desc:IsA("TextLabel") and desc.Text == sectionTitle then
-                        foundPTitle = desc
-                        foundPFrame = desc.Parent
-                        for _, child in ipairs(foundPFrame:GetChildren()) do
-                            if child:IsA("TextLabel") and child ~= desc then
-                                foundPDesc = child
-                                break
-                            end
+    for _, eventName in ipairs(targetEvents) do
+        -- 1. Metode getconnections (Paling Ampuh & Gaib)
+        if getconnections then
+            pcall(function()
+                if guiObj[eventName] then
+                    for _, conn in ipairs(getconnections(guiObj[eventName])) do
+                        conn:Fire() -- Eksekusi normal
+                        
+                        -- Jika Fire() gagal, kita paksa eksekusi langsung script di dalam tombolnya
+                        if conn.Function then
+                            task.spawn(conn.Function)
                         end
+                    end
+                end
+            end)
+        end
+        
+        -- 2. Metode firesignal (Alternatif executor lain)
+        if firesignal then
+            pcall(function()
+                firesignal(guiObj[eventName])
+            end)
+        end
+    end
+end
+
+local tempPauseBarbell = false
+
+---------------------------------------------------------
+-- MEKANIK 1: AUTO USE BARBELL
+---------------------------------------------------------
+task.spawn(function()
+    while true do
+        task.wait(0.2) -- Frekuensi cek diubah ke 0.2 detik agar lebih ringan
+        if not _G.autoUseBarbell or tempPauseBarbell then continue end
+        
+        local char = lp.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        local backpack = lp:FindFirstChild("Backpack")
+        
+        if not char or not hum then continue end
+
+        local currentTool = char:FindFirstChildOfClass("Tool")
+        
+        if currentTool and string.match(currentTool.Name, "Barbell$") then
+            currentTool:Activate()
+            task.wait(0.3) -- Jeda ekstra setelah aktivasi agar tidak terjadi spam paket data ke server
+        else
+            if backpack then
+                for _, tool in ipairs(backpack:GetChildren()) do
+                    if tool:IsA("Tool") and string.match(tool.Name, "Barbell$") then
+                        hum:EquipTool(tool)
+                        task.wait(0.2) 
+                        tool:Activate()
                         break
                     end
                 end
             end
-        end)
-
-        return {
-            Set = function(_, newTitle, newContent)
-                pcall(function()
-                    rawParaObj:Set(newTitle, newContent)
-                end)
-                
-                -- Jika frame belum tercari, coba cari lagi
-                if not foundPFrame then
-                    pcall(function()
-                        local sg = game:GetService("CoreGui"):FindFirstChild("SigmaUI") or (gethui and gethui():FindFirstChild("SigmaUI")) or localPlayer.PlayerGui:FindFirstChild("SigmaUI")
-                        if sg then
-                            for _, desc in ipairs(sg:GetDescendants()) do
-                                if desc:IsA("TextLabel") and desc.Text == newTitle then
-                                    foundPTitle = desc
-                                    foundPFrame = desc.Parent
-                                    for _, child in ipairs(foundPFrame:GetChildren()) do
-                                        if child:IsA("TextLabel") and child ~= desc then
-                                            foundPDesc = child
-                                            break
-                                        end
-                                    end
-                                    break
-                                end
-                            end
-                        end
-                    end)
-                end
-
-                if foundPFrame and foundPDesc then
-                    pcall(function()
-                        foundPFrame.AutomaticSize = Enum.AutomaticSize.Y
-                        foundPDesc.AutomaticSize = Enum.AutomaticSize.Y
-                        foundPDesc.TextWrapped = true
-
-                        -- Hitung tinggi eksak teks menggunakan TextService
-                        local width = math.max(300, foundPFrame.AbsoluteSize.X - 24)
-                        local sz = TextService:GetTextSize(
-                            tostring(newContent),
-                            foundPDesc.TextSize or 11,
-                            foundPDesc.Font or Enum.Font.Gotham,
-                            Vector2.new(width, 1000000)
-                        )
-                        local targetH = math.max(48, sz.Y + 36)
-                        foundPFrame.Size = UDim2.new(1, 0, 0, targetH)
-
-                        -- Update SecFrame induk agar tidak terpotong ClipsDescendants
-                        local inner = foundPFrame.Parent
-                        local secFrame = inner and inner.Parent
-                        if secFrame and secFrame:IsA("Frame") then
-                            local innerLayout = inner:FindFirstChildOfClass("UIListLayout")
-                            local layoutH = innerLayout and innerLayout.AbsoluteContentSize.Y or targetH
-                            local secH = math.max(layoutH + 46, targetH + 46)
-                            secFrame.Size = UDim2.new(1, -18, 0, secH)
-                        end
-                    end)
-                end
-            end
-        }
-    end
-
-    local OverviewLabel = applyDynamicParagraph(RawOverviewLabel, "Inventory Overview")
-    local FullInventoryLabel = applyDynamicParagraph(RawFullInventoryLabel, "Item List & Total")
-
-    -- ══════════════════════════════════════════
-    -- TAB 2: EVENT (CLAW MACHINE)
-    -- ══════════════════════════════════════════
-    local TabEvent = Window:MakeTab("🎪")
-
-    local SecClaw = TabEvent:AddSection("Claw Machine Event")
-    local RawClawStatusLabel = SecClaw:AddParagraph("Claw Machine Status", "⚡ Status: IDLE / OFF\n🎯 Requests Sent: 0\n⏱️ Loop Interval: 6.0s\n📡 Target: rev_ClawMachine_Request")
-    ClawStatusLabel = applyDynamicParagraph(RawClawStatusLabel, "Claw Machine Status")
-
-    local function startClawLoop()
-        if ClawLoopRunning then return end
-        ClawLoopRunning = true
-        task.spawn(function()
-            while AutoClawActive do
-                local ok, err = pcall(function()
-                    local remote = getClawRemote()
-                    if remote then
-                        remote:FireServer()
-                    else
-                        error("rev_ClawMachine_Request not found")
-                    end
-                end)
-                if ok then
-                    ClawRequestCount = ClawRequestCount + 1
-                end
-                if ClawStatusLabel then
-                    local statusTxt = string.format("⚡ Status: RUNNING\n🎯 Requests Sent: %d\n⏱️ Loop Interval: %.1fs\n🕒 Last Request: %s",
-                        ClawRequestCount, ClawDelay, os.date("%H:%M:%S"))
-                    if not ok and err then
-                        statusTxt = statusTxt .. "\n⚠️ Warning: " .. tostring(err)
-                    end
-                    ClawStatusLabel:Set("Claw Machine Status", statusTxt)
-                end
-                task.wait(ClawDelay)
-            end
-            ClawLoopRunning = false
-            if ClawStatusLabel then
-                ClawStatusLabel:Set("Claw Machine Status", string.format("⏸️ Status: STOPPED\n🎯 Requests Sent: %d\n⏱️ Configured Interval: %.1fs",
-                    ClawRequestCount, ClawDelay))
-            end
-        end)
-    end
-
-    SecClaw:AddToggle({
-        Name = "Auto Claw Machine (Loop 6s)",
-        Default = false
-    }, function(state)
-        AutoClawActive = state
-        if state then
-            notifyUser("Claw Event", "Auto Claw started! Firing every " .. tostring(ClawDelay) .. "s.", 2.5, "Success")
-            startClawLoop()
-        else
-            notifyUser("Claw Event", "Auto Claw stopped.", 2, "Info")
-            if ClawStatusLabel then
-                ClawStatusLabel:Set("Claw Machine Status", string.format("⏸️ Status: STOPPED\n🎯 Requests Sent: %d\n⏱️ Loop Interval: %.1fs", ClawRequestCount, ClawDelay))
-            end
-        end
-    end)
-
-    SecClaw:AddSlider({
-        Name = "Loop Interval (Seconds)",
-        Min = 1,
-        Max = 30,
-        Default = 6,
-        Step = 1
-    }, function(val)
-        ClawDelay = tonumber(val) or 6
-        if ClawStatusLabel and not AutoClawActive then
-            ClawStatusLabel:Set("Claw Machine Status", string.format("⚡ Status: IDLE / OFF\n🎯 Requests Sent: %d\n⏱️ Loop Interval: %.1fs", ClawRequestCount, ClawDelay))
-        end
-    end)
-
-    SecClaw:AddButton("⚡ Grab Once (FireServer)", function()
-        local ok, err = pcall(function()
-            local remote = getClawRemote()
-            if remote then
-                remote:FireServer()
-            else
-                error("rev_ClawMachine_Request not found")
-            end
-        end)
-        if ok then
-            ClawRequestCount = ClawRequestCount + 1
-            notifyUser("Claw Event", "Grab request sent! (Total: " .. ClawRequestCount .. ")", 2, "Success")
-            if ClawStatusLabel then
-                ClawStatusLabel:Set("Claw Machine Status", string.format("⚡ Status: %s\n🎯 Requests Sent: %d\n⏱️ Loop Interval: %.1fs\n🕒 Last Manual: %s",
-                    AutoClawActive and "RUNNING" or "IDLE", ClawRequestCount, ClawDelay, os.date("%H:%M:%S")))
-            end
-        else
-            notifyUser("Error", "Failed: " .. tostring(err), 3, "Error")
-        end
-    end)
-
-    SecClaw:AddButton("🔄 Reset Counter", function()
-        ClawRequestCount = 0
-        notifyUser("Claw Event", "Counter reset to 0.", 1.5, "Info")
-        if ClawStatusLabel then
-            ClawStatusLabel:Set("Claw Machine Status", string.format("⚡ Status: %s\n🎯 Requests Sent: 0\n⏱️ Loop Interval: %.1fs",
-                AutoClawActive and "RUNNING" or "IDLE", ClawDelay))
-        end
-    end)
-
-    -- ══════════════════════════════════════════
-    -- SECTION: B2S AUTO CRAFT (3 RECIPES)
-    -- ══════════════════════════════════════════
-    local SecB2S = TabEvent:AddSection("Back to School Auto Craft")
-    local RawB2SStatusLabel = SecB2S:AddParagraph("B2S Craft Status", "⚡ Status: ALL IDLE\n🔨 Craft #1: 0  │  Craft #2: 0  │  Craft #3: 0\n⏱️ Interval: 5.0s\n📡 Target: rev_b2s_Craft")
-    B2SStatusLabel = applyDynamicParagraph(RawB2SStatusLabel, "B2S Craft Status")
-
-    local function updateB2SStatusText()
-        if not B2SStatusLabel then return end
-        local activeList = {}
-        if AutoB2SActive1 then table.insert(activeList, "#1") end
-        if AutoB2SActive2 then table.insert(activeList, "#2") end
-        if AutoB2SActive3 then table.insert(activeList, "#3") end
-
-        local statusStr = (#activeList > 0) and ("RUNNING (" .. table.concat(activeList, ", ") .. ")") or "ALL IDLE"
-        local txt = string.format("⚡ Status: %s\n🔨 Craft #1: %d  │  Craft #2: %d  │  Craft #3: %d\n⏱️ Interval: %.1fs  │  🕒 Last: %s",
-            statusStr, B2SCount1, B2SCount2, B2SCount3, B2SDelay, os.date("%H:%M:%S"))
-        B2SStatusLabel:Set("B2S Craft Status", txt)
-    end
-
-    local function fireB2SCraft(id)
-        local ok, err = pcall(function()
-            local remote = getB2SRemote()
-            if remote then
-                remote:FireServer(id)
-                if id == 1 then B2SCount1 = B2SCount1 + 1
-                elseif id == 2 then B2SCount2 = B2SCount2 + 1
-                elseif id == 3 then B2SCount3 = B2SCount3 + 1
-                end
-            else
-                error("rev_b2s_Craft remote not found")
-            end
-        end)
-        updateB2SStatusText()
-        return ok, err
-    end
-
-    local function startB2SLoop(id)
-        if id == 1 then
-            if B2SLoopRunning1 then return end
-            B2SLoopRunning1 = true
-            task.spawn(function()
-                while AutoB2SActive1 do
-                    fireB2SCraft(1)
-                    task.wait(B2SDelay)
-                end
-                B2SLoopRunning1 = false
-                updateB2SStatusText()
-            end)
-        elseif id == 2 then
-            if B2SLoopRunning2 then return end
-            B2SLoopRunning2 = true
-            task.spawn(function()
-                while AutoB2SActive2 do
-                    fireB2SCraft(2)
-                    task.wait(B2SDelay)
-                end
-                B2SLoopRunning2 = false
-                updateB2SStatusText()
-            end)
-        elseif id == 3 then
-            if B2SLoopRunning3 then return end
-            B2SLoopRunning3 = true
-            task.spawn(function()
-                while AutoB2SActive3 do
-                    fireB2SCraft(3)
-                    task.wait(B2SDelay)
-                end
-                B2SLoopRunning3 = false
-                updateB2SStatusText()
-            end)
         end
     end
-
-    SecB2S:AddSlider({
-        Name = "Craft Interval (Seconds)",
-        Min = 0.5,
-        Max = 20,
-        Default = 5,
-        Step = 0.5
-    }, function(val)
-        B2SDelay = tonumber(val) or 5
-        updateB2SStatusText()
-    end)
-
-    SecB2S:AddToggle({
-        Name = "Auto Craft #1 (rev_b2s_Craft 1)",
-        Default = false
-    }, function(state)
-        AutoB2SActive1 = state
-        if state then
-            notifyUser("B2S Craft", "Auto Craft #1 started (Loop: " .. tostring(B2SDelay) .. "s)!", 2, "Success")
-            startB2SLoop(1)
-        else
-            notifyUser("B2S Craft", "Auto Craft #1 stopped.", 1.5, "Info")
-            updateB2SStatusText()
-        end
-    end)
-
-    SecB2S:AddToggle({
-        Name = "Auto Craft #2 (rev_b2s_Craft 2)",
-        Default = false
-    }, function(state)
-        AutoB2SActive2 = state
-        if state then
-            notifyUser("B2S Craft", "Auto Craft #2 started (Loop: " .. tostring(B2SDelay) .. "s)!", 2, "Success")
-            startB2SLoop(2)
-        else
-            notifyUser("B2S Craft", "Auto Craft #2 stopped.", 1.5, "Info")
-            updateB2SStatusText()
-        end
-    end)
-
-    SecB2S:AddToggle({
-        Name = "Auto Craft #3 (rev_b2s_Craft 3)",
-        Default = false
-    }, function(state)
-        AutoB2SActive3 = state
-        if state then
-            notifyUser("B2S Craft", "Auto Craft #3 started (Loop: " .. tostring(B2SDelay) .. "s)!", 2, "Success")
-            startB2SLoop(3)
-        else
-            notifyUser("B2S Craft", "Auto Craft #3 stopped.", 1.5, "Info")
-            updateB2SStatusText()
-        end
-    end)
-
-    SecB2S:AddButton("⚡ Craft #1 Once", function()
-        local ok, err = fireB2SCraft(1)
-        if ok then
-            notifyUser("B2S Craft", "Craft #1 sent to server!", 1.5, "Success")
-        else
-            notifyUser("Error", "Failed Craft #1: " .. tostring(err), 2.5, "Error")
-        end
-    end)
-
-    SecB2S:AddButton("⚡ Craft #2 Once", function()
-        local ok, err = fireB2SCraft(2)
-        if ok then
-            notifyUser("B2S Craft", "Craft #2 sent to server!", 1.5, "Success")
-        else
-            notifyUser("Error", "Failed Craft #2: " .. tostring(err), 2.5, "Error")
-        end
-    end)
-
-    SecB2S:AddButton("⚡ Craft #3 Once", function()
-        local ok, err = fireB2SCraft(3)
-        if ok then
-            notifyUser("B2S Craft", "Craft #3 sent to server!", 1.5, "Success")
-        else
-            notifyUser("Error", "Failed Craft #3: " .. tostring(err), 2.5, "Error")
-        end
-    end)
-
-    SecB2S:AddButton("🔄 Reset Craft Counters", function()
-        B2SCount1 = 0
-        B2SCount2 = 0
-        B2SCount3 = 0
-        notifyUser("B2S Craft", "All craft counters reset to 0.", 1.5, "Info")
-        updateB2SStatusText()
-    end)
-
-    -- Fungsi untuk merapikan dan membuka tinggi semua section
-    fixAllSectionHeights = function()
-        pcall(function()
-            for _, sec in ipairs(Window.Sections or {}) do
-                local sFrame = sec.Frame
-                if sFrame then
-                    local inner = sFrame:FindFirstChildWhichIsA("Frame")
-                    if inner then
-                        local layout = inner:FindFirstChildOfClass("UIListLayout")
-                        if layout then
-                            local contentH = layout.AbsoluteContentSize.Y + 46
-                            if contentH > 50 then
-                                sFrame.Size = UDim2.new(1, -18, 0, contentH)
-                            end
-                        end
-                    end
-                end
-            end
-        end)
-    end
-
-    -- Re-fix section heights when tabs are clicked
-    task.defer(function()
-        pcall(function()
-            for _, ti in ipairs(Window.Tabs or {}) do
-                if ti.Ico then
-                    ti.Ico.MouseButton1Click:Connect(function()
-                        task.delay(0.05, fixAllSectionHeights)
-                        task.delay(0.2, fixAllSectionHeights)
-                    end)
-                end
-            end
-        end)
-    end)
-
-    -- ══════════════════════════════════════════
-    -- INVENTORY SYNC ENGINE
-    -- ══════════════════════════════════════════
-    refreshInventoryText = function()
-        if not CachedInventoryData then return end
-        
-        local craftFilterOpt = "🔨 All Material Craft (Merged Qty)"
-        if InvMaterialCraftDropdown then
-            pcall(function()
-                craftFilterOpt = InvMaterialCraftDropdown:Get() or "🔨 All Material Craft (Merged Qty)"
-            end)
-        end
-
-        local selectedRarities = {}
-        if InvRarityDropdown then
-            pcall(function()
-                selectedRarities = InvRarityDropdown:Get()
-                if type(selectedRarities) ~= "table" then selectedRarities = {selectedRarities} end
-            end)
-        end
-        
-        local selectedMutations = {}
-        if InvMutationDropdown then
-            pcall(function()
-                selectedMutations = InvMutationDropdown:Get()
-                if type(selectedMutations) ~= "table" then selectedMutations = {selectedMutations} end
-            end)
-        end
-        
-        local favFilterOpt = "All Items"
-        if InvFavFilterDropdown then
-            pcall(function()
-                favFilterOpt = InvFavFilterDropdown:Get() or "All Items"
-            end)
-        end
-
-        local lvlFilterOpt = "All Levels"
-        if InvLevelFilterDropdown then
-            pcall(function()
-                lvlFilterOpt = InvLevelFilterDropdown:Get() or "All Levels"
-            end)
-        end
-        
-        local hasRarityFilter = false
-        for _, r in pairs(selectedRarities) do
-            if r ~= "" then hasRarityFilter = true; break end
-        end
-        
-        local hasMutationFilter = false
-        for _, m in pairs(selectedMutations) do
-            local cleanM = getBaseName(m)
-            if cleanM ~= "" then hasMutationFilter = true; break end
-        end
-        
-        local hasFavFilter = (favFilterOpt ~= "All Items")
-        local hasLvlFilter = (lvlFilterOpt ~= "All Levels")
-        local isFiltered = hasRarityFilter or hasMutationFilter or hasFavFilter or hasLvlFilter
-        
-        local categorizedItems = {}
-        local categoryTotals = {}
-        local filteredTotalCount = 0
-        
-        local InfiniteMath
-        pcall(function()
-            local Shared = ReplicatedStorage:FindFirstChild("Shared")
-            local Utility = Shared and Shared:FindFirstChild("Utility")
-            local IMObj = Utility and Utility:FindFirstChild("InfiniteMath")
-            if IMObj then InfiniteMath = require(IMObj) end
-        end)
-        
-        local totalCPSVal = InfiniteMath and InfiniteMath.new(0) or 0
-        local filteredCPSVal = InfiniteMath and InfiniteMath.new(0) or 0
-        
-        local itemFilterPassed = {}
-        local itemCPSMap = {}
-        local itemFavMap = {}
-        local itemLevelMap = {}
-        local itemRarityMap = {}
-        local itemMutationMap = {}
-        local totalFavCount = 0
-        
-        local craftCounts = {}
-        local craftFavCounts = {}
-        for _, mat in ipairs(MATERIAL_CRAFT_ITEMS) do
-            craftCounts[mat] = 0
-            craftFavCounts[mat] = 0
-        end
-
-        -- Pass 1: Scan tools sekali dan cache ke map
-        for _, tool in ipairs(getAllTools()) do
-            if isTradeable(tool) then
-                local fullName = getFullItemName(tool)
-                local toolCPS = getToolCPS(tool)
-                local toolLvl = getToolLevel(tool)
-                local toolRarity = getItemInfo(tool)
-                local toolMutation = getToolMutation(tool)
-                local isFav = isToolFavorite(tool)
-
-                itemLevelMap[fullName] = toolLvl
-                itemRarityMap[fullName] = toolRarity
-                itemMutationMap[fullName] = toolMutation
-
-                if toolCPS then
-                    pcall(function()
-                        totalCPSVal = totalCPSVal + toolCPS
-                    end)
-                    itemCPSMap[fullName] = toolCPS
-                end
-                if isFav then
-                    itemFavMap[fullName] = true
-                    totalFavCount = totalFavCount + 1
-                end
-
-                local matName = matchMaterialCraft(tool.Name) or matchMaterialCraft(fullName)
-                if matName then
-                    craftCounts[matName] = (craftCounts[matName] or 0) + 1
-                    if isFav then
-                        craftFavCounts[matName] = (craftFavCounts[matName] or 0) + 1
-                    end
-                end
-            end
-        end
-        CachedFavoriteCount = totalFavCount
-
-        -- ══════════════════════════════════════════
-        -- MATERIAL CRAFT VIEW (CONSOLIDATED / JUST QTY)
-        -- ══════════════════════════════════════════
-        if craftFilterOpt ~= "All Items (Normal)" then
-            local isAllCraft = (craftFilterOpt == "🔨 All Material Craft (Merged Qty)")
-            local targetItems = isAllCraft and MATERIAL_CRAFT_ITEMS or { craftFilterOpt }
-            
-            local totalTargetQty = 0
-            for _, mat in ipairs(targetItems) do
-                local q = craftCounts[mat] or 0
-                if favFilterOpt == "⭐ Only Favorites" then
-                    q = craftFavCounts[mat] or 0
-                elseif favFilterOpt == "⚪ Only Non-Favorites" then
-                    q = math.max(0, (craftCounts[mat] or 0) - (craftFavCounts[mat] or 0))
-                end
-                totalTargetQty = totalTargetQty + q
-            end
-
-            -- Update Overview Statistics Label
-            local overviewText = string.format("📦 Total Stock: %d items  │  ⭐ Favorites: %d items\n🔨 Material Craft: %d items (Consolidated)",
-                CachedTotalCount, CachedFavoriteCount, totalTargetQty)
-            if favFilterOpt ~= "All Items" then
-                overviewText = overviewText .. "  │  " .. favFilterOpt
-            end
-            if OverviewLabel then
-                OverviewLabel:Set("Inventory Overview", overviewText)
-            end
-
-            -- Update Minimized status in Sigma UI
-            pcall(function()
-                Window:SetMinimizedText(string.format("🔨 Craft: %d Items", totalTargetQty))
-                Window:SetMinimizedGlow("Success")
-            end)
-
-            -- Build Formatted Item List (Just pure quantity per name, no mutations, all merged)
-            local displayString = "🔨 MATERIAL CRAFT (CONSOLIDATED / JUST QTY)\n"
-            if isAllCraft then
-                displayString = displayString .. string.format("Filter: All 8 Craft Materials  │  Total Qty: %d\n", totalTargetQty)
-            else
-                displayString = displayString .. string.format("Filter: %s  │  Total Qty: %d\n", craftFilterOpt, totalTargetQty)
-            end
-            if favFilterOpt ~= "All Items" then
-                displayString = displayString .. "Status Filter: " .. favFilterOpt .. "\n"
-            end
-            displayString = displayString .. "\n"
-
-            for _, mat in ipairs(targetItems) do
-                local q = craftCounts[mat] or 0
-                if favFilterOpt == "⭐ Only Favorites" then
-                    q = craftFavCounts[mat] or 0
-                elseif favFilterOpt == "⚪ Only Non-Favorites" then
-                    q = math.max(0, (craftCounts[mat] or 0) - (craftFavCounts[mat] or 0))
-                end
-                displayString = displayString .. string.format(" • %s: %dx\n", mat, q)
-            end
-
-            LastFormattedInventoryText = displayString
-            if FullInventoryLabel then
-                FullInventoryLabel:Set("Item List & Total", displayString)
-            end
-
-            task.defer(fixAllSectionHeights)
-            return
-        end
-        
-        -- Pass 2: Filter dan kategorikan item
-        for itemName, amount in pairs(CachedInventoryData) do
-            local itemRarity = itemRarityMap[itemName] or "Unknown"
-            local itemMutation = itemMutationMap[itemName]
-            local itemLvl = itemLevelMap[itemName] or 1
-            local filterMut = itemMutation or "No Mutation"
-            local isFav = itemFavMap[itemName] == true
-            
-            -- Rarity filter
-            local rarityPass = true
-            if hasRarityFilter then
-                local found = false
-                for _, r in pairs(selectedRarities) do
-                    if r == itemRarity then found = true; break end
-                end
-                if not found then rarityPass = false end
-            end
-            
-            -- Mutation filter
-            local mutationPass = true
-            if hasMutationFilter then
-                local found = false
-                for _, m in pairs(selectedMutations) do
-                    local cleanM = getBaseName(m)
-                    if cleanM == filterMut then found = true; break end
-                end
-                if not found then mutationPass = false end
-            end
-
-            -- Favorite filter
-            local favPass = true
-            if favFilterOpt == "⭐ Only Favorites" then
-                favPass = isFav
-            elseif favFilterOpt == "⚪ Only Non-Favorites" then
-                favPass = not isFav
-            end
-
-            -- Level filter
-            local lvlPass = true
-            if lvlFilterOpt == "Lv. 1 Only" then
-                lvlPass = (itemLvl == 1)
-            elseif lvlFilterOpt == "Lv. > 1 (Upgraded)" then
-                lvlPass = (itemLvl > 1)
-            elseif lvlFilterOpt == "Max Level Only" then
-                lvlPass = (itemLvl >= 100 or string.find(string.lower(itemName), "max"))
-            end
-            
-            if rarityPass and mutationPass and favPass and lvlPass then
-                itemFilterPassed[itemName] = true
-                local category = "🏆 " .. string.upper(itemRarity) .. (itemMutation and (" " .. string.upper(itemMutation)) or "") .. " ITEMS"
-                if not categorizedItems[category] then
-                    categorizedItems[category] = {}
-                    categoryTotals[category] = 0
-                end
-                
-                local itemCPS = itemCPSMap[itemName]
-                table.insert(categorizedItems[category], {
-                    name = itemName, 
-                    qty = amount, 
-                    rarity = itemRarity, 
-                    cps = itemCPS,
-                    isFav = isFav
-                })
-                categoryTotals[category] = categoryTotals[category] + amount
-                filteredTotalCount = filteredTotalCount + amount
-            end
-        end
-        
-        -- Pass 3: Hitung filtered CPS
-        for _, tool in ipairs(getAllTools()) do
-            if isTradeable(tool) then
-                local fullName = getFullItemName(tool)
-                if itemFilterPassed[fullName] then
-                    local toolCPS = itemCPSMap[fullName]
-                    if toolCPS then
-                        pcall(function()
-                            filteredCPSVal = filteredCPSVal + toolCPS
-                        end)
-                    end
-                end
-            end
-        end
-        
-        local totalCpsStr = tostring(totalCPSVal)
-        local filteredCpsStr = tostring(filteredCPSVal)
-        
-        -- Update Overview Statistics Label
-        local overviewText = string.format("📦 Total Stock: %d items  │  ⭐ Favorites: %d items\n🧬 Unique Variants: %d items  │  ⚡ Total CPS: %s",
-            CachedTotalCount, CachedFavoriteCount, CachedUniqueCount, totalCpsStr)
-        if isFiltered then
-            overviewText = overviewText .. string.format("\n🎯 Showing: %d / %d (Filtered)  │  ⚡ Filtered CPS: %s",
-                filteredTotalCount, CachedTotalCount, filteredCpsStr)
-        end
-        if OverviewLabel then
-            OverviewLabel:Set("Inventory Overview", overviewText)
-        end
-
-        -- Update Minimized status in Sigma UI
-        pcall(function()
-            Window:SetMinimizedText(string.format("%d Items | ⭐ %d", CachedTotalCount, CachedFavoriteCount))
-            Window:SetMinimizedGlow("Success")
-        end)
-
-        -- Build Formatted Item List
-        local displayString = ""
-        if isFiltered then
-            displayString = string.format("Showing %d / %d Items (Filtered)  │  ⭐ %d Favorites\n", filteredTotalCount, CachedTotalCount, CachedFavoriteCount)
-            displayString = displayString .. "Filtered CPS: " .. filteredCpsStr .. "  │  Total CPS: " .. totalCpsStr .. "\n\n"
-            if filteredTotalCount == 0 then
-                displayString = displayString .. "No items match the selected filters."
-            end
-        else
-            displayString = string.format("Total All Items: %d (⭐ %d Favorites)\n", CachedTotalCount, CachedFavoriteCount)
-            displayString = displayString .. "Total CPS: " .. totalCpsStr .. "\n\n"
-            if CachedTotalCount == 0 then
-                displayString = displayString .. "Inventory is completely empty."
-            end
-        end
-        
-        if filteredTotalCount > 0 then
-            local sortedCategories = {}
-            for cat, _ in pairs(categorizedItems) do table.insert(sortedCategories, cat) end
-            table.sort(sortedCategories)
-            for _, cat in ipairs(sortedCategories) do
-                displayString = displayString .. "=== " .. cat .. " (Total: " .. categoryTotals[cat] .. ") ===\n"
-                table.sort(categorizedItems[cat], function(x, y)
-                    local a = x.cps
-                    local b = y.cps
-                    local typeA = typeof(a)
-                    local typeB = typeof(b)
-                    if typeA == typeB then
-                        if typeA == "nil" then
-                            return x.name < y.name
-                        end
-                        if a == b then
-                            return x.name < y.name
-                        end
-                        return a > b
-                    elseif typeA == "table" or typeA == "userdata" then
-                        return true
-                    elseif typeB == "table" or typeB == "userdata" then
-                        return false
-                    else
-                        if a ~= nil and b == nil then
-                            return true
-                        elseif a == nil and b ~= nil then
-                            return false
-                        else
-                            return x.name < y.name
-                        end
-                    end
-                end)
-                for _, item in ipairs(categorizedItems[cat]) do 
-                    local cpsStr = item.cps and (" │ CPS: " .. tostring(item.cps)) or ""
-                    local favPrefix = item.isFav and "⭐ " or ""
-                    displayString = displayString .. string.format(" • %s%s (Stock: %d%s)\n", favPrefix, item.name, item.qty, cpsStr) 
-                end
-                displayString = displayString .. "\n"
-            end
-        end
-        
-        LastFormattedInventoryText = displayString
-        if FullInventoryLabel then
-            FullInventoryLabel:Set("Item List & Total", displayString)
-        end
-
-        -- Pastikan semua section terbuka dan tidak terpotong
-        task.defer(fixAllSectionHeights)
-    end
-
-    updateInventoryDisplay = function()
-        if isSyncingUI then return end
-        isSyncingUI = true
-        task.spawn(function()
-            task.wait(0.3) 
-            local inventoryData = {}; local totalCount = 0; local uniqueCount = 0
-            for _, tool in pairs(getAllTools()) do  
-                if isTradeable(tool) then
-                    local displayName = getFullItemName(tool)  
-                    if not inventoryData[displayName] then
-                        uniqueCount = uniqueCount + 1
-                    end
-                    inventoryData[displayName] = (inventoryData[displayName] or 0) + 1  
-                    totalCount = totalCount + 1  
-                end
-            end  
-            CachedInventoryData = inventoryData
-            CachedTotalCount = totalCount
-            CachedUniqueCount = uniqueCount
-            
-            local invMutList = getInventoryMutationList()
-            if InvMutationDropdown then
-                pcall(function() InvMutationDropdown:Refresh(invMutList) end)
-            end
-            
-            refreshInventoryText()
-            isSyncingUI = false 
-        end)
-    end
-
-    -- ══════════════════════════════════════════
-    -- REAL-TIME INVENTORY EVENT LISTENERS
-    -- ══════════════════════════════════════════
-    local function connectInventory()
-        for _, conn in ipairs(InventoryConnections) do
-            pcall(function() conn:Disconnect() end)
-        end
-        table.clear(InventoryConnections)
-
-        local backpack = localPlayer:WaitForChild("Backpack", 5)
-        if backpack then
-            table.insert(InventoryConnections, backpack.ChildAdded:Connect(function(child)
-                if child:IsA("Tool") then updateInventoryDisplay() end
-            end))
-            table.insert(InventoryConnections, backpack.ChildRemoved:Connect(function(child)
-                if child:IsA("Tool") then updateInventoryDisplay() end
-            end))
-        end
-
-        local function hookCharacter(char)
-            if not char then return end
-            table.insert(InventoryConnections, char.ChildAdded:Connect(function(child)
-                if child:IsA("Tool") then updateInventoryDisplay() end
-            end))
-            table.insert(InventoryConnections, char.ChildRemoved:Connect(function(child)
-                if child:IsA("Tool") then updateInventoryDisplay() end
-            end))
-        end
-
-        if localPlayer.Character then
-            hookCharacter(localPlayer.Character)
-        end
-        table.insert(InventoryConnections, localPlayer.CharacterAdded:Connect(function(char)
-            hookCharacter(char)
-            task.wait(1)
-            updateInventoryDisplay()
-        end))
-    end
-
-    -- Connect listeners and perform initial scan
-    connectInventory()
-    updateInventoryDisplay()
-
-    -- Post-launch: perbaiki tinggi semua section setelah jendela selesai animasi buka
-    task.delay(0.6, fixAllSectionHeights)
-    task.delay(1.2, fixAllSectionHeights)
-
-    notifyUser("Inventory Viewer", "Loaded successfully! 2 Tabs active (Inventory & Event).", 3, "Success")
-
 end)
 
-if not success then
-    warn("[Inventory Viewer Error]:", errorMessage)
+---------------------------------------------------------
+-- MEKANIK 2: AUTO CLAIM X2 (REAL-TIME & SUPER CEPAT)
+---------------------------------------------------------
+local x2Buttons = {}
+
+local function registerX2Button(obj)
+    if (obj:IsA("ImageButton") or obj:IsA("ImageLabel")) and string.find(tostring(obj.Image), "138499790425912") then
+        if not table.find(x2Buttons, obj) then
+            table.insert(x2Buttons, obj)
+        end
+    end
 end
+
+-- Fungsi pembantu untuk cek apakah tombol dan semua parent-nya benar-benar terlihat (visible)
+local function isReallyVisible(obj)
+    local current = obj
+    while current and current:IsA("GuiObject") do
+        if not current.Visible then
+            return false
+        end
+        current = current.Parent
+    end
+    return true
+end
+
+-- Lakukan scan awal & pasang event listener untuk UI baru yang di-spawn
+task.spawn(function()
+    if playerGui then
+        -- Scan UI yang sudah terlanjur dimuat
+        for _, obj in ipairs(playerGui:GetDescendants()) do
+            registerX2Button(obj)
+        end
+        -- Dengar jika ada UI baru yang ditambahkan secara dinamis
+        playerGui.DescendantAdded:Connect(registerX2Button)
+    end
+end)
+
+-- Loop pemeriksaan super cepat (tiap 0.05 detik) khusus untuk list tombol yang cocok
+local lastClaim = 0
+task.spawn(function()
+    while task.wait(0.05) do
+        if not _G.autoClaimX2 then continue end
+        
+        local now = os.clock()
+        if now - lastClaim < 1.0 then continue end -- Cooldown agar tidak klik berulang-ulang dalam 1 detik
+        
+        for i = #x2Buttons, 1, -1 do
+            local obj = x2Buttons[i]
+            if not obj:IsDescendantOf(game) then
+                table.remove(x2Buttons, i) -- Hapus dari list jika objek sudah hancur
+            elseif isReallyVisible(obj) then
+                klikGaib(obj)
+                lastClaim = now
+                break -- Keluar dari iterasi untuk memproses klik
+            end
+        end
+    end
+end)
+
+---------------------------------------------------------
+-- MEKANIK 3: AUTO TELEPORT WEATHER EVENTS
+---------------------------------------------------------
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local function teleportWithBarbellPause(targetPart)
+    task.spawn(function()
+        tempPauseBarbell = true
+        
+        -- Lepas semua tools yang sedang dipegang
+        local char = lp.Character or lp.CharacterAdded:Wait()
+        local hum = char:WaitForChild("Humanoid", 10)
+        if hum then
+            hum:UnequipTools()
+        end
+        
+        -- Teleportasi
+        local hrp = char:WaitForChild("HumanoidRootPart", 10)
+        if hrp and targetPart and targetPart:IsA("BasePart") then
+            hrp.CFrame = targetPart.CFrame + Vector3.new(0, 3, 0)
+        end
+        
+        -- Jeda 1.5 detik sebelum memakai kembali
+        task.wait(1.5)
+        tempPauseBarbell = false
+    end)
+end
+
+local function teleportToLuckMachine()
+    task.spawn(function()
+        local debris = workspace:WaitForChild("Debris", 10)
+        if not debris then return end
+        
+        local luckMachine = debris:WaitForChild("LuckMachine", 15)
+        if not luckMachine then return end
+        
+        local standingPlatforms = luckMachine:WaitForChild("StandingPlatforms", 15)
+        if not standingPlatforms then return end
+        
+        -- Cari platform 1, 2, atau 3 secara berurutan
+        local targetPart = standingPlatforms:WaitForChild("1", 5) 
+            or standingPlatforms:WaitForChild("2", 5) 
+            or standingPlatforms:WaitForChild("3", 5)
+            
+        if targetPart and targetPart:IsA("BasePart") then
+            teleportWithBarbellPause(targetPart)
+        end
+    end)
+end
+
+local function teleportToGymMachine()
+    task.spawn(function()
+        local debris = workspace:WaitForChild("Debris", 10)
+        if not debris then return end
+        
+        local gymMachine = debris:WaitForChild("GymMachine", 15)
+        if not gymMachine then return end
+        
+        -- Cari part target untuk teleportasi (PrimaryPart atau BasePart pertama)
+        local targetPart = gymMachine.PrimaryPart
+        if not targetPart then
+            for _, child in ipairs(gymMachine:GetDescendants()) do
+                if child:IsA("BasePart") then
+                    targetPart = child
+                    break
+                end
+            end
+        end
+        
+        if targetPart then
+            teleportWithBarbellPause(targetPart)
+        end
+    end)
+end
+
+-- Hubungkan ke Remote Event rev_AddedWeather secara dinamis dengan proteksi pcall
+local success, weatherRemote = pcall(function()
+    return ReplicatedStorage:WaitForChild("Shared", 10)
+        :WaitForChild("Packages", 10)
+        :WaitForChild("Network", 10)
+        :WaitForChild("rev_AddedWeather", 10)
+end)
+
+if success and weatherRemote then
+    weatherRemote.OnClientEvent:Connect(function(weatherType, ...)
+        if weatherType == "LuckMachine" then
+            teleportToLuckMachine()
+        elseif weatherType == "LiftMachine" then
+            teleportToGymMachine()
+        end
+    end)
+end
+
+---------------------------------------------------------
+-- MEKANIK 4: ANTI AFK
+---------------------------------------------------------
+local VirtualUser = game:GetService("VirtualUser")
+lp.Idled:Connect(function()
+    pcall(function()
+        VirtualUser:CaptureController()
+        VirtualUser:ClickButton2(Vector2.new())
+    end)
+end)
+
+---------------------------------------------------------
+-- MEKANIK 5: AFK BLACKSCREEN (STATS MONITOR)
+---------------------------------------------------------
+local RunService = game:GetService("RunService")
+
+-- 1. Buat ScreenGui Hitam Fullscreen
+local blackScreenGui = Instance.new("ScreenGui")
+blackScreenGui.Name = "AFKBlackscreen"
+blackScreenGui.IgnoreGuiInset = true
+blackScreenGui.Parent = playerGui
+
+local blackFrame = Instance.new("Frame")
+blackFrame.Size = UDim2.new(1, 0, 1, 0)
+blackFrame.BackgroundColor3 = Color3.new(0, 0, 0)
+blackFrame.BorderSizePixel = 0
+blackFrame.Parent = blackScreenGui
+
+local infoLabel = Instance.new("TextLabel")
+infoLabel.Size = UDim2.new(0.8, 0, 0.4, 0)
+infoLabel.Position = UDim2.new(0.1, 0, 0.3, 0)
+infoLabel.BackgroundTransparency = 1
+infoLabel.TextColor3 = Color3.new(1, 1, 1)
+infoLabel.Font = Enum.Font.Code
+infoLabel.TextSize = 22
+infoLabel.TextXAlignment = Enum.TextXAlignment.Center
+infoLabel.TextYAlignment = Enum.TextYAlignment.Center
+infoLabel.Text = "Menghitung Statistik AFK..."
+infoLabel.Parent = blackFrame
+
+-- 2. Sistem Penghitung FPS
+local fps = 0
+local frameCount = 0
+local nextFpsUpdate = os.clock() + 1
+
+RunService.Heartbeat:Connect(function()
+    frameCount = frameCount + 1
+    local now = os.clock()
+    if now >= nextFpsUpdate then
+        fps = frameCount
+        frameCount = 0
+        nextFpsUpdate = now + 1
+    end
+end)
+
+-- 3. Fungsi Deteksi Statistik Dinamis (Attributes / Leaderstats / GUI)
+local function getStatValue(statName)
+    local val = nil
+    
+    -- A. Coba cari di attributes LocalPlayer
+    pcall(function()
+        val = lp:GetAttribute(statName) 
+            or lp:GetAttribute(statName .. "Level") 
+            or lp:GetAttribute(statName .. "Value")
+            or lp:GetAttribute(statName .. "Speed")
+    end)
+    if val then return tostring(val) end
+    
+    -- B. Coba cari di leaderstats / Stats folder
+    pcall(function()
+        for _, folder in ipairs(lp:GetChildren()) do
+            if folder:IsA("Folder") or folder:IsA("Configuration") then
+                local obj = folder:FindFirstChild(statName) 
+                    or folder:FindFirstChild(statName .. "Level")
+                    or folder:FindFirstChild(statName .. "Speed")
+                if obj then
+                    val = obj.Value
+                    break
+                end
+            end
+        end
+    end)
+    if val then return tostring(val) end
+    
+    -- C. Coba cari di GUI di seluruh PlayerGui (rekursif)
+    pcall(function()
+        for _, gui in ipairs(playerGui:GetChildren()) do
+            if gui:IsA("ScreenGui") and gui.Name ~= "AFKBlackscreen" then
+                for _, obj in ipairs(gui:GetDescendants()) do
+                    if obj:IsA("TextLabel") then
+                        local objName = string.lower(obj.Name)
+                        local parentName = obj.Parent and string.lower(obj.Parent.Name) or ""
+                        local searchPattern = string.lower(statName)
+                        
+                        -- Cek apakah nama objek atau nama parent-nya mengandung nama stat yang dicari
+                        if string.find(objName, searchPattern) or string.find(parentName, searchPattern) then
+                            local text = obj.Text
+                            -- Filter out teks belanja/upgrade
+                            if text and text ~= "" 
+                               and not string.find(string.lower(text), "upgrade") 
+                               and not string.find(string.lower(text), "cost") 
+                               and not string.find(string.lower(text), "beli") then
+                               
+                               val = text
+                               break
+                            end
+                        end
+                    end
+                end
+            end
+            if val then break end
+        end
+    end)
+    
+    return val and tostring(val) or nil
+end
+
+local function getKickPower()
+    local power = nil
+    pcall(function()
+        for _, gui in ipairs(playerGui:GetChildren()) do
+            if gui:IsA("ScreenGui") and gui.Name ~= "AFKBlackscreen" then
+                local bottomLeft = gui:FindFirstChild("BottomLeft", true)
+                if bottomLeft and bottomLeft:IsA("Frame") then
+                    local kickLevel = bottomLeft:FindFirstChild("KickLevel")
+                    if kickLevel and kickLevel:IsA("Frame") then
+                        local textLabel = kickLevel:FindFirstChildOfClass("TextLabel")
+                        if textLabel and textLabel.Text ~= "" then
+                            power = textLabel.Text
+                            break
+                        end
+                    end
+                end
+            end
+        end
+    end)
+    return power or "Tidak Terdeteksi"
+end
+
+local function getSpeedStat()
+    local val = "Tidak Terdeteksi"
+    pcall(function()
+        local frames = playerGui:WaitForChild("Frames", 10)
+        if frames then
+            -- 1. Cari exact match "+1 Speed"
+            for _, obj in ipairs(frames:GetDescendants()) do
+                if obj.Name == "+1 Speed" then
+                    local nameLabel = obj:FindFirstChild("NameLabel")
+                    if nameLabel then
+                        val = nameLabel.Text
+                        return val
+                    end
+                end
+            end
+            -- 2. Fallback: Cari yang mengandung "1 Speed" atau "1Speed"
+            for _, obj in ipairs(frames:GetDescendants()) do
+                if string.find(obj.Name, "1 Speed") or string.find(obj.Name, "1Speed") then
+                    local nameLabel = obj:FindFirstChild("NameLabel")
+                    if nameLabel then
+                        val = nameLabel.Text
+                        return val
+                    end
+                end
+            end
+            -- 3. Fallback Ekstrem: Cari yang mengandung "Speed" dan bertipe ImageLabel
+            for _, obj in ipairs(frames:GetDescendants()) do
+                if obj:IsA("ImageLabel") and string.find(obj.Name, "Speed") then
+                    local nameLabel = obj:FindFirstChild("NameLabel")
+                    if nameLabel then
+                        val = nameLabel.Text
+                        return val
+                    end
+                end
+            end
+        end
+    end)
+    return val
+end
+
+local function getRebirthStat()
+    local val = "Tidak Terdeteksi"
+    pcall(function()
+        local frames = playerGui:WaitForChild("Frames", 10)
+        if frames then
+            -- 1. Cari exact name "Rebirth" -> "RebirthLevel"
+            local rebirthFrame = frames:FindFirstChild("Rebirth")
+            local rebirthLevel = rebirthFrame and rebirthFrame:FindFirstChild("RebirthLevel")
+            if rebirthLevel then
+                val = rebirthLevel.Text
+                return val
+            end
+            
+            -- 2. Fallback: Cari secara rekursif objek bernama "RebirthLevel"
+            for _, obj in ipairs(frames:GetDescendants()) do
+                if obj.Name == "RebirthLevel" and obj:IsA("TextLabel") then
+                    val = obj.Text
+                    return val
+                end
+            end
+            
+            -- 3. Fallback Ekstrem: Cari objek mengandung nama "Rebirth" bertipe TextLabel
+            for _, obj in ipairs(frames:GetDescendants()) do
+                if obj:IsA("TextLabel") and string.find(obj.Name, "Rebirth") then
+                    val = obj.Text
+                    return val
+                end
+            end
+        end
+    end)
+    return val
+end
+
+-- 4. Loop Update Statistik (FPS & Waktu tiap 1 detik, Kick Power tiap 60 detik)
+local startTime = os.time()
+local cachedKickPower = "Menghitung..."
+local cachedSpeedStat = "Menghitung..."
+local cachedRebirthStat = "Menghitung..."
+local kickPowerUpdateCounter = 0
+
+local function updateMonitorText()
+    local elapsedSeconds = os.time() - startTime
+    
+    infoLabel.Text = string.format(
+        "=== ACCOUNT STATS MONITOR ===\n\n" ..
+        "User : %s\n" ..
+        "Fps : %d\n" ..
+        "Waktu Afk : %d Detik\n" ..
+        "%s\n" ..
+        "%s\n" ..
+        "%s\n\n" ..
+        "=============================",
+        lp.Name,
+        fps,
+        elapsedSeconds,
+        cachedSpeedStat,
+        cachedRebirthStat,
+        cachedKickPower
+    )
+end
+
+task.spawn(function()
+    task.wait(2) -- Jeda awal agar UI game selesai dimuat sepenuhnya
+    cachedKickPower = getKickPower()
+    cachedSpeedStat = getSpeedStat() -- Hanya dibaca sekali di awal eksekusi
+    cachedRebirthStat = getRebirthStat() -- Hanya dibaca sekali di awal eksekusi
+    updateMonitorText()
+    
+    while task.wait(1) do
+        kickPowerUpdateCounter = kickPowerUpdateCounter + 1
+        
+        -- Perbarui Kick Power hanya setelah 60 detik (1 menit)
+        if kickPowerUpdateCounter >= 60 then
+            kickPowerUpdateCounter = 0
+            cachedKickPower = getKickPower()
+        end
+        
+        updateMonitorText()
+    end
+end)
