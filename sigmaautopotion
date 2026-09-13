@@ -153,18 +153,45 @@ end
 local tempPauseBarbell = false
 
 ---------------------------------------------------------
--- MEKANIK 1: AUTO USE BARBELL
+-- MEKANIK 1: AUTO USE BARBELL & BIG JUPITER
 ---------------------------------------------------------
 local activeBarbellName = "Mencari Tool..."
 
+local function isBigJupiter(tool)
+    if not tool or not tool:IsA("Tool") then return false end
+    return string.find(string.lower(tool.Name), "big jupiter") ~= nil
+end
+
 local function isBarbellTool(tool)
     if not tool or not tool:IsA("Tool") then return false end
-    local name = tool.Name
-    return string.match(name, "Barbell$") ~= nil or string.find(string.lower(name), "barbell") ~= nil
+    local name = string.lower(tool.Name)
+    return isBigJupiter(tool) or string.match(tool.Name, "Barbell$") ~= nil or string.find(name, "barbell") ~= nil
 end
 
 local function getBarbellName()
     local char = lp.Character
+    local backpack = lp:FindFirstChild("Backpack")
+    
+    -- 1. Cek jika karakter sedang memegang Big Jupiter
+    if char then
+        local currentTool = char:FindFirstChildOfClass("Tool")
+        if currentTool and isBigJupiter(currentTool) then
+            activeBarbellName = currentTool.Name
+            return activeBarbellName
+        end
+    end
+    
+    -- 2. Cek jika ada Big Jupiter di Backpack (prioritas utama)
+    if backpack then
+        for _, tool in ipairs(backpack:GetChildren()) do
+            if isBigJupiter(tool) then
+                activeBarbellName = tool.Name
+                return activeBarbellName
+            end
+        end
+    end
+    
+    -- 3. Cek jika karakter sedang memegang Barbell lain
     if char then
         local currentTool = char:FindFirstChildOfClass("Tool")
         if isBarbellTool(currentTool) then
@@ -173,7 +200,7 @@ local function getBarbellName()
         end
     end
     
-    local backpack = lp:FindFirstChild("Backpack")
+    -- 4. Cek Barbell lain di Backpack
     if backpack then
         for _, tool in ipairs(backpack:GetChildren()) do
             if isBarbellTool(tool) then
@@ -183,6 +210,7 @@ local function getBarbellName()
         end
     end
     
+    -- 5. Fallback jika ada tool apapun di karakter
     if char then
         local currentTool = char:FindFirstChildOfClass("Tool")
         if currentTool then
@@ -206,10 +234,29 @@ task.spawn(function()
 
         local currentTool = char:FindFirstChildOfClass("Tool")
         
-        if isBarbellTool(currentTool) then
+        -- Deteksi apakah Big Jupiter ada di Backpack
+        local jupiterInBackpack = nil
+        if backpack then
+            for _, tool in ipairs(backpack:GetChildren()) do
+                if isBigJupiter(tool) then
+                    jupiterInBackpack = tool
+                    break
+                end
+            end
+        end
+        
+        -- Prioritas 1: Jika Big Jupiter ada di Backpack dan belum dipegang, langsung equip Big Jupiter!
+        if jupiterInBackpack and not isBigJupiter(currentTool) then
+            activeBarbellName = jupiterInBackpack.Name
+            hum:EquipTool(jupiterInBackpack)
+            task.wait(0.2)
+            jupiterInBackpack:Activate()
+        -- Prioritas 2: Jika karakter sedang memegang Big Jupiter atau Barbell
+        elseif isBarbellTool(currentTool) then
             activeBarbellName = currentTool.Name
             currentTool:Activate()
             task.wait(0.3) -- Jeda ekstra setelah aktivasi agar tidak terjadi spam paket data ke server
+        -- Prioritas 3: Cari Barbell di Backpack jika belum memegang tool apapun
         else
             if backpack then
                 for _, tool in ipairs(backpack:GetChildren()) do
