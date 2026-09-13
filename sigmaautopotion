@@ -603,7 +603,7 @@ local function getCashStat()
         if hud then
             local bottomLeft = hud:FindFirstChild("BottomLeft", true)
             if bottomLeft then
-                local coinFrame = bottomLeft:FindFirstChild("CoinFrame", true)
+                local coinFrame = bottomLeft:FindFirstChild("CoinsFrame", true) or bottomLeft:FindFirstChild("CoinFrame", true)
                 local insideFrame = (coinFrame and coinFrame:FindFirstChild("InsideFrame", true)) or bottomLeft:FindFirstChild("InsideFrame", true)
                 local coinLabel = (insideFrame or coinFrame or bottomLeft):FindFirstChild("CoinLabel", true)
                 if coinLabel and coinLabel:IsA("TextLabel") and coinLabel.Text ~= "" then
