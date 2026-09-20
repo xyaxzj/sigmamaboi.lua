@@ -35,12 +35,12 @@ _G.brainrotWhitelist    = {         -- Daftar nama brainrot yang diizinkan (Case
 _G.kickDelay          = 0.5         -- Jeda waktu (detik) di Safe Zone sebelum menendang/kick (Default: 0.5 detik, jangan terlalu instant)
 _G.autoSellAll         = false       -- true: Auto Sell All setiap 5 detik via ref_B_SellAll
 _G.autoRemovePlayer    = true        -- true: Hapus player lain dari game.Players & workspace.Players (100% Bersih & No Lag), false: Biarkan
-_G.debugConsoleLog     = true        -- true: Cetak log status/fase/candy ke console (F9), false: Senyap
+_G.debugConsoleLog     = false        -- true: Cetak log status/fase/candy ke console (F9), false: Senyap
 _G.failsafeTimeout     = 25          -- Waktu maksimal (detik) sebelum auto-reset ke Safe Zone jika macet
 
 -- ⚡ ULTRA ANTI-LAG & POTATO MODE (PUSH MAX PERFORMANCE)
 _G.antiLag             = true        -- true: Master switch Anti-Lag & Potato Mode Ekstrem
-_G.mapVisual           = "Invisible" -- "Invisible": Visual map pure dihapus/transparan (0% beban render GPU, warna putih hilang), "Gray": Abu-abu semen polos netral, "White": Putih potato, "Default": Warna asli
+_G.mapVisual           = "Gray" -- "Invisible": Visual map pure dihapus/transparan (0% beban render GPU, warna putih hilang), "Gray": Abu-abu semen polos netral, "White": Putih potato, "Default": Warna asli
 _G.optimizePhysics     = false       -- false (Default Aman): Hindari jitter fisika / suara mesin pada mekanisme objek
 _G.fpsCap              = 60          -- Batas target FPS (60 hemat baterai & CPU, 30 untuk multi-akun, 0 = default)
 _G.disable3dRender     = false       -- true: Layar freeze / 0% GPU saat AFK farm (Pencet F10 untuk toggle), false: Tampilan visual normal
