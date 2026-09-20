@@ -1,23 +1,19 @@
 -- ==============================================================================
--- 🥔 KALB ULTRA LIGHTWEIGHT AUTO FARM V3 (ULTRA ANTI-LAG & POTATO MAX EDITION)
+-- 🥔 KALB ULTRA LIGHTWEIGHT AUTO FARM V4 (CANDY EVENT & TELEPORT KICK EDITION)
 -- ==============================================================================
 -- Fitur & Alur:
 -- 1. ⚙️ Full Config Mode: Semua pengaturan diatur via variabel _G di baris atas (Tanpa UI)
--- 2. 🚫 Total Player & Character Purger (100% Bersih):
---    - Menghapus & memusnahkan SEMUA player lain dari game.Players
---    - Menghapus SEMUA karakter player lain dari folder workspace.Players & workspace root
---    - Real-time listener + Background loop anti-bocor (tidak ada lagi yang lolos)
--- 3. 📚 Back To School Event 1: Math Event Auto Solver & Hitbox Expander:
---    - Mendeteksi rev_AddedWeather "MathEvent" & Model angka (1, 2, 3...) di Debris
---    - Membaca soal matematika di GuiPart.SurfaceGui.TextLabel (cth: 7+5) & menyelesaikannya otomatis
---    - Menghapus Part jawaban SALAH di folder Answers (cth: Part A = 10 dihapus)
---    - Memperbesar hitbox Part jawaban BENAR (cth: Part B = 12 diperbesar ke 200 studs, CanQuery=true)
--- 4. 🏃 Back To School Event 2: PEClass Auto Purger:
---    - Mendeteksi rev_AddedWeather "PEClass"
---    - Menghapus SEMUA Model angka (1, 2, 3...) dan Part "Ball" di Debris secara real-time
--- 5. ⚽ Auto Kick: Bot menendang bola (nonstop / saat event berlangsung)
--- 6. 💰 Auto Sell All: Menjual semua brainrot tiap 5 detik (ref_B_SellAll)
--- 7. 🥔 Potato Mode Ekstrem & 🛡️ Anti-AFK
+-- 2. 🚫 Total Player & Character Purger (100% Bersih & No Lag)
+-- 3. 🍬 Candy Weather Event Engine:
+--    - Mendeteksi rev_AddedWeather "Candy" & rev_candySpawn
+--    - Memperbesar hitbox permen ke 200 studs (CanCollide=false, CanTouch=true, CanQuery=true)
+--    - Mendukung CarriedCandy, Candy, Chocolate, Cake, Pancakes, Gummy Bear, Ice Cream, Gummy Worm, dll.
+--    - Listener dinamis untuk mendaftarkan nama permen baru secara otomatis
+-- 4. 🧭 Candy Waypoint Navigation: Sembari membawa brainrot berjalan ke safe zone, melewati titik permen
+-- 5. 💀 Empty Spawn Handler: Jika rev_candySpawn mengirim {}, diam di tempat sampai mati, respawn lalu teleport kick
+-- 6. ⚡ Teleportation for Kick: Teleportasi instan ke safe zone saat Idle, Respawn, atau timeout untuk kick
+--    (Saat membawa brainrot ke safe zone TETAP MURNI JALAN KAKI)
+-- 7. 🥔 Ultra Anti-Lag V3 & Invisible Map (0% Beban Render GPU & No Machine Noise)
 -- ==============================================================================
 
 if not game:IsLoaded() then game.Loaded:Wait() end
@@ -26,12 +22,13 @@ if not game:IsLoaded() then game.Loaded:Wait() end
 -- ⚙️ KONFIGURASI PENGGUNA (UBAH SESUAI KEBUTUHAN DI SINI)
 -- ==============================================================================
 _G.autoFarm           = true        -- true: Auto Farm Aktif, false: Nonaktif
-_G.onlyMathEvent       = false       -- true: HANYA Auto Kick saat MathEvent aktif, false: Auto kick nonstop
-_G.autoMathEvent       = true        -- true: Otomatis selesaikan soal matematika, perbesar jawaban benar & hapus jawaban salah
-_G.autoPEClass         = true        -- true: Otomatis hapus Model angka & Ball di Debris saat event PEClass
+_G.onlyCandyEvent     = false       -- true: HANYA Auto Kick saat Candy Event aktif, false: Auto kick nonstop
+_G.autoCandyEvent     = true        -- true: Otomatis perbesar hitbox Candy/Cokelat/dll ke 200 studs & pandu waypoint jalan
+_G.candyHitboxSize    = Vector3.new(200, 200, 200) -- Ukuran hitbox Candy yang dibesarkan
+_G.candyReachDist     = 25          -- Jarak (studs) horizontal untuk menganggap permen sudah terlewati/terambil
 _G.autoSellAll         = false       -- true: Auto Sell All setiap 5 detik via ref_B_SellAll
 _G.autoRemovePlayer    = true        -- true: Hapus player lain dari game.Players & workspace.Players (100% Bersih & No Lag), false: Biarkan
-_G.debugConsoleLog     = true        -- true: Cetak log status/fase/soal math ke console (F9), false: Senyap
+_G.debugConsoleLog     = true        -- true: Cetak log status/fase/candy ke console (F9), false: Senyap
 _G.failsafeTimeout     = 25          -- Waktu maksimal (detik) sebelum auto-reset ke Safe Zone jika macet
 
 -- ⚡ ULTRA ANTI-LAG & POTATO MODE (PUSH MAX PERFORMANCE)
@@ -79,8 +76,36 @@ local function logConsole(...)
 end
 
 -- =============================================
--- 🛡️ FILTER & PROTEKSI ENTITAS LOKAL & MATH EVENT
+-- 🛡️ FILTER & PROTEKSI ENTITAS LOKAL & CANDY EVENT
 -- =============================================
+local CANDY_NAMES = {
+    ["carriedcandy"] = true,
+    ["candy"] = true,
+    ["chocolate"] = true,
+    ["cake"] = true,
+    ["pancakes"] = true,
+    ["gummy bear"] = true,
+    ["ice cream"] = true,
+    ["gummy worm"] = true,
+}
+
+local function registerCandyName(name)
+    if not name or name == "" then return end
+    CANDY_NAMES[string.lower(name)] = true
+end
+
+local function isCandyItem(inst)
+    if not inst then return false end
+    local lowerName = string.lower(inst.Name)
+    if CANDY_NAMES[lowerName] then return true end
+    for candyName, _ in pairs(CANDY_NAMES) do
+        if string.find(lowerName, candyName, 1, true) then
+            return true
+        end
+    end
+    return false
+end
+
 local function isLocalPlayerEntity(inst)
     if not inst then return false end
     if lp and inst == lp then return true end
@@ -90,18 +115,16 @@ local function isLocalPlayerEntity(inst)
     return false
 end
 
-local function isMathEventProtected(inst)
+local function isProtectedEventItem(inst)
     if not inst then return false end
     local name = inst.Name
-    if name == "GuiPart" or name == "Answers" or name == "PlotSign" or name == "KALB_SafeZoneMarker" then return true end
+    if name == "PlotSign" or name == "KALB_SafeZoneMarker" then return true end
+    if isCandyItem(inst) then return true end
 
     local curr = inst
     while curr and curr ~= workspace and curr ~= game do
         local cName = curr.Name
-        if cName == "GuiPart" or cName == "Answers" or cName == "PlotSign" or cName == "KALB_SafeZoneMarker" then
-            return true
-        end
-        if curr:IsA("Model") and (curr:FindFirstChild("GuiPart") or curr:FindFirstChild("Answers")) then
+        if cName == "PlotSign" or cName == "KALB_SafeZoneMarker" or isCandyItem(curr) then
             return true
         end
         curr = curr.Parent
@@ -276,7 +299,7 @@ local PURGE_CLASSES = {
 local function optimizeInstance(v)
     if not _G.antiLag or not v or not v.Parent then return end
     if isLocalPlayerEntity(v) then return end
-    if isMathEventProtected(v) then return end
+    if isProtectedEventItem(v) then return end
 
     pcall(function()
         local className = v.ClassName
@@ -613,330 +636,80 @@ if plotsFolder then
 end
 
 -- =============================================
--- 📚 BACK TO SCHOOL EVENT 1 & 2: MATH EVENT & PECLASS ENGINE (UNBREAKABLE AFK V2)
+-- 🍬 CANDY WEATHER EVENT ENGINE (HITBOX EXPANDER & WAYPOINT SYSTEM)
 -- =============================================
-local OPTIMAL_ANSWER_SIZE = Vector3.new(200, 200, 200)
-local isMathEventActive = true -- Default Aktif Langsung
-local isPEClassActive = false
-local modelLastSolvedQuestion = {} -- Melacak soal terakhir per model: [model] = "7+5"
+local CANDY_HITBOX_SIZE = _G.candyHitboxSize or Vector3.new(200, 200, 200)
+local isCandyEventActive = false
+local expandedCandyObjects = {}
 
--- Bersihkan cache model yang sudah dihancurkan
-local function pruneProcessedCache()
-    for model, _ in pairs(modelLastSolvedQuestion) do
-        if not model or not model.Parent then
-            modelLastSolvedQuestion[model] = nil
-        end
-    end
-end
+local function expandCandyHitbox(inst)
+    if not _G.autoCandyEvent or not inst or not inst.Parent then return end
+    if not isCandyItem(inst) then return end
+    if expandedCandyObjects[inst] then return end
 
--- Evaluator Matematika Super Kuat (Mendukung +, -, *, /, x, X, ×, ÷, :, serta format teks RichText)
-local function solveMathExpression(rawText)
-    if not rawText or rawText == "" then return nil end
-    local str = tostring(rawText)
-
-    -- Bersihkan tag HTML / RichText (<font>...</font>, <stroke>...</stroke>)
-    str = str:gsub("<[^>]+>", "")
-
-    -- Bersihkan tanda sama dengan dan tanda tanya
-    str = str:gsub("=%s*%?", ""):gsub("=", ""):gsub("%?", "")
-
-    -- Coba ekstrak pola 2 angka dengan operator matematika (cth: "7 + 5", "14 + 16", "12 x 4", "20 ÷ 5")
-    local num1Str, op, num2Str = str:match("(%-?%d+%.?%d*)%s*([%+%-%*%/xX×÷:])%s*(%-?%d+%.?%d*)")
-    if num1Str and op and num2Str then
-        local n1 = tonumber(num1Str)
-        local n2 = tonumber(num2Str)
-        if n1 and n2 then
-            if op == "+" then return n1 + n2
-            elseif op == "-" then return n1 - n2
-            elseif op == "*" or op == "x" or op == "X" or op == "×" then return n1 * n2
-            elseif (op == "/" or op == "÷" or op == ":") and n2 ~= 0 then return n1 / n2
+    pcall(function()
+        local targetPart = inst:IsA("BasePart") and inst or inst:FindFirstChildWhichIsA("BasePart", true)
+        if targetPart then
+            targetPart.CanCollide = false
+            targetPart.CanTouch = true
+            targetPart.CanQuery = true
+            targetPart.CastShadow = false
+            targetPart.Transparency = 0.5
+            local targetSize = _G.candyHitboxSize or CANDY_HITBOX_SIZE
+            if targetPart.Size ~= targetSize then
+                targetPart.Size = targetSize
             end
+            expandedCandyObjects[inst] = true
+            logConsole(string.format("🍬 [CANDY HITBOX] '%s' (%s) berhasil diperbesar ke 200 studs!", inst.Name, targetPart.Name))
+        end
+    end)
+end
+
+-- Pemindai semua permen di workspace & Debris
+local function scanAndExpandAllCandies()
+    if not _G.autoCandyEvent then return end
+
+    -- Bersihkan cache item yang sudah musnah
+    for obj, _ in pairs(expandedCandyObjects) do
+        if not obj or not obj.Parent then
+            expandedCandyObjects[obj] = nil
         end
     end
 
-    -- Konversi simbol perkalian & pembagian global
-    local cleanStr = str:gsub("×", "*"):gsub("x", "*"):gsub("X", "*"):gsub("÷", "/"):gsub(":", "/")
-    cleanStr = cleanStr:gsub("%s+", "")
-    cleanStr = cleanStr:gsub("[^%d%+%-%*%/%.%(%)]", "")
-
-    if cleanStr ~= "" then
-        local func = loadstring and loadstring("return " .. cleanStr)
-        if func then
-            local ok, val = pcall(func)
-            if ok and type(val) == "number" then
-                return val
-            end
-        end
-    end
-
-    return nil
-end
-
-local function parseAnswerValue(rawText)
-    if not rawText or rawText == "" then return nil end
-    local str = tostring(rawText)
-    str = str:gsub("<[^>]+>", "")
-    
-    -- Ekstrak angka murni dari string (cth: "12", "A) 12", "Ans: 12")
-    local numMatch = str:match("(%-?%d+%.?%d*)")
-    if numMatch then
-        local val = tonumber(numMatch)
-        if val then return val end
-    end
-
-    return solveMathExpression(str)
-end
-
--- Deteksi apakah sebuah Model adalah Model Soal Matematika
-local function isTargetQuestionModel(model)
-    if not model or not model:IsA("Model") then return false end
-    local hasGui = model:FindFirstChild("GuiPart") or model:FindFirstChild("GuiPart", true)
-    local hasAns = model:FindFirstChild("Answers") or model:FindFirstChild("Answers", true)
-    if hasGui and hasAns then return true end
-    if tonumber(model.Name) ~= nil and (hasGui or hasAns) then return true end
-    return false
-end
-
--- Cari Model Soal dari komponen apapun di dalamnya
-local function getQuestionModelFromInstance(inst)
-    if not inst or inst == workspace or inst == game then return nil end
-    local curr = inst
-    while curr and curr ~= workspace and curr ~= game do
-        if curr:IsA("Model") and isTargetQuestionModel(curr) then
-            return curr
-        end
-        curr = curr.Parent
-    end
-    return nil
-end
-
--- =============================================
--- 🏃 DETEKTOR & PURGER PECLASS (MODEL ANGKA & BALL)
--- =============================================
-local function isPEClassBall(inst)
-    if not inst then return false end
-    local lowerName = string.lower(inst.Name)
-    if lowerName == "ball" or string.find(lowerName, "ball") then
-        return true
-    end
-    return false
-end
-
-local function isPEClassModel(model)
-    if not model or not model:IsA("Model") then return false end
-    if tonumber(model.Name) == nil then return false end
-    if isTargetQuestionModel(model) then return false end
-    return true
-end
-
-local function scanAndPurgePEClass()
-    if not _G.autoPEClass then return end
     local debris = workspace:FindFirstChild("Debris")
     local containers = {workspace}
     if debris then table.insert(containers, debris) end
 
     for _, container in ipairs(containers) do
-        -- 1. Scan semua Ball di seluruh hierarki
-        for _, desc in ipairs(container:GetDescendants()) do
-            if isPEClassBall(desc) then
-                pcall(function()
-                    logConsole(string.format("🏃 [PECLASS PURGE] Menghapus Ball '%s' (%s)!", desc.Name, desc.ClassName))
-                    desc:Destroy()
-                end)
-            end
-        end
-
-        -- 2. Scan Model Angka PEClass (Model angka murni tanpa GuiPart & tanpa Answers)
         for _, child in ipairs(container:GetChildren()) do
-            if child:IsA("Model") and (tonumber(child.Name) ~= nil or child.Name:match("^%d+$")) then
-                local hasGui = child:FindFirstChild("GuiPart") or child:FindFirstChild("GuiPart", true)
-                local hasAns = child:FindFirstChild("Answers") or child:FindFirstChild("Answers", true)
-                if not hasGui and not hasAns then
-                    pcall(function()
-                        logConsole(string.format("🏃 [PECLASS PURGE] Menghapus Model Angka PEClass '%s'!", child.Name))
-                        child:Destroy()
-                    end)
-                end
+            if isCandyItem(child) then
+                expandCandyHitbox(child)
             end
         end
     end
 end
 
--- =============================================
--- 🧠 PROSES & SOLVE SOAL MATEMATIKA REAL-TIME
--- =============================================
-local function processMathQuestionModel(model)
-    if not _G.autoMathEvent then return end
-    if not model or not model.Parent then return end
-
-    local guiPart = model:FindFirstChild("GuiPart") or model:FindFirstChild("GuiPart", true)
-    local answersFolder = model:FindFirstChild("Answers") or model:FindFirstChild("Answers", true)
-
-    -- Tunggu hingga GuiPart dan Answers folder ada
-    if not guiPart or not answersFolder then return end
-
-    -- Cari TextLabel pada GuiPart
-    local questionLabel = guiPart:FindFirstChildWhichIsA("TextLabel", true)
-    if not questionLabel then return end
-
-    local qText = questionLabel.ContentText ~= "" and questionLabel.ContentText or questionLabel.Text
-    if not qText or qText == "" then return end
-
-    -- Jika soal pada model ini sudah diselesaikan, lewati
-    if modelLastSolvedQuestion[model] == qText then return end
-
-    local correctAnswer = solveMathExpression(qText)
-    if correctAnswer == nil then return end
-
-    -- Ambil semua opsi jawaban dari folder Answers
-    local answerItems = {}
-    for _, child in ipairs(answersFolder:GetChildren()) do
-        if child:IsA("BasePart") or child.ClassName == "Part" or child:IsA("Model") then
-            local targetPart = child:IsA("BasePart") and child or child:FindFirstChildWhichIsA("BasePart", true)
-            local ansLabel = child:FindFirstChildWhichIsA("TextLabel", true)
-            if ansLabel and targetPart then
-                local ansText = ansLabel.ContentText ~= "" and ansLabel.ContentText or ansLabel.Text
-                if ansText and ansText ~= "" then
-                    local ansVal = parseAnswerValue(ansText)
-                    if ansVal ~= nil then
-                        table.insert(answerItems, {part = targetPart, val = ansVal, text = ansText, obj = child})
-                    end
-                end
-            end
-        end
-    end
-
-    if #answerItems == 0 then
-        return
-    end
-
-    modelLastSolvedQuestion[model] = qText
-    isMathEventActive = true
-
-    logConsole(string.format("📚 [MATH EVENT] Soal #%s: '%s' -> Kunci Jawaban: %s", tostring(model.Name), tostring(qText), tostring(correctAnswer)))
-
-    -- Bersihkan partikel visual berat pada model soal
-    for _, desc in ipairs(model:GetDescendants()) do
-        if desc:IsA("ParticleEmitter") or desc:IsA("Fire") or desc:IsA("Smoke") or 
-           desc:IsA("Trail") or desc:IsA("PointLight") or desc:IsA("SpotLight") then
-            pcall(function() desc:Destroy() end)
-        end
-    end
-
-    -- Eksekusi pembesaran jawaban benar & penghapusan jawaban salah
-    local foundCorrect = false
-    for _, item in ipairs(answerItems) do
-        local isCorrect = (math.abs(item.val - correctAnswer) < 0.0001)
-
-        if isCorrect and not foundCorrect then
-            foundCorrect = true
-            -- JAWABAN BENAR: Perbesar Hitbox (200x200x200) & aktifkan CanTouch/CanQuery
-            pcall(function()
-                item.part.CanCollide = false
-                item.part.CanTouch = true
-                item.part.CanQuery = true
-                item.part.CastShadow = false
-                item.part.Transparency = 0.5
-                if item.part.Size ~= OPTIMAL_ANSWER_SIZE then
-                    item.part.Size = OPTIMAL_ANSWER_SIZE
-                end
-            end)
-            logConsole(string.format("   ✅ [JAWABAN BENAR] Part %s ('%s') diperbesar ke 200 studs!", item.part.Name, tostring(item.text)))
-        else
-            -- JAWABAN SALAH: Hapus Part agar tidak tersentuh bola/karakter!
-            pcall(function()
-                item.obj:Destroy()
-            end)
-            logConsole(string.format("   ❌ [JAWABAN SALAH] Part %s ('%s') dihapus!", item.part.Name, tostring(item.text)))
-        end
-    end
-end
-
--- =============================================
--- 📡 PEMINDAI UNIVERSAL WORKSPACE & DEBRIS
--- =============================================
-local function scanAndProcessAllMath()
-    pruneProcessedCache()
-    if not _G.autoMathEvent and not _G.autoPEClass then return end
-
-    local debris = workspace:FindFirstChild("Debris")
-    local containers = {workspace}
-    if debris then table.insert(containers, debris) end
-
-    -- 1. Purge PEClass
-    if _G.autoPEClass then
-        scanAndPurgePEClass()
-    end
-
-    -- 2. Scan model soal matematika
-    if _G.autoMathEvent then
-        for _, container in ipairs(containers) do
-            for _, child in ipairs(container:GetChildren()) do
-                if child:IsA("Model") then
-                    if isTargetQuestionModel(child) then
-                        task.defer(processMathQuestionModel, child)
-                    end
-                end
-            end
-        end
-    end
-end
-
--- Listener DescendantAdded pada Workspace (Menangkap model soal instan di mana pun berada)
+-- Listener DescendantAdded pada Workspace (Menangkap permen baru instan)
 workspace.DescendantAdded:Connect(function(descendant)
     task.defer(function()
         if not descendant or not descendant.Parent then return end
-
-        -- 1. Deteksi Ball PEClass Instan (Hapus seketika)
-        if _G.autoPEClass and isPEClassBall(descendant) then
-            pcall(function()
-                logConsole(string.format("🏃 [PECLASS PURGE] Menghapus Ball '%s'!", descendant.Name))
-                descendant:Destroy()
-            end)
-            return
-        end
-
-        -- 2. Deteksi Model Angka PEClass Instan (Tunggu 0.08s untuk validasi bahwa ini bukan soal Math)
-        if _G.autoPEClass and descendant:IsA("Model") and (tonumber(descendant.Name) ~= nil or descendant.Name:match("^%d+$")) then
-            task.wait(0.08)
-            if descendant and descendant.Parent then
-                local hasGui = descendant:FindFirstChild("GuiPart") or descendant:FindFirstChild("GuiPart", true)
-                local hasAns = descendant:FindFirstChild("Answers") or descendant:FindFirstChild("Answers", true)
-                if not hasGui and not hasAns then
-                    pcall(function()
-                        logConsole(string.format("🏃 [PECLASS PURGE] Menghapus Model Angka PEClass '%s'!", descendant.Name))
-                        descendant:Destroy()
-                    end)
-                    return
-                end
-            end
-        end
-
-        -- 3. Deteksi Math Event Instan
-        if _G.autoMathEvent then
-            if descendant.Name == "GuiPart" or descendant.Name == "Answers" or descendant:IsA("TextLabel") or descendant.Name == "A" or descendant.Name == "B" then
-                local model = getQuestionModelFromInstance(descendant)
-                if model then
-                    processMathQuestionModel(model)
-                end
-            elseif descendant:IsA("Model") and isTargetQuestionModel(descendant) then
-                processMathQuestionModel(descendant)
-            end
+        if _G.autoCandyEvent and isCandyItem(descendant) then
+            expandCandyHitbox(descendant)
         end
     end)
 end)
 
--- Background Scanner Loop (tiap 0.1 detik)
+-- Background Scanner Loop Candy (tiap 0.2 detik)
 task.spawn(function()
-    while task.wait(0.1) do
-        pcall(scanAndProcessAllMath)
+    while task.wait(0.2) do
+        pcall(scanAndExpandAllCandies)
     end
 end)
 
 -- Scan awal saat script pertama kali jalan
 task.spawn(function()
     task.wait(0.1)
-    pcall(scanAndProcessAllMath)
+    pcall(scanAndExpandAllCandies)
 end)
 
 -- =============================================
@@ -954,19 +727,33 @@ local kickAcceptedByServer = false
 local safeZone = Vector3.new(698.030701, 3.298559, 233.707077)
 local safeZoneCFrame = CFrame.new(698.030701, 3.298559, 233.707077, -0.061024, -0.000000, 0.998136, -0.000000, 1.000000, 0.000000, -0.998136, -0.000000, -0.061024)
 
+-- Variabel Navigasi Permen & Mode Kosong
+local activeCandyWaypoints = {}
+local emptyCandySpawnReceived = false
+
 local function logConsole(msg)
     if _G.debugConsoleLog then
         print(string.format("🤖 [KALB-FARM] [%s] %s", tostring(targetAction), tostring(msg)))
     end
 end
 
-local function checkMathEventActive()
-    if isMathEventActive then return true end
+-- Teleportasi Instan ke Safe Zone (Dipakai saat Kick / Idle / Respawn / Timeout)
+local function teleportToSafeZone(hrp)
+    if not hrp then return end
+    pcall(function()
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        hrp.AssemblyAngularVelocity = Vector3.zero
+        hrp.CFrame = safeZoneCFrame
+    end)
+end
+
+local function checkCandyEventActive()
+    if isCandyEventActive then return true end
     local debris = workspace:FindFirstChild("Debris")
     if debris then
         for _, child in ipairs(debris:GetChildren()) do
-            if child:IsA("Model") and tonumber(child.Name) ~= nil then
-                isMathEventActive = true
+            if isCandyItem(child) then
+                isCandyEventActive = true
                 return true
             end
         end
@@ -976,8 +763,8 @@ end
 
 local function shouldKick()
     if not _G.autoFarm then return false end
-    if _G.onlyMathEvent then
-        return checkMathEventActive()
+    if _G.onlyCandyEvent then
+        return checkCandyEventActive()
     end
     return true
 end
@@ -1037,6 +824,7 @@ local rev_Collected = findRemote("rev_Collected", "RemoteEvent")
 local rev_KickEventEnded = findRemote("rev_KickEventEnded", "RemoteEvent")
 local rev_AddedWeather = findRemote("rev_AddedWeather", "RemoteEvent")
 local rev_RemovedWeather = findRemote("rev_RemovedWeather", "RemoteEvent")
+local rev_candySpawn = findRemote("rev_candySpawn", "RemoteEvent")
 
 local ref_B_SellAll = findRemote("ref_B_SellAll", "RemoteFunction")
 
@@ -1126,13 +914,9 @@ local function setupServerEventListeners()
     local addW = rev_AddedWeather or findRemote("rev_AddedWeather", "RemoteEvent")
     if addW then
         addW.OnClientEvent:Connect(function(weatherType, ...)
-            if weatherType == "MathEvent" then
-                isMathEventActive = true
-                logConsole("📚 Event Cuaca: MATH EVENT AKTIF! Memulai Auto Solver & Hitbox Expander...")
-            elseif weatherType == "PEClass" then
-                isPEClassActive = true
-                logConsole("🏃 Event Cuaca: PECLASS AKTIF! Memulai Auto Purger (Model Angka & Ball)...")
-                scanAndPurgePEClass()
+            if weatherType == "Candy" then
+                isCandyEventActive = true
+                logConsole("🍬 Event Cuaca: CANDY EVENT AKTIF! Memulai Candy Hitbox Expander & Auto Navigator...")
             end
         end)
     end
@@ -1140,42 +924,59 @@ local function setupServerEventListeners()
     local remW = rev_RemovedWeather or findRemote("rev_RemovedWeather", "RemoteEvent")
     if remW then
         remW.OnClientEvent:Connect(function(weatherType, ...)
-            if weatherType == "MathEvent" then
-                isMathEventActive = false
-                logConsole("☁️ Event Cuaca: Math Event Selesai. Standby di Safe Zone...")
-            elseif weatherType == "PEClass" then
-                isPEClassActive = false
-                logConsole("☁️ Event Cuaca: PEClass Selesai. Standby di Safe Zone...")
+            if weatherType == "Candy" then
+                isCandyEventActive = false
+                activeCandyWaypoints = {}
+                emptyCandySpawnReceived = false
+                logConsole("☁️ Event Cuaca: Candy Event Selesai. Standby di Safe Zone...")
             end
+        end)
+    end
+
+    -- Listener rev_candySpawn (Koordinat Permen & Empty Spawn Detector)
+    local candyRemote = rev_candySpawn or findRemote("rev_candySpawn", "RemoteEvent")
+    if candyRemote then
+        candyRemote.OnClientEvent:Connect(function(spawnData, ...)
+            pcall(function()
+                logConsole("🍬 [EVENT REMOTE] rev_candySpawn diterima!")
+                if type(spawnData) == "table" then
+                    local count = 0
+                    local newWaypoints = {}
+                    for _, item in pairs(spawnData) do
+                        count = count + 1
+                        if type(item) == "table" then
+                            if item.Name then
+                                registerCandyName(item.Name)
+                            end
+                            if item.Position and typeof(item.Position) == "Vector3" then
+                                table.insert(newWaypoints, item.Position)
+                            elseif item.CFrame and typeof(item.CFrame) == "CFrame" then
+                                table.insert(newWaypoints, item.CFrame.Position)
+                            end
+                        elseif typeof(item) == "Vector3" then
+                            table.insert(newWaypoints, item)
+                        end
+                    end
+
+                    if count == 0 or #newWaypoints == 0 then
+                        emptyCandySpawnReceived = true
+                        activeCandyWaypoints = {}
+                        logConsole("⚠️ [CANDY SPAWN] Data kosong ({}) diterima! Bot akan diam sampai mati.")
+                    else
+                        emptyCandySpawnReceived = false
+                        activeCandyWaypoints = newWaypoints
+                        logConsole(string.format("🍬 [CANDY SPAWN] Berhasil mendeteksi %d titik permen untuk waypoint navigasi!", #activeCandyWaypoints))
+                    end
+                elseif spawnData == nil then
+                    emptyCandySpawnReceived = true
+                    activeCandyWaypoints = {}
+                    logConsole("⚠️ [CANDY SPAWN] Data nil diterima! Bot akan diam sampai mati.")
+                end
+            end)
         end)
     end
 end
 setupServerEventListeners()
-
--- =============================================
--- 📚 DETEKSI MATH EVENT REAL-TIME (MULTI-SOURCE)
--- =============================================
-local function checkMathEventActive()
-    if isMathEventActive then return true end
-    local debris = workspace:FindFirstChild("Debris")
-    if debris then
-        for _, child in ipairs(debris:GetChildren()) do
-            if child:IsA("Model") and tonumber(child.Name) ~= nil then
-                isMathEventActive = true
-                return true
-            end
-        end
-    end
-    return false
-end
-
-local function shouldKick()
-    if not _G.autoFarm then return false end
-    if _G.onlyMathEvent then
-        return checkMathEventActive()
-    end
-    return true
-end
 
 -- =============================================
 -- 🚀 FUNGSI EKSEKUSI TENDANGAN REINFORCED (LAPIS 1 + LAPIS 3 NETWORK)
@@ -1252,19 +1053,25 @@ task.spawn(function()
             globalStuckTimer = 0
             kickRetryCount = 0
             kickAcceptedByServer = false
+            activeCandyWaypoints = {}
+            emptyCandySpawnReceived = false
             continue 
         end
 
         if targetAction == "WaitingRespawn" and hum.Health > 0 then
+            -- RESPAWN SELESAI: LANGSUNG TELEPORTASI KE SAFE ZONE UNTUK KICK!
+            teleportToSafeZone(hrp)
             targetAction = "Idle"
             lastAction = "Idle"
             kickRetryCount = 0
             kickAcceptedByServer = false
             stateTimer = 0
-            logConsole("Karakter Respawn -> Berjalan ke Safe Zone sebelum Kick...")
+            activeCandyWaypoints = {}
+            emptyCandySpawnReceived = false
+            logConsole("Karakter Respawn -> Teleportasi instan ke Safe Zone untuk Kick...")
         end
 
-        -- [ PENGATUR WAKTU & FAILSAFE RESET (MURNI JALAN TANPA TELEPORT) ]
+        -- [ PENGATUR WAKTU & FAILSAFE RESET ]
         if targetAction ~= lastAction then
             globalStuckTimer = 0
             stateTimer = 0 
@@ -1274,22 +1081,23 @@ task.spawn(function()
             globalStuckTimer = globalStuckTimer + 0.05
             stateTimer = stateTimer + 0.05 
             
-            local maxTimeout = _G.failsafeTimeout or 45
-            if globalStuckTimer >= maxTimeout and targetAction ~= "WalkToSafeZone" then
+            local maxTimeout = _G.failsafeTimeout or 25
+            if globalStuckTimer >= maxTimeout and targetAction ~= "WalkToSafeZone" and targetAction ~= "StayStillUntilDead" then
                 globalStuckTimer = 0
                 stateTimer = 0
+                teleportToSafeZone(hrp)
                 targetAction = "Idle"
-                logConsole("🚨 Failsafe Triggered: Reset ke Idle")
+                logConsole("🚨 Failsafe Triggered: Teleportasi reset ke Idle Safe Zone")
                 continue
             end
         end
 
         local distToSafeZone = (hrp.Position - safeZone).Magnitude
 
-        -- [ FASE 1: IDLE / NENDANG DI SAFE ZONE (MURNI JALAN KAKI - TANPA TELEPORT) ]
+        -- [ FASE 1: IDLE / NENDANG DI SAFE ZONE (TELEPORTASI INSTAN JIKA JAUH) ]
         if targetAction == "Idle" then
             if distToSafeZone > 5 then
-                hum:MoveTo(safeZone)
+                teleportToSafeZone(hrp)
             else
                 if shouldKick() then
                     if stateTimer >= 0.15 then
@@ -1302,6 +1110,7 @@ task.spawn(function()
                         phase2Fired = false
                         collectedFired = false
                         kickEndedFired = false
+                        emptyCandySpawnReceived = false
                         executeKick()
                         targetAction = "WaitingForPhase2"
                     end
@@ -1310,14 +1119,19 @@ task.spawn(function()
                 end
             end
 
-        -- [ FASE 2: NUNGGU PHASE 2 DARI SERVER -> LANGSUNG JALAN KE SAFEZONE ]
+        -- [ FASE 2: NUNGGU PHASE 2 DARI SERVER / DETEKSI EMPTY SPAWN ]
         elseif targetAction == "WaitingForPhase2" then
-            if phase2Fired or collectedFired or kickEndedFired then
+            -- Kondisi Khusus: rev_candySpawn mengirim {} (kosong) -> bot diam sampai mati
+            if emptyCandySpawnReceived then
+                targetAction = "StayStillUntilDead"
+                logConsole("⚠️ [EMPTY CANDY SPAWN] Koordinat kosong diterima! Masuk ke mode diam sampai mati...")
+
+            elseif phase2Fired or collectedFired or kickEndedFired then
                 phase2Fired = false
                 kickRetryCount = 0
                 kickAcceptedByServer = false
                 targetAction = "WalkToSafeZone"
-                logConsole("Phase 2 Selesai / Lucky Block Kena -> Langsung Jalan ke Safe Zone")
+                logConsole("Phase 2 Selesai / Lucky Block Kena -> Berjalan Kaki Membawa Brainrot (Menuju Safe Zone)")
 
             -- Kondisi 1: Kick belum terdaftar sama sekali di server setelah 3 detik -> Retry
             elseif not kickAcceptedByServer and stateTimer >= 3.0 and not phase2Fired and not collectedFired and not kickEndedFired then
@@ -1342,25 +1156,79 @@ task.spawn(function()
             elseif stateTimer >= 20.0 then
                 kickAcceptedByServer = false
                 targetAction = "WalkToSafeZone"
-                logConsole("Phase 2 Timeout (20s) -> Lanjut Jalan ke Safe Zone")
+                logConsole("Phase 2 Timeout (20s) -> Lanjut Berjalan Kaki ke Safe Zone")
             end
 
-        -- [ FASE 3: JALAN MURNI SAMPAI KE SAFE ZONE (TANPA TELEPORT) ]
+        -- [ FASE KHUSUS: DIAM DI TEMPAT SAMPAI MATI (JIKA CANDY SPAWN KOSONG {}) ]
+        elseif targetAction == "StayStillUntilDead" then
+            pcall(function()
+                hum:MoveTo(hrp.Position)
+                hrp.AssemblyLinearVelocity = Vector3.zero
+                hrp.AssemblyAngularVelocity = Vector3.zero
+            end)
+            -- Menunggu karakter mati sendiri (hum.Health <= 0 akan ditangkap oleh pendeteksi mati di atas)
+
+        -- [ FASE 3: JALAN KAKI MEMBAWA BRAINROT MENUJU SAFE ZONE (JANGAN TELEPORTASI!) ]
         elseif targetAction == "WalkToSafeZone" then
             pcall(function()
                 if hum.WalkSpeed < 16 then hum.WalkSpeed = 16 end
                 if hrp.Anchored then hrp.Anchored = false end
             end)
-            hum:MoveTo(safeZone)
+
+            -- Navigasi sembari melewati koordinat permen
+            local targetPos = safeZone
+            if #activeCandyWaypoints > 0 then
+                local bestIdx = nil
+                local bestDist = math.huge
+                for i, pos in ipairs(activeCandyWaypoints) do
+                    local d = (Vector3.new(hrp.Position.X, 0, hrp.Position.Z) - Vector3.new(pos.X, 0, pos.Z)).Magnitude
+                    if d < bestDist then
+                        bestDist = d
+                        bestIdx = i
+                    end
+                end
+
+                if bestIdx then
+                    local wp = activeCandyWaypoints[bestIdx]
+                    local reachThreshold = _G.candyReachDist or 25
+                    if bestDist <= reachThreshold then
+                        table.remove(activeCandyWaypoints, bestIdx)
+                        logConsole(string.format("🍬 Waypoint permen terlewati/terambil! Sisa waypoint: %d", #activeCandyWaypoints))
+                        if #activeCandyWaypoints > 0 then
+                            local nextIdx = 1
+                            local nextDist = math.huge
+                            for i, pos in ipairs(activeCandyWaypoints) do
+                                local d = (Vector3.new(hrp.Position.X, 0, hrp.Position.Z) - Vector3.new(pos.X, 0, pos.Z)).Magnitude
+                                if d < nextDist then
+                                    nextDist = d
+                                    nextIdx = i
+                                end
+                            end
+                            wp = activeCandyWaypoints[nextIdx]
+                        else
+                            wp = nil
+                        end
+                    end
+
+                    if wp then
+                        -- Sesuaikan koordinat Y agar karakter tidak terantuk ke bawah tanah
+                        targetPos = Vector3.new(wp.X, math.max(wp.Y, hrp.Position.Y), wp.Z)
+                    end
+                end
+            end
+
+            -- Bot TETAP MURNI JALAN KAKI via MoveTo
+            hum:MoveTo(targetPos)
+
             if distToSafeZone < 5 then
                 targetAction = "WaitingForCollected"
                 logConsole("Tiba di Safe Zone -> Menunggu Reward Collected")
             end
 
-        -- [ FASE 4: NUNGGU COLLECTED & RE-KICK INSTAN / STOP JIKA METEOR BERAKHIR ]
+        -- [ FASE 4: NUNGGU COLLECTED & RE-KICK INSTAN (TELEPORTASI KE SAFEZONE UNTUK KICK) ]
         elseif targetAction == "WaitingForCollected" then
             if distToSafeZone >= 5 then
-                hum:MoveTo(safeZone)
+                teleportToSafeZone(hrp)
             end
 
             if collectedFired or kickEndedFired or stateTimer >= 2.5 then
@@ -1370,6 +1238,11 @@ task.spawn(function()
                 phase2Fired = false
                 kickRetryCount = 0
                 kickAcceptedByServer = false
+                activeCandyWaypoints = {}
+                emptyCandySpawnReceived = false
+
+                -- Pastikan posisi presisi di SafeZone via teleportasi
+                teleportToSafeZone(hrp)
 
                 if shouldKick() then
                     executeKick()
@@ -1377,7 +1250,7 @@ task.spawn(function()
                     logConsole(string.format("🎉 Total Mutasi: %d | Re-Kick Langsung!", mutationCount))
                 else
                     targetAction = "Idle"
-                    logConsole(string.format("🎉 Total Mutasi: %d | Ronde Tuntas -> Standby di Safe Zone (Menunggu Event Meteor)", mutationCount))
+                    logConsole(string.format("🎉 Total Mutasi: %d | Ronde Tuntas -> Standby di Safe Zone (Menunggu Event Candy)", mutationCount))
                 end
             end
         end
@@ -1385,5 +1258,5 @@ task.spawn(function()
 end)
 
 print("--------------------------------------------------")
-print("🚀 [SUKSES] KALB Meteor Shower Auto Farm Siap Berjalan!")
+print("🚀 [SUKSES] KALB Candy Event & Teleport Kick Auto Farm Siap Berjalan!")
 print("--------------------------------------------------")
