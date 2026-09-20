@@ -36,14 +36,14 @@ _G.failsafeTimeout     = 25          -- Waktu maksimal (detik) sebelum auto-rese
 
 -- ⚡ ULTRA ANTI-LAG & POTATO MODE (PUSH MAX PERFORMANCE)
 _G.antiLag             = true        -- true: Master switch Anti-Lag & Potato Mode Ekstrem
-_G.whiteMap            = true        -- true: Ubah map menjadi putih potato (SmoothPlastic & No Shadows), false: Warna asli
+_G.mapVisual           = "Invisible" -- "Invisible": Visual map pure dihapus/transparan (0% beban render GPU, warna putih hilang), "Gray": Abu-abu semen polos netral, "White": Putih potato, "Default": Warna asli
+_G.optimizePhysics     = true        -- true: Matikan CanTouch pada scenery map (Hemat kalkulasi CPU Physics, 100% aman untuk event)
 _G.fpsCap              = 60          -- Batas target FPS (60 hemat baterai & CPU, 30 untuk multi-akun, 0 = default)
 _G.disable3dRender     = false       -- true: Layar freeze / 0% GPU saat AFK farm (Pencet F10 untuk toggle), false: Tampilan visual normal
 _G.muteAudio           = true        -- true: Mute semua audio & reverb game (0% beban CPU audio)
 _G.cleanLighting       = true        -- true: Hapus semua efek visual di Lighting (Sky, Blur, Bloom, Atmosphere, SunRays)
 _G.removeParticles     = true        -- true: Hapus ParticleEmitter, Trail, Beam, Fire, Smoke, Sparkles, Highlight, Lights
 _G.optimizeTerrain     = true        -- true: Matikan gelombang air & dekorasi rumput pada terrain
-_G.freezeAnimations    = true        -- true: Hentikan animasi skeletal pada karakter lain / NPC (Hemat CPU Skeletal)
 _G.cleanClientAssets   = true        -- true: Sembunyikan ClientRenderedAssets & PlacedEggRenders
 
 print("--------------------------------------------------")
@@ -93,19 +93,18 @@ end
 local function isMathEventProtected(inst)
     if not inst then return false end
     local name = inst.Name
-    if name == "GuiPart" or name == "Answers" or name == "PlotSign" then return true end
-    if inst:IsA("SurfaceGui") or inst:IsA("BillboardGui") or inst:IsA("TextLabel") then
-        local curr = inst.Parent
-        while curr and curr ~= workspace and curr ~= game do
-            local cName = curr.Name
-            if cName == "GuiPart" or cName == "Answers" or cName == "PlotSign" then
-                return true
-            end
-            if curr:IsA("Model") and (curr:FindFirstChild("GuiPart") or curr:FindFirstChild("Answers")) then
-                return true
-            end
-            curr = curr.Parent
+    if name == "GuiPart" or name == "Answers" or name == "PlotSign" or name == "KALB_SafeZoneMarker" then return true end
+
+    local curr = inst
+    while curr and curr ~= workspace and curr ~= game do
+        local cName = curr.Name
+        if cName == "GuiPart" or cName == "Answers" or cName == "PlotSign" or cName == "KALB_SafeZoneMarker" then
+            return true
         end
+        if curr:IsA("Model") and (curr:FindFirstChild("GuiPart") or curr:FindFirstChild("Answers")) then
+            return true
+        end
+        curr = curr.Parent
     end
     return false
 end
@@ -304,22 +303,57 @@ local function optimizeInstance(v)
             return
         end
 
-        -- 5. Potato Mesh & BasePart (SmoothPlastic, No Shadows, White Map)
+        -- 5. Potato Mesh & BasePart (Invisible / Gray / White Map)
         if v:IsA("BasePart") then
             v.Material = Enum.Material.SmoothPlastic
             v.Reflectance = 0
             v.CastShadow = false
-            if _G.whiteMap then
+
+            local mode = _G.mapVisual or (_G.whiteMap and "White" or "Default")
+            if mode == "Invisible" then
+                v.Transparency = 1
+            elseif mode == "Gray" then
+                v.Color = Color3.fromRGB(140, 140, 140)
+            elseif mode == "White" then
                 v.Color = Color3.new(1, 1, 1)
             end
+
             if v:IsA("MeshPart") then
                 v.TextureID = ""
+            end
+
+            -- Physics Optimizer: Matikan CanTouch pada objek scenery mati (Hemat CPU physics, CanCollide tetap aktif agar lantai tidak jebol)
+            if _G.optimizePhysics then
+                v.CanTouch = false
             end
         elseif v:IsA("SpecialMesh") then
             v.TextureId = ""
         end
     end)
 end
+
+-- Safe Zone Visual Marker (Penanda titik Safe Zone saat Map Invisible)
+local function ensureSafeZoneMarker()
+    if _G.mapVisual ~= "Invisible" then return end
+    pcall(function()
+        local existing = workspace:FindFirstChild("KALB_SafeZoneMarker")
+        if not existing then
+            local marker = Instance.new("Part")
+            marker.Name = "KALB_SafeZoneMarker"
+            marker.Size = Vector3.new(12, 0.2, 12)
+            marker.Position = Vector3.new(698.030701, 3.2, 233.707077)
+            marker.Anchored = true
+            marker.CanCollide = false
+            marker.CanTouch = false
+            marker.CanQuery = false
+            marker.Material = Enum.Material.Neon
+            marker.Color = Color3.fromRGB(0, 255, 128)
+            marker.Transparency = 0.6
+            marker.Parent = workspace
+        end
+    end)
+end
+ensureSafeZoneMarker()
 
 -- Eksekusi awal pembersihan aset ke seluruh workspace
 task.spawn(function()
@@ -339,32 +373,13 @@ workspace.DescendantAdded:Connect(function(descendant)
 end)
 
 -- =============================================
--- 🏃 6. SKELETAL ANIMATION FREEZER (HEMAT CPU)
--- =============================================
-local function freezeCharacterAnimations(charModel)
-    if not _G.freezeAnimations or not charModel or isLocalPlayerEntity(charModel) then return end
-    pcall(function()
-        local hum = charModel:FindFirstChildOfClass("Humanoid")
-        if hum then
-            local anim = hum:FindFirstChildOfClass("Animator")
-            if anim then
-                for _, track in ipairs(anim:GetPlayingAnimationTracks()) do
-                    pcall(function() track:Stop(0) end)
-                end
-            end
-        end
-    end)
-end
-
--- =============================================
--- 🚫 7. TOTAL PLAYER & CHARACTER PURGER (100% BERSIH)
+-- 🚫 6. TOTAL PLAYER & CHARACTER PURGER (100% BERSIH)
 -- =============================================
 local function purgeOtherPlayer(player)
     if not _G.autoRemovePlayer or not player or player == lp or player.Name == lpName then return end
     
     pcall(function()
         if player.Character then
-            freezeCharacterAnimations(player.Character)
             player.Character:ClearAllChildren()
             player.Character:Destroy()
         end
@@ -379,8 +394,6 @@ local function purgeOtherCharacter(charModel)
     if not _G.autoRemovePlayer or not charModel then return end
     if isLocalPlayerEntity(charModel) then return end
     if charModel.Name == "Plots" or charModel.Name == "Debris" or charModel.Name == "NPCs" then return end
-
-    freezeCharacterAnimations(charModel)
 
     pcall(function()
         for _, v in ipairs(charModel:GetDescendants()) do
