@@ -1,27 +1,45 @@
 -- ==============================================================================
--- 🥔 KALB ULTRA LIGHTWEIGHT AUTO FARM & ANTI-LAG (ZERO MEMORY LEAK)
+-- 🥔 KALB ULTRA LIGHTWEIGHT AUTO FARM V2 (BACK TO SCHOOL: MATH EVENT & PECLASS)
 -- ==============================================================================
--- Fitur & Evaluasi:
--- 1. 🥔 Potato Mode Ekstrem: Hapus semua texture, PBR, bayangan, partikel, & efek Lighting
--- 2. 🚫 Total Player & Character Purger: Hapus karakter & instance player lain dari game.Players & workspace.Players
--- 3. 🛡️ Anti-AFK (VirtualUser) & Auto Garbage Collector (RAM tetap enteng berjam-jam)
--- 4. 💰 Auto Sell All (Setiap 5 detik via ref_B_SellAll)
--- 5. 🛒 Meteor Shop Auto Buy:
---    - 🦖 Patagotitan (⚡ON)
---    - ⚡ Speed (+1) (⚡ON)
---    - 👑 Frigorex (⚡ON)
---    - 🦏 Tricerabob (⚡ON)
---    - 🧪 Farm Potion (I) (Khusus Jam Ganjil WIB & Max Menit :10)
+-- Fitur & Alur:
+-- 1. ⚙️ Full Config Mode: Semua pengaturan diatur via variabel _G di baris atas (Tanpa UI)
+-- 2. 🚫 Total Player & Character Purger (100% Bersih):
+--    - Menghapus & memusnahkan SEMUA player lain dari game.Players
+--    - Menghapus SEMUA karakter player lain dari folder workspace.Players & workspace root
+--    - Real-time listener + Background loop anti-bocor (tidak ada lagi yang lolos)
+-- 3. 📚 Back To School Event 1: Math Event Auto Solver & Hitbox Expander:
+--    - Mendeteksi rev_AddedWeather "MathEvent" & Model angka (1, 2, 3...) di Debris
+--    - Membaca soal matematika di GuiPart.SurfaceGui.TextLabel (cth: 7+5) & menyelesaikannya otomatis
+--    - Menghapus Part jawaban SALAH di folder Answers (cth: Part A = 10 dihapus)
+--    - Memperbesar hitbox Part jawaban BENAR (cth: Part B = 12 diperbesar ke 200 studs, CanQuery=true)
+-- 4. 🏃 Back To School Event 2: PEClass Auto Purger:
+--    - Mendeteksi rev_AddedWeather "PEClass"
+--    - Menghapus SEMUA Model angka (1, 2, 3...) dan Part "Ball" di Debris secara real-time
+-- 5. ⚽ Auto Kick: Bot menendang bola (nonstop / saat event berlangsung)
+-- 6. 💰 Auto Sell All: Menjual semua brainrot tiap 5 detik (ref_B_SellAll)
+-- 7. 🥔 Potato Mode Ekstrem & 🛡️ Anti-AFK
 -- ==============================================================================
 
-pcall(function()
-    if not game:IsLoaded() then
-        game.Loaded:Wait()
-    end
-end)
+if not game:IsLoaded() then game.Loaded:Wait() end
+
+-- ==============================================================================
+-- ⚙️ KONFIGURASI PENGGUNA (UBAH SESUAI KEBUTUHAN DI SINI)
+-- ==============================================================================
+_G.autoFarm = true               -- true: Auto Farm Aktif, false: Nonaktif
+_G.onlyMathEvent = false         -- true: HANYA Auto Kick saat MathEvent aktif, false: Auto kick nonstop
+_G.autoMathEvent = true          -- true: Otomatis selesaikan soal matematika, perbesar jawaban benar & hapus jawaban salah
+_G.autoPEClass = true            -- true: Otomatis hapus Model angka & Ball di Debris saat event PEClass
+_G.autoSellAll = false           -- true: Auto Sell All setiap 5 detik via ref_B_SellAll
+_G.autoRemovePlayer = true       -- true: Hapus player lain dari game.Players & workspace.Players (100% Bersih & No Lag), false: Biarkan
+_G.debugConsoleLog = true        -- true: Cetak log status/fase/soal math ke console (F9), false: Senyap
+_G.failsafeTimeout = 25          -- Waktu maksimal (detik) sebelum auto-reset ke Safe Zone jika macet
+
+print("--------------------------------------------------")
+print("🚀 [INIT] Memuat KALB Auto Farm V2 (BackToSchool Math Event & PEClass)...")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
 local VirtualUser = game:GetService("VirtualUser")
 
@@ -39,84 +57,22 @@ local lpName = lp and lp.Name or ""
 local lpDisplayName = lp and lp.DisplayName or ""
 local myUidStr = lp and tostring(lp.UserId) or ""
 
--- =============================================
--- ⚙️ KONFIGURASI 
--- =============================================
-_G.autoFarm = true
-_G.autoBuyPatagotitan = true  -- 🦖 Patagotitan
-_G.autoBuySpeed = true        -- ⚡ Speed (+1)
-_G.autoBuyFrigorex = true     -- 👑 Frigorex
-_G.autoBuyTricerabob = true   -- 🦏 Tricerabob
-_G.autoBuyFarmPotion = true   -- 🧪 Farm Potion (I) (Khusus jam ganjil WIB max menit :10)
-_G.autoSellAll = true         -- 💰 Auto Sell All tiap 5s
-_G.autoRemovePlayer = true    -- 🚫 Hapus player lain dari game.Players & workspace.Players
-
--- =============================================
--- 🚀 1. OPTIMISASI LIGHTING & SETTINGS GLOBAL (SUPER ENTENG)
--- =============================================
-pcall(function()
-    Lighting.GlobalShadows = false
-    Lighting.FogEnd = 9e9
-    Lighting.Brightness = 1
-    for _, effect in ipairs(Lighting:GetChildren()) do
-        if effect:IsA("PostEffect") or effect:IsA("BloomEffect") or effect:IsA("BlurEffect") or effect:IsA("ColorCorrectionEffect") or effect:IsA("SunRaysEffect") or effect:IsA("DepthOfFieldEffect") then
-            effect.Enabled = false
-            effect:Destroy()
-        end
+local function logConsole(...)
+    if _G.debugConsoleLog ~= false then
+        print(...)
     end
-end)
-
-pcall(function()
-    if settings and settings().Rendering then
-        settings().Rendering.QualityLevel = 1
-    end
-end)
+end
 
 -- =============================================
--- 🥔 2. SYSTEM HAPUS TEKSTUR & VISUAL (SAFE ZERO-ERROR & ZERO-LAG)
+-- 🚀 SYSTEM ANTI-LAG & POTATO MODE
 -- =============================================
-local PURGE_CLASSES = {
-    PointLight = true,
-    SpotLight = true,
-    SurfaceLight = true,
-    ParticleEmitter = true,
-    Trail = true,
-    Beam = true,
-    Fire = true,
-    Smoke = true,
-    Sparkles = true,
-    SurfaceAppearance = true,
-    Clothing = true,
-    ShirtGraphic = true,
-    SelectionBox = true,
-    SelectionSphere = true,
-}
-
 local function stripTexture(v)
     if not v then return end
     if lp and lp.Character and (v == lp.Character or v:IsDescendantOf(lp.Character)) then return end
 
     pcall(function()
-        local className = v.ClassName
-        if PURGE_CLASSES[className] then
-            v:Destroy()
-            return
-        end
-
-        if className == "Highlight" or v:IsA("Highlight") then
-            v.Enabled = false
-            v.FillTransparency = 1
-            v.OutlineTransparency = 1
-            return
-        end
-
-        if className == "Decal" or className == "Texture" or v:IsA("Decal") or v:IsA("Texture") then
-            v.Transparency = 1
-            return
-        end
-
         if v:IsA("BasePart") then
-            v.Material = Enum.Material.SmoothPlastic
+            v.Material = Enum.Material.Plastic
             v.Reflectance = 0
             v.CastShadow = false
             v.Color = Color3.new(1, 1, 1)
@@ -125,50 +81,45 @@ local function stripTexture(v)
             end
         elseif v:IsA("SpecialMesh") then
             v.TextureId = ""
+        elseif v:IsA("Decal") or v:IsA("Texture") or v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Beam") or v:IsA("Fire") or v:IsA("Smoke") or v:IsA("Sparkles") or v:IsA("SurfaceAppearance") or v:IsA("Clothing") or v:IsA("ShirtGraphic") then
+            v:Destroy()
         end
     end)
 end
 
-for _, v in ipairs(workspace:GetDescendants()) do
-    stripTexture(v)
-end
+pcall(function()
+    for _, v in ipairs(workspace:GetDescendants()) do
+        stripTexture(v)
+    end
 
-workspace.DescendantAdded:Connect(function(v)
-    task.defer(stripTexture, v)
+    Lighting.GlobalShadows = false
+    Lighting.FogEnd = 9e9
+    for _, v in ipairs(Lighting:GetDescendants()) do
+        if v:IsA("PostEffect") or v:IsA("BlurEffect") or v:IsA("SunRaysEffect") or v:IsA("ColorCorrectionEffect") or v:IsA("BloomEffect") or v:IsA("DepthOfFieldEffect") or v:IsA("Sky") then
+            v:Destroy()
+        end
+    end
 end)
 
 -- =============================================
--- 🚫 3. TOTAL PURGER (HAPUS OTHER PLAYER & DATA DI WORKSPACE + PLAYERS)
+-- 🚫 TOTAL PLAYER & CHARACTER PURGER (100% BERSIH)
 -- =============================================
-local function isLocalPlayerEntity(entity)
-    if not entity then return false end
-    if entity == lp then return true end
-    if lp and lp.Character and entity == lp.Character then return true end
-    if entity.Name == lpName or (lpDisplayName ~= "" and entity.Name == lpDisplayName) then return true end
+local function isLocalPlayerEntity(inst)
+    if not inst then return false end
+    if lp and inst == lp then return true end
+    if lp and lp.Character and (inst == lp.Character or inst:IsDescendantOf(lp.Character)) then return true end
+    local name = inst.Name
+    if name == lpName or (lpDisplayName ~= "" and name == lpDisplayName) then return true end
     return false
 end
 
-local function purgeOtherCharacter(char)
-    if not char or not char:IsA("Model") or isLocalPlayerEntity(char) then return end
-    pcall(function()
-        for _, part in ipairs(char:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.Transparency = 1
-                part.CanCollide = false
-            elseif part:IsA("Decal") or part:IsA("Texture") or part:IsA("Clothing") then
-                part:Destroy()
-            end
-        end
-        char:ClearAllChildren()
-        char:Destroy()
-    end)
-end
-
 local function purgeOtherPlayer(player)
-    if not player or player == lp then return end
+    if not _G.autoRemovePlayer or not player or player == lp or player.Name == lpName then return end
+    
     pcall(function()
         if player.Character then
-            purgeOtherCharacter(player.Character)
+            player.Character:ClearAllChildren()
+            player.Character:Destroy()
         end
     end)
     pcall(function()
@@ -177,10 +128,35 @@ local function purgeOtherPlayer(player)
     end)
 end
 
+local function purgeOtherCharacter(charModel)
+    if not _G.autoRemovePlayer or not charModel then return end
+    if isLocalPlayerEntity(charModel) then return end
+    if charModel.Name == "Plots" or charModel.Name == "Debris" or charModel.Name == "NPCs" then return end
+
+    pcall(function()
+        for _, v in ipairs(charModel:GetDescendants()) do
+            if v:IsA("BasePart") then
+                v.Transparency = 1
+                v.CanCollide = false
+                v.CanTouch = false
+                v.CanQuery = false
+            elseif v:IsA("Decal") or v:IsA("Texture") or v:IsA("BillboardGui") or v:IsA("SurfaceGui") or v:IsA("Highlight") then
+                v.Enabled = false
+                v:Destroy()
+            end
+        end
+        charModel:ClearAllChildren()
+        charModel:Destroy()
+    end)
+end
+
 local function scanAndPurgeAllOtherPlayers()
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= lp then
-            purgeOtherPlayer(player)
+    if not _G.autoRemovePlayer then return end
+
+    -- 1. Bersihkan dari game:GetService("Players")
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= lp then
+            purgeOtherPlayer(p)
         end
     end
     for _, child in ipairs(Players:GetChildren()) do
@@ -189,6 +165,7 @@ local function scanAndPurgeAllOtherPlayers()
         end
     end
 
+    -- 2. Bersihkan dari workspace.Players folder
     local wsPlayers = workspace:FindFirstChild("Players")
     if wsPlayers then
         for _, child in ipairs(wsPlayers:GetChildren()) do
@@ -198,6 +175,7 @@ local function scanAndPurgeAllOtherPlayers()
         end
     end
 
+    -- 3. Bersihkan dari workspace root (karakter liar)
     for _, child in ipairs(workspace:GetChildren()) do
         if child:IsA("Model") and not isLocalPlayerEntity(child) and child.Name ~= "Plots" and child.Name ~= "Debris" and child.Name ~= "NPCs" and child.Name ~= "Players" then
             if child:FindFirstChildOfClass("Humanoid") or child:FindFirstChild("HumanoidRootPart") or child:FindFirstChild("Head") then
@@ -207,8 +185,10 @@ local function scanAndPurgeAllOtherPlayers()
     end
 end
 
+-- Eksekusi awal pembersihan player & karakter
 scanAndPurgeAllOtherPlayers()
 
+-- Event Listener saat ada Player baru join
 Players.PlayerAdded:Connect(function(player)
     if not _G.autoRemovePlayer then return end
     if player ~= lp then
@@ -232,6 +212,7 @@ Players.ChildAdded:Connect(function(child)
     end
 end)
 
+-- Listener khusus untuk workspace.Players
 local function setupWsPlayersListener(folder)
     if not folder then return end
     for _, child in ipairs(folder:GetChildren()) do
@@ -266,8 +247,28 @@ workspace.ChildAdded:Connect(function(child)
     end
 end)
 
+-- Background Sweeper Loop (Menjamin 0% Player Lolos & Bersihkan RAM)
+task.spawn(function()
+    local cleanCounter = 0
+    while task.wait(0.25) do
+        if _G.autoRemovePlayer then
+            pcall(scanAndPurgeAllOtherPlayers)
+        end
+
+        cleanCounter = cleanCounter + 1
+        -- Tiap 30 detik jalankan garbage collector
+        if cleanCounter >= 120 then
+            cleanCounter = 0
+            pcall(function()
+                if gcinfo then gcinfo() end
+                if collectgarbage then collectgarbage("collect") end
+            end)
+        end
+    end
+end)
+
 -- =============================================
--- 🎯 4. DETEKTOR PLOT SENDIRI & REMOVER PLOT LAIN
+-- 🎯 DETEKTOR PLOT SENDIRI & REMOVER PLOT LAIN
 -- =============================================
 local function isMyPlot(plotModel)
     if not plotModel or not plotModel:IsA("Model") then return false end
@@ -335,38 +336,402 @@ if plotsFolder then
 end
 
 -- =============================================
--- 🧹 5. PERIODIC SWEEPER & GARBAGE COLLECTOR
+-- 📚 BACK TO SCHOOL EVENT 1 & 2: MATH EVENT & PECLASS ENGINE (UNBREAKABLE AFK V2)
 -- =============================================
-task.spawn(function()
-    while task.wait(3) do
-        if _G.autoRemovePlayer then
-            pcall(scanAndPurgeAllOtherPlayers)
+local OPTIMAL_ANSWER_SIZE = Vector3.new(200, 200, 200)
+local isMathEventActive = true -- Default Aktif Langsung
+local isPEClassActive = false
+local modelLastSolvedQuestion = {} -- Melacak soal terakhir per model: [model] = "7+5"
+
+-- Bersihkan cache model yang sudah dihancurkan
+local function pruneProcessedCache()
+    for model, _ in pairs(modelLastSolvedQuestion) do
+        if not model or not model.Parent then
+            modelLastSolvedQuestion[model] = nil
         end
-
-        pcall(function()
-            if collectgarbage then
-                collectgarbage("step", 50)
-            elseif gcinfo then
-                gcinfo()
-            end
-        end)
     end
-end)
+end
 
--- =============================================
--- 🛡️ 6. ANTI AFK (VIRTUALUSER)
--- =============================================
-if lp then
-    lp.Idled:Connect(function()
-        pcall(function()
-            VirtualUser:CaptureController()
-            VirtualUser:ClickButton2(Vector2.new())
-        end)
-    end)
+-- Evaluator Matematika Super Kuat (Mendukung +, -, *, /, x, X, ×, ÷, :, serta format teks RichText)
+local function solveMathExpression(rawText)
+    if not rawText or rawText == "" then return nil end
+    local str = tostring(rawText)
+
+    -- Bersihkan tag HTML / RichText (<font>...</font>, <stroke>...</stroke>)
+    str = str:gsub("<[^>]+>", "")
+
+    -- Bersihkan tanda sama dengan dan tanda tanya
+    str = str:gsub("=%s*%?", ""):gsub("=", ""):gsub("%?", "")
+
+    -- Coba ekstrak pola 2 angka dengan operator matematika (cth: "7 + 5", "14 + 16", "12 x 4", "20 ÷ 5")
+    local num1Str, op, num2Str = str:match("(%-?%d+%.?%d*)%s*([%+%-%*%/xX×÷:])%s*(%-?%d+%.?%d*)")
+    if num1Str and op and num2Str then
+        local n1 = tonumber(num1Str)
+        local n2 = tonumber(num2Str)
+        if n1 and n2 then
+            if op == "+" then return n1 + n2
+            elseif op == "-" then return n1 - n2
+            elseif op == "*" or op == "x" or op == "X" or op == "×" then return n1 * n2
+            elseif (op == "/" or op == "÷" or op == ":") and n2 ~= 0 then return n1 / n2
+            end
+        end
+    end
+
+    -- Konversi simbol perkalian & pembagian global
+    local cleanStr = str:gsub("×", "*"):gsub("x", "*"):gsub("X", "*"):gsub("÷", "/"):gsub(":", "/")
+    cleanStr = cleanStr:gsub("%s+", "")
+    cleanStr = cleanStr:gsub("[^%d%+%-%*%/%.%(%)]", "")
+
+    if cleanStr ~= "" then
+        local func = loadstring and loadstring("return " .. cleanStr)
+        if func then
+            local ok, val = pcall(func)
+            if ok and type(val) == "number" then
+                return val
+            end
+        end
+    end
+
+    return nil
+end
+
+local function parseAnswerValue(rawText)
+    if not rawText or rawText == "" then return nil end
+    local str = tostring(rawText)
+    str = str:gsub("<[^>]+>", "")
+    
+    -- Ekstrak angka murni dari string (cth: "12", "A) 12", "Ans: 12")
+    local numMatch = str:match("(%-?%d+%.?%d*)")
+    if numMatch then
+        local val = tonumber(numMatch)
+        if val then return val end
+    end
+
+    return solveMathExpression(str)
+end
+
+-- Deteksi apakah sebuah Model adalah Model Soal Matematika
+local function isTargetQuestionModel(model)
+    if not model or not model:IsA("Model") then return false end
+    local hasGui = model:FindFirstChild("GuiPart") or model:FindFirstChild("GuiPart", true)
+    local hasAns = model:FindFirstChild("Answers") or model:FindFirstChild("Answers", true)
+    if hasGui and hasAns then return true end
+    if tonumber(model.Name) ~= nil and (hasGui or hasAns) then return true end
+    return false
+end
+
+-- Cari Model Soal dari komponen apapun di dalamnya
+local function getQuestionModelFromInstance(inst)
+    if not inst or inst == workspace or inst == game then return nil end
+    local curr = inst
+    while curr and curr ~= workspace and curr ~= game do
+        if curr:IsA("Model") and isTargetQuestionModel(curr) then
+            return curr
+        end
+        curr = curr.Parent
+    end
+    return nil
 end
 
 -- =============================================
--- 📡 7. REMOTE NETWORK DISCOVERY
+-- 🏃 DETEKTOR & PURGER PECLASS (MODEL ANGKA & BALL)
+-- =============================================
+local function isPEClassBall(inst)
+    if not inst then return false end
+    local lowerName = string.lower(inst.Name)
+    if lowerName == "ball" or string.find(lowerName, "ball") then
+        return true
+    end
+    return false
+end
+
+local function isPEClassModel(model)
+    if not model or not model:IsA("Model") then return false end
+    if tonumber(model.Name) == nil then return false end
+    if isTargetQuestionModel(model) then return false end
+    return true
+end
+
+local function scanAndPurgePEClass()
+    if not _G.autoPEClass then return end
+    local debris = workspace:FindFirstChild("Debris")
+    local containers = {workspace}
+    if debris then table.insert(containers, debris) end
+
+    for _, container in ipairs(containers) do
+        -- 1. Scan semua Ball di seluruh hierarki
+        for _, desc in ipairs(container:GetDescendants()) do
+            if isPEClassBall(desc) then
+                pcall(function()
+                    logConsole(string.format("🏃 [PECLASS PURGE] Menghapus Ball '%s' (%s)!", desc.Name, desc.ClassName))
+                    desc:Destroy()
+                end)
+            end
+        end
+
+        -- 2. Scan Model Angka PEClass (Model angka murni tanpa GuiPart & tanpa Answers)
+        for _, child in ipairs(container:GetChildren()) do
+            if child:IsA("Model") and (tonumber(child.Name) ~= nil or child.Name:match("^%d+$")) then
+                local hasGui = child:FindFirstChild("GuiPart") or child:FindFirstChild("GuiPart", true)
+                local hasAns = child:FindFirstChild("Answers") or child:FindFirstChild("Answers", true)
+                if not hasGui and not hasAns then
+                    pcall(function()
+                        logConsole(string.format("🏃 [PECLASS PURGE] Menghapus Model Angka PEClass '%s'!", child.Name))
+                        child:Destroy()
+                    end)
+                end
+            end
+        end
+    end
+end
+
+-- =============================================
+-- 🧠 PROSES & SOLVE SOAL MATEMATIKA REAL-TIME
+-- =============================================
+local function processMathQuestionModel(model)
+    if not _G.autoMathEvent then return end
+    if not model or not model.Parent then return end
+
+    local guiPart = model:FindFirstChild("GuiPart") or model:FindFirstChild("GuiPart", true)
+    local answersFolder = model:FindFirstChild("Answers") or model:FindFirstChild("Answers", true)
+
+    -- Tunggu hingga GuiPart dan Answers folder ada
+    if not guiPart or not answersFolder then return end
+
+    -- Cari TextLabel pada GuiPart
+    local questionLabel = guiPart:FindFirstChildWhichIsA("TextLabel", true)
+    if not questionLabel then return end
+
+    local qText = questionLabel.ContentText ~= "" and questionLabel.ContentText or questionLabel.Text
+    if not qText or qText == "" then return end
+
+    -- Jika soal pada model ini sudah diselesaikan, lewati
+    if modelLastSolvedQuestion[model] == qText then return end
+
+    local correctAnswer = solveMathExpression(qText)
+    if correctAnswer == nil then return end
+
+    -- Ambil semua opsi jawaban dari folder Answers
+    local answerItems = {}
+    for _, child in ipairs(answersFolder:GetChildren()) do
+        if child:IsA("BasePart") or child.ClassName == "Part" or child:IsA("Model") then
+            local targetPart = child:IsA("BasePart") and child or child:FindFirstChildWhichIsA("BasePart", true)
+            local ansLabel = child:FindFirstChildWhichIsA("TextLabel", true)
+            if ansLabel and targetPart then
+                local ansText = ansLabel.ContentText ~= "" and ansLabel.ContentText or ansLabel.Text
+                if ansText and ansText ~= "" then
+                    local ansVal = parseAnswerValue(ansText)
+                    if ansVal ~= nil then
+                        table.insert(answerItems, {part = targetPart, val = ansVal, text = ansText, obj = child})
+                    end
+                end
+            end
+        end
+    end
+
+    if #answerItems == 0 then
+        return
+    end
+
+    modelLastSolvedQuestion[model] = qText
+    isMathEventActive = true
+
+    logConsole(string.format("📚 [MATH EVENT] Soal #%s: '%s' -> Kunci Jawaban: %s", tostring(model.Name), tostring(qText), tostring(correctAnswer)))
+
+    -- Bersihkan partikel visual berat pada model soal
+    for _, desc in ipairs(model:GetDescendants()) do
+        if desc:IsA("ParticleEmitter") or desc:IsA("Fire") or desc:IsA("Smoke") or 
+           desc:IsA("Trail") or desc:IsA("PointLight") or desc:IsA("SpotLight") then
+            pcall(function() desc:Destroy() end)
+        end
+    end
+
+    -- Eksekusi pembesaran jawaban benar & penghapusan jawaban salah
+    local foundCorrect = false
+    for _, item in ipairs(answerItems) do
+        local isCorrect = (math.abs(item.val - correctAnswer) < 0.0001)
+
+        if isCorrect and not foundCorrect then
+            foundCorrect = true
+            -- JAWABAN BENAR: Perbesar Hitbox (200x200x200) & aktifkan CanTouch/CanQuery
+            pcall(function()
+                item.part.CanCollide = false
+                item.part.CanTouch = true
+                item.part.CanQuery = true
+                item.part.CastShadow = false
+                item.part.Transparency = 0.5
+                if item.part.Size ~= OPTIMAL_ANSWER_SIZE then
+                    item.part.Size = OPTIMAL_ANSWER_SIZE
+                end
+            end)
+            logConsole(string.format("   ✅ [JAWABAN BENAR] Part %s ('%s') diperbesar ke 200 studs!", item.part.Name, tostring(item.text)))
+        else
+            -- JAWABAN SALAH: Hapus Part agar tidak tersentuh bola/karakter!
+            pcall(function()
+                item.obj:Destroy()
+            end)
+            logConsole(string.format("   ❌ [JAWABAN SALAH] Part %s ('%s') dihapus!", item.part.Name, tostring(item.text)))
+        end
+    end
+end
+
+-- =============================================
+-- 📡 PEMINDAI UNIVERSAL WORKSPACE & DEBRIS
+-- =============================================
+local function scanAndProcessAllMath()
+    pruneProcessedCache()
+    if not _G.autoMathEvent and not _G.autoPEClass then return end
+
+    local debris = workspace:FindFirstChild("Debris")
+    local containers = {workspace}
+    if debris then table.insert(containers, debris) end
+
+    -- 1. Purge PEClass
+    if _G.autoPEClass then
+        scanAndPurgePEClass()
+    end
+
+    -- 2. Scan model soal matematika
+    if _G.autoMathEvent then
+        for _, container in ipairs(containers) do
+            for _, child in ipairs(container:GetChildren()) do
+                if child:IsA("Model") then
+                    if isTargetQuestionModel(child) then
+                        task.defer(processMathQuestionModel, child)
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- Listener DescendantAdded pada Workspace (Menangkap model soal instan di mana pun berada)
+workspace.DescendantAdded:Connect(function(descendant)
+    task.defer(function()
+        if not descendant or not descendant.Parent then return end
+
+        -- 1. Deteksi Ball PEClass Instan (Hapus seketika)
+        if _G.autoPEClass and isPEClassBall(descendant) then
+            pcall(function()
+                logConsole(string.format("🏃 [PECLASS PURGE] Menghapus Ball '%s'!", descendant.Name))
+                descendant:Destroy()
+            end)
+            return
+        end
+
+        -- 2. Deteksi Model Angka PEClass Instan (Tunggu 0.08s untuk validasi bahwa ini bukan soal Math)
+        if _G.autoPEClass and descendant:IsA("Model") and (tonumber(descendant.Name) ~= nil or descendant.Name:match("^%d+$")) then
+            task.wait(0.08)
+            if descendant and descendant.Parent then
+                local hasGui = descendant:FindFirstChild("GuiPart") or descendant:FindFirstChild("GuiPart", true)
+                local hasAns = descendant:FindFirstChild("Answers") or descendant:FindFirstChild("Answers", true)
+                if not hasGui and not hasAns then
+                    pcall(function()
+                        logConsole(string.format("🏃 [PECLASS PURGE] Menghapus Model Angka PEClass '%s'!", descendant.Name))
+                        descendant:Destroy()
+                    end)
+                    return
+                end
+            end
+        end
+
+        -- 3. Deteksi Math Event Instan
+        if _G.autoMathEvent then
+            if descendant.Name == "GuiPart" or descendant.Name == "Answers" or descendant:IsA("TextLabel") or descendant.Name == "A" or descendant.Name == "B" then
+                local model = getQuestionModelFromInstance(descendant)
+                if model then
+                    processMathQuestionModel(model)
+                end
+            elseif descendant:IsA("Model") and isTargetQuestionModel(descendant) then
+                processMathQuestionModel(descendant)
+            end
+        end
+    end)
+end)
+
+-- Background Scanner Loop (tiap 0.1 detik)
+task.spawn(function()
+    while task.wait(0.1) do
+        pcall(scanAndProcessAllMath)
+    end
+end)
+
+-- Scan awal saat script pertama kali jalan
+task.spawn(function()
+    task.wait(0.1)
+    pcall(scanAndProcessAllMath)
+end)
+
+-- =============================================
+-- 🧠 VARIABEL STATE MACHINE & POSISI
+-- =============================================
+local targetAction = "Idle"
+local lastAction = "Idle"
+local stateTimer = 0               
+local globalStuckTimer = 0         
+local mutationCount = 0            
+local lastRewardDesc = "None"
+local kickRetryCount = 0
+local MAX_KICK_RETRIES = 2
+local kickAcceptedByServer = false
+local safeZone = Vector3.new(698.030701, 3.298559, 233.707077)
+local safeZoneCFrame = CFrame.new(698.030701, 3.298559, 233.707077, -0.061024, -0.000000, 0.998136, -0.000000, 1.000000, 0.000000, -0.998136, -0.000000, -0.061024)
+
+local function logConsole(msg)
+    if _G.debugConsoleLog then
+        print(string.format("🤖 [KALB-FARM] [%s] %s", tostring(targetAction), tostring(msg)))
+    end
+end
+
+local function checkMathEventActive()
+    if isMathEventActive then return true end
+    local debris = workspace:FindFirstChild("Debris")
+    if debris then
+        for _, child in ipairs(debris:GetChildren()) do
+            if child:IsA("Model") and tonumber(child.Name) ~= nil then
+                isMathEventActive = true
+                return true
+            end
+        end
+    end
+    return false
+end
+
+local function shouldKick()
+    if not _G.autoFarm then return false end
+    if _G.onlyMathEvent then
+        return checkMathEventActive()
+    end
+    return true
+end
+
+-- =============================================
+-- 🛡️ ANTI AFK (MURNI TANPA KLIK APAPUN)
+-- =============================================
+pcall(function()
+    if getconnections then
+        for _, conn in ipairs(getconnections(lp.Idled)) do
+            conn:Disable()
+        end
+    end
+end)
+
+lp.Idled:Connect(function()
+    pcall(function()
+        if getconnections then
+            for _, conn in ipairs(getconnections(lp.Idled)) do
+                conn:Disable()
+            end
+        end
+        if VirtualUser then
+            VirtualUser:CaptureController()
+            VirtualUser:ClickButton2(Vector2.new())
+        end
+    end)
+end)
+
+-- =============================================
+-- 📡 DAFTAR REMOTE NETWORK RESMI & AUTO-RESOLVER
 -- =============================================
 local networkFolder = nil
 pcall(function()
@@ -375,226 +740,31 @@ pcall(function()
     networkFolder = packages and (packages:FindFirstChild("Network") or packages:WaitForChild("Network", 3))
 end)
 
-local ref_B_SellAll = networkFolder and networkFolder:FindFirstChild("ref_B_SellAll")
-local rev_MeteorShop_RequestSync = networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_RequestSync")
-local rev_MeteorShop_Stock = networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_Stock")
-local rev_MeteorShop_Buy = networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_Buy")
-
-if not rev_MeteorShop_Stock or not rev_MeteorShop_Buy or not rev_MeteorShop_RequestSync or not ref_B_SellAll then
-    for _, r in pairs(ReplicatedStorage:GetDescendants()) do
-        if r:IsA("RemoteEvent") then
-            if r.Name == "rev_MeteorShop_Stock" then rev_MeteorShop_Stock = r
-            elseif r.Name == "rev_MeteorShop_Buy" then rev_MeteorShop_Buy = r
-            elseif r.Name == "rev_MeteorShop_RequestSync" then rev_MeteorShop_RequestSync = r
-            end
-        elseif r:IsA("RemoteFunction") then
-            if r.Name == "ref_B_SellAll" then ref_B_SellAll = r
-            end
+local function findRemote(name, className)
+    if networkFolder then
+        local r = networkFolder:FindFirstChild(name)
+        if r and (not className or r:IsA(className)) then return r end
+    end
+    for _, r in ipairs(ReplicatedStorage:GetDescendants()) do
+        if r.Name == name and (not className or r:IsA(className)) then
+            return r
         end
     end
+    return nil
 end
 
--- =============================================
--- 📢 DISCORD WEBHOOK NOTIFIER (PATAGOTITAN, FRIGOREX, TRICERABOB - ZERO LAG)
--- =============================================
-local DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1539697793973756084/1oLTQDKSmutWJlPX91He00IEEAg_lsos8MWbxuXki8LKqO8WnZUX8kwurULVjdB8lOqb"
+local ref_KickEvent = findRemote("ref_KickEvent", "RemoteFunction")
+local kickRemote = findRemote("rev_KickEvent", "RemoteEvent")
+local rev_kickPhase2 = findRemote("rev_kickPhase2", "RemoteEvent")
+local rev_Collected = findRemote("rev_Collected", "RemoteEvent")
+local rev_KickEventEnded = findRemote("rev_KickEventEnded", "RemoteEvent")
+local rev_AddedWeather = findRemote("rev_AddedWeather", "RemoteEvent")
+local rev_RemovedWeather = findRemote("rev_RemovedWeather", "RemoteEvent")
 
-local PATAGO_IMAGE_URL = "https://www.roblox.com/asset-thumbnail/image?assetId=95399484334874&width=420&height=420&format=png"
-local FRIGOREX_IMAGE_URL = "https://www.roblox.com/asset-thumbnail/image?assetId=140510107418430&width=420&height=420&format=png"
-
-local function sendDiscordWebhook(itemName, totalBought)
-    totalBought = totalBought or 1
-    task.defer(function()
-        task.spawn(function()
-            pcall(function()
-                local httpReq = request or http_request or (delta and delta.request) or (syn and syn.request) or (Fluxus and Fluxus.request) or (http and http.request)
-                if not httpReq then return end
-                local HttpService = game:GetService("HttpService")
-
-                local userDisplayName = lp and lp.DisplayName or (lp and lp.Name or "Unknown")
-                local userId = lp and tostring(lp.UserId) or "0"
-                local playerAvatarCdn = string.format("https://www.roblox.com/headshot-thumbnail/image?userId=%s&width=150&height=150&format=png", userId)
-
-                local itemImageUrl = ""
-                local embedColor = 0x3498db
-                local itemIcon = "🛒"
-                local unitCost = 0
-                local itemBuff = ""
-
-                if itemName == "Patagotitan" then
-                    itemIcon = "🦖"
-                    embedColor = 0x2ecc71 -- Hijau Emerald
-                    itemImageUrl = PATAGO_IMAGE_URL
-                    unitCost = 500
-                    itemBuff = "150% CP/s"
-                elseif itemName == "Frigorex" then
-                    itemIcon = "👑"
-                    embedColor = 0x9b59b6 -- Ungu Royal
-                    itemImageUrl = FRIGOREX_IMAGE_URL
-                    unitCost = 1250
-                    itemBuff = "250% CP/s"
-                elseif itemName == "Tricerabob" then
-                    itemIcon = "🦏"
-                    embedColor = 0xe67e22 -- Oranye Golden
-                    itemImageUrl = playerAvatarCdn
-                    unitCost = 750
-                    itemBuff = "Exclusive Meteor Brainrot"
-                end
-
-                local totalCost = unitCost * totalBought
-                local titleDesc = (totalBought > 1) and string.format("%s %dx %s", itemIcon, totalBought, itemName) or string.format("%s %s", itemIcon, itemName)
-
-                local payload = {
-                    ["username"] = "KALB Meteor Shop",
-                    ["avatar_url"] = playerAvatarCdn,
-                    ["embeds"] = {
-                        {
-                            ["author"] = {
-                                ["name"] = userDisplayName,
-                                ["icon_url"] = playerAvatarCdn
-                            },
-                            ["title"] = "Berhasil Membeli",
-                            ["description"] = titleDesc,
-                            ["color"] = embedColor,
-                            ["thumbnail"] = {
-                                ["url"] = itemImageUrl
-                            },
-                            ["fields"] = {
-                                {
-                                    ["name"] = "Exclusive",
-                                    ["value"] = itemBuff,
-                                    ["inline"] = false
-                                },
-                                {
-                                    ["name"] = "Jumlah",
-                                    ["value"] = string.format("%d Unit", totalBought),
-                                    ["inline"] = true
-                                },
-                                {
-                                    ["name"] = "Total Harga",
-                                    ["value"] = string.format("%d Tokens", totalCost),
-                                    ["inline"] = true
-                                }
-                            },
-                            ["footer"] = {
-                                ["text"] = "KALB - Meteor Shop"
-                            },
-                            ["timestamp"] = os.date("!%Y-%m-%dT%H:%M:%SZ")
-                        }
-                    }
-                }
-
-                httpReq({
-                    Url = DISCORD_WEBHOOK_URL,
-                    Method = "POST",
-                    Headers = {
-                        ["Content-Type"] = "application/json"
-                    },
-                    Body = HttpService:JSONEncode(payload)
-                })
-            end)
-        end)
-    end)
-end
+local ref_B_SellAll = findRemote("ref_B_SellAll", "RemoteFunction")
 
 -- =============================================
--- 🛒 8. AUTO BUY METEOR SHOP (PATAGOTITAN, SPEED, FRIGOREX, TRICERABOB)
--- =============================================
-if rev_MeteorShop_Stock then
-    rev_MeteorShop_Stock.OnClientEvent:Connect(function(stockData, expiryTimestamp)
-        if type(stockData) ~= "table" then return end
-        
-        local buyRemote = rev_MeteorShop_Buy or (networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_Buy"))
-        if not buyRemote then return end
-
-        for itemName, itemInfo in pairs(stockData) do
-            if type(itemInfo) == "table" then
-                local stockCount = tonumber(itemInfo.Stock) or 0
-                
-                if stockCount > 0 then
-                    local shouldBuy = false
-
-                    if itemName == "Patagotitan" and _G.autoBuyPatagotitan then
-                        shouldBuy = true
-                    elseif itemName == "Speed" and _G.autoBuySpeed then
-                        shouldBuy = true
-                    elseif itemName == "Frigorex" and _G.autoBuyFrigorex then
-                        shouldBuy = true
-                    elseif itemName == "Tricerabob" and _G.autoBuyTricerabob then
-                        shouldBuy = true
-                    end
-
-                    if shouldBuy then
-                        task.spawn(function()
-                            local boughtCount = 0
-                            for i = 1, stockCount do
-                                pcall(function()
-                                    buyRemote:FireServer(itemName)
-                                    boughtCount = boughtCount + 1
-                                    print(string.format("🛒 [METEOR AUTO BUY] Berhasil membeli %s (#%d/%d)!", itemName, i, stockCount))
-                                end)
-                                task.wait(0.15)
-                            end
-                            if boughtCount > 0 and (itemName == "Patagotitan" or itemName == "Frigorex" or itemName == "Tricerabob") then
-                                sendDiscordWebhook(itemName, boughtCount)
-                            end
-                        end)
-                    end
-                end
-            end
-        end
-    end)
-end
-
--- Loop Request Sync Stock setiap 60 Detik
-task.spawn(function()
-    task.wait(3)
-    while true do
-        if _G.autoFarm and (_G.autoBuyPatagotitan or _G.autoBuySpeed or _G.autoBuyFrigorex or _G.autoBuyTricerabob) then
-            pcall(function()
-                local syncRemote = rev_MeteorShop_RequestSync or (networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_RequestSync"))
-                if syncRemote then
-                    syncRemote:FireServer()
-                end
-            end)
-        end
-        task.wait(60)
-    end
-end)
-
--- =============================================
--- 🧪 9. AUTO BUY FARM POTION (KHUSUS JAM GANJIL WIB: 1, 3, 5... 23 & MAX MENIT :10)
--- =============================================
-local lastBoughtFarmPotionHour = -1
-
-task.spawn(function()
-    task.wait(2)
-    while true do
-        if _G.autoFarm and _G.autoBuyFarmPotion then
-            pcall(function()
-                local wibTime = os.date("!*t", os.time() + (7 * 3600))
-                local hourWIB = wibTime.hour
-                local minWIB = wibTime.min
-                local secWIB = wibTime.sec
-
-                -- Hanya beli jika jam ganjil (1, 3, 5... 23) DAN menit masih <= 10
-                if (hourWIB % 2 == 1) and (minWIB <= 10) and (lastBoughtFarmPotionHour ~= hourWIB) then
-                    lastBoughtFarmPotionHour = hourWIB
-                    
-                    local buyRemote = rev_MeteorShop_Buy or (networkFolder and networkFolder:FindFirstChild("rev_MeteorShop_Buy"))
-                    if buyRemote then
-                        buyRemote:FireServer("Farm Potion")
-                        print(string.format("🧪 [AUTO BUY WIB] Berhasil membeli 1x Farm Potion pada jam %02d:%02d:%02d WIB (Di bawah menit :10)!", hourWIB, minWIB, secWIB))
-                    end
-                end
-            end)
-        end
-        task.wait(5)
-    end
-end)
-
--- =============================================
--- 💰 10. AUTO SELL ALL (SETIAP 5 DETIK)
+-- 💰 AUTO SELL ALL (SETIAP 5 DETIK)
 -- =============================================
 task.spawn(function()
     while task.wait(5) do
@@ -608,4 +778,335 @@ task.spawn(function()
     end
 end)
 
-print("🥔 [KALB] Auto Farm (Anti-Lag, Total Purge, Auto Sell, Patago, Speed, Frigorex & Farm Potion WIB) Siap!")
+-- =============================================
+-- 🎮 LAPIS 1: ULTRA-LIGHTWEIGHT CONTROLLER HOOK (ZERO-FREEZE & NON-BLOCKING)
+-- =============================================
+local cachedGameController = nil
+
+local function getGameController()
+    if cachedGameController and type(cachedGameController.Kick) == "function" then
+        return cachedGameController
+    end
+
+    if getgc then
+        local ok, tables = pcall(function() return getgc(true) end)
+        if ok and type(tables) == "table" then
+            for _, item in ipairs(tables) do
+                if type(item) == "table" then
+                    if rawget(item, "CanKick") ~= nil and type(rawget(item, "Kick")) == "function" then
+                        cachedGameController = item
+                        return item
+                    end
+                end
+            end
+        end
+    end
+
+    return nil
+end
+
+-- Pre-fetch controller saat script pertama kali dimuat
+task.spawn(function()
+    task.wait(1)
+    getGameController()
+end)
+
+-- =============================================
+-- 📡 LISTENER EVENT SERVER (REAL-TIME RECEPTOR)
+-- =============================================
+local phase2Fired = false
+local collectedFired = false
+local kickEndedFired = false
+
+local function setupServerEventListeners()
+    local p2 = rev_kickPhase2 or findRemote("rev_kickPhase2", "RemoteEvent")
+    if p2 then
+        p2.OnClientEvent:Connect(function(rewardTable, ...)
+            phase2Fired = true
+            pcall(function()
+                if type(rewardTable) == "table" and rewardTable[1] then
+                    lastRewardDesc = string.format("%s [%s]", tostring(rewardTable[1].Name or "Brainrot"), tostring(rewardTable[1].Mutation or "Normal"))
+                    logConsole(string.format("🎉 Gacha Reward Masuk: %s", lastRewardDesc))
+                end
+            end)
+        end)
+    end
+
+    local col = rev_Collected or findRemote("rev_Collected", "RemoteEvent")
+    if col then
+        col.OnClientEvent:Connect(function(...)
+            collectedFired = true
+        end)
+    end
+
+    local ended = rev_KickEventEnded or findRemote("rev_KickEventEnded", "RemoteEvent")
+    if ended then
+        ended.OnClientEvent:Connect(function(...)
+            kickEndedFired = true
+        end)
+    end
+
+    local addW = rev_AddedWeather or findRemote("rev_AddedWeather", "RemoteEvent")
+    if addW then
+        addW.OnClientEvent:Connect(function(weatherType, ...)
+            if weatherType == "MathEvent" then
+                isMathEventActive = true
+                logConsole("📚 Event Cuaca: MATH EVENT AKTIF! Memulai Auto Solver & Hitbox Expander...")
+            elseif weatherType == "PEClass" then
+                isPEClassActive = true
+                logConsole("🏃 Event Cuaca: PECLASS AKTIF! Memulai Auto Purger (Model Angka & Ball)...")
+                scanAndPurgePEClass()
+            end
+        end)
+    end
+
+    local remW = rev_RemovedWeather or findRemote("rev_RemovedWeather", "RemoteEvent")
+    if remW then
+        remW.OnClientEvent:Connect(function(weatherType, ...)
+            if weatherType == "MathEvent" then
+                isMathEventActive = false
+                logConsole("☁️ Event Cuaca: Math Event Selesai. Standby di Safe Zone...")
+            elseif weatherType == "PEClass" then
+                isPEClassActive = false
+                logConsole("☁️ Event Cuaca: PEClass Selesai. Standby di Safe Zone...")
+            end
+        end)
+    end
+end
+setupServerEventListeners()
+
+-- =============================================
+-- 📚 DETEKSI MATH EVENT REAL-TIME (MULTI-SOURCE)
+-- =============================================
+local function checkMathEventActive()
+    if isMathEventActive then return true end
+    local debris = workspace:FindFirstChild("Debris")
+    if debris then
+        for _, child in ipairs(debris:GetChildren()) do
+            if child:IsA("Model") and tonumber(child.Name) ~= nil then
+                isMathEventActive = true
+                return true
+            end
+        end
+    end
+    return false
+end
+
+local function shouldKick()
+    if not _G.autoFarm then return false end
+    if _G.onlyMathEvent then
+        return checkMathEventActive()
+    end
+    return true
+end
+
+-- =============================================
+-- 🚀 FUNGSI EKSEKUSI TENDANGAN REINFORCED (LAPIS 1 + LAPIS 3 NETWORK)
+-- =============================================
+local function executeKick()
+    local timestamp = nil
+    pcall(function() timestamp = workspace:GetServerTimeNow() end)
+    if not timestamp or type(timestamp) ~= "number" or timestamp <= 0 then
+        timestamp = tick()
+    end
+
+    logConsole("⚡ Mengeksekusi Kick (Lapis 1 Controller Hook + Lapis 3 Network)...")
+
+    -- 🎮 LAPIS 1: Direct GameController Hook (Buka Kunci Cooldown & Panggil Kick Asli di Game)
+    pcall(function()
+        local controller = getGameController()
+        if controller then
+            if controller.UnblockKick then pcall(function() controller:UnblockKick() end) end
+            if controller.ResetCooldown then pcall(function() controller:ResetCooldown() end) end
+            controller.CanKick = true
+            if controller.InGame ~= nil then controller.InGame = false end
+            if controller.Status ~= nil and controller.Status == "InKick" then controller.Status = "Lobby" end
+            pcall(function() controller:Kick(1, 1) end)
+        end
+    end)
+
+    -- 📡 LAPIS 3: Network Remote Invocation (Jalur Resmi Server Non-Blocking & Konfirmasi Sukses)
+    task.spawn(function()
+        pcall(function()
+            local targetRemote = ref_KickEvent or (networkFolder and networkFolder:FindFirstChild("ref_KickEvent"))
+            if not targetRemote then
+                for _, r in pairs(ReplicatedStorage:GetDescendants()) do
+                    if r:IsA("RemoteFunction") and r.Name == "ref_KickEvent" then
+                        targetRemote = r
+                        ref_KickEvent = r
+                        break
+                    end
+                end
+            end
+
+            if targetRemote and targetRemote:IsA("RemoteFunction") then
+                local res = targetRemote:InvokeServer(1, 1, timestamp)
+                if res == true or (type(res) == "table" and res[1] == true) then
+                    kickAcceptedByServer = true
+                    logConsole("✅ [SERVER CONFIRMED] Tendangan resmi terdaftar di server! Bola sedang terbang...")
+                end
+            end
+
+            local fallbackEvent = kickRemote or (networkFolder and networkFolder:FindFirstChild("rev_KickEvent"))
+            if fallbackEvent and fallbackEvent:IsA("RemoteEvent") then
+                fallbackEvent:FireServer(1, 1, timestamp)
+            end
+        end)
+    end)
+end
+
+-- =============================================
+-- ⚙️ MAIN LOOP (STATE MACHINE AUTO FARM)
+-- =============================================
+task.spawn(function()
+    while task.wait(0.05) do
+        if not _G.autoFarm then continue end
+
+        local char = lp.Character
+        local hum = char and char:FindFirstChild("Humanoid")
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+
+        if not hum or not hrp then continue end 
+
+        -- [ PENDETEKSI MATI & RESPAWN ]
+        if hum.Health <= 0 then
+            targetAction = "WaitingRespawn"
+            lastAction = "WaitingRespawn"
+            globalStuckTimer = 0
+            kickRetryCount = 0
+            kickAcceptedByServer = false
+            continue 
+        end
+
+        if targetAction == "WaitingRespawn" and hum.Health > 0 then
+            targetAction = "Idle"
+            lastAction = "Idle"
+            kickRetryCount = 0
+            kickAcceptedByServer = false
+            stateTimer = 0
+            logConsole("Karakter Respawn -> Berjalan ke Safe Zone sebelum Kick...")
+        end
+
+        -- [ PENGATUR WAKTU & FAILSAFE RESET (MURNI JALAN TANPA TELEPORT) ]
+        if targetAction ~= lastAction then
+            globalStuckTimer = 0
+            stateTimer = 0 
+            lastAction = targetAction
+            logConsole("Transisi Fase -> " .. tostring(targetAction))
+        else
+            globalStuckTimer = globalStuckTimer + 0.05
+            stateTimer = stateTimer + 0.05 
+            
+            local maxTimeout = _G.failsafeTimeout or 45
+            if globalStuckTimer >= maxTimeout and targetAction ~= "WalkToSafeZone" then
+                globalStuckTimer = 0
+                stateTimer = 0
+                targetAction = "Idle"
+                logConsole("🚨 Failsafe Triggered: Reset ke Idle")
+                continue
+            end
+        end
+
+        local distToSafeZone = (hrp.Position - safeZone).Magnitude
+
+        -- [ FASE 1: IDLE / NENDANG DI SAFE ZONE (MURNI JALAN KAKI - TANPA TELEPORT) ]
+        if targetAction == "Idle" then
+            if distToSafeZone > 5 then
+                hum:MoveTo(safeZone)
+            else
+                if shouldKick() then
+                    if stateTimer >= 0.15 then
+                        pcall(function()
+                            hrp.AssemblyLinearVelocity = Vector3.zero
+                            hrp.AssemblyAngularVelocity = Vector3.zero
+                        end)
+                        kickRetryCount = 0
+                        kickAcceptedByServer = false
+                        phase2Fired = false
+                        collectedFired = false
+                        kickEndedFired = false
+                        executeKick()
+                        targetAction = "WaitingForPhase2"
+                    end
+                else
+                    task.wait(0.1)
+                end
+            end
+
+        -- [ FASE 2: NUNGGU PHASE 2 DARI SERVER -> LANGSUNG JALAN KE SAFEZONE ]
+        elseif targetAction == "WaitingForPhase2" then
+            if phase2Fired or collectedFired or kickEndedFired then
+                phase2Fired = false
+                kickRetryCount = 0
+                kickAcceptedByServer = false
+                targetAction = "WalkToSafeZone"
+                logConsole("Phase 2 Selesai / Lucky Block Kena -> Langsung Jalan ke Safe Zone")
+
+            -- Kondisi 1: Kick belum terdaftar sama sekali di server setelah 3 detik -> Retry
+            elseif not kickAcceptedByServer and stateTimer >= 3.0 and not phase2Fired and not collectedFired and not kickEndedFired then
+                if kickRetryCount < MAX_KICK_RETRIES then
+                    kickRetryCount = kickRetryCount + 1
+                    stateTimer = 0
+                    logConsole(string.format("⚠️ [RETRY] Kick belum terdaftar di server, mencoba kick ulang #%d/%d...", kickRetryCount, MAX_KICK_RETRIES))
+                    executeKick()
+                else
+                    logConsole(string.format("🚨 [FAILSAFE] Gagal respon setelah %d kali retry! Memaksa Respawn/Reset Karakter...", MAX_KICK_RETRIES))
+                    kickRetryCount = 0
+                    kickAcceptedByServer = false
+                    stateTimer = 0
+                    targetAction = "WaitingRespawn"
+                    pcall(function()
+                        if hum then hum.Health = 0 end
+                        if char then char:BreakJoints() end
+                    end)
+                end
+
+            -- Kondisi 2: Kick sudah diterima server (bola sedang terbang), tunggu hingga maksimal 20 detik
+            elseif stateTimer >= 20.0 then
+                kickAcceptedByServer = false
+                targetAction = "WalkToSafeZone"
+                logConsole("Phase 2 Timeout (20s) -> Lanjut Jalan ke Safe Zone")
+            end
+
+        -- [ FASE 3: JALAN MURNI SAMPAI KE SAFE ZONE (TANPA TELEPORT) ]
+        elseif targetAction == "WalkToSafeZone" then
+            pcall(function()
+                if hum.WalkSpeed < 16 then hum.WalkSpeed = 16 end
+                if hrp.Anchored then hrp.Anchored = false end
+            end)
+            hum:MoveTo(safeZone)
+            if distToSafeZone < 5 then
+                targetAction = "WaitingForCollected"
+                logConsole("Tiba di Safe Zone -> Menunggu Reward Collected")
+            end
+
+        -- [ FASE 4: NUNGGU COLLECTED & RE-KICK INSTAN / STOP JIKA METEOR BERAKHIR ]
+        elseif targetAction == "WaitingForCollected" then
+            if distToSafeZone >= 5 then
+                hum:MoveTo(safeZone)
+            end
+
+            if collectedFired or kickEndedFired or stateTimer >= 2.5 then
+                collectedFired = false
+                kickEndedFired = false
+                mutationCount = mutationCount + 1
+                phase2Fired = false
+                kickRetryCount = 0
+                kickAcceptedByServer = false
+
+                if shouldKick() then
+                    executeKick()
+                    targetAction = "WaitingForPhase2"
+                    logConsole(string.format("🎉 Total Mutasi: %d | Re-Kick Langsung!", mutationCount))
+                else
+                    targetAction = "Idle"
+                    logConsole(string.format("🎉 Total Mutasi: %d | Ronde Tuntas -> Standby di Safe Zone (Menunggu Event Meteor)", mutationCount))
+                end
+            end
+        end
+    end
+end)
+
+print("--------------------------------------------------")
+print("🚀 [SUKSES] KALB Meteor Shower Auto Farm Siap Berjalan!")
+print("--------------------------------------------------")
