@@ -1,24 +1,21 @@
 -- ==============================================================================
--- 🎓 KALB AUTO MATH, PECLASS & AUTO SELL (FLAWLESS & GUARANTEED 24/7 AFK)
+-- 🍬 KALB AUTO CANDY HITBOX EXPANDER & AUTO SELL (FLAWLESS & GUARANTEED 24/7 AFK)
 -- ==============================================================================
 -- 📋 Fitur Utama:
 -- 1. 🚀 Anti-Lag & Extreme FPS Boost (Potato Mode):
 --    - Menghapus shadow, partikel berat, tekstur, efek blur, bloom, post-processing
+--    - Proteksi penuh untuk karakter pemain dan item permen event
 --
--- 2. 📚 MathEvent Auto Solver:
---    - Membaca soal dari GuiPart.SurfaceGui.TextLabel (1-3 digit, RichText, +, -, *, /, x, ÷, :)
---    - ✅ Jawaban BENAR: Hitbox diperbesar ke 200x200x200 studs (CanTouch=true, CanQuery=true, Transparency=0.5)
---    - ❌ Jawaban SALAH: Part langsung dimusnahkan/dihapus (:Destroy())
+-- 2. 🍬 Candy Weather Event Engine:
+--    - Mendeteksi rev_AddedWeather "Candy" & rev_candySpawn
+--    - ✅ Hitbox diperbesar ke 200x200x200 studs (CanTouch=true, CanQuery=true, CanCollide=false, Transparency=0.5)
+--    - 🎯 Target: CarriedCandy, Candy, Chocolate, Cake, Pancakes, Gummy Bear, Ice Cream, Gummy Worm, dll.
+--    - 📡 Dynamic Listener: Otomatis mendeteksi dan mendaftarkan nama permen baru dari server
 --
--- 3. 🏃 PEClass Purger (100% GARANSI HAPUS):
---    - Menghapus SEMUA Part/MeshPart/Model bernama "Ball" (di seluruh Workspace & Debris)
---    - Menghapus SEMUA Model angka PEClass (Model angka tanpa GuiPart/Answers)
---    - Menggunakan delay aman 0.08s agar tidak salah menghapus soal Math
---
--- 4. 💰 Auto Sell All:
+-- 3. 💰 Auto Sell All:
 --    - Menjual seluruh brainrot setiap 5 detik via RemoteFunction ref_B_SellAll
 --
--- 5. 🛡️ Anti-AFK & 🧹 Memory Pruner (Anti Disconnect 24/7)
+-- 4. 🛡️ Anti-AFK & 🧹 Memory Pruner (Anti Disconnect 24/7)
 -- ==============================================================================
 
 if not game:IsLoaded() then game.Loaded:Wait() end
@@ -26,15 +23,15 @@ if not game:IsLoaded() then game.Loaded:Wait() end
 -- ==============================================================================
 -- ⚙️ KONFIGURASI PENGGUNA
 -- ==============================================================================
-_G.antiLag = true            -- true: Aktifkan Anti-Lag / FPS Boost Ekstrem (Potato Mode)
-_G.autoMathEvent = true      -- true: Otomatis selesaikan soal math & perbesar jawaban benar
-_G.autoPEClass = true        -- true: Otomatis hapus Model angka PEClass & Ball
-_G.autoSellAll = false        -- true: Otomatis jual semua brainrot berkala
-_G.sellInterval = 5          -- Interval waktu (detik) Auto Sell All
-_G.debugConsoleLog = false    -- true: Tampilkan log di Developer Console (F9)
+_G.antiLag = true                              -- true: Aktifkan Anti-Lag / FPS Boost Ekstrem (Potato Mode)
+_G.autoCandyEvent = true                       -- true: Otomatis perbesar hitbox permen (Candy, Cokelat, dll.)
+_G.candyHitboxSize = Vector3.new(200, 200, 200)-- Ukuran hitbox Candy yang dibesarkan (Default: 200 studs)
+_G.autoSellAll = true                          -- true: Otomatis jual semua brainrot berkala
+_G.sellInterval = 5                            -- Interval waktu (detik) Auto Sell All
+_G.debugConsoleLog = true                      -- true: Tampilkan log di Developer Console (F9)
 
 print("--------------------------------------------------")
-print("🚀 [INIT] Memuat KALB Perfect Math, PEClass & Auto Sell...")
+print("🚀 [INIT] Memuat KALB Perfect Candy Event & Auto Sell...")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -58,11 +55,67 @@ local function logConsole(...)
 end
 
 -- ==============================================================================
+-- 🍬 DAFTAR TARGET CANDY & DYNAMIC DISCOVERY ENGINE
+-- ==============================================================================
+local CANDY_NAMES = {
+    ["carriedcandy"] = true,
+    ["candy"] = true,
+    ["chocolate"] = true,
+    ["cake"] = true,
+    ["pancakes"] = true,
+    ["gummy bear"] = true,
+    ["ice cream"] = true,
+    ["gummy worm"] = true,
+}
+
+-- Mendaftarkan nama permen baru secara dinamis
+local function registerCandyName(name)
+    if not name or name == "" then return end
+    local lower = string.lower(tostring(name))
+    if not CANDY_NAMES[lower] then
+        CANDY_NAMES[lower] = true
+        logConsole(string.format("🍬 [CANDY DISCOVERY] Mendaftarkan jenis permen baru: '%s'", tostring(name)))
+    end
+end
+
+-- Pengecekan apakah sebuah objek adalah item permen
+local function isCandyItem(inst)
+    if not inst then return false end
+    local lowerName = string.lower(inst.Name)
+    if CANDY_NAMES[lowerName] then return true end
+    for candyName, _ in pairs(CANDY_NAMES) do
+        if string.find(lowerName, candyName, 1, true) then
+            return true
+        end
+    end
+    return false
+end
+
+-- Proteksi agar partikel/tekstur permen tidak terhapus oleh anti-lag
+local function isProtectedEventItem(inst)
+    if not inst then return false end
+    local name = inst.Name
+    if name == "PlotSign" or name == "KALB_SafeZoneMarker" then return true end
+    if isCandyItem(inst) then return true end
+
+    local curr = inst
+    while curr and curr ~= workspace and curr ~= game do
+        local cName = curr.Name
+        if cName == "PlotSign" or cName == "KALB_SafeZoneMarker" or isCandyItem(curr) then
+            return true
+        end
+        curr = curr.Parent
+    end
+    return false
+end
+
+-- ==============================================================================
 -- 🚀 SISTEM ANTI-LAG & FPS BOOSTER (POTATO MODE EKSTREM)
 -- ==============================================================================
 local function stripTexture(v)
     if not v then return end
     if lp and lp.Character and (v == lp.Character or v:IsDescendantOf(lp.Character)) then return end
+    if isProtectedEventItem(v) then return end
 
     pcall(function()
         if v:IsA("BasePart") then
@@ -170,6 +223,7 @@ end
 local ref_B_SellAll = findRemote("ref_B_SellAll", "RemoteFunction")
 local rev_AddedWeather = findRemote("rev_AddedWeather", "RemoteEvent")
 local rev_RemovedWeather = findRemote("rev_RemovedWeather", "RemoteEvent")
+local rev_candySpawn = findRemote("rev_candySpawn", "RemoteEvent")
 
 -- ==============================================================================
 -- 💰 FITUR 1: AUTO SELL ALL (SETIAP 5 DETIK NONSTOP)
@@ -196,355 +250,160 @@ task.spawn(function()
 end)
 
 -- ==============================================================================
--- 🔍 KLASIFIKASI OBJEK & STRUKTUR (MATH vs PECLASS)
+-- 🍬 FITUR 2: CANDY HITBOX EXPANDER ENGINE (200x200x200 STUDS)
 -- ==============================================================================
-local OPTIMAL_ANSWER_SIZE = Vector3.new(200, 200, 200)
-local modelLastSolvedQuestion = {} -- Melacak soal terakhir: [model] = "7+5"
+local CANDY_HITBOX_SIZE = _G.candyHitboxSize or Vector3.new(200, 200, 200)
+local isCandyEventActive = false
+local expandedCandyObjects = {}
 
--- Deteksi apakah model adalah Model Soal Matematika
-local function isMathQuestionModel(model)
-    if not model or not model:IsA("Model") then return false end
-    local hasGui = model:FindFirstChild("GuiPart") or model:FindFirstChild("GuiPart", true)
-    local hasAns = model:FindFirstChild("Answers") or model:FindFirstChild("Answers", true)
-    if hasGui or hasAns then
-        return true
-    end
-    return false
-end
+local function expandCandyHitbox(inst)
+    if not _G.autoCandyEvent or not inst or not inst.Parent then return end
+    if not isCandyItem(inst) then return end
+    if expandedCandyObjects[inst] then return end
 
--- Deteksi apakah objek adalah Bola PEClass
-local function isPEClassBall(inst)
-    if not inst then return false end
-    local lowerName = string.lower(inst.Name)
-    if lowerName == "ball" or string.find(lowerName, "ball") then
-        return true
-    end
-    return false
-end
-
--- Cari Model Soal dari komponen apapun di dalamnya
-local function getQuestionModelFromInstance(inst)
-    if not inst or inst == workspace or inst == game then return nil end
-    local curr = inst
-    while curr and curr ~= workspace and curr ~= game do
-        if curr:IsA("Model") and isMathQuestionModel(curr) then
-            return curr
+    pcall(function()
+        local targetPart = inst:IsA("BasePart") and inst or inst:FindFirstChildWhichIsA("BasePart", true)
+        if targetPart then
+            targetPart.CanCollide = false
+            targetPart.CanTouch = true
+            targetPart.CanQuery = true
+            targetPart.CastShadow = false
+            targetPart.Transparency = 0.5
+            local targetSize = _G.candyHitboxSize or CANDY_HITBOX_SIZE
+            if targetPart.Size ~= targetSize then
+                targetPart.Size = targetSize
+            end
+            expandedCandyObjects[inst] = true
+            logConsole(string.format("🍬 [CANDY HITBOX] '%s' (%s) berhasil diperbesar ke 200 studs!", inst.Name, targetPart.Name))
         end
-        curr = curr.Parent
-    end
-    return nil
+    end)
 end
 
--- Bersihkan cache model yang sudah musnah
-local function pruneProcessedCache()
-    for model, _ in pairs(modelLastSolvedQuestion) do
-        if not model or not model.Parent then
-            modelLastSolvedQuestion[model] = nil
+-- Pemindai semua permen di workspace & Debris
+local function scanAndExpandAllCandies()
+    if not _G.autoCandyEvent then return end
+
+    -- Bersihkan cache item yang sudah musnah dari ingatan
+    for obj, _ in pairs(expandedCandyObjects) do
+        if not obj or not obj.Parent then
+            expandedCandyObjects[obj] = nil
         end
     end
-end
-
--- ==============================================================================
--- 🏃 MEKANIK PECLASS: PURGER BALL & MODEL ANGKA PECLASS (100% RELIABLE)
--- ==============================================================================
-local function purgePEClassEntities()
-    if not _G.autoPEClass then return end
 
     local debris = workspace:FindFirstChild("Debris")
     local containers = {workspace}
     if debris then table.insert(containers, debris) end
 
     for _, container in ipairs(containers) do
-        -- 1. Hapus SEMUA Ball di mana pun berada (direct child & descendant)
-        for _, desc in ipairs(container:GetDescendants()) do
-            if isPEClassBall(desc) then
-                pcall(function()
-                    logConsole(string.format("🏃 [PECLASS PURGE] Menghapus Ball '%s' (%s)!", desc.Name, desc.ClassName))
-                    desc:Destroy()
-                end)
-            end
-        end
-
-        -- 2. Hapus Model Angka PEClass (Model angka tanpa GuiPart & tanpa Answers)
         for _, child in ipairs(container:GetChildren()) do
-            if child:IsA("Model") and (tonumber(child.Name) ~= nil or child.Name:match("^%d+$")) then
-                local hasGui = child:FindFirstChild("GuiPart") or child:FindFirstChild("GuiPart", true)
-                local hasAns = child:FindFirstChild("Answers") or child:FindFirstChild("Answers", true)
-                
-                -- Jika tidak punya GuiPart dan tidak punya Answers, ini 100% model angka PEClass!
-                if not hasGui and not hasAns then
-                    pcall(function()
-                        logConsole(string.format("🏃 [PECLASS PURGE] Menghapus Model Angka PEClass '%s'!", child.Name))
-                        child:Destroy()
-                    end)
-                end
+            if isCandyItem(child) then
+                expandCandyHitbox(child)
             end
         end
     end
 end
 
--- ==============================================================================
--- 🧠 EVALUATOR & SOLVER MATEMATIKA
--- ==============================================================================
-local function solveMathExpression(rawText)
-    if not rawText or rawText == "" then return nil end
-    local str = tostring(rawText)
-
-    -- Bersihkan tag HTML / RichText (<font>...</font>, <stroke>...</stroke>)
-    str = str:gsub("<[^>]+>", "")
-
-    -- Bersihkan tanda sama dengan dan tanda tanya
-    str = str:gsub("=%s*%?", ""):gsub("=", ""):gsub("%?", "")
-
-    -- Coba ekstrak pola 2 angka dengan operator matematika (cth: "7 + 5", "14 + 16", "12 x 4", "20 ÷ 5")
-    local num1Str, op, num2Str = str:match("(%-?%d+%.?%d*)%s*([%+%-%*%/xX×÷:])%s*(%-?%d+%.?%d*)")
-    if num1Str and op and num2Str then
-        local n1 = tonumber(num1Str)
-        local n2 = tonumber(num2Str)
-        if n1 and n2 then
-            if op == "+" then return n1 + n2
-            elseif op == "-" then return n1 - n2
-            elseif op == "*" or op == "x" or op == "X" or op == "×" then return n1 * n2
-            elseif (op == "/" or op == "÷" or op == ":") and n2 ~= 0 then return n1 / n2
-            end
-        end
-    end
-
-    -- Konversi simbol perkalian & pembagian global
-    local cleanStr = str:gsub("×", "*"):gsub("x", "*"):gsub("X", "*"):gsub("÷", "/"):gsub(":", "/")
-    cleanStr = cleanStr:gsub("%s+", "")
-    cleanStr = cleanStr:gsub("[^%d%+%-%*%/%.%(%)]", "")
-
-    if cleanStr ~= "" then
-        local func = loadstring and loadstring("return " .. cleanStr)
-        if func then
-            local ok, val = pcall(func)
-            if ok and type(val) == "number" then
-                return val
-            end
-        end
-    end
-
-    return nil
-end
-
-local function parseAnswerValue(rawText)
-    if not rawText or rawText == "" then return nil end
-    local str = tostring(rawText)
-    str = str:gsub("<[^>]+>", "")
-    
-    -- Ekstrak angka murni dari string pilihan jawaban (cth: "12", "A) 12", "Ans: 12")
-    local numMatch = str:match("(%-?%d+%.?%d*)")
-    if numMatch then
-        local val = tonumber(numMatch)
-        if val then return val end
-    end
-
-    return solveMathExpression(str)
-end
-
-local function processMathQuestionModel(model)
-    if not _G.autoMathEvent then return end
-    if not model or not model.Parent then return end
-
-    local guiPart = model:FindFirstChild("GuiPart") or model:FindFirstChild("GuiPart", true)
-    local answersFolder = model:FindFirstChild("Answers") or model:FindFirstChild("Answers", true)
-
-    if not guiPart or not answersFolder then return end
-
-    local questionLabel = guiPart:FindFirstChildWhichIsA("TextLabel", true)
-    if not questionLabel then return end
-
-    local qText = questionLabel.ContentText ~= "" and questionLabel.ContentText or questionLabel.Text
-    if not qText or qText == "" then return end
-
-    -- Jika soal ini sudah pernah diselesaikan dan part jawaban benar sudah berukuran 200, lewati
-    if modelLastSolvedQuestion[model] == qText then
-        return
-    end
-
-    local correctAnswer = solveMathExpression(qText)
-    if correctAnswer == nil then return end
-
-    -- Ambil semua opsi jawaban dari folder Answers
-    local answerItems = {}
-    for _, child in ipairs(answersFolder:GetChildren()) do
-        if child:IsA("BasePart") or child.ClassName == "Part" or child:IsA("Model") then
-            local targetPart = child:IsA("BasePart") and child or child:FindFirstChildWhichIsA("BasePart", true)
-            local ansLabel = child:FindFirstChildWhichIsA("TextLabel", true)
-            if ansLabel and targetPart then
-                local ansText = ansLabel.ContentText ~= "" and ansLabel.ContentText or ansLabel.Text
-                if ansText and ansText ~= "" then
-                    local ansVal = parseAnswerValue(ansText)
-                    if ansVal ~= nil then
-                        table.insert(answerItems, {part = targetPart, val = ansVal, text = ansText, obj = child})
+-- Hook Engine Cuaca Game (WeatherService_Client)
+local function isWeatherServiceCandyActive()
+    local ok, result = pcall(function()
+        local svLoader = ReplicatedStorage:FindFirstChild("Modules") and ReplicatedStorage.Modules:FindFirstChild("ServicesLoader")
+        local ws = svLoader and svLoader:FindFirstChild("WeatherService_Client") and require(svLoader.WeatherService_Client)
+        if ws and type(ws.Events) == "table" then
+            local now = os.time()
+            for eName, endTs in pairs(ws.Events) do
+                if string.find(string.lower(tostring(eName)), "candy") then
+                    if type(endTs) ~= "number" or endTs > now then
+                        return true
                     end
                 end
             end
         end
-    end
-
-    -- Butuh setidaknya 1 opsi jawaban ter-load sebelum eksekusi
-    if #answerItems == 0 then
-        return
-    end
-
-    modelLastSolvedQuestion[model] = qText
-
-    logConsole(string.format("📚 [MATH EVENT] Soal #%s: '%s' -> Kunci Jawaban: %s", tostring(model.Name), tostring(qText), tostring(correctAnswer)))
-
-    -- Bersihkan partikel visual berat
-    for _, desc in ipairs(model:GetDescendants()) do
-        if desc:IsA("ParticleEmitter") or desc:IsA("Fire") or desc:IsA("Smoke") or 
-           desc:IsA("Trail") or desc:IsA("PointLight") or desc:IsA("SpotLight") then
-            pcall(function() desc:Destroy() end)
-        end
-    end
-
-    -- Eksekusi pembesaran jawaban benar & penghapusan jawaban salah
-    local foundCorrect = false
-    for _, item in ipairs(answerItems) do
-        local isCorrect = (math.abs(item.val - correctAnswer) < 0.0001)
-
-        if isCorrect and not foundCorrect then
-            foundCorrect = true
-            -- JAWABAN BENAR: Perbesar Hitbox (200x200x200) & aktifkan CanTouch/CanQuery
-            pcall(function()
-                item.part.CanCollide = false
-                item.part.CanTouch = true
-                item.part.CanQuery = true
-                item.part.CastShadow = false
-                item.part.Transparency = 0.5
-                if item.part.Size ~= OPTIMAL_ANSWER_SIZE then
-                    item.part.Size = OPTIMAL_ANSWER_SIZE
-                end
-            end)
-            logConsole(string.format("   ✅ [JAWABAN BENAR] Part %s ('%s') diperbesar ke 200 studs!", item.part.Name, tostring(item.text)))
-        else
-            -- JAWABAN SALAH: Hapus Part agar tidak tersentuh bola/karakter!
-            pcall(function()
-                item.obj:Destroy()
-            end)
-            logConsole(string.format("   ❌ [JAWABAN SALAH] Part %s ('%s') dihapus!", item.part.Name, tostring(item.text)))
-        end
-    end
+        return false
+    end)
+    return (ok and result == true)
 end
 
 -- ==============================================================================
--- 📡 PEMINDAI UNIVERSAL WORKSPACE & DEBRIS
--- ==============================================================================
-local function scanAndProcessAllMath()
-    if not _G.autoMathEvent then return end
-
-    local containers = {workspace}
-    local debris = workspace:FindFirstChild("Debris")
-    if debris then table.insert(containers, debris) end
-
-    for _, container in ipairs(containers) do
-        for _, child in ipairs(container:GetChildren()) do
-            if child:IsA("Model") and isMathQuestionModel(child) then
-                task.defer(processMathQuestionModel, child)
-            end
-        end
-    end
-end
-
-local function runFullCycle()
-    pruneProcessedCache()
-
-    -- 1. Eksekusi Purger PEClass (Hapus Ball & Model Angka PEClass)
-    if _G.autoPEClass then
-        purgePEClassEntities()
-    end
-
-    -- 2. Eksekusi Solver MathEvent
-    if _G.autoMathEvent then
-        scanAndProcessAllMath()
-    end
-end
-
--- ==============================================================================
--- ⚡ LISTENER DESCENDANT ADDED (REAL-TIME INSTANT)
+-- ⚡ LISTENER DESCENDANT ADDED (REAL-TIME INSTANT HITBOX EXPANSION)
 -- ==============================================================================
 workspace.DescendantAdded:Connect(function(descendant)
     task.defer(function()
         if not descendant or not descendant.Parent then return end
-
-        -- 1. Deteksi Ball PEClass Instan (Hapus seketika)
-        if _G.autoPEClass and isPEClassBall(descendant) then
-            pcall(function()
-                logConsole(string.format("🏃 [PECLASS PURGE] Menghapus Ball '%s'!", descendant.Name))
-                descendant:Destroy()
-            end)
-            return
-        end
-
-        -- 2. Deteksi Model Angka PEClass Instan (Tunggu 0.08s untuk validasi bahwa ini bukan soal Math)
-        if _G.autoPEClass and descendant:IsA("Model") and (tonumber(descendant.Name) ~= nil or descendant.Name:match("^%d+$")) then
-            task.wait(0.08)
-            if descendant and descendant.Parent then
-                local hasGui = descendant:FindFirstChild("GuiPart") or descendant:FindFirstChild("GuiPart", true)
-                local hasAns = descendant:FindFirstChild("Answers") or descendant:FindFirstChild("Answers", true)
-                if not hasGui and not hasAns then
-                    pcall(function()
-                        logConsole(string.format("🏃 [PECLASS PURGE] Menghapus Model Angka PEClass '%s'!", descendant.Name))
-                        descendant:Destroy()
-                    end)
-                    return
-                end
-            end
-        end
-
-        -- 3. Deteksi Komponen Math Event Instan
-        if _G.autoMathEvent then
-            if descendant.Name == "GuiPart" or descendant.Name == "Answers" or descendant:IsA("TextLabel") or descendant.Name == "A" or descendant.Name == "B" then
-                local model = getQuestionModelFromInstance(descendant)
-                if model then
-                    processMathQuestionModel(model)
-                end
-            elseif descendant:IsA("Model") and isMathQuestionModel(descendant) then
-                processMathQuestionModel(descendant)
-            end
+        if _G.autoCandyEvent and isCandyItem(descendant) then
+            expandCandyHitbox(descendant)
         end
     end)
 end)
 
--- Fast Background Watchdog Loop (tiap 0.1 detik)
+-- Fast Background Watchdog Loop (tiap 0.2 detik)
 task.spawn(function()
-    while task.wait(0.1) do
-        pcall(runFullCycle)
+    while task.wait(0.2) do
+        pcall(scanAndExpandAllCandies)
     end
 end)
 
 -- Scan awal saat script dieksekusi
 task.spawn(function()
     task.wait(0.1)
-    pcall(runFullCycle)
+    pcall(scanAndExpandAllCandies)
 end)
 
 -- ==============================================================================
--- 🌦️ SINKRONISASI REMOTE WEATHER (EVENT NOTIFIER)
+-- 🌦️ SINKRONISASI REMOTE WEATHER & CANDY SPAWN LISTENER
 -- ==============================================================================
 local function setupWeatherListeners()
     local addW = rev_AddedWeather or findRemote("rev_AddedWeather", "RemoteEvent")
     if addW then
         addW.OnClientEvent:Connect(function(weatherType, ...)
-            logConsole(string.format("📡 [WEATHER] Event Baru: %s", tostring(weatherType)))
-            modelLastSolvedQuestion = {} -- Reset cache setiap ada event baru
-            pcall(runFullCycle)
+            local wStr = string.lower(tostring(weatherType or ""))
+            if string.find(wStr, "candy") then
+                isCandyEventActive = true
+                logConsole(string.format("📡 [WEATHER] Event Candy Dimulai: %s! Memperbesar seluruh hitbox permen...", tostring(weatherType)))
+                pcall(scanAndExpandAllCandies)
+            end
         end)
     end
 
     local remW = rev_RemovedWeather or findRemote("rev_RemovedWeather", "RemoteEvent")
     if remW then
         remW.OnClientEvent:Connect(function(weatherType, ...)
-            logConsole(string.format("☁️ [WEATHER] Event %s Berakhir.", tostring(weatherType)))
-            modelLastSolvedQuestion = {}
+            local wStr = string.lower(tostring(weatherType or ""))
+            if string.find(wStr, "candy") then
+                isCandyEventActive = false
+                logConsole(string.format("☁️ [WEATHER] Event %s Berakhir.", tostring(weatherType)))
+            end
+        end)
+    end
+
+    -- Listener rev_candySpawn: Otomatis mendeteksi nama permen baru
+    local candyRemote = rev_candySpawn or findRemote("rev_candySpawn", "RemoteEvent")
+    if candyRemote then
+        candyRemote.OnClientEvent:Connect(function(spawnData, ...)
+            pcall(function()
+                if type(spawnData) == "table" then
+                    for _, item in pairs(spawnData) do
+                        if type(item) == "table" and item.Name then
+                            registerCandyName(item.Name)
+                        end
+                    end
+                end
+                pcall(scanAndExpandAllCandies)
+            end)
         end)
     end
 end
 
 setupWeatherListeners()
 
+-- Periksa status cuaca saat script pertama kali aktif
+task.spawn(function()
+    if isWeatherServiceCandyActive() then
+        isCandyEventActive = true
+        logConsole("🍬 [WEATHER INIT] Terdeteksi Candy Event sedang aktif di server!")
+        pcall(scanAndExpandAllCandies)
+    end
+end)
+
 print("--------------------------------------------------")
-print("✅ [BackToSchool] Perfect Math & PEClass Engine + Anti-Lag Siap Berjalan 24/7!")
+print("✅ [CandyEvent] Perfect Candy Hitbox Engine & Auto Sell Siap Berjalan 24/7!")
+print("--------------------------------------------------")
