@@ -37,7 +37,7 @@ _G.failsafeTimeout     = 25          -- Waktu maksimal (detik) sebelum auto-rese
 -- ⚡ ULTRA ANTI-LAG & POTATO MODE (PUSH MAX PERFORMANCE)
 _G.antiLag             = true        -- true: Master switch Anti-Lag & Potato Mode Ekstrem
 _G.mapVisual           = "Invisible" -- "Invisible": Visual map pure dihapus/transparan (0% beban render GPU, warna putih hilang), "Gray": Abu-abu semen polos netral, "White": Putih potato, "Default": Warna asli
-_G.optimizePhysics     = true        -- true: Matikan CanTouch pada scenery map (Hemat kalkulasi CPU Physics, 100% aman untuk event)
+_G.optimizePhysics     = false       -- false (Default Aman): Hindari jitter fisika / suara mesin pada mekanisme objek
 _G.fpsCap              = 60          -- Batas target FPS (60 hemat baterai & CPU, 30 untuk multi-akun, 0 = default)
 _G.disable3dRender     = false       -- true: Layar freeze / 0% GPU saat AFK farm (Pencet F10 untuk toggle), false: Tampilan visual normal
 _G.muteAudio           = true        -- true: Mute semua audio & reverb game (0% beban CPU audio)
@@ -159,6 +159,11 @@ if _G.muteAudio then
             if ugs then ugs.MasterVolume = 0 end
         end
         SoundService.AmbientReverb = Enum.ReverbType.NoReverb
+        for _, sg in ipairs(SoundService:GetDescendants()) do
+            if sg:IsA("SoundGroup") then
+                sg.Volume = 0
+            end
+        end
     end)
 end
 
@@ -266,7 +271,6 @@ local PURGE_CLASSES = {
     Smoke = true,
     Sparkles = true,
     SurfaceAppearance = true,
-    Highlight = true,
 }
 
 local function optimizeInstance(v)
@@ -277,33 +281,38 @@ local function optimizeInstance(v)
     pcall(function()
         local className = v.ClassName
 
-        -- 1. Mute suara individual (Hemat CPU audio mixer)
+        -- 1. Mute suara individual (HANYA set Volume = 0, JANGAN :Stop() agar tidak restart loop / gredek mesin!)
         if _G.muteAudio and v:IsA("Sound") then
             v.Volume = 0
-            if v.Looped and v.Playing then v:Stop() end
             return
         end
 
-        -- 2. Purge partikel, cahaya, dan efek visual berat (Hemat GPU shader & draw calls)
+        -- 2. Highlight: JANGAN di-Destroy karena script AnimateBrainrots memakai instance-nya (hindari crash 800+ error)
+        if v:IsA("Highlight") then
+            v.Enabled = false
+            return
+        end
+
+        -- 3. Purge partikel, cahaya, dan efek visual berat (Hemat GPU shader & draw calls)
         if _G.removeParticles and PURGE_CLASSES[className] then
             v:Destroy()
             return
         end
 
-        -- 3. Hapus Decal, Texture, Clothing, ShirtGraphic
+        -- 4. Hapus Decal, Texture, Clothing, ShirtGraphic
         if className == "Decal" or className == "Texture" or v:IsA("Clothing") or v:IsA("ShirtGraphic") then
             v:Destroy()
             return
         end
 
-        -- 4. Matikan BillboardGui / SurfaceGui non-math & non-PlayerGui
+        -- 5. Matikan BillboardGui / SurfaceGui non-math & non-PlayerGui
         if (v:IsA("BillboardGui") or v:IsA("SurfaceGui")) and not v:IsDescendantOf(lp:WaitForChild("PlayerGui", 1)) then
             v.Enabled = false
             v:Destroy()
             return
         end
 
-        -- 5. Potato Mesh & BasePart (Invisible / Gray / White Map)
+        -- 6. Potato Mesh & BasePart (Invisible / Gray / White Map)
         if v:IsA("BasePart") then
             v.Material = Enum.Material.SmoothPlastic
             v.Reflectance = 0
@@ -322,8 +331,8 @@ local function optimizeInstance(v)
                 v.TextureID = ""
             end
 
-            -- Physics Optimizer: Matikan CanTouch pada objek scenery mati (Hemat CPU physics, CanCollide tetap aktif agar lantai tidak jebol)
-            if _G.optimizePhysics then
+            -- Physics Optimizer: Hanya pada part Anchored agar tidak merusak mekanisme bergerak
+            if _G.optimizePhysics and v.Anchored then
                 v.CanTouch = false
             end
         elseif v:IsA("SpecialMesh") then
