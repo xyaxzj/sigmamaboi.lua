@@ -32,6 +32,7 @@ _G.brainrotWhitelist    = {         -- Daftar nama brainrot yang diizinkan (Case
     "Tricerabob",
     "Teacherrina",
 }
+_G.kickDelay          = 0.5         -- Jeda waktu (detik) di Safe Zone sebelum menendang/kick (Default: 0.5 detik, jangan terlalu instant)
 _G.autoSellAll         = false       -- true: Auto Sell All setiap 5 detik via ref_B_SellAll
 _G.autoRemovePlayer    = true        -- true: Hapus player lain dari game.Players & workspace.Players (100% Bersih & No Lag), false: Biarkan
 _G.debugConsoleLog     = true        -- true: Cetak log status/fase/candy ke console (F9), false: Senyap
@@ -1210,7 +1211,8 @@ task.spawn(function()
                 teleportToSafeZone(hrp)
             else
                 if shouldKick() then
-                    if stateTimer >= 0.15 then
+                    local delayKick = (_G.kickDelay and _G.kickDelay > 0) and _G.kickDelay or 0.5
+                    if stateTimer >= delayKick then
                         pcall(function()
                             hrp.AssemblyLinearVelocity = Vector3.zero
                             hrp.AssemblyAngularVelocity = Vector3.zero
@@ -1302,9 +1304,11 @@ task.spawn(function()
                 lastRewardBrainrotName = ""
 
                 if shouldKick() then
+                    local delayKick = (_G.kickDelay and _G.kickDelay > 0) and _G.kickDelay or 0.5
+                    task.wait(delayKick)
                     executeKick()
                     targetAction = "WaitingForPhase2"
-                    logConsole(string.format("⚡ [COLLECTED SECURITY] Reward Collected saat diam! Teleport ke Safe Zone & Re-Kick Langsung! Total: %d", mutationCount))
+                    logConsole(string.format("⚡ [COLLECTED SECURITY] Reward Collected saat diam! Teleport ke Safe Zone & Re-Kick (Jeda %.1fs)! Total: %d", delayKick, mutationCount))
                 else
                     targetAction = "Idle"
                     logConsole(string.format("⚡ [COLLECTED SECURITY] Reward Collected saat diam! Standby di Safe Zone. Total: %d", mutationCount))
@@ -1323,7 +1327,7 @@ task.spawn(function()
                     hrp.AssemblyAngularVelocity = Vector3.zero
                 end)
                 -- Failsafe Auto-Reset: Jika dalam 1.5 detik karakter tidak mati sendiri, paksa respawn agar bisa teleport ke safe zone untuk kick berikutnya!
-                if stateTimer >= 1.5 then
+                if stateTimer >= 3 then
                     logConsole("💀 [AUTO-RESET] Bot diam 1.5s -> Memaksa respawn agar bisa kembali ke Safe Zone untuk kick berikutnya...")
                     pcall(function()
                         hum.Health = 0
@@ -1348,9 +1352,11 @@ task.spawn(function()
                 lastRewardBrainrotName = ""
 
                 if shouldKick() then
+                    local delayKick = (_G.kickDelay and _G.kickDelay > 0) and _G.kickDelay or 0.5
+                    task.wait(delayKick)
                     executeKick()
                     targetAction = "WaitingForPhase2"
-                    logConsole(string.format("⚡ [COLLECTED SECURITY] Barang sudah Collected di tengah jalan! Langsung teleport ke Safe Zone & Re-Kick! Total: %d", mutationCount))
+                    logConsole(string.format("⚡ [COLLECTED SECURITY] Barang sudah Collected di tengah jalan! Langsung teleport ke Safe Zone & Re-Kick (Jeda %.1fs)! Total: %d", delayKick, mutationCount))
                 else
                     targetAction = "Idle"
                     logConsole(string.format("⚡ [COLLECTED SECURITY] Barang sudah Collected! Standby di Safe Zone. Total: %d", mutationCount))
@@ -1434,9 +1440,11 @@ task.spawn(function()
                 teleportToSafeZone(hrp)
 
                 if shouldKick() then
+                    local delayKick = (_G.kickDelay and _G.kickDelay > 0) and _G.kickDelay or 0.5
+                    task.wait(delayKick)
                     executeKick()
                     targetAction = "WaitingForPhase2"
-                    logConsole(string.format("🎉 Total Mutasi: %d | Re-Kick Langsung!", mutationCount))
+                    logConsole(string.format("🎉 Total Mutasi: %d | Re-Kick (Jeda %.1fs)!", mutationCount, delayKick))
                 else
                     targetAction = "Idle"
                     logConsole(string.format("🎉 Total Mutasi: %d | Ronde Tuntas -> Standby di Safe Zone (Menunggu Event Candy)", mutationCount))
