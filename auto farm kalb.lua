@@ -51,7 +51,7 @@ _G.optimizeTerrain     = true        -- true: Matikan gelombang air & dekorasi r
 _G.cleanClientAssets   = true        -- true: Sembunyikan ClientRenderedAssets & PlacedEggRenders
 
 print("--------------------------------------------------")
-print("🚀 [INIT] Memuat KALB Auto Farm V3 (Ultra Anti-Lag & Potato Max Edition)...")
+print("🚀 [INIT] Memuat KALB Auto Farm V4 (Ultra Anti-Lag & Potato Max Edition)...")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
