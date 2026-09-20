@@ -974,8 +974,40 @@ local function setupServerEventListeners()
     if col then
         col.OnClientEvent:Connect(function(...)
             collectedFired = true
+            logConsole("📥 [SERVER EVENT] rev_Collected diterima!")
+            -- 🛡️ SECURITY TELEPORT: Jika reward sudah collected, segera teleport ke Safe Zone
+            pcall(function()
+                local char = lp.Character
+                local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                if hrp and (targetAction == "WalkToSafeZone" or targetAction == "StayStillUntilDead" or targetAction == "WaitingForCollected") then
+                    teleportToSafeZone(hrp)
+                end
+            end)
         end)
     end
+
+    -- 🛡️ SECURITY LISTENER: Deteksi Teks / Pop-up "Collected" di PlayerGui
+    pcall(function()
+        local pGui = lp:FindFirstChild("PlayerGui") or lp:WaitForChild("PlayerGui", 2)
+        if pGui then
+            pGui.DescendantAdded:Connect(function(desc)
+                if desc:IsA("TextLabel") or desc:IsA("TextButton") then
+                    local txt = string.lower(tostring(desc.Text or ""))
+                    if string.find(txt, "collected") then
+                        collectedFired = true
+                        logConsole("📥 [UI SECURITY] Teks 'Collected' terdeteksi di PlayerGui! Memicu security teleport...")
+                        pcall(function()
+                            local char = lp.Character
+                            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                            if hrp and (targetAction == "WalkToSafeZone" or targetAction == "StayStillUntilDead" or targetAction == "WaitingForCollected") then
+                                teleportToSafeZone(hrp)
+                            end
+                        end)
+                    end
+                end
+            end)
+        end
+    end)
 
     local ended = rev_KickEventEnded or findRemote("rev_KickEventEnded", "RemoteEvent")
     if ended then
@@ -1257,6 +1289,29 @@ task.spawn(function()
 
         -- [ FASE KHUSUS: DIAM DI TEMPAT SAMPAI MATI (JIKA CANDY SPAWN KOSONG {} ATAU TIDAK LOLOS WHITELIST) ]
         elseif targetAction == "StayStillUntilDead" then
+            -- 🛡️ SECURITY CHECK: Jika reward ternyata ter-collect saat sedang diam, langsung teleport ke Safe Zone untuk kick!
+            if collectedFired then
+                collectedFired = false
+                teleportToSafeZone(hrp)
+                mutationCount = mutationCount + 1
+                phase2Fired = false
+                kickRetryCount = 0
+                kickAcceptedByServer = false
+                activeCandyWaypoints = {}
+                emptyCandySpawnReceived = false
+                lastRewardBrainrotName = ""
+
+                if shouldKick() then
+                    executeKick()
+                    targetAction = "WaitingForPhase2"
+                    logConsole(string.format("⚡ [COLLECTED SECURITY] Reward Collected saat diam! Teleport ke Safe Zone & Re-Kick Langsung! Total: %d", mutationCount))
+                else
+                    targetAction = "Idle"
+                    logConsole(string.format("⚡ [COLLECTED SECURITY] Reward Collected saat diam! Standby di Safe Zone. Total: %d", mutationCount))
+                end
+                continue
+            end
+
             -- Jika tiba-tiba ada Candy Event atau barang/permen muncul di map, pause whitelist dan langsung jalan!
             if isCandyEventOngoing() then
                 targetAction = "WalkToSafeZone"
@@ -1280,6 +1335,29 @@ task.spawn(function()
 
         -- [ FASE 3: JALAN KAKI MEMBAWA BRAINROT MENUJU SAFE ZONE (JANGAN TELEPORTASI!) ]
         elseif targetAction == "WalkToSafeZone" then
+            -- 🛡️ SECURITY CHECK: Jika reward sudah ter-collect oleh server / UI di tengah jalan, langsung teleport & kick lagi!
+            if collectedFired then
+                collectedFired = false
+                teleportToSafeZone(hrp)
+                mutationCount = mutationCount + 1
+                phase2Fired = false
+                kickRetryCount = 0
+                kickAcceptedByServer = false
+                activeCandyWaypoints = {}
+                emptyCandySpawnReceived = false
+                lastRewardBrainrotName = ""
+
+                if shouldKick() then
+                    executeKick()
+                    targetAction = "WaitingForPhase2"
+                    logConsole(string.format("⚡ [COLLECTED SECURITY] Barang sudah Collected di tengah jalan! Langsung teleport ke Safe Zone & Re-Kick! Total: %d", mutationCount))
+                else
+                    targetAction = "Idle"
+                    logConsole(string.format("⚡ [COLLECTED SECURITY] Barang sudah Collected! Standby di Safe Zone. Total: %d", mutationCount))
+                end
+                continue
+            end
+
             pcall(function()
                 if hum.WalkSpeed < 16 then hum.WalkSpeed = 16 end
                 if hrp.Anchored then hrp.Anchored = false end
