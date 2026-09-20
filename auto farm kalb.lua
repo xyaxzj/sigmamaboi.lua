@@ -32,9 +32,9 @@ _G.brainrotWhitelist    = {         -- Daftar nama brainrot yang diizinkan (Case
     "Tricerabob",
     "Teacherrina",
 }
-_G.autoSellAll         = true       -- true: Auto Sell All setiap 5 detik via ref_B_SellAll
+_G.autoSellAll         = false       -- true: Auto Sell All setiap 5 detik via ref_B_SellAll
 _G.autoRemovePlayer    = true        -- true: Hapus player lain dari game.Players & workspace.Players (100% Bersih & No Lag), false: Biarkan
-_G.debugConsoleLog     = false        -- true: Cetak log status/fase/candy ke console (F9), false: Senyap
+_G.debugConsoleLog     = true        -- true: Cetak log status/fase/candy ke console (F9), false: Senyap
 _G.failsafeTimeout     = 25          -- Waktu maksimal (detik) sebelum auto-reset ke Safe Zone jika macet
 
 -- ⚡ ULTRA ANTI-LAG & POTATO MODE (PUSH MAX PERFORMANCE)
@@ -754,11 +754,36 @@ local function teleportToSafeZone(hrp)
     end)
 end
 
+local function isWeatherServiceCandyActive()
+    local ok, result = pcall(function()
+        local svLoader = ReplicatedStorage:FindFirstChild("Modules") and ReplicatedStorage.Modules:FindFirstChild("ServicesLoader")
+        local ws = svLoader and svLoader:FindFirstChild("WeatherService_Client") and require(svLoader.WeatherService_Client)
+        if ws and type(ws.Events) == "table" then
+            local now = os.time()
+            for eName, endTs in pairs(ws.Events) do
+                if string.find(string.lower(tostring(eName)), "candy") then
+                    if type(endTs) ~= "number" or endTs > now then
+                        return true
+                    end
+                end
+            end
+        end
+        return false
+    end)
+    return (ok and result == true)
+end
+
 local function checkCandyEventActive()
     if isCandyEventActive then return true end
+    if isWeatherServiceCandyActive() then
+        isCandyEventActive = true
+        return true
+    end
     local debris = workspace:FindFirstChild("Debris")
-    if debris then
-        for _, child in ipairs(debris:GetChildren()) do
+    local containers = {workspace}
+    if debris then table.insert(containers, debris) end
+    for _, container in ipairs(containers) do
+        for _, child in ipairs(container:GetChildren()) do
             if isCandyItem(child) then
                 isCandyEventActive = true
                 return true
@@ -768,12 +793,23 @@ local function checkCandyEventActive()
     return false
 end
 
--- Pengecekan Event Override (Pause Whitelist jika ada Candy Event atau barang permen di map)
-local function shouldBypassWhitelist()
+local function isCandyEventOngoing()
     if isCandyEventActive then return true end
     if #activeCandyWaypoints > 0 then return true end
-    if checkCandyEventActive() then return true end
+    if isWeatherServiceCandyActive() then
+        isCandyEventActive = true
+        return true
+    end
+    if checkCandyEventActive() then
+        isCandyEventActive = true
+        return true
+    end
     return false
+end
+
+-- Pengecekan Event Override (Pause Whitelist jika ada Candy Event atau barang permen di map)
+local function shouldBypassWhitelist()
+    return isCandyEventOngoing()
 end
 
 -- Validasi Brainrot Whitelist
@@ -795,7 +831,7 @@ end
 local function shouldKick()
     if not _G.autoFarm then return false end
     if _G.onlyCandyEvent then
-        return checkCandyEventActive()
+        return isCandyEventOngoing()
     end
     return true
 end
@@ -951,7 +987,8 @@ local function setupServerEventListeners()
     local addW = rev_AddedWeather or findRemote("rev_AddedWeather", "RemoteEvent")
     if addW then
         addW.OnClientEvent:Connect(function(weatherType, ...)
-            if weatherType == "Candy" then
+            local wStr = string.lower(tostring(weatherType or ""))
+            if string.find(wStr, "candy") then
                 isCandyEventActive = true
                 logConsole("🍬 Event Cuaca: CANDY EVENT AKTIF! Memulai Candy Hitbox Expander & Auto Navigator...")
             end
@@ -961,7 +998,8 @@ local function setupServerEventListeners()
     local remW = rev_RemovedWeather or findRemote("rev_RemovedWeather", "RemoteEvent")
     if remW then
         remW.OnClientEvent:Connect(function(weatherType, ...)
-            if weatherType == "Candy" then
+            local wStr = string.lower(tostring(weatherType or ""))
+            if string.find(wStr, "candy") then
                 isCandyEventActive = false
                 activeCandyWaypoints = {}
                 emptyCandySpawnReceived = false
@@ -1120,10 +1158,11 @@ task.spawn(function()
             stateTimer = stateTimer + 0.05 
             
             local maxTimeout = _G.failsafeTimeout or 25
-            if globalStuckTimer >= maxTimeout and targetAction ~= "WalkToSafeZone" and targetAction ~= "StayStillUntilDead" then
+            if globalStuckTimer >= maxTimeout and targetAction ~= "WalkToSafeZone" then
                 globalStuckTimer = 0
                 stateTimer = 0
                 lastRewardBrainrotName = ""
+                emptyCandySpawnReceived = false
                 teleportToSafeZone(hrp)
                 targetAction = "Idle"
                 logConsole("🚨 Failsafe Triggered: Teleportasi reset ke Idle Safe Zone")
@@ -1161,8 +1200,10 @@ task.spawn(function()
 
         -- [ FASE 2: NUNGGU PHASE 2 DARI SERVER / DETEKSI EMPTY SPAWN / WHITELIST CHECK ]
         elseif targetAction == "WaitingForPhase2" then
-            -- Kondisi Khusus 1: rev_candySpawn mengirim {} (kosong) -> bot diam sampai mati
-            if emptyCandySpawnReceived then
+            local candyOngoing = isCandyEventOngoing()
+
+            -- Kondisi Khusus 1: rev_candySpawn mengirim {} (kosong) DAN event candy tidak aktif
+            if emptyCandySpawnReceived and not candyOngoing then
                 targetAction = "StayStillUntilDead"
                 logConsole("⚠️ [EMPTY CANDY SPAWN] Koordinat kosong diterima! Masuk ke mode diam sampai mati...")
 
@@ -1170,6 +1211,7 @@ task.spawn(function()
                 phase2Fired = false
                 kickRetryCount = 0
                 kickAcceptedByServer = false
+                emptyCandySpawnReceived = false
 
                 -- Pengecekan Event Override & Whitelist
                 local bypassWl = shouldBypassWhitelist()
@@ -1178,7 +1220,7 @@ task.spawn(function()
                 if isAllowed then
                     targetAction = "WalkToSafeZone"
                     if bypassWl and _G.useBrainrotWhitelist and not isBrainrotWhitelisted(lastRewardBrainrotName) then
-                        logConsole(string.format("🍬 [EVENT OVERRIDE] Brainrot '%s' tidak di whitelist tapi ada Candy Event/Item di map! Whitelist di-pause -> Membawa ke Safe Zone...", tostring(lastRewardBrainrotName)))
+                        logConsole(string.format("🍬 [EVENT OVERRIDE] Brainrot '%s' tidak di whitelist tapi Candy Event sedang aktif! Tetap bawa ke Safe Zone...", tostring(lastRewardBrainrotName)))
                     else
                         logConsole(string.format("Phase 2 Selesai -> Berjalan Kaki Membawa Brainrot '%s' (Menuju Safe Zone)", tostring(lastRewardBrainrotName)))
                     end
@@ -1216,15 +1258,23 @@ task.spawn(function()
         -- [ FASE KHUSUS: DIAM DI TEMPAT SAMPAI MATI (JIKA CANDY SPAWN KOSONG {} ATAU TIDAK LOLOS WHITELIST) ]
         elseif targetAction == "StayStillUntilDead" then
             -- Jika tiba-tiba ada Candy Event atau barang/permen muncul di map, pause whitelist dan langsung jalan!
-            if shouldBypassWhitelist() then
+            if isCandyEventOngoing() then
                 targetAction = "WalkToSafeZone"
-                logConsole("🍬 [EVENT OVERRIDE] Barang/Permen terdeteksi di map saat sedang diam! Whitelist di-pause -> Mulai jalan mengambil permen...")
+                logConsole("🍬 [EVENT OVERRIDE] Candy Event terdeteksi saat sedang diam! Whitelist di-pause -> Mulai jalan ke Safe Zone...")
             else
                 pcall(function()
                     hum:MoveTo(hrp.Position)
                     hrp.AssemblyLinearVelocity = Vector3.zero
                     hrp.AssemblyAngularVelocity = Vector3.zero
                 end)
+                -- Failsafe Auto-Reset: Jika dalam 1.5 detik karakter tidak mati sendiri, paksa respawn agar bisa teleport ke safe zone untuk kick berikutnya!
+                if stateTimer >= 1.5 then
+                    logConsole("💀 [AUTO-RESET] Bot diam 1.5s -> Memaksa respawn agar bisa kembali ke Safe Zone untuk kick berikutnya...")
+                    pcall(function()
+                        hum.Health = 0
+                        char:BreakJoints()
+                    end)
+                end
             end
             -- Menunggu karakter mati sendiri jika tidak ada event (hum.Health <= 0 akan ditangkap oleh pendeteksi mati di atas)
 
