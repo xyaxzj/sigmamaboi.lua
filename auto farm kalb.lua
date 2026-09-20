@@ -1,5 +1,5 @@
 -- ==============================================================================
--- 🥔 KALB ULTRA LIGHTWEIGHT AUTO FARM V2 (BACK TO SCHOOL: MATH EVENT & PECLASS)
+-- 🥔 KALB ULTRA LIGHTWEIGHT AUTO FARM V3 (ULTRA ANTI-LAG & POTATO MAX EDITION)
 -- ==============================================================================
 -- Fitur & Alur:
 -- 1. ⚙️ Full Config Mode: Semua pengaturan diatur via variabel _G di baris atas (Tanpa UI)
@@ -25,23 +25,38 @@ if not game:IsLoaded() then game.Loaded:Wait() end
 -- ==============================================================================
 -- ⚙️ KONFIGURASI PENGGUNA (UBAH SESUAI KEBUTUHAN DI SINI)
 -- ==============================================================================
-_G.autoFarm = true               -- true: Auto Farm Aktif, false: Nonaktif
-_G.onlyMathEvent = false         -- true: HANYA Auto Kick saat MathEvent aktif, false: Auto kick nonstop
-_G.autoMathEvent = true          -- true: Otomatis selesaikan soal matematika, perbesar jawaban benar & hapus jawaban salah
-_G.autoPEClass = true            -- true: Otomatis hapus Model angka & Ball di Debris saat event PEClass
-_G.autoSellAll = false           -- true: Auto Sell All setiap 5 detik via ref_B_SellAll
-_G.autoRemovePlayer = true       -- true: Hapus player lain dari game.Players & workspace.Players (100% Bersih & No Lag), false: Biarkan
-_G.debugConsoleLog = true        -- true: Cetak log status/fase/soal math ke console (F9), false: Senyap
-_G.failsafeTimeout = 25          -- Waktu maksimal (detik) sebelum auto-reset ke Safe Zone jika macet
+_G.autoFarm           = true        -- true: Auto Farm Aktif, false: Nonaktif
+_G.onlyMathEvent       = false       -- true: HANYA Auto Kick saat MathEvent aktif, false: Auto kick nonstop
+_G.autoMathEvent       = true        -- true: Otomatis selesaikan soal matematika, perbesar jawaban benar & hapus jawaban salah
+_G.autoPEClass         = true        -- true: Otomatis hapus Model angka & Ball di Debris saat event PEClass
+_G.autoSellAll         = false       -- true: Auto Sell All setiap 5 detik via ref_B_SellAll
+_G.autoRemovePlayer    = true        -- true: Hapus player lain dari game.Players & workspace.Players (100% Bersih & No Lag), false: Biarkan
+_G.debugConsoleLog     = true        -- true: Cetak log status/fase/soal math ke console (F9), false: Senyap
+_G.failsafeTimeout     = 25          -- Waktu maksimal (detik) sebelum auto-reset ke Safe Zone jika macet
+
+-- ⚡ ULTRA ANTI-LAG & POTATO MODE (PUSH MAX PERFORMANCE)
+_G.antiLag             = true        -- true: Master switch Anti-Lag & Potato Mode Ekstrem
+_G.whiteMap            = true        -- true: Ubah map menjadi putih potato (SmoothPlastic & No Shadows), false: Warna asli
+_G.fpsCap              = 60          -- Batas target FPS (60 hemat baterai & CPU, 30 untuk multi-akun, 0 = default)
+_G.disable3dRender     = false       -- true: Layar freeze / 0% GPU saat AFK farm (Pencet F10 untuk toggle), false: Tampilan visual normal
+_G.muteAudio           = true        -- true: Mute semua audio & reverb game (0% beban CPU audio)
+_G.cleanLighting       = true        -- true: Hapus semua efek visual di Lighting (Sky, Blur, Bloom, Atmosphere, SunRays)
+_G.removeParticles     = true        -- true: Hapus ParticleEmitter, Trail, Beam, Fire, Smoke, Sparkles, Highlight, Lights
+_G.optimizeTerrain     = true        -- true: Matikan gelombang air & dekorasi rumput pada terrain
+_G.freezeAnimations    = true        -- true: Hentikan animasi skeletal pada karakter lain / NPC (Hemat CPU Skeletal)
+_G.cleanClientAssets   = true        -- true: Sembunyikan ClientRenderedAssets & PlacedEggRenders
 
 print("--------------------------------------------------")
-print("🚀 [INIT] Memuat KALB Auto Farm V2 (BackToSchool Math Event & PEClass)...")
+print("🚀 [INIT] Memuat KALB Auto Farm V3 (Ultra Anti-Lag & Potato Max Edition)...")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
 local VirtualUser = game:GetService("VirtualUser")
+local SoundService = game:GetService("SoundService")
+local UserInputService = game:GetService("UserInputService")
+local UserSettingsService = (type(UserSettings) == "function" and pcall(UserSettings)) and UserSettings() or nil
 
 local lp = Players.LocalPlayer
 if not lp then
@@ -64,45 +79,7 @@ local function logConsole(...)
 end
 
 -- =============================================
--- 🚀 SYSTEM ANTI-LAG & POTATO MODE
--- =============================================
-local function stripTexture(v)
-    if not v then return end
-    if lp and lp.Character and (v == lp.Character or v:IsDescendantOf(lp.Character)) then return end
-
-    pcall(function()
-        if v:IsA("BasePart") then
-            v.Material = Enum.Material.Plastic
-            v.Reflectance = 0
-            v.CastShadow = false
-            v.Color = Color3.new(1, 1, 1)
-            if v:IsA("MeshPart") then
-                v.TextureID = ""
-            end
-        elseif v:IsA("SpecialMesh") then
-            v.TextureId = ""
-        elseif v:IsA("Decal") or v:IsA("Texture") or v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Beam") or v:IsA("Fire") or v:IsA("Smoke") or v:IsA("Sparkles") or v:IsA("SurfaceAppearance") or v:IsA("Clothing") or v:IsA("ShirtGraphic") then
-            v:Destroy()
-        end
-    end)
-end
-
-pcall(function()
-    for _, v in ipairs(workspace:GetDescendants()) do
-        stripTexture(v)
-    end
-
-    Lighting.GlobalShadows = false
-    Lighting.FogEnd = 9e9
-    for _, v in ipairs(Lighting:GetDescendants()) do
-        if v:IsA("PostEffect") or v:IsA("BlurEffect") or v:IsA("SunRaysEffect") or v:IsA("ColorCorrectionEffect") or v:IsA("BloomEffect") or v:IsA("DepthOfFieldEffect") or v:IsA("Sky") then
-            v:Destroy()
-        end
-    end
-end)
-
--- =============================================
--- 🚫 TOTAL PLAYER & CHARACTER PURGER (100% BERSIH)
+-- 🛡️ FILTER & PROTEKSI ENTITAS LOKAL & MATH EVENT
 -- =============================================
 local function isLocalPlayerEntity(inst)
     if not inst then return false end
@@ -113,11 +90,281 @@ local function isLocalPlayerEntity(inst)
     return false
 end
 
+local function isMathEventProtected(inst)
+    if not inst then return false end
+    local name = inst.Name
+    if name == "GuiPart" or name == "Answers" or name == "PlotSign" then return true end
+    if inst:IsA("SurfaceGui") or inst:IsA("BillboardGui") or inst:IsA("TextLabel") then
+        local curr = inst.Parent
+        while curr and curr ~= workspace and curr ~= game do
+            local cName = curr.Name
+            if cName == "GuiPart" or cName == "Answers" or cName == "PlotSign" then
+                return true
+            end
+            if curr:IsA("Model") and (curr:FindFirstChild("GuiPart") or curr:FindFirstChild("Answers")) then
+                return true
+            end
+            curr = curr.Parent
+        end
+    end
+    return false
+end
+
+-- =============================================
+-- ⚡ 1. ENGINE & HARDWARE OPTIMIZER
+-- =============================================
+-- Native Quality Level 1 (Engine Setting Terendah)
+pcall(function()
+    if settings and settings().Rendering then
+        settings().Rendering.QualityLevel = 1
+    end
+    if UserSettingsService then
+        local ugs = UserSettingsService:GetService("UserGameSettings")
+        if ugs then ugs.SavedQualityLevel = Enum.SavedQualitySetting.QualityLevel1 end
+    end
+end)
+
+-- Target FPS Cap
+if _G.fpsCap and _G.fpsCap > 0 then
+    pcall(function()
+        if setfpscap and typeof(setfpscap) == "function" then
+            setfpscap(_G.fpsCap)
+        end
+    end)
+end
+
+-- 3D Rendering (0% GPU AFK) & Hotkey F10 Toggle
+if _G.disable3dRender then
+    pcall(function()
+        RunService:Set3dRenderingEnabled(false)
+    end)
+end
+
+pcall(function()
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if not gameProcessed and input.KeyCode == Enum.KeyCode.F10 then
+            _G.disable3dRender = not _G.disable3dRender
+            pcall(function()
+                RunService:Set3dRenderingEnabled(not _G.disable3dRender)
+            end)
+            logConsole("🎮 [3D RENDER] Toggled: " .. (_G.disable3dRender and "OFF (0% GPU AFK)" or "ON"))
+        end
+    end)
+end)
+
+-- Total Audio Mute (0% CPU Audio Processing)
+if _G.muteAudio then
+    pcall(function()
+        if UserSettingsService then
+            local ugs = UserSettingsService:GetService("UserGameSettings")
+            if ugs then ugs.MasterVolume = 0 end
+        end
+        SoundService.AmbientReverb = Enum.ReverbType.NoReverb
+    end)
+end
+
+-- =============================================
+-- ☁️ 2. LIGHTING & ATMOSPHERE REAL-TIME PURGER
+-- =============================================
+local function purgeLighting()
+    if not _G.cleanLighting then return end
+    pcall(function()
+        Lighting.GlobalShadows = false
+        Lighting.FogEnd = 9e9
+        Lighting.Brightness = 1
+        Lighting.ClockTime = 14
+        Lighting.OutdoorAmbient = Color3.fromRGB(128, 128, 128)
+        for _, v in ipairs(Lighting:GetChildren()) do
+            if v:IsA("PostEffect") or v:IsA("BlurEffect") or v:IsA("SunRaysEffect")
+               or v:IsA("ColorCorrectionEffect") or v:IsA("BloomEffect")
+               or v:IsA("DepthOfFieldEffect") or v:IsA("Sky")
+               or v:IsA("Atmosphere") or v:IsA("Clouds") then
+                v.Enabled = false
+                v:Destroy()
+            end
+        end
+    end)
+end
+purgeLighting()
+
+Lighting.ChildAdded:Connect(function(child)
+    if _G.cleanLighting then
+        task.defer(function()
+            if child:IsA("PostEffect") or child:IsA("BlurEffect") or child:IsA("SunRaysEffect")
+               or child:IsA("ColorCorrectionEffect") or child:IsA("BloomEffect")
+               or child:IsA("DepthOfFieldEffect") or child:IsA("Sky")
+               or child:IsA("Atmosphere") or child:IsA("Clouds") then
+                pcall(function()
+                    child.Enabled = false
+                    child:Destroy()
+                end)
+            end
+        end)
+    end
+end)
+
+-- =============================================
+-- 🌊 3. TERRAIN & WATER OPTIMIZER
+-- =============================================
+if _G.optimizeTerrain then
+    pcall(function()
+        local terrain = workspace:FindFirstChildOfClass("Terrain")
+        if terrain then
+            terrain.WaterWaveSize = 0
+            terrain.WaterWaveSpeed = 0
+            terrain.WaterReflectance = 0
+            terrain.WaterTransparency = 0
+            if sethiddenproperty then
+                pcall(function() sethiddenproperty(terrain, "Decoration", false) end)
+            end
+        end
+    end)
+end
+
+-- =============================================
+-- 🥚 4. CLIENT ASSETS & PLACED EGGS PURGER
+-- =============================================
+local function cleanClientAssets()
+    if not _G.cleanClientAssets then return end
+    pcall(function()
+        local eggFolder = workspace:FindFirstChild("PlacedEggRenders")
+        if eggFolder then
+            for _, d in ipairs(eggFolder:GetDescendants()) do
+                if d:IsA("BasePart") then
+                    d.Transparency = 1
+                    d.CastShadow = false
+                elseif d:IsA("Decal") or d:IsA("Texture") then
+                    d:Destroy()
+                end
+            end
+        end
+        local clientAssets = workspace:FindFirstChild("ClientRenderedAssets")
+        if clientAssets then
+            for _, d in ipairs(clientAssets:GetDescendants()) do
+                if d:IsA("BasePart") then
+                    d.Transparency = 1
+                    d.CastShadow = false
+                elseif d:IsA("Decal") or d:IsA("Texture") then
+                    d:Destroy()
+                end
+            end
+        end
+    end)
+end
+cleanClientAssets()
+
+-- =============================================
+-- 🥔 5. CORE INSTANCE OPTIMIZER (SMOOTHPLASTIC, WHITE MAP & PURGE FX)
+-- =============================================
+local PURGE_CLASSES = {
+    PointLight = true,
+    SpotLight = true,
+    SurfaceLight = true,
+    ParticleEmitter = true,
+    Trail = true,
+    Beam = true,
+    Fire = true,
+    Smoke = true,
+    Sparkles = true,
+    SurfaceAppearance = true,
+    Highlight = true,
+}
+
+local function optimizeInstance(v)
+    if not _G.antiLag or not v or not v.Parent then return end
+    if isLocalPlayerEntity(v) then return end
+    if isMathEventProtected(v) then return end
+
+    pcall(function()
+        local className = v.ClassName
+
+        -- 1. Mute suara individual (Hemat CPU audio mixer)
+        if _G.muteAudio and v:IsA("Sound") then
+            v.Volume = 0
+            if v.Looped and v.Playing then v:Stop() end
+            return
+        end
+
+        -- 2. Purge partikel, cahaya, dan efek visual berat (Hemat GPU shader & draw calls)
+        if _G.removeParticles and PURGE_CLASSES[className] then
+            v:Destroy()
+            return
+        end
+
+        -- 3. Hapus Decal, Texture, Clothing, ShirtGraphic
+        if className == "Decal" or className == "Texture" or v:IsA("Clothing") or v:IsA("ShirtGraphic") then
+            v:Destroy()
+            return
+        end
+
+        -- 4. Matikan BillboardGui / SurfaceGui non-math & non-PlayerGui
+        if (v:IsA("BillboardGui") or v:IsA("SurfaceGui")) and not v:IsDescendantOf(lp:WaitForChild("PlayerGui", 1)) then
+            v.Enabled = false
+            v:Destroy()
+            return
+        end
+
+        -- 5. Potato Mesh & BasePart (SmoothPlastic, No Shadows, White Map)
+        if v:IsA("BasePart") then
+            v.Material = Enum.Material.SmoothPlastic
+            v.Reflectance = 0
+            v.CastShadow = false
+            if _G.whiteMap then
+                v.Color = Color3.new(1, 1, 1)
+            end
+            if v:IsA("MeshPart") then
+                v.TextureID = ""
+            end
+        elseif v:IsA("SpecialMesh") then
+            v.TextureId = ""
+        end
+    end)
+end
+
+-- Eksekusi awal pembersihan aset ke seluruh workspace
+task.spawn(function()
+    if _G.antiLag then
+        for _, v in ipairs(workspace:GetDescendants()) do
+            optimizeInstance(v)
+        end
+        logConsole("🚀 [ANTI-LAG] Ultra Potato Mode & Hardware Engine Berhasil Diaktifkan!")
+    end
+end)
+
+-- Listener Real-Time DescendantAdded untuk Workspace
+workspace.DescendantAdded:Connect(function(descendant)
+    if _G.antiLag then
+        task.defer(optimizeInstance, descendant)
+    end
+end)
+
+-- =============================================
+-- 🏃 6. SKELETAL ANIMATION FREEZER (HEMAT CPU)
+-- =============================================
+local function freezeCharacterAnimations(charModel)
+    if not _G.freezeAnimations or not charModel or isLocalPlayerEntity(charModel) then return end
+    pcall(function()
+        local hum = charModel:FindFirstChildOfClass("Humanoid")
+        if hum then
+            local anim = hum:FindFirstChildOfClass("Animator")
+            if anim then
+                for _, track in ipairs(anim:GetPlayingAnimationTracks()) do
+                    pcall(function() track:Stop(0) end)
+                end
+            end
+        end
+    end)
+end
+
+-- =============================================
+-- 🚫 7. TOTAL PLAYER & CHARACTER PURGER (100% BERSIH)
+-- =============================================
 local function purgeOtherPlayer(player)
     if not _G.autoRemovePlayer or not player or player == lp or player.Name == lpName then return end
     
     pcall(function()
         if player.Character then
+            freezeCharacterAnimations(player.Character)
             player.Character:ClearAllChildren()
             player.Character:Destroy()
         end
@@ -132,6 +379,8 @@ local function purgeOtherCharacter(charModel)
     if not _G.autoRemovePlayer or not charModel then return end
     if isLocalPlayerEntity(charModel) then return end
     if charModel.Name == "Plots" or charModel.Name == "Debris" or charModel.Name == "NPCs" then return end
+
+    freezeCharacterAnimations(charModel)
 
     pcall(function()
         for _, v in ipairs(charModel:GetDescendants()) do
@@ -256,6 +505,12 @@ task.spawn(function()
         end
 
         cleanCounter = cleanCounter + 1
+        -- Tiap 10 detik bersihkan client assets & refresh lighting
+        if cleanCounter % 40 == 0 then
+            pcall(cleanClientAssets)
+            pcall(purgeLighting)
+        end
+
         -- Tiap 30 detik jalankan garbage collector
         if cleanCounter >= 120 then
             cleanCounter = 0
