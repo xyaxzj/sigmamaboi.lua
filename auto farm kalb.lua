@@ -51,7 +51,7 @@ _G.optimizeTerrain     = true        -- true: Matikan gelombang air & dekorasi r
 _G.cleanClientAssets   = true        -- true: Sembunyikan ClientRenderedAssets & PlacedEggRenders
 
 print("--------------------------------------------------")
-print("🚀 [INIT] Memuat KALB Auto Farm V5.1 (Ultra Anti-Lag & Potato Max Edition)...")
+print("🚀 [INIT] Memuat KALB Auto Farm v5.2 (Ultra Anti-Lag & Potato Max Edition)...")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -672,7 +672,7 @@ local function expandCandyHitbox(inst)
     end)
 end
 
--- Pemindai semua permen di workspace & Debris
+-- Pemindai semua permen di Debris
 local function scanAndExpandAllCandies()
     if not _G.autoCandyEvent then return end
 
@@ -684,11 +684,8 @@ local function scanAndExpandAllCandies()
     end
 
     local debris = workspace:FindFirstChild("Debris")
-    local containers = {workspace}
-    if debris then table.insert(containers, debris) end
-
-    for _, container in ipairs(containers) do
-        for _, child in ipairs(container:GetChildren()) do
+    if debris then
+        for _, child in ipairs(debris:GetChildren()) do
             if isCandyItem(child) then
                 expandCandyHitbox(child)
             end
@@ -696,14 +693,28 @@ local function scanAndExpandAllCandies()
     end
 end
 
--- Listener DescendantAdded pada Workspace (Menangkap permen baru instan)
-workspace.DescendantAdded:Connect(function(descendant)
-    task.defer(function()
-        if not descendant or not descendant.Parent then return end
-        if _G.autoCandyEvent and isCandyItem(descendant) then
-            expandCandyHitbox(descendant)
-        end
+-- Listener Debris (Menangkap permen baru instan di folder Debris)
+local function hookDebrisListener(debrisFolder)
+    if not debrisFolder then return end
+    debrisFolder.ChildAdded:Connect(function(child)
+        task.defer(function()
+            if not child or not child.Parent then return end
+            if _G.autoCandyEvent and isCandyItem(child) then
+                expandCandyHitbox(child)
+            end
+        end)
     end)
+end
+
+local initialDebris = workspace:FindFirstChild("Debris")
+if initialDebris then
+    hookDebrisListener(initialDebris)
+end
+
+workspace.ChildAdded:Connect(function(child)
+    if child.Name == "Debris" then
+        task.defer(function() hookDebrisListener(child) end)
+    end
 end)
 
 -- Background Scanner Loop Candy (tiap 0.2 detik)
@@ -808,18 +819,11 @@ local function isCandyEventOngoing()
     return false
 end
 
--- Pengecekan apakah ada Permen Nyata di Map (Waypoints / Debris / Workspace)
+-- Pengecekan apakah ada Permen Nyata di Map (Waypoints aktif dari rev_candySpawn atau item di Debris)
 local function hasCandyOnMap()
     if #activeCandyWaypoints > 0 then return true end
 
-    -- Cek objek permen yang sudah di-expand dan masih ada di game
-    for obj, _ in pairs(expandedCandyObjects) do
-        if obj and obj.Parent then
-            return true
-        end
-    end
-
-    -- Cek Debris folder
+    -- Cek Debris folder (HANYA objek di Debris, JANGAN cek workspace karena ada objek map statis)
     local debris = workspace:FindFirstChild("Debris")
     if debris then
         for _, child in ipairs(debris:GetChildren()) do
@@ -829,23 +833,19 @@ local function hasCandyOnMap()
         end
     end
 
-    -- Cek Workspace direct children
-    for _, child in ipairs(workspace:GetChildren()) do
-        if isCandyItem(child) then
-            return true
-        end
-    end
-
     return false
 end
 
--- Pengecekan Event Override: HANYA bypass whitelist jika Candy Event aktif DAN ada permen NYATA yang spawn di map!
--- Jika Candy Event aktif tapi 0 permen yang spawn ({}) -> Whitelist TETAP BERLAKU (tidak jalan ke safe zone kecuali whitelisted)
+-- Pengecekan Event Override: HANYA bypass whitelist jika:
+-- 1. Candy Event aktif
+-- 2. rev_candySpawn TIDAK mengirim {} (empty)
+-- 3. Ada permen nyata (waypoint aktif atau item di Debris)
 local function shouldBypassWhitelist()
     if not isCandyEventOngoing() then return false end
     if emptyCandySpawnReceived then return false end
-    if not hasCandyOnMap() then return false end
-    return true
+    if #activeCandyWaypoints > 0 then return true end
+    if hasCandyOnMap() then return true end
+    return false
 end
 
 -- Validasi Brainrot Whitelist
@@ -1305,7 +1305,6 @@ task.spawn(function()
                         logConsole(string.format("🛑 [WHITELIST REJECTED] Brainrot '%s' TIDAK ada di whitelist! Bot diam di tempat (tidak dibawa ke safe zone)...", tostring(lastRewardBrainrotName)))
                     end
                 end
-                emptyCandySpawnReceived = false
 
             -- Kondisi 1: Kick belum terdaftar sama sekali di server setelah 3 detik -> Retry
             elseif not kickAcceptedByServer and stateTimer >= 3.0 and not phase2Fired and not collectedFired and not kickEndedFired then
@@ -1361,24 +1360,20 @@ task.spawn(function()
                 continue
             end
 
-            -- Jika tiba-tiba ada permen NYATA yang spawn di map, pause whitelist dan langsung jalan!
-            if shouldBypassWhitelist() then
-                targetAction = "WalkToSafeZone"
-                logConsole("🍬 [EVENT OVERRIDE] Permen nyata terdeteksi muncul di map saat diam! Whitelist di-pause -> Mulai jalan ke Safe Zone...")
-            else
+            -- BOT MURNI DIAM DI TEMPAT SAMPAI MATI / AUTO-RESET (DILARANG JALAN KE SAFE ZONE!)
+            pcall(function()
+                hum:MoveTo(hrp.Position)
+                hrp.AssemblyLinearVelocity = Vector3.zero
+                hrp.AssemblyAngularVelocity = Vector3.zero
+            end)
+
+            -- Failsafe Auto-Reset: Jika dalam 1.5 detik karakter tidak mati sendiri, paksa respawn agar bisa teleport ke safe zone untuk kick berikutnya!
+            if stateTimer >= 1.5 then
+                logConsole("💀 [AUTO-RESET] Bot diam 1.5s -> Memaksa respawn agar bisa kembali ke Safe Zone untuk kick berikutnya...")
                 pcall(function()
-                    hum:MoveTo(hrp.Position)
-                    hrp.AssemblyLinearVelocity = Vector3.zero
-                    hrp.AssemblyAngularVelocity = Vector3.zero
+                    hum.Health = 0
+                    char:BreakJoints()
                 end)
-                -- Failsafe Auto-Reset: Jika dalam 1.5 detik karakter tidak mati sendiri, paksa respawn agar bisa teleport ke safe zone untuk kick berikutnya!
-                if stateTimer >= 1.5 then
-                    logConsole("💀 [AUTO-RESET] Bot diam 1.5s -> Memaksa respawn agar bisa kembali ke Safe Zone untuk kick berikutnya...")
-                    pcall(function()
-                        hum.Health = 0
-                        char:BreakJoints()
-                    end)
-                end
             end
             -- Menunggu karakter mati sendiri jika tidak ada event (hum.Health <= 0 akan ditangkap oleh pendeteksi mati di atas)
 
