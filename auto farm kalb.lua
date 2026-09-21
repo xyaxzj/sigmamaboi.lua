@@ -26,10 +26,11 @@ _G.onlyCandyEvent       = false       -- true: HANYA Auto Kick saat Candy Event 
 
 -- 🍬 PENGATURAN FITUR CANDY EVENT (DAPAT DIAKTIFKAN / DINONAKTIFKAN SECARA TERPISAH)
 _G.enableCandyEvent     = true        -- [1] Master Switch: Aktifkan penanganan Candy Event (cuaca & spawn permen)
-_G.expandCandyHitbox    = false        -- [2] Hitbox Switch: Memperbesar hitbox Candy/Cokelat/dll ke ukuran yang ditentukan
-_G.candyHitboxSize      = Vector3.new(200, 200, 200) -- Ukuran hitbox Candy yang dibesarkan
+_G.expandCandyHitbox    = true        -- [2] Hitbox Switch: Memperbesar hitbox Candy/Cokelat/dll ke ukuran yang ditentukan
+_G.candyHitboxSize      = Vector3.new(50, 50, 50) -- Ukuran hitbox Candy yang dibesarkan
 _G.candyWaypointNav     = true        -- [3] Navigation Switch: Pandu rute jalan kaki melintasi waypoint permen ke Safe Zone
-_G.candyReachDist       = 5          -- Jarak (studs) horizontal untuk menganggap permen sudah terlewati/terambil
+_G.candyReachDist       = 25          -- Jarak (studs) horizontal untuk menganggap permen sudah terlewati/terambil
+_G.verifyDebrisPickup   = true        -- [4] Debris Checker: Pastikan barang di Debris hilang saat dibawa; jika belum hilang, kembali ke waypoint
 
 _G.useBrainrotWhitelist = true        -- true: Hanya bawa brainrot di whitelist ke safe zone, false: Bawa semua
 _G.brainrotWhitelist    = {           -- Daftar nama brainrot yang diizinkan (Case-insensitive & Partial match)
@@ -784,6 +785,54 @@ task.spawn(function()
 end)
 
 -- =============================================
+-- 🔍 PEMERIKSA STATUS BARANG DI DEBRIS
+-- =============================================
+local function getDebrisItemPosition(inst)
+    if not inst or not inst.Parent then return nil end
+    local ok, pos = pcall(function()
+        if inst:IsA("BasePart") then
+            return inst.Position
+        elseif inst:IsA("Model") then
+            if inst.PrimaryPart then
+                return inst.PrimaryPart.Position
+            end
+            local bp = inst:FindFirstChildWhichIsA("BasePart", true)
+            if bp then return bp.Position end
+            return inst:GetPivot().Position
+        end
+        return nil
+    end)
+    return (ok and pos) or nil
+end
+
+-- Mencari apakah barang/permen di dekat koordinat waypoint masih ada di folder Debris
+-- Mengembalikan: itemInstance (jika masih ada), jarakHorizontal, posisiItem
+local function findItemInDebrisNear(pos, maxDist)
+    local debris = workspace:FindFirstChild("Debris")
+    if not debris or not pos then return nil, math.huge, nil end
+    local searchDist = maxDist or 45
+    local closestItem = nil
+    local closestDist = math.huge
+    local closestPos = nil
+
+    for _, child in ipairs(debris:GetChildren()) do
+        if isCandyItem(child) then
+            local p = getDebrisItemPosition(child)
+            if p then
+                local d = (Vector3.new(pos.X, 0, pos.Z) - Vector3.new(p.X, 0, p.Z)).Magnitude
+                if d <= searchDist and d < closestDist then
+                    closestDist = d
+                    closestItem = child
+                    closestPos = p
+                end
+            end
+        end
+    end
+
+    return closestItem, closestDist, closestPos
+end
+
+-- =============================================
 -- 🧠 VARIABEL STATE MACHINE & POSISI
 -- =============================================
 local stateTimer = 0               
@@ -1516,59 +1565,82 @@ task.spawn(function()
             -- Navigasi sembari melewati koordinat permen
             local targetPos = safeZone
             if isWaypointNavEnabled() and #activeCandyWaypoints > 0 then
+                -- 1. Pertahankan target aktif atau pilih waypoint terdekat baru
                 local bestIdx = nil
                 local bestDist = math.huge
-                for i, pos in ipairs(activeCandyWaypoints) do
-                    local d = (Vector3.new(hrp.Position.X, 0, hrp.Position.Z) - Vector3.new(pos.X, 0, pos.Z)).Magnitude
-                    if d < bestDist then
-                        bestDist = d
-                        bestIdx = i
+
+                if currentWaypointTarget then
+                    for i, pos in ipairs(activeCandyWaypoints) do
+                        if (pos - currentWaypointTarget).Magnitude < 0.5 then
+                            bestIdx = i
+                            bestDist = (Vector3.new(hrp.Position.X, 0, hrp.Position.Z) - Vector3.new(pos.X, 0, pos.Z)).Magnitude
+                            break
+                        end
+                    end
+                end
+
+                if not bestIdx then
+                    for i, pos in ipairs(activeCandyWaypoints) do
+                        local d = (Vector3.new(hrp.Position.X, 0, hrp.Position.Z) - Vector3.new(pos.X, 0, pos.Z)).Magnitude
+                        if d < bestDist then
+                            bestDist = d
+                            bestIdx = i
+                        end
                     end
                 end
 
                 if bestIdx then
                     local wp = activeCandyWaypoints[bestIdx]
-                    local reachThreshold = _G.candyReachDist or 25
+                    currentWaypointTarget = wp
+                    local reachThreshold = _G.candyReachDist or 5
 
-                    -- 🛡️ WAYPOINT STUCK WATCHDOG: Jika karakter mencoba mencapai waypoint yang sama selama > 6 detik, lewati waypoint tersebut!
-                    if currentWaypointTarget == wp then
-                        waypointStuckTimer = waypointStuckTimer + 0.05
-                        if waypointStuckTimer >= 6.0 then
-                            table.remove(activeCandyWaypoints, bestIdx)
-                            logConsole(string.format("⚠️ [WAYPOINT STUCK] Waypoint tidak terjangkau dalam 6s! Melewati ke titik berikutnya... Sisa: %d", #activeCandyWaypoints))
-                            waypointStuckTimer = 0
-                            currentWaypointTarget = nil
-                            wp = nil
-                        end
-                    else
-                        currentWaypointTarget = wp
-                        waypointStuckTimer = 0
-                    end
+                    -- 🔍 CEK DEBRIS: Cek apakah barang permen masih ada di Debris di sekitar waypoint
+                    local itemInDebris, itemDist, itemPos = findItemInDebrisNear(wp, 45)
+                    local shouldVerifyDebris = (_G.verifyDebrisPickup ~= false)
 
-                    if wp and bestDist <= reachThreshold then
+                    -- Target pergerakan: utamakan posisi aktual item di Debris jika ada
+                    local wpTargetPos = itemPos or wp
+                    targetPos = Vector3.new(wpTargetPos.X, math.max(wpTargetPos.Y, hrp.Position.Y), wpTargetPos.Z)
+
+                    -- 🛡️ WAYPOINT STUCK WATCHDOG: Jika mencoba waypoint yang sama > 8 detik tanpa perubahan, lewati
+                    waypointStuckTimer = waypointStuckTimer + 0.05
+                    if waypointStuckTimer >= 8.0 then
                         table.remove(activeCandyWaypoints, bestIdx)
-                        currentWaypointTarget = nil
+                        logConsole(string.format("⚠️ [WAYPOINT TIMEOUT] Waypoint (%s) tidak terambil setelah 8s! Melewati ke titik berikutnya... Sisa: %d", itemInDebris and itemInDebris.Name or "Candy", #activeCandyWaypoints))
                         waypointStuckTimer = 0
-                        logConsole(string.format("🍬 Waypoint permen terlewati/terambil! Sisa waypoint: %d", #activeCandyWaypoints))
-                        if #activeCandyWaypoints > 0 then
-                            local nextIdx = 1
-                            local nextDist = math.huge
-                            for i, pos in ipairs(activeCandyWaypoints) do
-                                local d = (Vector3.new(hrp.Position.X, 0, hrp.Position.Z) - Vector3.new(pos.X, 0, pos.Z)).Magnitude
-                                if d < nextDist then
-                                    nextDist = d
-                                    nextIdx = i
+                        currentWaypointTarget = nil
+                        wp = nil
+                    else
+                        local distToTarget = (Vector3.new(hrp.Position.X, 0, hrp.Position.Z) - Vector3.new(wpTargetPos.X, 0, wpTargetPos.Z)).Magnitude
+
+                        -- 📦 KONDISI KELOLOSAN WAYPOINT:
+                        -- Jika verifikasi Debris aktif: Selesai HANYA JIKA barang sudah hilang dari Debris!
+                        -- Jika barang BELUM HILANG dari Debris: bot TIDAK menghapus waypoint dan KEMBALI mendekat ke waypoint tersebut!
+                        if shouldVerifyDebris then
+                            if not itemInDebris then
+                                -- Barang SUDAH HILANG dari Debris (berhasil dibawa)
+                                table.remove(activeCandyWaypoints, bestIdx)
+                                currentWaypointTarget = nil
+                                waypointStuckTimer = 0
+                                logConsole(string.format("🍬 [COLLECTED] Barang berhasil dibawa (hilang dari Debris)! Sisa waypoint: %d", #activeCandyWaypoints))
+                            else
+                                -- Barang MASIH ADA di Debris -> Belum hilang!
+                                -- Jika karakter sudah sempat berada di dekat titik atau lewat, kembali / tetap fokus ke titik barang
+                                if distToTarget <= reachThreshold then
+                                    if math.floor(waypointStuckTimer * 10) % 20 == 0 then
+                                        logConsole(string.format("⏳ [CEK DEBRIS] Barang '%s' belum hilang dari Debris (jarak: %.1fm). Kembali mendekat ke waypoint...", itemInDebris.Name, distToTarget))
+                                    end
                                 end
                             end
-                            wp = activeCandyWaypoints[nextIdx]
                         else
-                            wp = nil
+                            -- Mode fallback tanpa verifikasi Debris (hanya cek jarak)
+                            if distToTarget <= reachThreshold then
+                                table.remove(activeCandyWaypoints, bestIdx)
+                                currentWaypointTarget = nil
+                                waypointStuckTimer = 0
+                                logConsole(string.format("🍬 Waypoint permen terlewati! Sisa waypoint: %d", #activeCandyWaypoints))
+                            end
                         end
-                    end
-
-                    if wp then
-                        -- Sesuaikan koordinat Y agar karakter tidak terantuk ke bawah tanah
-                        targetPos = Vector3.new(wp.X, math.max(wp.Y, hrp.Position.Y), wp.Z)
                     end
                 end
             else
@@ -1579,7 +1651,9 @@ task.spawn(function()
             -- Bot TETAP MURNI JALAN KAKI via MoveTo
             hum:MoveTo(targetPos)
 
-            if distToSafeZone < 5 then
+            -- 🛡️ HANYA masuk Safe Zone jika SEMUA waypoint permen sudah tuntas diambil (atau tidak aktif)
+            local waypointsPending = isWaypointNavEnabled() and (#activeCandyWaypoints > 0)
+            if distToSafeZone < 5 and not waypointsPending then
                 currentWaypointTarget = nil
                 waypointStuckTimer = 0
                 targetAction = "WaitingForCollected"
