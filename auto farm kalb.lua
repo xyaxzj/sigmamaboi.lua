@@ -29,7 +29,7 @@ _G.enableCandyEvent     = true        -- [1] Master Switch: Aktifkan penanganan 
 _G.expandCandyHitbox    = false        -- [2] Hitbox Switch: Memperbesar hitbox Candy/Cokelat/dll ke ukuran yang ditentukan
 _G.candyHitboxSize      = Vector3.new(200, 200, 200) -- Ukuran hitbox Candy yang dibesarkan
 _G.candyWaypointNav     = true        -- [3] Navigation Switch: Pandu rute jalan kaki melintasi waypoint permen ke Safe Zone
-_G.candyReachDist       = 5          -- Jarak (studs) horizontal untuk menganggap permen sudah terlewati/terambil
+_G.candyReachDist       = 3          -- Jarak (studs) horizontal untuk menganggap permen sudah terlewati/terambil
 
 _G.useBrainrotWhitelist = true        -- true: Hanya bawa brainrot di whitelist ke safe zone, false: Bawa semua
 _G.brainrotWhitelist    = {           -- Daftar nama brainrot yang diizinkan (Case-insensitive & Partial match)
