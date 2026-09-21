@@ -35,7 +35,7 @@ _G.brainrotWhitelist    = {         -- Daftar nama brainrot yang diizinkan (Case
 _G.kickDelay          = 0.5         -- Jeda waktu (detik) di Safe Zone sebelum menendang/kick (Default: 0.5 detik, jangan terlalu instant)
 _G.autoSellAll         = false       -- true: Auto Sell All setiap 5 detik via ref_B_SellAll
 _G.autoRemovePlayer    = true        -- true: Hapus player lain dari game.Players & workspace.Players (100% Bersih & No Lag), false: Biarkan
-_G.debugConsoleLog     = false        -- true: Cetak log status/fase/candy ke console (F9), false: Senyap
+_G.debugConsoleLog     = true        -- true: Cetak log status/fase/candy ke console (F9), false: Senyap
 _G.failsafeTimeout     = 25          -- Waktu maksimal (detik) sebelum auto-reset ke Safe Zone jika macet
 
 -- ⚡ ULTRA ANTI-LAG & POTATO MODE (PUSH MAX PERFORMANCE)
@@ -51,7 +51,7 @@ _G.optimizeTerrain     = true        -- true: Matikan gelombang air & dekorasi r
 _G.cleanClientAssets   = true        -- true: Sembunyikan ClientRenderedAssets & PlacedEggRenders
 
 print("--------------------------------------------------")
-print("🚀 [INIT] Memuat KALB Auto Farm V4 (Ultra Anti-Lag & Potato Max Edition)...")
+print("🚀 [INIT] Memuat KALB Auto Farm V5.1 (Ultra Anti-Lag & Potato Max Edition)...")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -808,9 +808,44 @@ local function isCandyEventOngoing()
     return false
 end
 
--- Pengecekan Event Override (Pause Whitelist jika ada Candy Event atau barang permen di map)
+-- Pengecekan apakah ada Permen Nyata di Map (Waypoints / Debris / Workspace)
+local function hasCandyOnMap()
+    if #activeCandyWaypoints > 0 then return true end
+
+    -- Cek objek permen yang sudah di-expand dan masih ada di game
+    for obj, _ in pairs(expandedCandyObjects) do
+        if obj and obj.Parent then
+            return true
+        end
+    end
+
+    -- Cek Debris folder
+    local debris = workspace:FindFirstChild("Debris")
+    if debris then
+        for _, child in ipairs(debris:GetChildren()) do
+            if isCandyItem(child) then
+                return true
+            end
+        end
+    end
+
+    -- Cek Workspace direct children
+    for _, child in ipairs(workspace:GetChildren()) do
+        if isCandyItem(child) then
+            return true
+        end
+    end
+
+    return false
+end
+
+-- Pengecekan Event Override: HANYA bypass whitelist jika Candy Event aktif DAN ada permen NYATA yang spawn di map!
+-- Jika Candy Event aktif tapi 0 permen yang spawn ({}) -> Whitelist TETAP BERLAKU (tidak jalan ke safe zone kecuali whitelisted)
 local function shouldBypassWhitelist()
-    return isCandyEventOngoing()
+    if not isCandyEventOngoing() then return false end
+    if emptyCandySpawnReceived then return false end
+    if not hasCandyOnMap() then return false end
+    return true
 end
 
 -- Validasi Brainrot Whitelist
@@ -1046,6 +1081,7 @@ local function setupServerEventListeners()
     if candyRemote then
         candyRemote.OnClientEvent:Connect(function(spawnData, ...)
             pcall(function()
+                kickAcceptedByServer = true
                 logConsole("🍬 [EVENT REMOTE] rev_candySpawn diterima!")
                 if type(spawnData) == "table" then
                     local count = 0
@@ -1069,7 +1105,7 @@ local function setupServerEventListeners()
                     if count == 0 or #newWaypoints == 0 then
                         emptyCandySpawnReceived = true
                         activeCandyWaypoints = {}
-                        logConsole("⚠️ [CANDY SPAWN] Data kosong ({}) diterima! Bot akan diam sampai mati.")
+                        logConsole("⚠️ [CANDY SPAWN] Data kosong ({}) diterima! Tidak ada permen yang spawn.")
                     else
                         emptyCandySpawnReceived = false
                         activeCandyWaypoints = newWaypoints
@@ -1078,7 +1114,7 @@ local function setupServerEventListeners()
                 elseif spawnData == nil then
                     emptyCandySpawnReceived = true
                     activeCandyWaypoints = {}
-                    logConsole("⚠️ [CANDY SPAWN] Data nil diterima! Bot akan diam sampai mati.")
+                    logConsole("⚠️ [CANDY SPAWN] Data nil diterima! Tidak ada permen yang spawn.")
                 end
             end)
         end)
@@ -1234,34 +1270,42 @@ task.spawn(function()
 
         -- [ FASE 2: NUNGGU PHASE 2 DARI SERVER / DETEKSI EMPTY SPAWN / WHITELIST CHECK ]
         elseif targetAction == "WaitingForPhase2" then
-            local candyOngoing = isCandyEventOngoing()
-
-            -- Kondisi Khusus 1: rev_candySpawn mengirim {} (kosong) DAN event candy tidak aktif
-            if emptyCandySpawnReceived and not candyOngoing then
-                targetAction = "StayStillUntilDead"
-                logConsole("⚠️ [EMPTY CANDY SPAWN] Koordinat kosong diterima! Masuk ke mode diam sampai mati...")
-
-            elseif phase2Fired or collectedFired or kickEndedFired then
+            if phase2Fired or collectedFired or kickEndedFired then
                 phase2Fired = false
                 kickRetryCount = 0
                 kickAcceptedByServer = false
-                emptyCandySpawnReceived = false
 
-                -- Pengecekan Event Override & Whitelist
+                -- Pengecekan Whitelist & Candy Override
+                local isWhitelisted = _G.useBrainrotWhitelist and isBrainrotWhitelisted(lastRewardBrainrotName)
                 local bypassWl = shouldBypassWhitelist()
-                local isAllowed = bypassWl or isBrainrotWhitelisted(lastRewardBrainrotName)
+
+                local isAllowed = false
+                if bypassWl then
+                    isAllowed = true
+                elseif isWhitelisted then
+                    isAllowed = true
+                elseif not _G.useBrainrotWhitelist and not emptyCandySpawnReceived and (not _G.onlyCandyEvent or hasCandyOnMap()) then
+                    isAllowed = true
+                end
 
                 if isAllowed then
                     targetAction = "WalkToSafeZone"
-                    if bypassWl and _G.useBrainrotWhitelist and not isBrainrotWhitelisted(lastRewardBrainrotName) then
-                        logConsole(string.format("🍬 [EVENT OVERRIDE] Brainrot '%s' tidak di whitelist tapi Candy Event sedang aktif! Tetap bawa ke Safe Zone...", tostring(lastRewardBrainrotName)))
+                    if bypassWl and _G.useBrainrotWhitelist and not isWhitelisted then
+                        logConsole(string.format("🍬 [EVENT OVERRIDE] Ada permen di map! Brainrot '%s' tetap dibawa ke Safe Zone sembari ambil permen...", tostring(lastRewardBrainrotName)))
                     else
-                        logConsole(string.format("Phase 2 Selesai -> Berjalan Kaki Membawa Brainrot '%s' (Menuju Safe Zone)", tostring(lastRewardBrainrotName)))
+                        logConsole(string.format("✅ [PASSED] Membawa Brainrot '%s' Menuju Safe Zone", tostring(lastRewardBrainrotName)))
                     end
                 else
                     targetAction = "StayStillUntilDead"
-                    logConsole(string.format("🛑 [WHITELIST REJECTED] Brainrot '%s' TIDAK ada di whitelist! Bot diam di tempat (tidak dibawa ke safe zone)...", tostring(lastRewardBrainrotName)))
+                    if emptyCandySpawnReceived then
+                        logConsole(string.format("🛑 [EMPTY CANDY SPAWN] Koordinat permen kosong ({}) & Brainrot '%s' bukan whitelist! Bot diam di tempat...", tostring(lastRewardBrainrotName)))
+                    elseif not hasCandyOnMap() and isCandyEventOngoing() then
+                        logConsole(string.format("🛑 [NO CANDY ON MAP] Gada permen yang spawn di map & Brainrot '%s' bukan whitelist! Bot diam di tempat...", tostring(lastRewardBrainrotName)))
+                    else
+                        logConsole(string.format("🛑 [WHITELIST REJECTED] Brainrot '%s' TIDAK ada di whitelist! Bot diam di tempat (tidak dibawa ke safe zone)...", tostring(lastRewardBrainrotName)))
+                    end
                 end
+                emptyCandySpawnReceived = false
 
             -- Kondisi 1: Kick belum terdaftar sama sekali di server setelah 3 detik -> Retry
             elseif not kickAcceptedByServer and stateTimer >= 3.0 and not phase2Fired and not collectedFired and not kickEndedFired then
@@ -1285,8 +1329,9 @@ task.spawn(function()
             -- Kondisi 2: Kick sudah diterima server (bola sedang terbang), tunggu hingga maksimal 20 detik
             elseif stateTimer >= 20.0 then
                 kickAcceptedByServer = false
-                targetAction = "WalkToSafeZone"
-                logConsole("Phase 2 Timeout (20s) -> Lanjut Berjalan Kaki ke Safe Zone")
+                targetAction = "Idle"
+                teleportToSafeZone(hrp)
+                logConsole("🚨 Phase 2 Timeout (20s) -> Teleportasi reset ke Safe Zone")
             end
 
         -- [ FASE KHUSUS: DIAM DI TEMPAT SAMPAI MATI (JIKA CANDY SPAWN KOSONG {} ATAU TIDAK LOLOS WHITELIST) ]
@@ -1316,10 +1361,10 @@ task.spawn(function()
                 continue
             end
 
-            -- Jika tiba-tiba ada Candy Event atau barang/permen muncul di map, pause whitelist dan langsung jalan!
-            if isCandyEventOngoing() then
+            -- Jika tiba-tiba ada permen NYATA yang spawn di map, pause whitelist dan langsung jalan!
+            if shouldBypassWhitelist() then
                 targetAction = "WalkToSafeZone"
-                logConsole("🍬 [EVENT OVERRIDE] Candy Event terdeteksi saat sedang diam! Whitelist di-pause -> Mulai jalan ke Safe Zone...")
+                logConsole("🍬 [EVENT OVERRIDE] Permen nyata terdeteksi muncul di map saat diam! Whitelist di-pause -> Mulai jalan ke Safe Zone...")
             else
                 pcall(function()
                     hum:MoveTo(hrp.Position)
@@ -1327,7 +1372,7 @@ task.spawn(function()
                     hrp.AssemblyAngularVelocity = Vector3.zero
                 end)
                 -- Failsafe Auto-Reset: Jika dalam 1.5 detik karakter tidak mati sendiri, paksa respawn agar bisa teleport ke safe zone untuk kick berikutnya!
-                if stateTimer >= 3 then
+                if stateTimer >= 1.5 then
                     logConsole("💀 [AUTO-RESET] Bot diam 1.5s -> Memaksa respawn agar bisa kembali ke Safe Zone untuk kick berikutnya...")
                     pcall(function()
                         hum.Health = 0
