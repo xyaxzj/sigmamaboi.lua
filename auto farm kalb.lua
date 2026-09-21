@@ -26,10 +26,10 @@ _G.onlyCandyEvent       = false       -- true: HANYA Auto Kick saat Candy Event 
 
 -- 🍬 PENGATURAN FITUR CANDY EVENT (DAPAT DIAKTIFKAN / DINONAKTIFKAN SECARA TERPISAH)
 _G.enableCandyEvent     = true        -- [1] Master Switch: Aktifkan penanganan Candy Event (cuaca & spawn permen)
-_G.expandCandyHitbox    = false        -- [2] Hitbox Switch: Memperbesar hitbox Candy/Cokelat/dll ke ukuran yang ditentukan
+_G.expandCandyHitbox    = true        -- [2] Hitbox Switch: Memperbesar hitbox Candy/Cokelat/dll ke ukuran yang ditentukan
 _G.candyHitboxSize      = Vector3.new(200, 200, 200) -- Ukuran hitbox Candy yang dibesarkan
 _G.candyWaypointNav     = true        -- [3] Navigation Switch: Pandu rute jalan kaki melintasi waypoint permen ke Safe Zone
-_G.candyReachDist       = 3          -- Jarak (studs) horizontal untuk menganggap permen sudah terlewati/terambil
+_G.candyReachDist       = 5          -- Jarak (studs) horizontal untuk menganggap permen sudah terlewati/terambil
 
 _G.useBrainrotWhitelist = true        -- true: Hanya bawa brainrot di whitelist ke safe zone, false: Bawa semua
 _G.brainrotWhitelist    = {           -- Daftar nama brainrot yang diizinkan (Case-insensitive & Partial match)
@@ -56,7 +56,7 @@ _G.optimizeTerrain     = true        -- true: Matikan gelombang air & dekorasi r
 _G.cleanClientAssets   = true        -- true: Sembunyikan ClientRenderedAssets & PlacedEggRenders
 
 print("--------------------------------------------------")
-print("🚀 [INIT] Memuat KALB Auto Farm 5.5.1 (Ultra Anti-Lag & Potato Max Edition)...")
+print("🚀 [INIT] Memuat KALB Auto Farm V3 (Ultra Anti-Lag & Potato Max Edition)...")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
