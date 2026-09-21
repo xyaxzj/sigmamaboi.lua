@@ -38,9 +38,11 @@ _G.brainrotWhitelist    = {           -- Daftar nama brainrot yang diizinkan (Ca
     "Teacherrina",
 }
 _G.kickDelay            = 0.5         -- Jeda waktu (detik) di Safe Zone sebelum menendang/kick (Default: 0.5 detik, jangan terlalu instant)
-_G.autoSellAll          = false       -- true: Auto Sell All setiap 5 detik via ref_B_SellAll
+_G.autoSellAll          = true       -- true: Auto Sell All setiap 5 detik via ref_B_SellAll
+_G.autoWorldTeleport    = true        -- true: Teleport otomatis 1x saat baru dieksekusi via rev_WORLD_TP, false: Nonaktif
+_G.targetWorld          = 2           -- Target ID World untuk teleportasi otomatis (Default: 2)
 _G.autoRemovePlayer     = true        -- true: Hapus player lain dari game.Players & workspace.Players (100% Bersih & No Lag), false: Biarkan
-_G.debugConsoleLog      = true        -- true: Cetak log status/fase/candy ke console (F9), false: Senyap
+_G.debugConsoleLog      = false        -- true: Cetak log status/fase/candy ke console (F9), false: Senyap
 _G.failsafeTimeout      = 25          -- Waktu maksimal (detik) sebelum auto-reset ke Safe Zone jika macet
 
 -- ⚡ ULTRA ANTI-LAG & POTATO MODE (PUSH MAX PERFORMANCE)
@@ -989,6 +991,33 @@ local rev_RemovedWeather = findRemote("rev_RemovedWeather", "RemoteEvent")
 local rev_candySpawn = findRemote("rev_candySpawn", "RemoteEvent")
 
 local ref_B_SellAll = findRemote("ref_B_SellAll", "RemoteFunction")
+local rev_WORLD_TP = findRemote("rev_WORLD_TP", "RemoteEvent")
+
+-- =============================================
+-- 🌍 AUTO WORLD TELEPORT (1X SAAT BARU EXECUTE)
+-- =============================================
+task.spawn(function()
+    if _G.autoWorldTeleport ~= false then
+        pcall(function()
+            local targetWorld = (type(_G.targetWorld) == "number") and _G.targetWorld or 2
+            local tpRemote = rev_WORLD_TP or findRemote("rev_WORLD_TP", "RemoteEvent")
+            if not tpRemote then
+                local shared = ReplicatedStorage:FindFirstChild("Shared")
+                local packages = shared and shared:FindFirstChild("Packages")
+                local net = packages and packages:FindFirstChild("Network")
+                tpRemote = net and net:FindFirstChild("rev_WORLD_TP")
+            end
+
+            if tpRemote then
+                tpRemote:FireServer(targetWorld)
+                logConsole(string.format("🌍 [WORLD TP] rev_WORLD_TP:FireServer(%s) berhasil dieksekusi 1x!", tostring(targetWorld)))
+            else
+                game:GetService("ReplicatedStorage").Shared.Packages.Network.rev_WORLD_TP:FireServer(targetWorld)
+                logConsole(string.format("🌍 [WORLD TP] rev_WORLD_TP:FireServer(%s) dipanggil langsung!", tostring(targetWorld)))
+            end
+        end)
+    end
+end)
 
 -- =============================================
 -- 💰 AUTO SELL ALL (SETIAP 5 DETIK)
