@@ -21,22 +21,27 @@ if not game:IsLoaded() then game.Loaded:Wait() end
 -- ==============================================================================
 -- ⚙️ KONFIGURASI PENGGUNA (UBAH SESUAI KEBUTUHAN DI SINI)
 -- ==============================================================================
-_G.autoFarm           = true        -- true: Auto Farm Aktif, false: Nonaktif
-_G.onlyCandyEvent     = false       -- true: HANYA Auto Kick saat Candy Event aktif, false: Auto kick nonstop
-_G.autoCandyEvent     = true        -- true: Otomatis perbesar hitbox Candy/Cokelat/dll ke 200 studs & pandu waypoint jalan
-_G.candyHitboxSize    = Vector3.new(200, 200, 200) -- Ukuran hitbox Candy yang dibesarkan
-_G.candyReachDist     = 25          -- Jarak (studs) horizontal untuk menganggap permen sudah terlewati/terambil
-_G.useBrainrotWhitelist = true      -- true: Hanya bawa brainrot di whitelist ke safe zone, false: Bawa semua
-_G.brainrotWhitelist    = {         -- Daftar nama brainrot yang diizinkan (Case-insensitive & Partial match)
+_G.autoFarm             = true        -- true: Auto Farm Aktif, false: Nonaktif
+_G.onlyCandyEvent       = false       -- true: HANYA Auto Kick saat Candy Event aktif, false: Auto kick nonstop
+
+-- 🍬 PENGATURAN FITUR CANDY EVENT (DAPAT DIAKTIFKAN / DINONAKTIFKAN SECARA TERPISAH)
+_G.enableCandyEvent     = true        -- [1] Master Switch: Aktifkan penanganan Candy Event (cuaca & spawn permen)
+_G.expandCandyHitbox    = false        -- [2] Hitbox Switch: Memperbesar hitbox Candy/Cokelat/dll ke ukuran yang ditentukan
+_G.candyHitboxSize      = Vector3.new(200, 200, 200) -- Ukuran hitbox Candy yang dibesarkan
+_G.candyWaypointNav     = true        -- [3] Navigation Switch: Pandu rute jalan kaki melintasi waypoint permen ke Safe Zone
+_G.candyReachDist       = 5          -- Jarak (studs) horizontal untuk menganggap permen sudah terlewati/terambil
+
+_G.useBrainrotWhitelist = true        -- true: Hanya bawa brainrot di whitelist ke safe zone, false: Bawa semua
+_G.brainrotWhitelist    = {           -- Daftar nama brainrot yang diizinkan (Case-insensitive & Partial match)
     "Chocolate Gangster",
     "Tricerabob",
     "Teacherrina",
 }
-_G.kickDelay          = 0.5         -- Jeda waktu (detik) di Safe Zone sebelum menendang/kick (Default: 0.5 detik, jangan terlalu instant)
-_G.autoSellAll         = true       -- true: Auto Sell All setiap 5 detik via ref_B_SellAll
-_G.autoRemovePlayer    = true        -- true: Hapus player lain dari game.Players & workspace.Players (100% Bersih & No Lag), false: Biarkan
-_G.debugConsoleLog     = false        -- true: Cetak log status/fase/candy ke console (F9), false: Senyap
-_G.failsafeTimeout     = 25          -- Waktu maksimal (detik) sebelum auto-reset ke Safe Zone jika macet
+_G.kickDelay            = 0.5         -- Jeda waktu (detik) di Safe Zone sebelum menendang/kick (Default: 0.5 detik, jangan terlalu instant)
+_G.autoSellAll          = false       -- true: Auto Sell All setiap 5 detik via ref_B_SellAll
+_G.autoRemovePlayer     = true        -- true: Hapus player lain dari game.Players & workspace.Players (100% Bersih & No Lag), false: Biarkan
+_G.debugConsoleLog      = true        -- true: Cetak log status/fase/candy ke console (F9), false: Senyap
+_G.failsafeTimeout      = 25          -- Waktu maksimal (detik) sebelum auto-reset ke Safe Zone jika macet
 
 -- ⚡ ULTRA ANTI-LAG & POTATO MODE (PUSH MAX PERFORMANCE)
 _G.antiLag             = true        -- true: Master switch Anti-Lag & Potato Mode Ekstrem
@@ -51,7 +56,7 @@ _G.optimizeTerrain     = true        -- true: Matikan gelombang air & dekorasi r
 _G.cleanClientAssets   = true        -- true: Sembunyikan ClientRenderedAssets & PlacedEggRenders
 
 print("--------------------------------------------------")
-print("🚀 [INIT] Memuat KALB Auto Farm v5.3 (Ultra Anti-Lag & Potato Max Edition)...")
+print("🚀 [INIT] Memuat KALB Auto Farm 5.5 (Ultra Anti-Lag & Potato Max Edition)...")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -76,8 +81,16 @@ local lpName = lp and lp.Name or ""
 local lpDisplayName = lp and lp.DisplayName or ""
 local myUidStr = lp and tostring(lp.UserId) or ""
 
+local targetAction = "Idle"
+local lastAction = "Idle"
+
 local function logConsole(...)
-    if _G.debugConsoleLog ~= false then
+    if _G.debugConsoleLog == false then return end
+    local count = select("#", ...)
+    if count == 1 then
+        local msg = select(1, ...)
+        print(string.format("🤖 [KALB-FARM] [%s] %s", tostring(targetAction), tostring(msg)))
+    else
         print(...)
     end
 end
@@ -128,7 +141,10 @@ local function isProtectedEventItem(inst)
     if name == "PlotSign" or name == "KALB_SafeZoneMarker" then return true end
     if isCandyItem(inst) then return true end
 
-    local curr = inst
+    local p = inst.Parent
+    if not p or p == workspace or p == game then return false end
+
+    local curr = p
     while curr and curr ~= workspace and curr ~= game do
         local cName = curr.Name
         if cName == "PlotSign" or cName == "KALB_SafeZoneMarker" or isCandyItem(curr) then
@@ -394,11 +410,17 @@ local function ensureSafeZoneMarker()
 end
 ensureSafeZoneMarker()
 
--- Eksekusi awal pembersihan aset ke seluruh workspace
+-- Eksekusi awal pembersihan aset ke seluruh workspace (Batching agar tidak freeze di awal)
 task.spawn(function()
     if _G.antiLag then
-        for _, v in ipairs(workspace:GetDescendants()) do
+        local all = workspace:GetDescendants()
+        local count = 0
+        for _, v in ipairs(all) do
             optimizeInstance(v)
+            count = count + 1
+            if count % 500 == 0 then
+                task.wait()
+            end
         end
         logConsole("🚀 [ANTI-LAG] Ultra Potato Mode & Hardware Engine Berhasil Diaktifkan!")
     end
@@ -548,27 +570,26 @@ workspace.ChildAdded:Connect(function(child)
     end
 end)
 
--- Background Sweeper Loop (Menjamin 0% Player Lolos & Bersihkan RAM)
+-- Background Sweeper Loop (Backup sweeper dengan interval santai agar hemat CPU)
 task.spawn(function()
     local cleanCounter = 0
-    while task.wait(0.25) do
+    while task.wait(3.0) do
         if _G.autoRemovePlayer then
             pcall(scanAndPurgeAllOtherPlayers)
         end
 
         cleanCounter = cleanCounter + 1
-        -- Tiap 10 detik bersihkan client assets & refresh lighting
-        if cleanCounter % 40 == 0 then
+        -- Tiap ~30 detik bersihkan client assets & refresh lighting
+        if cleanCounter % 10 == 0 then
             pcall(cleanClientAssets)
             pcall(purgeLighting)
         end
 
-        -- Tiap 30 detik jalankan garbage collector
-        if cleanCounter >= 120 then
+        -- Tiap ~60 detik jalankan garbage collector bertahap (non-blocking step)
+        if cleanCounter >= 20 then
             cleanCounter = 0
             pcall(function()
-                if gcinfo then gcinfo() end
-                if collectgarbage then collectgarbage("collect") end
+                if collectgarbage then collectgarbage("step", 100) end
             end)
         end
     end
@@ -639,18 +660,48 @@ end
 
 local plotsFolder = workspace:FindFirstChild("Plots") or (workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild("Plots"))
 if plotsFolder then
-    cleanPlots(plotsFolder)
+    task.spawn(function()
+        task.wait(1.5) -- Beri waktu agar plot lokal selesai dimuat server sebelum membersihkan plot lain
+        cleanPlots(plotsFolder)
+    end)
 end
 
 -- =============================================
 -- 🍬 CANDY WEATHER EVENT ENGINE (HITBOX EXPANDER & WAYPOINT SYSTEM)
 -- =============================================
+local function isCandyEventEnabled()
+    if _G.enableCandyEvent ~= nil then
+        return _G.enableCandyEvent == true
+    end
+    if _G.autoCandyEvent ~= nil then
+        return _G.autoCandyEvent == true
+    end
+    return true
+end
+
+local function isHitboxExpanderEnabled()
+    if _G.expandCandyHitbox ~= nil then
+        return _G.expandCandyHitbox == true
+    end
+    if _G.autoCandyEvent ~= nil then
+        return _G.autoCandyEvent == true
+    end
+    return true
+end
+
+local function isWaypointNavEnabled()
+    if _G.candyWaypointNav ~= nil then
+        return _G.candyWaypointNav == true
+    end
+    return true
+end
+
 local CANDY_HITBOX_SIZE = _G.candyHitboxSize or Vector3.new(200, 200, 200)
 local isCandyEventActive = false
-local expandedCandyObjects = {}
+local expandedCandyObjects = setmetatable({}, { __mode = "k" })
 
 local function expandCandyHitbox(inst)
-    if not _G.autoCandyEvent or not inst or not inst.Parent then return end
+    if not isHitboxExpanderEnabled() or not inst or not inst.Parent then return end
     if not isCandyItem(inst) then return end
     if expandedCandyObjects[inst] then return end
 
@@ -674,7 +725,7 @@ end
 
 -- Pemindai semua permen di Debris
 local function scanAndExpandAllCandies()
-    if not _G.autoCandyEvent then return end
+    if not isHitboxExpanderEnabled() then return end
 
     -- Bersihkan cache item yang sudah musnah
     for obj, _ in pairs(expandedCandyObjects) do
@@ -699,7 +750,7 @@ local function hookDebrisListener(debrisFolder)
     debrisFolder.ChildAdded:Connect(function(child)
         task.defer(function()
             if not child or not child.Parent then return end
-            if _G.autoCandyEvent and isCandyItem(child) then
+            if isHitboxExpanderEnabled() and isCandyItem(child) then
                 expandCandyHitbox(child)
             end
         end)
@@ -717,9 +768,9 @@ workspace.ChildAdded:Connect(function(child)
     end
 end)
 
--- Background Scanner Loop Candy (tiap 0.2 detik)
+-- Background Scanner Loop Candy (tiap 0.8 detik sebagai backup listener)
 task.spawn(function()
-    while task.wait(0.2) do
+    while task.wait(0.8) do
         pcall(scanAndExpandAllCandies)
     end
 end)
@@ -733,8 +784,6 @@ end)
 -- =============================================
 -- 🧠 VARIABEL STATE MACHINE & POSISI
 -- =============================================
-local targetAction = "Idle"
-local lastAction = "Idle"
 local stateTimer = 0               
 local globalStuckTimer = 0         
 local mutationCount = 0            
@@ -745,16 +794,12 @@ local kickAcceptedByServer = false
 local safeZone = Vector3.new(698.030701, 3.298559, 233.707077)
 local safeZoneCFrame = CFrame.new(698.030701, 3.298559, 233.707077, -0.061024, -0.000000, 0.998136, -0.000000, 1.000000, 0.000000, -0.998136, -0.000000, -0.061024)
 
--- Variabel Navigasi Permen & Mode Kosong
+-- Variabel Navigasi Permen & Anti-Stuck Watchdog
 local activeCandyWaypoints = {}
+local currentWaypointTarget = nil
+local waypointStuckTimer = 0
 local emptyCandySpawnReceived = false
 local lastRewardBrainrotName = ""
-
-local function logConsole(msg)
-    if _G.debugConsoleLog then
-        print(string.format("🤖 [KALB-FARM] [%s] %s", tostring(targetAction), tostring(msg)))
-    end
-end
 
 -- Teleportasi Instan ke Safe Zone (Dipakai saat Kick / Idle / Respawn / Timeout)
 local function teleportToSafeZone(hrp)
@@ -766,23 +811,36 @@ local function teleportToSafeZone(hrp)
     end)
 end
 
-local function isWeatherServiceCandyActive()
-    local ok, result = pcall(function()
+local cachedWeatherService = nil
+local function getWeatherService()
+    if cachedWeatherService ~= nil then return cachedWeatherService end
+    local ok, res = pcall(function()
         local svLoader = ReplicatedStorage:FindFirstChild("Modules") and ReplicatedStorage.Modules:FindFirstChild("ServicesLoader")
-        local ws = svLoader and svLoader:FindFirstChild("WeatherService_Client") and require(svLoader.WeatherService_Client)
-        if ws and type(ws.Events) == "table" then
-            local now = os.time()
-            for eName, endTs in pairs(ws.Events) do
-                if string.find(string.lower(tostring(eName)), "candy") then
-                    if type(endTs) ~= "number" or endTs > now then
-                        return true
-                    end
+        if svLoader and svLoader:FindFirstChild("WeatherService_Client") then
+            return require(svLoader.WeatherService_Client)
+        end
+        return nil
+    end)
+    if ok and res then
+        cachedWeatherService = res
+        return res
+    end
+    return nil
+end
+
+local function isWeatherServiceCandyActive()
+    local ws = getWeatherService()
+    if ws and type(ws.Events) == "table" then
+        local now = os.time()
+        for eName, endTs in pairs(ws.Events) do
+            if string.find(string.lower(tostring(eName)), "candy") then
+                if type(endTs) ~= "number" or endTs > now then
+                    return true
                 end
             end
         end
-        return false
-    end)
-    return (ok and result == true)
+    end
+    return false
 end
 
 local function checkCandyEventActive()
@@ -791,11 +849,10 @@ local function checkCandyEventActive()
         isCandyEventActive = true
         return true
     end
+    -- HANYA cek folder Debris (JANGAN cek workspace karena ada objek dekorasi map statis)
     local debris = workspace:FindFirstChild("Debris")
-    local containers = {workspace}
-    if debris then table.insert(containers, debris) end
-    for _, container in ipairs(containers) do
-        for _, child in ipairs(container:GetChildren()) do
+    if debris then
+        for _, child in ipairs(debris:GetChildren()) do
             if isCandyItem(child) then
                 isCandyEventActive = true
                 return true
@@ -806,6 +863,7 @@ local function checkCandyEventActive()
 end
 
 local function isCandyEventOngoing()
+    if not isCandyEventEnabled() then return false end
     if isCandyEventActive then return true end
     if #activeCandyWaypoints > 0 then return true end
     if isWeatherServiceCandyActive() then
@@ -841,6 +899,7 @@ end
 -- 2. rev_candySpawn TIDAK mengirim {} (empty)
 -- 3. Ada permen nyata (waypoint aktif atau item di Debris)
 local function shouldBypassWhitelist()
+    if not isCandyEventEnabled() then return false end
     if not isCandyEventOngoing() then return false end
     if emptyCandySpawnReceived then return false end
     if #activeCandyWaypoints > 0 then return true end
@@ -1057,8 +1116,10 @@ local function setupServerEventListeners()
         addW.OnClientEvent:Connect(function(weatherType, ...)
             local wStr = string.lower(tostring(weatherType or ""))
             if string.find(wStr, "candy") then
-                isCandyEventActive = true
-                logConsole("🍬 Event Cuaca: CANDY EVENT AKTIF! Memulai Candy Hitbox Expander & Auto Navigator...")
+                if isCandyEventEnabled() then
+                    isCandyEventActive = true
+                    logConsole("🍬 Event Cuaca: CANDY EVENT AKTIF! Memulai Candy Hitbox Expander & Auto Navigator...")
+                end
             end
         end)
     end
@@ -1082,6 +1143,7 @@ local function setupServerEventListeners()
         candyRemote.OnClientEvent:Connect(function(spawnData, ...)
             pcall(function()
                 kickAcceptedByServer = true
+                if not isCandyEventEnabled() then return end
                 logConsole("🍬 [EVENT REMOTE] rev_candySpawn diterima!")
                 if type(spawnData) == "table" then
                     local count = 0
@@ -1379,6 +1441,17 @@ task.spawn(function()
 
         -- [ FASE 3: JALAN KAKI MEMBAWA BRAINROT MENUJU SAFE ZONE (JANGAN TELEPORTASI!) ]
         elseif targetAction == "WalkToSafeZone" then
+            -- 🛡️ FAILSAFE TIMEOUT KHUSUS JALAN KAKI: Jika jalan kaki melebihi 45 detik, paksa teleport ke Safe Zone
+            if stateTimer >= 45.0 then
+                logConsole("🚨 [WALK TIMEOUT] Terlalu lama berjalan (45s) -> Memaksa teleport ke Safe Zone!")
+                teleportToSafeZone(hrp)
+                targetAction = "WaitingForCollected"
+                activeCandyWaypoints = {}
+                currentWaypointTarget = nil
+                waypointStuckTimer = 0
+                continue
+            end
+
             -- 🛡️ SECURITY CHECK: Jika reward sudah ter-collect oleh server / UI di tengah jalan, langsung teleport & kick lagi!
             if collectedFired then
                 collectedFired = false
@@ -1388,6 +1461,8 @@ task.spawn(function()
                 kickRetryCount = 0
                 kickAcceptedByServer = false
                 activeCandyWaypoints = {}
+                currentWaypointTarget = nil
+                waypointStuckTimer = 0
                 emptyCandySpawnReceived = false
                 lastRewardBrainrotName = ""
 
@@ -1411,7 +1486,7 @@ task.spawn(function()
 
             -- Navigasi sembari melewati koordinat permen
             local targetPos = safeZone
-            if #activeCandyWaypoints > 0 then
+            if isWaypointNavEnabled() and #activeCandyWaypoints > 0 then
                 local bestIdx = nil
                 local bestDist = math.huge
                 for i, pos in ipairs(activeCandyWaypoints) do
@@ -1425,8 +1500,26 @@ task.spawn(function()
                 if bestIdx then
                     local wp = activeCandyWaypoints[bestIdx]
                     local reachThreshold = _G.candyReachDist or 25
-                    if bestDist <= reachThreshold then
+
+                    -- 🛡️ WAYPOINT STUCK WATCHDOG: Jika karakter mencoba mencapai waypoint yang sama selama > 6 detik, lewati waypoint tersebut!
+                    if currentWaypointTarget == wp then
+                        waypointStuckTimer = waypointStuckTimer + 0.05
+                        if waypointStuckTimer >= 6.0 then
+                            table.remove(activeCandyWaypoints, bestIdx)
+                            logConsole(string.format("⚠️ [WAYPOINT STUCK] Waypoint tidak terjangkau dalam 6s! Melewati ke titik berikutnya... Sisa: %d", #activeCandyWaypoints))
+                            waypointStuckTimer = 0
+                            currentWaypointTarget = nil
+                            wp = nil
+                        end
+                    else
+                        currentWaypointTarget = wp
+                        waypointStuckTimer = 0
+                    end
+
+                    if wp and bestDist <= reachThreshold then
                         table.remove(activeCandyWaypoints, bestIdx)
+                        currentWaypointTarget = nil
+                        waypointStuckTimer = 0
                         logConsole(string.format("🍬 Waypoint permen terlewati/terambil! Sisa waypoint: %d", #activeCandyWaypoints))
                         if #activeCandyWaypoints > 0 then
                             local nextIdx = 1
@@ -1449,12 +1542,17 @@ task.spawn(function()
                         targetPos = Vector3.new(wp.X, math.max(wp.Y, hrp.Position.Y), wp.Z)
                     end
                 end
+            else
+                currentWaypointTarget = nil
+                waypointStuckTimer = 0
             end
 
             -- Bot TETAP MURNI JALAN KAKI via MoveTo
             hum:MoveTo(targetPos)
 
             if distToSafeZone < 5 then
+                currentWaypointTarget = nil
+                waypointStuckTimer = 0
                 targetAction = "WaitingForCollected"
                 logConsole("Tiba di Safe Zone -> Menunggu Reward Collected")
             end
