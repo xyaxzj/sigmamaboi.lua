@@ -1,42 +1,71 @@
 -- ==============================================================================
--- 🍬 KALB AUTO CANDY HITBOX EXPANDER & AUTO SELL (FLAWLESS & GUARANTEED 24/7 AFK)
+-- 🥔 KALB ULTRA LIGHTWEIGHT AUTO FARM V4 (CANDY EVENT & TELEPORT KICK EDITION)
 -- ==============================================================================
--- 📋 Fitur Utama:
--- 1. 🚀 Anti-Lag & Extreme FPS Boost (Potato Mode):
---    - Menghapus shadow, partikel berat, tekstur, efek blur, bloom, post-processing
---    - Proteksi penuh untuk karakter pemain dan item permen event
---
--- 2. 🍬 Candy Weather Event Engine:
+-- Fitur & Alur:
+-- 1. ⚙️ Full Config Mode: Semua pengaturan diatur via variabel _G di baris atas (Tanpa UI)
+-- 2. 🚫 Total Player & Character Purger (100% Bersih & No Lag)
+-- 3. 🍬 Candy Weather Event Engine:
 --    - Mendeteksi rev_AddedWeather "Candy" & rev_candySpawn
---    - ✅ Hitbox diperbesar ke 200x200x200 studs (CanTouch=true, CanQuery=true, CanCollide=false, Transparency=0.5)
---    - 🎯 Target: CarriedCandy, Candy, Chocolate, Cake, Pancakes, Gummy Bear, Ice Cream, Gummy Worm, dll.
---    - 📡 Dynamic Listener: Otomatis mendeteksi dan mendaftarkan nama permen baru dari server
---
--- 3. 💰 Auto Sell All:
---    - Menjual seluruh brainrot setiap 5 detik via RemoteFunction ref_B_SellAll
---
--- 4. 🛡️ Anti-AFK & 🧹 Memory Pruner (Anti Disconnect 24/7)
+--    - Memperbesar hitbox permen ke 200 studs (CanCollide=false, CanTouch=true, CanQuery=true)
+--    - Mendukung CarriedCandy, Candy, Chocolate, Cake, Pancakes, Gummy Bear, Ice Cream, Gummy Worm, dll.
+--    - Listener dinamis untuk mendaftarkan nama permen baru secara otomatis
+-- 4. 🧭 Candy Waypoint Navigation: Sembari membawa brainrot berjalan ke safe zone, melewati titik permen
+-- 5. 💀 Empty Spawn Handler: Jika rev_candySpawn mengirim {}, diam di tempat sampai mati, respawn lalu teleport kick
+-- 6. ⚡ Teleportation for Kick: Teleportasi instan ke safe zone saat Idle, Respawn, atau timeout untuk kick
+--    (Saat membawa brainrot ke safe zone TETAP MURNI JALAN KAKI)
+-- 7. 🥔 Ultra Anti-Lag V3 & Invisible Map (0% Beban Render GPU & No Machine Noise)
 -- ==============================================================================
 
 if not game:IsLoaded() then game.Loaded:Wait() end
 
 -- ==============================================================================
--- ⚙️ KONFIGURASI PENGGUNA
+-- ⚙️ KONFIGURASI PENGGUNA (UBAH SESUAI KEBUTUHAN DI SINI)
 -- ==============================================================================
-_G.antiLag = true                              -- true: Aktifkan Anti-Lag / FPS Boost Ekstrem (Potato Mode)
-_G.autoCandyEvent = true                       -- true: Otomatis perbesar hitbox permen (Candy, Cokelat, dll.)
-_G.candyHitboxSize = Vector3.new(200, 200, 200)-- Ukuran hitbox Candy yang dibesarkan (Default: 200 studs)
-_G.autoSellAll = true                          -- true: Otomatis jual semua brainrot berkala
-_G.sellInterval = 5                            -- Interval waktu (detik) Auto Sell All
-_G.debugConsoleLog = true                      -- true: Tampilkan log di Developer Console (F9)
+_G.autoFarm             = true        -- true: Auto Farm Aktif, false: Nonaktif
+_G.onlyCandyEvent       = false       -- true: HANYA Auto Kick saat Candy Event aktif, false: Auto kick nonstop
+
+-- 🍬 PENGATURAN FITUR CANDY EVENT (DAPAT DIAKTIFKAN / DINONAKTIFKAN SECARA TERPISAH)
+_G.enableCandyEvent     = true        -- [1] Master Switch: Aktifkan penanganan Candy Event (cuaca & spawn permen)
+_G.expandCandyHitbox    = true        -- [2] Hitbox Switch: Memperbesar hitbox Candy/Cokelat/dll ke ukuran yang ditentukan
+_G.candyHitboxSize      = Vector3.new(200, 200, 200) -- Ukuran hitbox Candy yang dibesarkan
+_G.candyWaypointNav     = true        -- [3] Navigation Switch: Pandu rute jalan kaki melintasi waypoint permen ke Safe Zone
+_G.candyReachDist       = 5          -- Jarak (studs) horizontal untuk menganggap permen sudah terlewati/terambil
+
+_G.useBrainrotWhitelist = true        -- true: Hanya bawa brainrot di whitelist ke safe zone, false: Bawa semua
+_G.brainrotWhitelist    = {           -- Daftar nama brainrot yang diizinkan (Case-insensitive & Partial match)
+    "Chocolate Gangster",
+    "Tricerabob",
+    "Teacherrina",
+}
+_G.kickDelay            = 0.5         -- Jeda waktu (detik) di Safe Zone sebelum menendang/kick (Default: 0.5 detik, jangan terlalu instant)
+_G.autoSellAll          = false       -- true: Auto Sell All setiap 5 detik via ref_B_SellAll
+_G.autoRemovePlayer     = true        -- true: Hapus player lain dari game.Players & workspace.Players (100% Bersih & No Lag), false: Biarkan
+_G.debugConsoleLog      = true        -- true: Cetak log status/fase/candy ke console (F9), false: Senyap
+_G.failsafeTimeout      = 25          -- Waktu maksimal (detik) sebelum auto-reset ke Safe Zone jika macet
+
+-- ⚡ ULTRA ANTI-LAG & POTATO MODE (PUSH MAX PERFORMANCE)
+_G.antiLag             = true        -- true: Master switch Anti-Lag & Potato Mode Ekstrem
+_G.mapVisual           = "Invisible" -- "Invisible": Visual map pure dihapus/transparan (0% beban render GPU, warna putih hilang), "Gray": Abu-abu semen polos netral, "White": Putih potato, "Default": Warna asli
+_G.optimizePhysics     = false       -- false (Default Aman): Hindari jitter fisika / suara mesin pada mekanisme objek
+_G.fpsCap              = 60          -- Batas target FPS (60 hemat baterai & CPU, 30 untuk multi-akun, 0 = default)
+_G.disable3dRender     = false       -- true: Layar freeze / 0% GPU saat AFK farm (Pencet F10 untuk toggle), false: Tampilan visual normal
+_G.muteAudio           = true        -- true: Mute semua audio & reverb game (0% beban CPU audio)
+_G.cleanLighting       = true        -- true: Hapus semua efek visual di Lighting (Sky, Blur, Bloom, Atmosphere, SunRays)
+_G.removeParticles     = true        -- true: Hapus ParticleEmitter, Trail, Beam, Fire, Smoke, Sparkles, Highlight, Lights
+_G.optimizeTerrain     = true        -- true: Matikan gelombang air & dekorasi rumput pada terrain
+_G.cleanClientAssets   = true        -- true: Sembunyikan ClientRenderedAssets & PlacedEggRenders
 
 print("--------------------------------------------------")
-print("🚀 [INIT] Memuat KALB Perfect Candy Event & Auto Sell...")
+print("🚀 [INIT] Memuat KALB Auto Farm V3 (Ultra Anti-Lag & Potato Max Edition)...")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
 local VirtualUser = game:GetService("VirtualUser")
+local SoundService = game:GetService("SoundService")
+local UserInputService = game:GetService("UserInputService")
+local UserSettingsService = (type(UserSettings) == "function" and pcall(UserSettings)) and UserSettings() or nil
 
 local lp = Players.LocalPlayer
 if not lp then
@@ -48,15 +77,27 @@ if not lp then
     until lp or count > 50
 end
 
+local lpName = lp and lp.Name or ""
+local lpDisplayName = lp and lp.DisplayName or ""
+local myUidStr = lp and tostring(lp.UserId) or ""
+
+local targetAction = "Idle"
+local lastAction = "Idle"
+
 local function logConsole(...)
-    if _G.debugConsoleLog ~= false then
+    if _G.debugConsoleLog == false then return end
+    local count = select("#", ...)
+    if count == 1 then
+        local msg = select(1, ...)
+        print(string.format("🤖 [KALB-FARM] [%s] %s", tostring(targetAction), tostring(msg)))
+    else
         print(...)
     end
 end
 
--- ==============================================================================
--- 🍬 DAFTAR TARGET CANDY & DYNAMIC DISCOVERY ENGINE
--- ==============================================================================
+-- =============================================
+-- 🛡️ FILTER & PROTEKSI ENTITAS LOKAL & CANDY EVENT
+-- =============================================
 local CANDY_NAMES = {
     ["carriedcandy"] = true,
     ["candy"] = true,
@@ -68,17 +109,11 @@ local CANDY_NAMES = {
     ["gummy worm"] = true,
 }
 
--- Mendaftarkan nama permen baru secara dinamis
 local function registerCandyName(name)
     if not name or name == "" then return end
-    local lower = string.lower(tostring(name))
-    if not CANDY_NAMES[lower] then
-        CANDY_NAMES[lower] = true
-        logConsole(string.format("🍬 [CANDY DISCOVERY] Mendaftarkan jenis permen baru: '%s'", tostring(name)))
-    end
+    CANDY_NAMES[string.lower(name)] = true
 end
 
--- Pengecekan apakah sebuah objek adalah item permen
 local function isCandyItem(inst)
     if not inst then return false end
     local lowerName = string.lower(inst.Name)
@@ -91,14 +126,25 @@ local function isCandyItem(inst)
     return false
 end
 
--- Proteksi agar partikel/tekstur permen tidak terhapus oleh anti-lag
+local function isLocalPlayerEntity(inst)
+    if not inst then return false end
+    if lp and inst == lp then return true end
+    if lp and lp.Character and (inst == lp.Character or inst:IsDescendantOf(lp.Character)) then return true end
+    local name = inst.Name
+    if name == lpName or (lpDisplayName ~= "" and name == lpDisplayName) then return true end
+    return false
+end
+
 local function isProtectedEventItem(inst)
     if not inst then return false end
     local name = inst.Name
     if name == "PlotSign" or name == "KALB_SafeZoneMarker" then return true end
     if isCandyItem(inst) then return true end
 
-    local curr = inst
+    local p = inst.Parent
+    if not p or p == workspace or p == game then return false end
+
+    local curr = p
     while curr and curr ~= workspace and curr ~= game do
         local cName = curr.Name
         if cName == "PlotSign" or cName == "KALB_SafeZoneMarker" or isCandyItem(curr) then
@@ -109,62 +155,785 @@ local function isProtectedEventItem(inst)
     return false
 end
 
--- ==============================================================================
--- 🚀 SISTEM ANTI-LAG & FPS BOOSTER (POTATO MODE EKSTREM)
--- ==============================================================================
-local function stripTexture(v)
-    if not v then return end
-    if lp and lp.Character and (v == lp.Character or v:IsDescendantOf(lp.Character)) then return end
-    if isProtectedEventItem(v) then return end
+-- =============================================
+-- ⚡ 1. ENGINE & HARDWARE OPTIMIZER
+-- =============================================
+-- Native Quality Level 1 (Engine Setting Terendah)
+pcall(function()
+    if settings and settings().Rendering then
+        settings().Rendering.QualityLevel = 1
+    end
+    if UserSettingsService then
+        local ugs = UserSettingsService:GetService("UserGameSettings")
+        if ugs then ugs.SavedQualityLevel = Enum.SavedQualitySetting.QualityLevel1 end
+    end
+end)
 
+-- Target FPS Cap
+if _G.fpsCap and _G.fpsCap > 0 then
     pcall(function()
-        if v:IsA("BasePart") then
-            v.Material = Enum.Material.Plastic
-            v.Reflectance = 0
-            v.CastShadow = false
-            v.Color = Color3.new(1, 1, 1)
-            if v:IsA("MeshPart") then
-                v.TextureID = ""
-            end
-        elseif v:IsA("SpecialMesh") then
-            v.TextureId = ""
-        elseif v:IsA("Decal") or v:IsA("Texture") or v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Beam") or v:IsA("Fire") or v:IsA("Smoke") or v:IsA("Sparkles") or v:IsA("SurfaceAppearance") or v:IsA("Clothing") or v:IsA("ShirtGraphic") then
-            v:Destroy()
+        if setfpscap and typeof(setfpscap) == "function" then
+            setfpscap(_G.fpsCap)
         end
     end)
 end
 
-if _G.antiLag then
+-- 3D Rendering (0% GPU AFK) & Hotkey F10 Toggle
+if _G.disable3dRender then
     pcall(function()
-        for _, v in ipairs(workspace:GetDescendants()) do
-            stripTexture(v)
-        end
+        RunService:Set3dRenderingEnabled(false)
+    end)
+end
 
+pcall(function()
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if not gameProcessed and input.KeyCode == Enum.KeyCode.F10 then
+            _G.disable3dRender = not _G.disable3dRender
+            pcall(function()
+                RunService:Set3dRenderingEnabled(not _G.disable3dRender)
+            end)
+            logConsole("🎮 [3D RENDER] Toggled: " .. (_G.disable3dRender and "OFF (0% GPU AFK)" or "ON"))
+        end
+    end)
+end)
+
+-- Total Audio Mute (0% CPU Audio Processing)
+if _G.muteAudio then
+    pcall(function()
+        if UserSettingsService then
+            local ugs = UserSettingsService:GetService("UserGameSettings")
+            if ugs then ugs.MasterVolume = 0 end
+        end
+        SoundService.AmbientReverb = Enum.ReverbType.NoReverb
+        for _, sg in ipairs(SoundService:GetDescendants()) do
+            if sg:IsA("SoundGroup") then
+                sg.Volume = 0
+            end
+        end
+    end)
+end
+
+-- =============================================
+-- ☁️ 2. LIGHTING & ATMOSPHERE REAL-TIME PURGER
+-- =============================================
+local function purgeLighting()
+    if not _G.cleanLighting then return end
+    pcall(function()
         Lighting.GlobalShadows = false
         Lighting.FogEnd = 9e9
-        for _, v in ipairs(Lighting:GetDescendants()) do
-            if v:IsA("PostEffect") or v:IsA("BlurEffect") or v:IsA("SunRaysEffect") or v:IsA("ColorCorrectionEffect") or v:IsA("BloomEffect") or v:IsA("DepthOfFieldEffect") or v:IsA("Sky") then
+        Lighting.Brightness = 1
+        Lighting.ClockTime = 14
+        Lighting.OutdoorAmbient = Color3.fromRGB(128, 128, 128)
+        for _, v in ipairs(Lighting:GetChildren()) do
+            if v:IsA("PostEffect") or v:IsA("BlurEffect") or v:IsA("SunRaysEffect")
+               or v:IsA("ColorCorrectionEffect") or v:IsA("BloomEffect")
+               or v:IsA("DepthOfFieldEffect") or v:IsA("Sky")
+               or v:IsA("Atmosphere") or v:IsA("Clouds") then
+                v.Enabled = false
                 v:Destroy()
             end
         end
-
-        if setfpscap then
-            pcall(setfpscap, 60)
-        end
-
-        logConsole("🚀 [ANTI-LAG] Potato Mode & FPS Booster berhasil diaktifkan!")
     end)
+end
+purgeLighting()
 
-    workspace.DescendantAdded:Connect(function(descendant)
-        if _G.antiLag then
-            task.defer(stripTexture, descendant)
+Lighting.ChildAdded:Connect(function(child)
+    if _G.cleanLighting then
+        task.defer(function()
+            if child:IsA("PostEffect") or child:IsA("BlurEffect") or child:IsA("SunRaysEffect")
+               or child:IsA("ColorCorrectionEffect") or child:IsA("BloomEffect")
+               or child:IsA("DepthOfFieldEffect") or child:IsA("Sky")
+               or child:IsA("Atmosphere") or child:IsA("Clouds") then
+                pcall(function()
+                    child.Enabled = false
+                    child:Destroy()
+                end)
+            end
+        end)
+    end
+end)
+
+-- =============================================
+-- 🌊 3. TERRAIN & WATER OPTIMIZER
+-- =============================================
+if _G.optimizeTerrain then
+    pcall(function()
+        local terrain = workspace:FindFirstChildOfClass("Terrain")
+        if terrain then
+            terrain.WaterWaveSize = 0
+            terrain.WaterWaveSpeed = 0
+            terrain.WaterReflectance = 0
+            terrain.WaterTransparency = 0
+            if sethiddenproperty then
+                pcall(function() sethiddenproperty(terrain, "Decoration", false) end)
+            end
         end
     end)
 end
 
--- ==============================================================================
--- 🛡️ ANTI-AFK & MEMORY STABILIZER (ANTI DISCONNECT & ANTI MEMORY LEAK)
--- ==============================================================================
+-- =============================================
+-- 🥚 4. CLIENT ASSETS & PLACED EGGS PURGER
+-- =============================================
+local function cleanClientAssets()
+    if not _G.cleanClientAssets then return end
+    pcall(function()
+        local eggFolder = workspace:FindFirstChild("PlacedEggRenders")
+        if eggFolder then
+            for _, d in ipairs(eggFolder:GetDescendants()) do
+                if d:IsA("BasePart") then
+                    d.Transparency = 1
+                    d.CastShadow = false
+                elseif d:IsA("Decal") or d:IsA("Texture") then
+                    d:Destroy()
+                end
+            end
+        end
+        local clientAssets = workspace:FindFirstChild("ClientRenderedAssets")
+        if clientAssets then
+            for _, d in ipairs(clientAssets:GetDescendants()) do
+                if d:IsA("BasePart") then
+                    d.Transparency = 1
+                    d.CastShadow = false
+                elseif d:IsA("Decal") or d:IsA("Texture") then
+                    d:Destroy()
+                end
+            end
+        end
+    end)
+end
+cleanClientAssets()
+
+-- =============================================
+-- 🥔 5. CORE INSTANCE OPTIMIZER (SMOOTHPLASTIC, WHITE MAP & PURGE FX)
+-- =============================================
+local PURGE_CLASSES = {
+    PointLight = true,
+    SpotLight = true,
+    SurfaceLight = true,
+    ParticleEmitter = true,
+    Trail = true,
+    Beam = true,
+    Fire = true,
+    Smoke = true,
+    Sparkles = true,
+    SurfaceAppearance = true,
+}
+
+local function optimizeInstance(v)
+    if not _G.antiLag or not v or not v.Parent then return end
+    if isLocalPlayerEntity(v) then return end
+    if isProtectedEventItem(v) then return end
+
+    pcall(function()
+        local className = v.ClassName
+
+        -- 1. Mute suara individual (HANYA set Volume = 0, JANGAN :Stop() agar tidak restart loop / gredek mesin!)
+        if _G.muteAudio and v:IsA("Sound") then
+            v.Volume = 0
+            return
+        end
+
+        -- 2. Highlight: JANGAN di-Destroy karena script AnimateBrainrots memakai instance-nya (hindari crash 800+ error)
+        if v:IsA("Highlight") then
+            v.Enabled = false
+            return
+        end
+
+        -- 3. Purge partikel, cahaya, dan efek visual berat (Hemat GPU shader & draw calls)
+        if _G.removeParticles and PURGE_CLASSES[className] then
+            v:Destroy()
+            return
+        end
+
+        -- 4. Hapus Decal, Texture, Clothing, ShirtGraphic
+        if className == "Decal" or className == "Texture" or v:IsA("Clothing") or v:IsA("ShirtGraphic") then
+            v:Destroy()
+            return
+        end
+
+        -- 5. Matikan BillboardGui / SurfaceGui non-math & non-PlayerGui
+        if (v:IsA("BillboardGui") or v:IsA("SurfaceGui")) and not v:IsDescendantOf(lp:WaitForChild("PlayerGui", 1)) then
+            v.Enabled = false
+            v:Destroy()
+            return
+        end
+
+        -- 6. Potato Mesh & BasePart (Invisible / Gray / White Map)
+        if v:IsA("BasePart") then
+            v.Material = Enum.Material.SmoothPlastic
+            v.Reflectance = 0
+            v.CastShadow = false
+
+            local mode = _G.mapVisual or (_G.whiteMap and "White" or "Default")
+            if mode == "Invisible" then
+                v.Transparency = 1
+            elseif mode == "Gray" then
+                v.Color = Color3.fromRGB(140, 140, 140)
+            elseif mode == "White" then
+                v.Color = Color3.new(1, 1, 1)
+            end
+
+            if v:IsA("MeshPart") then
+                v.TextureID = ""
+            end
+
+            -- Physics Optimizer: Hanya pada part Anchored agar tidak merusak mekanisme bergerak
+            if _G.optimizePhysics and v.Anchored then
+                v.CanTouch = false
+            end
+        elseif v:IsA("SpecialMesh") then
+            v.TextureId = ""
+        end
+    end)
+end
+
+-- Safe Zone Visual Marker (Penanda titik Safe Zone saat Map Invisible)
+local function ensureSafeZoneMarker()
+    if _G.mapVisual ~= "Invisible" then return end
+    pcall(function()
+        local existing = workspace:FindFirstChild("KALB_SafeZoneMarker")
+        if not existing then
+            local marker = Instance.new("Part")
+            marker.Name = "KALB_SafeZoneMarker"
+            marker.Size = Vector3.new(12, 0.2, 12)
+            marker.Position = Vector3.new(698.030701, 3.2, 233.707077)
+            marker.Anchored = true
+            marker.CanCollide = false
+            marker.CanTouch = false
+            marker.CanQuery = false
+            marker.Material = Enum.Material.Neon
+            marker.Color = Color3.fromRGB(0, 255, 128)
+            marker.Transparency = 0.6
+            marker.Parent = workspace
+        end
+    end)
+end
+ensureSafeZoneMarker()
+
+-- Eksekusi awal pembersihan aset ke seluruh workspace (Batching agar tidak freeze di awal)
+task.spawn(function()
+    if _G.antiLag then
+        local all = workspace:GetDescendants()
+        local count = 0
+        for _, v in ipairs(all) do
+            optimizeInstance(v)
+            count = count + 1
+            if count % 500 == 0 then
+                task.wait()
+            end
+        end
+        logConsole("🚀 [ANTI-LAG] Ultra Potato Mode & Hardware Engine Berhasil Diaktifkan!")
+    end
+end)
+
+-- Listener Real-Time DescendantAdded untuk Workspace
+workspace.DescendantAdded:Connect(function(descendant)
+    if _G.antiLag then
+        task.defer(optimizeInstance, descendant)
+    end
+end)
+
+-- =============================================
+-- 🚫 6. TOTAL PLAYER & CHARACTER PURGER (100% BERSIH)
+-- =============================================
+local function purgeOtherPlayer(player)
+    if not _G.autoRemovePlayer or not player or player == lp or player.Name == lpName then return end
+    
+    pcall(function()
+        if player.Character then
+            player.Character:ClearAllChildren()
+            player.Character:Destroy()
+        end
+    end)
+    pcall(function()
+        player:ClearAllChildren()
+        player:Destroy()
+    end)
+end
+
+local function purgeOtherCharacter(charModel)
+    if not _G.autoRemovePlayer or not charModel then return end
+    if isLocalPlayerEntity(charModel) then return end
+    if charModel.Name == "Plots" or charModel.Name == "Debris" or charModel.Name == "NPCs" then return end
+
+    pcall(function()
+        for _, v in ipairs(charModel:GetDescendants()) do
+            if v:IsA("BasePart") then
+                v.Transparency = 1
+                v.CanCollide = false
+                v.CanTouch = false
+                v.CanQuery = false
+            elseif v:IsA("Decal") or v:IsA("Texture") or v:IsA("BillboardGui") or v:IsA("SurfaceGui") or v:IsA("Highlight") then
+                v.Enabled = false
+                v:Destroy()
+            end
+        end
+        charModel:ClearAllChildren()
+        charModel:Destroy()
+    end)
+end
+
+local function scanAndPurgeAllOtherPlayers()
+    if not _G.autoRemovePlayer then return end
+
+    -- 1. Bersihkan dari game:GetService("Players")
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= lp then
+            purgeOtherPlayer(p)
+        end
+    end
+    for _, child in ipairs(Players:GetChildren()) do
+        if child ~= lp and child:IsA("Player") then
+            purgeOtherPlayer(child)
+        end
+    end
+
+    -- 2. Bersihkan dari workspace.Players folder
+    local wsPlayers = workspace:FindFirstChild("Players")
+    if wsPlayers then
+        for _, child in ipairs(wsPlayers:GetChildren()) do
+            if child.Name ~= "Plots" and not isLocalPlayerEntity(child) then
+                purgeOtherCharacter(child)
+            end
+        end
+    end
+
+    -- 3. Bersihkan dari workspace root (karakter liar)
+    for _, child in ipairs(workspace:GetChildren()) do
+        if child:IsA("Model") and not isLocalPlayerEntity(child) and child.Name ~= "Plots" and child.Name ~= "Debris" and child.Name ~= "NPCs" and child.Name ~= "Players" then
+            if child:FindFirstChildOfClass("Humanoid") or child:FindFirstChild("HumanoidRootPart") or child:FindFirstChild("Head") then
+                purgeOtherCharacter(child)
+            end
+        end
+    end
+end
+
+-- Eksekusi awal pembersihan player & karakter
+scanAndPurgeAllOtherPlayers()
+
+-- Event Listener saat ada Player baru join
+Players.PlayerAdded:Connect(function(player)
+    if not _G.autoRemovePlayer then return end
+    if player ~= lp then
+        task.defer(function()
+            purgeOtherPlayer(player)
+        end)
+        player.CharacterAdded:Connect(function(char)
+            task.defer(function()
+                purgeOtherCharacter(char)
+            end)
+        end)
+    end
+end)
+
+Players.ChildAdded:Connect(function(child)
+    if not _G.autoRemovePlayer then return end
+    if child ~= lp and child:IsA("Player") then
+        task.defer(function()
+            purgeOtherPlayer(child)
+        end)
+    end
+end)
+
+-- Listener khusus untuk workspace.Players
+local function setupWsPlayersListener(folder)
+    if not folder then return end
+    for _, child in ipairs(folder:GetChildren()) do
+        if child.Name ~= "Plots" and not isLocalPlayerEntity(child) then
+            purgeOtherCharacter(child)
+        end
+    end
+    folder.ChildAdded:Connect(function(child)
+        if not _G.autoRemovePlayer then return end
+        task.defer(function()
+            if child.Name ~= "Plots" and not isLocalPlayerEntity(child) then
+                purgeOtherCharacter(child)
+            end
+        end)
+    end)
+end
+
+local wsPlayers = workspace:FindFirstChild("Players")
+if wsPlayers then
+    setupWsPlayersListener(wsPlayers)
+end
+
+workspace.ChildAdded:Connect(function(child)
+    if child.Name == "Players" then
+        task.defer(function() setupWsPlayersListener(child) end)
+    elseif child:IsA("Model") and not isLocalPlayerEntity(child) and child.Name ~= "Plots" and child.Name ~= "Debris" and child.Name ~= "NPCs" then
+        task.defer(function()
+            if child:FindFirstChildOfClass("Humanoid") or child:FindFirstChild("HumanoidRootPart") or child:FindFirstChild("Head") then
+                purgeOtherCharacter(child)
+            end
+        end)
+    end
+end)
+
+-- Background Sweeper Loop (Backup sweeper dengan interval santai agar hemat CPU)
+task.spawn(function()
+    local cleanCounter = 0
+    while task.wait(3.0) do
+        if _G.autoRemovePlayer then
+            pcall(scanAndPurgeAllOtherPlayers)
+        end
+
+        cleanCounter = cleanCounter + 1
+        -- Tiap ~30 detik bersihkan client assets & refresh lighting
+        if cleanCounter % 10 == 0 then
+            pcall(cleanClientAssets)
+            pcall(purgeLighting)
+        end
+
+        -- Tiap ~60 detik jalankan garbage collector bertahap (non-blocking step)
+        if cleanCounter >= 20 then
+            cleanCounter = 0
+            pcall(function()
+                if collectgarbage then collectgarbage("step", 100) end
+            end)
+        end
+    end
+end)
+
+-- =============================================
+-- 🎯 DETEKTOR PLOT SENDIRI & REMOVER PLOT LAIN
+-- =============================================
+local function isMyPlot(plotModel)
+    if not plotModel or not plotModel:IsA("Model") then return false end
+
+    local sign = plotModel:FindFirstChild("PlotSign", true)
+    if sign then
+        local pps = sign:FindFirstChild("PlayerPlotSign", true)
+        if pps then
+            local nameLabel = pps:FindFirstChild("PlayerName", true)
+            if nameLabel and nameLabel:IsA("TextLabel") then
+                local t = nameLabel.Text
+                if t and (t == lpName or t:find(lpName, 1, true) or (lpDisplayName ~= "" and (t == lpDisplayName or t:find(lpDisplayName, 1, true)))) then
+                    return true
+                end
+            end
+            local icon = pps:FindFirstChild("PlayerIcon", true)
+            if icon and (icon:IsA("ImageLabel") or icon:IsA("ImageButton")) then
+                local img = icon.Image
+                if img and img:find(myUidStr, 1, true) then
+                    return true
+                end
+            end
+        end
+    end
+
+    for _, item in ipairs(plotModel:GetDescendants()) do
+        local ok, result = pcall(function()
+            if item:IsA("TextLabel") then
+                local t = item.Text
+                if t and (t == lpName or (lpDisplayName ~= "" and t == lpDisplayName)) then
+                    return true
+                end
+            elseif item:IsA("StringValue") or item:IsA("ObjectValue") or item:IsA("IntValue") or item:IsA("NumberValue") then
+                local v = item.Value
+                if v == lpName or v == lp or tostring(v) == myUidStr then
+                    return true
+                end
+            end
+            return false
+        end)
+        if ok and result then return true end
+    end
+
+    return false
+end
+
+local function cleanPlots(plotsFolder)
+    if not plotsFolder then return end
+    for _, plot in ipairs(plotsFolder:GetChildren()) do
+        if plot:IsA("Model") and not isMyPlot(plot) then
+            pcall(function() plot:Destroy() end)
+        end
+    end
+    plotsFolder.ChildAdded:Connect(function(plot)
+        task.wait(0.2)
+        if plot:IsA("Model") and not isMyPlot(plot) then
+            pcall(function() plot:Destroy() end)
+        end
+    end)
+end
+
+local plotsFolder = workspace:FindFirstChild("Plots") or (workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild("Plots"))
+if plotsFolder then
+    task.spawn(function()
+        task.wait(1.5) -- Beri waktu agar plot lokal selesai dimuat server sebelum membersihkan plot lain
+        cleanPlots(plotsFolder)
+    end)
+end
+
+-- =============================================
+-- 🍬 CANDY WEATHER EVENT ENGINE (HITBOX EXPANDER & WAYPOINT SYSTEM)
+-- =============================================
+local function isCandyEventEnabled()
+    if _G.enableCandyEvent ~= nil then
+        return _G.enableCandyEvent == true
+    end
+    if _G.autoCandyEvent ~= nil then
+        return _G.autoCandyEvent == true
+    end
+    return true
+end
+
+local function isHitboxExpanderEnabled()
+    if _G.expandCandyHitbox ~= nil then
+        return _G.expandCandyHitbox == true
+    end
+    if _G.autoCandyEvent ~= nil then
+        return _G.autoCandyEvent == true
+    end
+    return true
+end
+
+local function isWaypointNavEnabled()
+    if _G.candyWaypointNav ~= nil then
+        return _G.candyWaypointNav == true
+    end
+    return true
+end
+
+local CANDY_HITBOX_SIZE = _G.candyHitboxSize or Vector3.new(200, 200, 200)
+local isCandyEventActive = false
+local expandedCandyObjects = setmetatable({}, { __mode = "k" })
+
+local function expandCandyHitbox(inst)
+    if not isHitboxExpanderEnabled() or not inst or not inst.Parent then return end
+    if not isCandyItem(inst) then return end
+    if expandedCandyObjects[inst] then return end
+
+    pcall(function()
+        local targetPart = inst:IsA("BasePart") and inst or inst:FindFirstChildWhichIsA("BasePart", true)
+        if targetPart then
+            targetPart.CanCollide = false
+            targetPart.CanTouch = true
+            targetPart.CanQuery = true
+            targetPart.CastShadow = false
+            targetPart.Transparency = 0.5
+            local targetSize = _G.candyHitboxSize or CANDY_HITBOX_SIZE
+            if targetPart.Size ~= targetSize then
+                targetPart.Size = targetSize
+            end
+            expandedCandyObjects[inst] = true
+            logConsole(string.format("🍬 [CANDY HITBOX] '%s' (%s) berhasil diperbesar ke 200 studs!", inst.Name, targetPart.Name))
+        end
+    end)
+end
+
+-- Pemindai semua permen di Debris
+local function scanAndExpandAllCandies()
+    if not isHitboxExpanderEnabled() then return end
+
+    -- Bersihkan cache item yang sudah musnah
+    for obj, _ in pairs(expandedCandyObjects) do
+        if not obj or not obj.Parent then
+            expandedCandyObjects[obj] = nil
+        end
+    end
+
+    local debris = workspace:FindFirstChild("Debris")
+    if debris then
+        for _, child in ipairs(debris:GetChildren()) do
+            if isCandyItem(child) then
+                expandCandyHitbox(child)
+            end
+        end
+    end
+end
+
+-- Listener Debris (Menangkap permen baru instan di folder Debris)
+local function hookDebrisListener(debrisFolder)
+    if not debrisFolder then return end
+    debrisFolder.ChildAdded:Connect(function(child)
+        task.defer(function()
+            if not child or not child.Parent then return end
+            if isHitboxExpanderEnabled() and isCandyItem(child) then
+                expandCandyHitbox(child)
+            end
+        end)
+    end)
+end
+
+local initialDebris = workspace:FindFirstChild("Debris")
+if initialDebris then
+    hookDebrisListener(initialDebris)
+end
+
+workspace.ChildAdded:Connect(function(child)
+    if child.Name == "Debris" then
+        task.defer(function() hookDebrisListener(child) end)
+    end
+end)
+
+-- Background Scanner Loop Candy (tiap 0.8 detik sebagai backup listener)
+task.spawn(function()
+    while task.wait(0.8) do
+        pcall(scanAndExpandAllCandies)
+    end
+end)
+
+-- Scan awal saat script pertama kali jalan
+task.spawn(function()
+    task.wait(0.1)
+    pcall(scanAndExpandAllCandies)
+end)
+
+-- =============================================
+-- 🧠 VARIABEL STATE MACHINE & POSISI
+-- =============================================
+local stateTimer = 0               
+local globalStuckTimer = 0         
+local mutationCount = 0            
+local lastRewardDesc = "None"
+local kickRetryCount = 0
+local MAX_KICK_RETRIES = 2
+local kickAcceptedByServer = false
+local safeZone = Vector3.new(698.030701, 3.298559, 233.707077)
+local safeZoneCFrame = CFrame.new(698.030701, 3.298559, 233.707077, -0.061024, -0.000000, 0.998136, -0.000000, 1.000000, 0.000000, -0.998136, -0.000000, -0.061024)
+
+-- Variabel Navigasi Permen & Anti-Stuck Watchdog
+local activeCandyWaypoints = {}
+local currentWaypointTarget = nil
+local waypointStuckTimer = 0
+local emptyCandySpawnReceived = false
+local lastRewardBrainrotName = ""
+
+-- Teleportasi Instan ke Safe Zone (Dipakai saat Kick / Idle / Respawn / Timeout)
+local function teleportToSafeZone(hrp)
+    if not hrp then return end
+    pcall(function()
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        hrp.AssemblyAngularVelocity = Vector3.zero
+        hrp.CFrame = safeZoneCFrame
+    end)
+end
+
+local cachedWeatherService = nil
+local function getWeatherService()
+    if cachedWeatherService ~= nil then return cachedWeatherService end
+    local ok, res = pcall(function()
+        local svLoader = ReplicatedStorage:FindFirstChild("Modules") and ReplicatedStorage.Modules:FindFirstChild("ServicesLoader")
+        if svLoader and svLoader:FindFirstChild("WeatherService_Client") then
+            return require(svLoader.WeatherService_Client)
+        end
+        return nil
+    end)
+    if ok and res then
+        cachedWeatherService = res
+        return res
+    end
+    return nil
+end
+
+local function isWeatherServiceCandyActive()
+    local ws = getWeatherService()
+    if ws and type(ws.Events) == "table" then
+        local now = os.time()
+        for eName, endTs in pairs(ws.Events) do
+            if string.find(string.lower(tostring(eName)), "candy") then
+                if type(endTs) ~= "number" or endTs > now then
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+local function checkCandyEventActive()
+    if isCandyEventActive then return true end
+    if isWeatherServiceCandyActive() then
+        isCandyEventActive = true
+        return true
+    end
+    -- HANYA cek folder Debris (JANGAN cek workspace karena ada objek dekorasi map statis)
+    local debris = workspace:FindFirstChild("Debris")
+    if debris then
+        for _, child in ipairs(debris:GetChildren()) do
+            if isCandyItem(child) then
+                isCandyEventActive = true
+                return true
+            end
+        end
+    end
+    return false
+end
+
+local function isCandyEventOngoing()
+    if not isCandyEventEnabled() then return false end
+    if isCandyEventActive then return true end
+    if #activeCandyWaypoints > 0 then return true end
+    if isWeatherServiceCandyActive() then
+        isCandyEventActive = true
+        return true
+    end
+    if checkCandyEventActive() then
+        isCandyEventActive = true
+        return true
+    end
+    return false
+end
+
+-- Pengecekan apakah ada Permen Nyata di Map (Waypoints aktif dari rev_candySpawn atau item di Debris)
+local function hasCandyOnMap()
+    if #activeCandyWaypoints > 0 then return true end
+
+    -- Cek Debris folder (HANYA objek di Debris, JANGAN cek workspace karena ada objek map statis)
+    local debris = workspace:FindFirstChild("Debris")
+    if debris then
+        for _, child in ipairs(debris:GetChildren()) do
+            if isCandyItem(child) then
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
+-- Pengecekan Event Override: HANYA bypass whitelist jika:
+-- 1. Candy Event aktif
+-- 2. rev_candySpawn TIDAK mengirim {} (empty)
+-- 3. Ada permen nyata (waypoint aktif atau item di Debris)
+local function shouldBypassWhitelist()
+    if not isCandyEventEnabled() then return false end
+    if not isCandyEventOngoing() then return false end
+    if emptyCandySpawnReceived then return false end
+    if #activeCandyWaypoints > 0 then return true end
+    if hasCandyOnMap() then return true end
+    return false
+end
+
+-- Validasi Brainrot Whitelist
+local function isBrainrotWhitelisted(name)
+    if not _G.useBrainrotWhitelist then return true end
+    if not _G.brainrotWhitelist or #_G.brainrotWhitelist == 0 then return true end
+    if not name or name == "" then return false end
+
+    local lowerName = string.lower(tostring(name))
+    for _, wlName in ipairs(_G.brainrotWhitelist) do
+        local cleanWl = string.lower(tostring(wlName))
+        if cleanWl ~= "" and (lowerName == cleanWl or string.find(lowerName, cleanWl, 1, true)) then
+            return true
+        end
+    end
+    return false
+end
+
+local function shouldKick()
+    if not _G.autoFarm then return false end
+    if _G.onlyCandyEvent then
+        return isCandyEventOngoing()
+    end
+    return true
+end
+
+-- =============================================
+-- 🛡️ ANTI AFK (MURNI TANPA KLIK APAPUN)
+-- =============================================
 pcall(function()
     if getconnections then
         for _, conn in ipairs(getconnections(lp.Idled)) do
@@ -187,19 +956,9 @@ lp.Idled:Connect(function()
     end)
 end)
 
--- Pembersih Memori Tiap 60 Detik
-task.spawn(function()
-    while task.wait(60) do
-        pcall(function()
-            if gcinfo then gcinfo() end
-            if collectgarbage then collectgarbage("collect") end
-        end)
-    end
-end)
-
--- ==============================================================================
--- 📡 DAFTAR REMOTE NETWORK & AUTO-RESOLVER
--- ==============================================================================
+-- =============================================
+-- 📡 DAFTAR REMOTE NETWORK RESMI & AUTO-RESOLVER
+-- =============================================
 local networkFolder = nil
 pcall(function()
     local shared = ReplicatedStorage:FindFirstChild("Shared") or ReplicatedStorage:WaitForChild("Shared", 3)
@@ -220,146 +979,147 @@ local function findRemote(name, className)
     return nil
 end
 
-local ref_B_SellAll = findRemote("ref_B_SellAll", "RemoteFunction")
+local ref_KickEvent = findRemote("ref_KickEvent", "RemoteFunction")
+local kickRemote = findRemote("rev_KickEvent", "RemoteEvent")
+local rev_kickPhase2 = findRemote("rev_kickPhase2", "RemoteEvent")
+local rev_Collected = findRemote("rev_Collected", "RemoteEvent")
+local rev_KickEventEnded = findRemote("rev_KickEventEnded", "RemoteEvent")
 local rev_AddedWeather = findRemote("rev_AddedWeather", "RemoteEvent")
 local rev_RemovedWeather = findRemote("rev_RemovedWeather", "RemoteEvent")
 local rev_candySpawn = findRemote("rev_candySpawn", "RemoteEvent")
 
--- ==============================================================================
--- 💰 FITUR 1: AUTO SELL ALL (SETIAP 5 DETIK NONSTOP)
--- ==============================================================================
-task.spawn(function()
-    while true do
-        local delayTime = (_G.sellInterval and _G.sellInterval > 0) and _G.sellInterval or 5
-        task.wait(delayTime)
-        if _G.autoSellAll then
-            pcall(function()
-                local sellRemote = ref_B_SellAll
-                if not sellRemote or not sellRemote.Parent then
-                    sellRemote = findRemote("ref_B_SellAll", "RemoteFunction")
-                    ref_B_SellAll = sellRemote
-                end
+local ref_B_SellAll = findRemote("ref_B_SellAll", "RemoteFunction")
 
-                if sellRemote and sellRemote:IsA("RemoteFunction") then
-                    sellRemote:InvokeServer()
-                    logConsole("💰 [AUTO SELL] Berhasil menjual seluruh brainrot!")
-                end
-            end)
-        end
+-- =============================================
+-- 💰 AUTO SELL ALL (SETIAP 5 DETIK)
+-- =============================================
+task.spawn(function()
+    while task.wait(5) do
+        if not _G.autoFarm or not _G.autoSellAll then continue end
+        pcall(function()
+            local sellRemote = ref_B_SellAll or (networkFolder and networkFolder:FindFirstChild("ref_B_SellAll"))
+            if sellRemote then
+                sellRemote:InvokeServer()
+            end
+        end)
     end
 end)
 
--- ==============================================================================
--- 🍬 FITUR 2: CANDY HITBOX EXPANDER ENGINE (200x200x200 STUDS)
--- ==============================================================================
-local CANDY_HITBOX_SIZE = _G.candyHitboxSize or Vector3.new(200, 200, 200)
-local isCandyEventActive = false
-local expandedCandyObjects = {}
+-- =============================================
+-- 🎮 LAPIS 1: ULTRA-LIGHTWEIGHT CONTROLLER HOOK (ZERO-FREEZE & NON-BLOCKING)
+-- =============================================
+local cachedGameController = nil
 
-local function expandCandyHitbox(inst)
-    if not _G.autoCandyEvent or not inst or not inst.Parent then return end
-    if not isCandyItem(inst) then return end
-    if expandedCandyObjects[inst] then return end
-
-    pcall(function()
-        local targetPart = inst:IsA("BasePart") and inst or inst:FindFirstChildWhichIsA("BasePart", true)
-        if targetPart then
-            targetPart.CanCollide = false
-            targetPart.CanTouch = true
-            targetPart.CanQuery = true
-            targetPart.CastShadow = false
-            targetPart.Transparency = 0.5
-            local targetSize = _G.candyHitboxSize or CANDY_HITBOX_SIZE
-            if targetPart.Size ~= targetSize then
-                targetPart.Size = targetSize
-            end
-            expandedCandyObjects[inst] = true
-            logConsole(string.format("🍬 [CANDY HITBOX] '%s' (%s) berhasil diperbesar ke 200 studs!", inst.Name, targetPart.Name))
-        end
-    end)
-end
-
--- Pemindai semua permen di workspace & Debris
-local function scanAndExpandAllCandies()
-    if not _G.autoCandyEvent then return end
-
-    -- Bersihkan cache item yang sudah musnah dari ingatan
-    for obj, _ in pairs(expandedCandyObjects) do
-        if not obj or not obj.Parent then
-            expandedCandyObjects[obj] = nil
-        end
+local function getGameController()
+    if cachedGameController and type(cachedGameController.Kick) == "function" then
+        return cachedGameController
     end
 
-    local debris = workspace:FindFirstChild("Debris")
-    local containers = {workspace}
-    if debris then table.insert(containers, debris) end
-
-    for _, container in ipairs(containers) do
-        for _, child in ipairs(container:GetChildren()) do
-            if isCandyItem(child) then
-                expandCandyHitbox(child)
-            end
-        end
-    end
-end
-
--- Hook Engine Cuaca Game (WeatherService_Client)
-local function isWeatherServiceCandyActive()
-    local ok, result = pcall(function()
-        local svLoader = ReplicatedStorage:FindFirstChild("Modules") and ReplicatedStorage.Modules:FindFirstChild("ServicesLoader")
-        local ws = svLoader and svLoader:FindFirstChild("WeatherService_Client") and require(svLoader.WeatherService_Client)
-        if ws and type(ws.Events) == "table" then
-            local now = os.time()
-            for eName, endTs in pairs(ws.Events) do
-                if string.find(string.lower(tostring(eName)), "candy") then
-                    if type(endTs) ~= "number" or endTs > now then
-                        return true
+    if getgc then
+        local ok, tables = pcall(function() return getgc(true) end)
+        if ok and type(tables) == "table" then
+            for _, item in ipairs(tables) do
+                if type(item) == "table" then
+                    if rawget(item, "CanKick") ~= nil and type(rawget(item, "Kick")) == "function" then
+                        cachedGameController = item
+                        return item
                     end
                 end
             end
         end
-        return false
-    end)
-    return (ok and result == true)
+    end
+
+    return nil
 end
 
--- ==============================================================================
--- ⚡ LISTENER DESCENDANT ADDED (REAL-TIME INSTANT HITBOX EXPANSION)
--- ==============================================================================
-workspace.DescendantAdded:Connect(function(descendant)
-    task.defer(function()
-        if not descendant or not descendant.Parent then return end
-        if _G.autoCandyEvent and isCandyItem(descendant) then
-            expandCandyHitbox(descendant)
+-- Pre-fetch controller saat script pertama kali dimuat
+task.spawn(function()
+    task.wait(1)
+    getGameController()
+end)
+
+-- =============================================
+-- 📡 LISTENER EVENT SERVER (REAL-TIME RECEPTOR)
+-- =============================================
+local phase2Fired = false
+local collectedFired = false
+local kickEndedFired = false
+
+local function setupServerEventListeners()
+    local p2 = rev_kickPhase2 or findRemote("rev_kickPhase2", "RemoteEvent")
+    if p2 then
+        p2.OnClientEvent:Connect(function(rewardTable, ...)
+            phase2Fired = true
+            pcall(function()
+                if type(rewardTable) == "table" and rewardTable[1] then
+                    lastRewardBrainrotName = tostring(rewardTable[1].Name or "")
+                    local mutation = tostring(rewardTable[1].Mutation or "Normal")
+                    lastRewardDesc = string.format("%s [%s]", lastRewardBrainrotName ~= "" and lastRewardBrainrotName or "Brainrot", mutation)
+                    logConsole(string.format("🎉 Gacha Reward Masuk: %s", lastRewardDesc))
+                elseif type(rewardTable) == "table" and rewardTable.Name then
+                    lastRewardBrainrotName = tostring(rewardTable.Name or "")
+                    lastRewardDesc = lastRewardBrainrotName
+                    logConsole(string.format("🎉 Gacha Reward Masuk: %s", lastRewardDesc))
+                end
+            end)
+        end)
+    end
+
+    local col = rev_Collected or findRemote("rev_Collected", "RemoteEvent")
+    if col then
+        col.OnClientEvent:Connect(function(...)
+            collectedFired = true
+            logConsole("📥 [SERVER EVENT] rev_Collected diterima!")
+            -- 🛡️ SECURITY TELEPORT: Jika reward sudah collected, segera teleport ke Safe Zone
+            pcall(function()
+                local char = lp.Character
+                local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                if hrp and (targetAction == "WalkToSafeZone" or targetAction == "StayStillUntilDead" or targetAction == "WaitingForCollected") then
+                    teleportToSafeZone(hrp)
+                end
+            end)
+        end)
+    end
+
+    -- 🛡️ SECURITY LISTENER: Deteksi Teks / Pop-up "Collected" di PlayerGui
+    pcall(function()
+        local pGui = lp:FindFirstChild("PlayerGui") or lp:WaitForChild("PlayerGui", 2)
+        if pGui then
+            pGui.DescendantAdded:Connect(function(desc)
+                if desc:IsA("TextLabel") or desc:IsA("TextButton") then
+                    local txt = string.lower(tostring(desc.Text or ""))
+                    if string.find(txt, "collected") then
+                        collectedFired = true
+                        logConsole("📥 [UI SECURITY] Teks 'Collected' terdeteksi di PlayerGui! Memicu security teleport...")
+                        pcall(function()
+                            local char = lp.Character
+                            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                            if hrp and (targetAction == "WalkToSafeZone" or targetAction == "StayStillUntilDead" or targetAction == "WaitingForCollected") then
+                                teleportToSafeZone(hrp)
+                            end
+                        end)
+                    end
+                end
+            end)
         end
     end)
-end)
 
--- Fast Background Watchdog Loop (tiap 0.2 detik)
-task.spawn(function()
-    while task.wait(0.2) do
-        pcall(scanAndExpandAllCandies)
+    local ended = rev_KickEventEnded or findRemote("rev_KickEventEnded", "RemoteEvent")
+    if ended then
+        ended.OnClientEvent:Connect(function(...)
+            kickEndedFired = true
+        end)
     end
-end)
 
--- Scan awal saat script dieksekusi
-task.spawn(function()
-    task.wait(0.1)
-    pcall(scanAndExpandAllCandies)
-end)
-
--- ==============================================================================
--- 🌦️ SINKRONISASI REMOTE WEATHER & CANDY SPAWN LISTENER
--- ==============================================================================
-local function setupWeatherListeners()
     local addW = rev_AddedWeather or findRemote("rev_AddedWeather", "RemoteEvent")
     if addW then
         addW.OnClientEvent:Connect(function(weatherType, ...)
             local wStr = string.lower(tostring(weatherType or ""))
             if string.find(wStr, "candy") then
-                isCandyEventActive = true
-                logConsole(string.format("📡 [WEATHER] Event Candy Dimulai: %s! Memperbesar seluruh hitbox permen...", tostring(weatherType)))
-                pcall(scanAndExpandAllCandies)
+                if isCandyEventEnabled() then
+                    isCandyEventActive = true
+                    logConsole("🍬 Event Cuaca: CANDY EVENT AKTIF! Memulai Candy Hitbox Expander & Auto Navigator...")
+                end
             end
         end)
     end
@@ -370,40 +1130,468 @@ local function setupWeatherListeners()
             local wStr = string.lower(tostring(weatherType or ""))
             if string.find(wStr, "candy") then
                 isCandyEventActive = false
-                logConsole(string.format("☁️ [WEATHER] Event %s Berakhir.", tostring(weatherType)))
+                activeCandyWaypoints = {}
+                emptyCandySpawnReceived = false
+                logConsole("☁️ Event Cuaca: Candy Event Selesai. Standby di Safe Zone...")
             end
         end)
     end
 
-    -- Listener rev_candySpawn: Otomatis mendeteksi nama permen baru
+    -- Listener rev_candySpawn (Koordinat Permen & Empty Spawn Detector)
     local candyRemote = rev_candySpawn or findRemote("rev_candySpawn", "RemoteEvent")
     if candyRemote then
         candyRemote.OnClientEvent:Connect(function(spawnData, ...)
             pcall(function()
+                kickAcceptedByServer = true
+                if not isCandyEventEnabled() then return end
+                logConsole("🍬 [EVENT REMOTE] rev_candySpawn diterima!")
                 if type(spawnData) == "table" then
+                    local count = 0
+                    local newWaypoints = {}
                     for _, item in pairs(spawnData) do
-                        if type(item) == "table" and item.Name then
-                            registerCandyName(item.Name)
+                        count = count + 1
+                        if type(item) == "table" then
+                            if item.Name then
+                                registerCandyName(item.Name)
+                            end
+                            if item.Position and typeof(item.Position) == "Vector3" then
+                                table.insert(newWaypoints, item.Position)
+                            elseif item.CFrame and typeof(item.CFrame) == "CFrame" then
+                                table.insert(newWaypoints, item.CFrame.Position)
+                            end
+                        elseif typeof(item) == "Vector3" then
+                            table.insert(newWaypoints, item)
                         end
                     end
+
+                    if count == 0 or #newWaypoints == 0 then
+                        emptyCandySpawnReceived = true
+                        activeCandyWaypoints = {}
+                        logConsole("⚠️ [CANDY SPAWN] Data kosong ({}) diterima! Tidak ada permen yang spawn.")
+                    else
+                        emptyCandySpawnReceived = false
+                        activeCandyWaypoints = newWaypoints
+                        logConsole(string.format("🍬 [CANDY SPAWN] Berhasil mendeteksi %d titik permen untuk waypoint navigasi!", #activeCandyWaypoints))
+                    end
+                elseif spawnData == nil then
+                    emptyCandySpawnReceived = true
+                    activeCandyWaypoints = {}
+                    logConsole("⚠️ [CANDY SPAWN] Data nil diterima! Tidak ada permen yang spawn.")
                 end
-                pcall(scanAndExpandAllCandies)
             end)
         end)
     end
 end
+setupServerEventListeners()
 
-setupWeatherListeners()
+-- =============================================
+-- 🚀 FUNGSI EKSEKUSI TENDANGAN REINFORCED (LAPIS 1 + LAPIS 3 NETWORK)
+-- =============================================
+local function executeKick()
+    local timestamp = nil
+    pcall(function() timestamp = workspace:GetServerTimeNow() end)
+    if not timestamp or type(timestamp) ~= "number" or timestamp <= 0 then
+        timestamp = tick()
+    end
 
--- Periksa status cuaca saat script pertama kali aktif
+    logConsole("⚡ Mengeksekusi Kick (Lapis 1 Controller Hook + Lapis 3 Network)...")
+
+    -- 🎮 LAPIS 1: Direct GameController Hook (Buka Kunci Cooldown & Panggil Kick Asli di Game)
+    pcall(function()
+        local controller = getGameController()
+        if controller then
+            if controller.UnblockKick then pcall(function() controller:UnblockKick() end) end
+            if controller.ResetCooldown then pcall(function() controller:ResetCooldown() end) end
+            controller.CanKick = true
+            if controller.InGame ~= nil then controller.InGame = false end
+            if controller.Status ~= nil and controller.Status == "InKick" then controller.Status = "Lobby" end
+            pcall(function() controller:Kick(1, 1) end)
+        end
+    end)
+
+    -- 📡 LAPIS 3: Network Remote Invocation (Jalur Resmi Server Non-Blocking & Konfirmasi Sukses)
+    task.spawn(function()
+        pcall(function()
+            local targetRemote = ref_KickEvent or (networkFolder and networkFolder:FindFirstChild("ref_KickEvent"))
+            if not targetRemote then
+                for _, r in pairs(ReplicatedStorage:GetDescendants()) do
+                    if r:IsA("RemoteFunction") and r.Name == "ref_KickEvent" then
+                        targetRemote = r
+                        ref_KickEvent = r
+                        break
+                    end
+                end
+            end
+
+            if targetRemote and targetRemote:IsA("RemoteFunction") then
+                local res = targetRemote:InvokeServer(1, 1, timestamp)
+                if res == true or (type(res) == "table" and res[1] == true) then
+                    kickAcceptedByServer = true
+                    logConsole("✅ [SERVER CONFIRMED] Tendangan resmi terdaftar di server! Bola sedang terbang...")
+                end
+            end
+
+            local fallbackEvent = kickRemote or (networkFolder and networkFolder:FindFirstChild("rev_KickEvent"))
+            if fallbackEvent and fallbackEvent:IsA("RemoteEvent") then
+                fallbackEvent:FireServer(1, 1, timestamp)
+            end
+        end)
+    end)
+end
+
+-- =============================================
+-- ⚙️ MAIN LOOP (STATE MACHINE AUTO FARM)
+-- =============================================
 task.spawn(function()
-    if isWeatherServiceCandyActive() then
-        isCandyEventActive = true
-        logConsole("🍬 [WEATHER INIT] Terdeteksi Candy Event sedang aktif di server!")
-        pcall(scanAndExpandAllCandies)
+    while task.wait(0.05) do
+        if not _G.autoFarm then continue end
+
+        local char = lp.Character
+        local hum = char and char:FindFirstChild("Humanoid")
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+
+        if not hum or not hrp then continue end 
+
+        -- [ PENDETEKSI MATI & RESPAWN ]
+        if hum.Health <= 0 then
+            targetAction = "WaitingRespawn"
+            lastAction = "WaitingRespawn"
+            globalStuckTimer = 0
+            kickRetryCount = 0
+            kickAcceptedByServer = false
+            activeCandyWaypoints = {}
+            emptyCandySpawnReceived = false
+            continue 
+        end
+
+        if targetAction == "WaitingRespawn" and hum.Health > 0 then
+            -- RESPAWN SELESAI: LANGSUNG TELEPORTASI KE SAFE ZONE UNTUK KICK!
+            teleportToSafeZone(hrp)
+            targetAction = "Idle"
+            lastAction = "Idle"
+            kickRetryCount = 0
+            kickAcceptedByServer = false
+            stateTimer = 0
+            activeCandyWaypoints = {}
+            emptyCandySpawnReceived = false
+            lastRewardBrainrotName = ""
+            logConsole("Karakter Respawn -> Teleportasi instan ke Safe Zone untuk Kick...")
+        end
+
+        -- [ PENGATUR WAKTU & FAILSAFE RESET ]
+        if targetAction ~= lastAction then
+            globalStuckTimer = 0
+            stateTimer = 0 
+            lastAction = targetAction
+            logConsole("Transisi Fase -> " .. tostring(targetAction))
+        else
+            globalStuckTimer = globalStuckTimer + 0.05
+            stateTimer = stateTimer + 0.05 
+            
+            local maxTimeout = _G.failsafeTimeout or 25
+            if globalStuckTimer >= maxTimeout and targetAction ~= "WalkToSafeZone" then
+                globalStuckTimer = 0
+                stateTimer = 0
+                lastRewardBrainrotName = ""
+                emptyCandySpawnReceived = false
+                teleportToSafeZone(hrp)
+                targetAction = "Idle"
+                logConsole("🚨 Failsafe Triggered: Teleportasi reset ke Idle Safe Zone")
+                continue
+            end
+        end
+
+        local distToSafeZone = (hrp.Position - safeZone).Magnitude
+
+        -- [ FASE 1: IDLE / NENDANG DI SAFE ZONE (TELEPORTASI INSTAN JIKA JAUH) ]
+        if targetAction == "Idle" then
+            if distToSafeZone > 5 then
+                teleportToSafeZone(hrp)
+            else
+                if shouldKick() then
+                    local delayKick = (_G.kickDelay and _G.kickDelay > 0) and _G.kickDelay or 0.5
+                    if stateTimer >= delayKick then
+                        pcall(function()
+                            hrp.AssemblyLinearVelocity = Vector3.zero
+                            hrp.AssemblyAngularVelocity = Vector3.zero
+                        end)
+                        kickRetryCount = 0
+                        kickAcceptedByServer = false
+                        phase2Fired = false
+                        collectedFired = false
+                        kickEndedFired = false
+                        emptyCandySpawnReceived = false
+                        lastRewardBrainrotName = ""
+                        executeKick()
+                        targetAction = "WaitingForPhase2"
+                    end
+                else
+                    task.wait(0.1)
+                end
+            end
+
+        -- [ FASE 2: NUNGGU PHASE 2 DARI SERVER / DETEKSI EMPTY SPAWN / WHITELIST CHECK ]
+        elseif targetAction == "WaitingForPhase2" then
+            if phase2Fired or collectedFired or kickEndedFired then
+                phase2Fired = false
+                kickRetryCount = 0
+                kickAcceptedByServer = false
+
+                -- Pengecekan Whitelist & Candy Override
+                local isWhitelisted = _G.useBrainrotWhitelist and isBrainrotWhitelisted(lastRewardBrainrotName)
+                local bypassWl = shouldBypassWhitelist()
+
+                local isAllowed = false
+                if bypassWl then
+                    isAllowed = true
+                elseif isWhitelisted then
+                    isAllowed = true
+                elseif not _G.useBrainrotWhitelist and not emptyCandySpawnReceived and (not _G.onlyCandyEvent or hasCandyOnMap()) then
+                    isAllowed = true
+                end
+
+                if isAllowed then
+                    targetAction = "WalkToSafeZone"
+                    if bypassWl and _G.useBrainrotWhitelist and not isWhitelisted then
+                        logConsole(string.format("🍬 [EVENT OVERRIDE] Ada permen di map! Brainrot '%s' tetap dibawa ke Safe Zone sembari ambil permen...", tostring(lastRewardBrainrotName)))
+                    else
+                        logConsole(string.format("✅ [PASSED] Membawa Brainrot '%s' Menuju Safe Zone", tostring(lastRewardBrainrotName)))
+                    end
+                else
+                    targetAction = "StayStillUntilDead"
+                    if emptyCandySpawnReceived then
+                        logConsole(string.format("🛑 [EMPTY CANDY SPAWN] Koordinat permen kosong ({}) & Brainrot '%s' bukan whitelist! Bot diam di tempat...", tostring(lastRewardBrainrotName)))
+                    elseif not hasCandyOnMap() and isCandyEventOngoing() then
+                        logConsole(string.format("🛑 [NO CANDY ON MAP] Gada permen yang spawn di map & Brainrot '%s' bukan whitelist! Bot diam di tempat...", tostring(lastRewardBrainrotName)))
+                    else
+                        logConsole(string.format("🛑 [WHITELIST REJECTED] Brainrot '%s' TIDAK ada di whitelist! Bot diam di tempat (tidak dibawa ke safe zone)...", tostring(lastRewardBrainrotName)))
+                    end
+                end
+
+            -- Kondisi 1: Kick belum terdaftar sama sekali di server setelah 3 detik -> Retry
+            elseif not kickAcceptedByServer and stateTimer >= 3.0 and not phase2Fired and not collectedFired and not kickEndedFired then
+                if kickRetryCount < MAX_KICK_RETRIES then
+                    kickRetryCount = kickRetryCount + 1
+                    stateTimer = 0
+                    logConsole(string.format("⚠️ [RETRY] Kick belum terdaftar di server, mencoba kick ulang #%d/%d...", kickRetryCount, MAX_KICK_RETRIES))
+                    executeKick()
+                else
+                    logConsole(string.format("🚨 [FAILSAFE] Gagal respon setelah %d kali retry! Memaksa Respawn/Reset Karakter...", MAX_KICK_RETRIES))
+                    kickRetryCount = 0
+                    kickAcceptedByServer = false
+                    stateTimer = 0
+                    targetAction = "WaitingRespawn"
+                    pcall(function()
+                        if hum then hum.Health = 0 end
+                        if char then char:BreakJoints() end
+                    end)
+                end
+
+            -- Kondisi 2: Kick sudah diterima server (bola sedang terbang), tunggu hingga maksimal 20 detik
+            elseif stateTimer >= 20.0 then
+                kickAcceptedByServer = false
+                targetAction = "Idle"
+                teleportToSafeZone(hrp)
+                logConsole("🚨 Phase 2 Timeout (20s) -> Teleportasi reset ke Safe Zone")
+            end
+
+        -- [ FASE KHUSUS: DIAM DI TEMPAT SAMPAI MATI (JIKA CANDY SPAWN KOSONG {} ATAU TIDAK LOLOS WHITELIST) ]
+        elseif targetAction == "StayStillUntilDead" then
+            -- 🛡️ SECURITY CHECK: Jika reward ternyata ter-collect saat sedang diam, langsung teleport ke Safe Zone untuk kick!
+            if collectedFired then
+                collectedFired = false
+                teleportToSafeZone(hrp)
+                mutationCount = mutationCount + 1
+                phase2Fired = false
+                kickRetryCount = 0
+                kickAcceptedByServer = false
+                activeCandyWaypoints = {}
+                emptyCandySpawnReceived = false
+                lastRewardBrainrotName = ""
+
+                if shouldKick() then
+                    local delayKick = (_G.kickDelay and _G.kickDelay > 0) and _G.kickDelay or 0.5
+                    task.wait(delayKick)
+                    executeKick()
+                    targetAction = "WaitingForPhase2"
+                    logConsole(string.format("⚡ [COLLECTED SECURITY] Reward Collected saat diam! Teleport ke Safe Zone & Re-Kick (Jeda %.1fs)! Total: %d", delayKick, mutationCount))
+                else
+                    targetAction = "Idle"
+                    logConsole(string.format("⚡ [COLLECTED SECURITY] Reward Collected saat diam! Standby di Safe Zone. Total: %d", mutationCount))
+                end
+                continue
+            end
+
+            -- BOT MURNI DIAM DI TEMPAT SAMPAI MATI / AUTO-RESET (DILARANG JALAN KE SAFE ZONE!)
+            pcall(function()
+                hum:MoveTo(hrp.Position)
+                hrp.AssemblyLinearVelocity = Vector3.zero
+                hrp.AssemblyAngularVelocity = Vector3.zero
+            end)
+
+            -- Failsafe Auto-Reset: Jika dalam 1.5 detik karakter tidak mati sendiri, paksa respawn agar bisa teleport ke safe zone untuk kick berikutnya!
+            if stateTimer >= 1.5 then
+                logConsole("💀 [AUTO-RESET] Bot diam 1.5s -> Memaksa respawn agar bisa kembali ke Safe Zone untuk kick berikutnya...")
+                pcall(function()
+                    hum.Health = 0
+                    char:BreakJoints()
+                end)
+            end
+            -- Menunggu karakter mati sendiri jika tidak ada event (hum.Health <= 0 akan ditangkap oleh pendeteksi mati di atas)
+
+        -- [ FASE 3: JALAN KAKI MEMBAWA BRAINROT MENUJU SAFE ZONE (JANGAN TELEPORTASI!) ]
+        elseif targetAction == "WalkToSafeZone" then
+            -- 🛡️ FAILSAFE TIMEOUT KHUSUS JALAN KAKI: Jika jalan kaki melebihi 45 detik, paksa teleport ke Safe Zone
+            if stateTimer >= 45.0 then
+                logConsole("🚨 [WALK TIMEOUT] Terlalu lama berjalan (45s) -> Memaksa teleport ke Safe Zone!")
+                teleportToSafeZone(hrp)
+                targetAction = "WaitingForCollected"
+                activeCandyWaypoints = {}
+                currentWaypointTarget = nil
+                waypointStuckTimer = 0
+                continue
+            end
+
+            -- 🛡️ SECURITY CHECK: Jika reward sudah ter-collect oleh server / UI di tengah jalan, langsung teleport & kick lagi!
+            if collectedFired then
+                collectedFired = false
+                teleportToSafeZone(hrp)
+                mutationCount = mutationCount + 1
+                phase2Fired = false
+                kickRetryCount = 0
+                kickAcceptedByServer = false
+                activeCandyWaypoints = {}
+                currentWaypointTarget = nil
+                waypointStuckTimer = 0
+                emptyCandySpawnReceived = false
+                lastRewardBrainrotName = ""
+
+                if shouldKick() then
+                    local delayKick = (_G.kickDelay and _G.kickDelay > 0) and _G.kickDelay or 0.5
+                    task.wait(delayKick)
+                    executeKick()
+                    targetAction = "WaitingForPhase2"
+                    logConsole(string.format("⚡ [COLLECTED SECURITY] Barang sudah Collected di tengah jalan! Langsung teleport ke Safe Zone & Re-Kick (Jeda %.1fs)! Total: %d", delayKick, mutationCount))
+                else
+                    targetAction = "Idle"
+                    logConsole(string.format("⚡ [COLLECTED SECURITY] Barang sudah Collected! Standby di Safe Zone. Total: %d", mutationCount))
+                end
+                continue
+            end
+
+            pcall(function()
+                if hum.WalkSpeed < 16 then hum.WalkSpeed = 16 end
+                if hrp.Anchored then hrp.Anchored = false end
+            end)
+
+            -- Navigasi sembari melewati koordinat permen
+            local targetPos = safeZone
+            if isWaypointNavEnabled() and #activeCandyWaypoints > 0 then
+                local bestIdx = nil
+                local bestDist = math.huge
+                for i, pos in ipairs(activeCandyWaypoints) do
+                    local d = (Vector3.new(hrp.Position.X, 0, hrp.Position.Z) - Vector3.new(pos.X, 0, pos.Z)).Magnitude
+                    if d < bestDist then
+                        bestDist = d
+                        bestIdx = i
+                    end
+                end
+
+                if bestIdx then
+                    local wp = activeCandyWaypoints[bestIdx]
+                    local reachThreshold = _G.candyReachDist or 25
+
+                    -- 🛡️ WAYPOINT STUCK WATCHDOG: Jika karakter mencoba mencapai waypoint yang sama selama > 6 detik, lewati waypoint tersebut!
+                    if currentWaypointTarget == wp then
+                        waypointStuckTimer = waypointStuckTimer + 0.05
+                        if waypointStuckTimer >= 6.0 then
+                            table.remove(activeCandyWaypoints, bestIdx)
+                            logConsole(string.format("⚠️ [WAYPOINT STUCK] Waypoint tidak terjangkau dalam 6s! Melewati ke titik berikutnya... Sisa: %d", #activeCandyWaypoints))
+                            waypointStuckTimer = 0
+                            currentWaypointTarget = nil
+                            wp = nil
+                        end
+                    else
+                        currentWaypointTarget = wp
+                        waypointStuckTimer = 0
+                    end
+
+                    if wp and bestDist <= reachThreshold then
+                        table.remove(activeCandyWaypoints, bestIdx)
+                        currentWaypointTarget = nil
+                        waypointStuckTimer = 0
+                        logConsole(string.format("🍬 Waypoint permen terlewati/terambil! Sisa waypoint: %d", #activeCandyWaypoints))
+                        if #activeCandyWaypoints > 0 then
+                            local nextIdx = 1
+                            local nextDist = math.huge
+                            for i, pos in ipairs(activeCandyWaypoints) do
+                                local d = (Vector3.new(hrp.Position.X, 0, hrp.Position.Z) - Vector3.new(pos.X, 0, pos.Z)).Magnitude
+                                if d < nextDist then
+                                    nextDist = d
+                                    nextIdx = i
+                                end
+                            end
+                            wp = activeCandyWaypoints[nextIdx]
+                        else
+                            wp = nil
+                        end
+                    end
+
+                    if wp then
+                        -- Sesuaikan koordinat Y agar karakter tidak terantuk ke bawah tanah
+                        targetPos = Vector3.new(wp.X, math.max(wp.Y, hrp.Position.Y), wp.Z)
+                    end
+                end
+            else
+                currentWaypointTarget = nil
+                waypointStuckTimer = 0
+            end
+
+            -- Bot TETAP MURNI JALAN KAKI via MoveTo
+            hum:MoveTo(targetPos)
+
+            if distToSafeZone < 5 then
+                currentWaypointTarget = nil
+                waypointStuckTimer = 0
+                targetAction = "WaitingForCollected"
+                logConsole("Tiba di Safe Zone -> Menunggu Reward Collected")
+            end
+
+        -- [ FASE 4: NUNGGU COLLECTED & RE-KICK INSTAN (TELEPORTASI KE SAFEZONE UNTUK KICK) ]
+        elseif targetAction == "WaitingForCollected" then
+            if distToSafeZone >= 5 then
+                teleportToSafeZone(hrp)
+            end
+
+            if collectedFired or kickEndedFired or stateTimer >= 2.5 then
+                collectedFired = false
+                kickEndedFired = false
+                mutationCount = mutationCount + 1
+                phase2Fired = false
+                kickRetryCount = 0
+                kickAcceptedByServer = false
+                activeCandyWaypoints = {}
+                emptyCandySpawnReceived = false
+                lastRewardBrainrotName = ""
+
+                -- Pastikan posisi presisi di SafeZone via teleportasi
+                teleportToSafeZone(hrp)
+
+                if shouldKick() then
+                    local delayKick = (_G.kickDelay and _G.kickDelay > 0) and _G.kickDelay or 0.5
+                    task.wait(delayKick)
+                    executeKick()
+                    targetAction = "WaitingForPhase2"
+                    logConsole(string.format("🎉 Total Mutasi: %d | Re-Kick (Jeda %.1fs)!", mutationCount, delayKick))
+                else
+                    targetAction = "Idle"
+                    logConsole(string.format("🎉 Total Mutasi: %d | Ronde Tuntas -> Standby di Safe Zone (Menunggu Event Candy)", mutationCount))
+                end
+            end
+        end
     end
 end)
 
 print("--------------------------------------------------")
-print("✅ [CandyEvent] Perfect Candy Hitbox Engine & Auto Sell Siap Berjalan 24/7!")
+print("🚀 [SUKSES] KALB Candy Event & Teleport Kick Auto Farm Siap Berjalan!")
 print("--------------------------------------------------")
