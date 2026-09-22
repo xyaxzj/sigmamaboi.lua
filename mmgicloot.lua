@@ -1,19 +1,21 @@
 -- ==============================================================================
--- 🥔 KALB ULTRA LIGHTWEIGHT AUTO FARM V4 (CANDY EVENT & TELEPORT KICK EDITION)
+-- 🥔 KALB ULTRA LIGHTWEIGHT AUTO FARM V5.0 (SAFE ANTI-LAG & CANDY EVENT EDITION)
 -- ==============================================================================
 -- Fitur & Alur:
 -- 1. ⚙️ Full Config Mode: Semua pengaturan diatur via variabel _G di baris atas (Tanpa UI)
 -- 2. 🚫 Total Player & Character Purger (100% Bersih & No Lag)
 -- 3. 🍬 Candy Weather Event Engine:
 --    - Mendeteksi rev_AddedWeather "Candy" & rev_candySpawn
---    - Memperbesar hitbox permen ke 200 studs (CanCollide=false, CanTouch=true, CanQuery=true)
---    - Mendukung CarriedCandy, Candy, Chocolate, Cake, Pancakes, Gummy Bear, Ice Cream, Gummy Worm, dll.
---    - Listener dinamis untuk mendaftarkan nama permen baru secara otomatis
+--    - Hitbox, Navigasi Waypoint & Debris Checker
+--    - Mendukung CarriedCandy, Candy, Chocolate, Cake, Pancakes, Gummy Bear, Ice Cream, dll.
 -- 4. 🧭 Candy Waypoint Navigation: Sembari membawa brainrot berjalan ke safe zone, melewati titik permen
--- 5. 💀 Empty Spawn Handler: Jika rev_candySpawn mengirim {}, diam di tempat sampai mati, respawn lalu teleport kick
--- 6. ⚡ Teleportation for Kick: Teleportasi instan ke safe zone saat Idle, Respawn, atau timeout untuk kick
---    (Saat membawa brainrot ke safe zone TETAP MURNI JALAN KAKI)
--- 7. 🥔 Ultra Anti-Lag V3 & Invisible Map (0% Beban Render GPU & No Machine Noise)
+-- 5. 💀 Empty Spawn Handler: Jika rev_candySpawn mengirim {}, diam di tempat sampai mati & respawn
+-- 6. ⚡ Teleportation for Kick: Teleportasi instan ke safe zone saat Idle, Respawn, atau timeout kick
+-- 7. 🥔 Safe Potato & Anti-Lag V5.0:
+--    - Container Emptying (Decor, Walls, Shops, Leaderboards, NPCs, Machines, Portal, Sell)
+--    - PlayerGui Optimizer (Enabled = false & Proteksi TouchGui HP)
+--    - Map Gray Semen, Purge Partikel/Lampu/Decal & Purge Lighting
+--    - Disarm error loop DecorationsHandler 60 FPS
 -- ==============================================================================
 
 if not game:IsLoaded() then game.Loaded:Wait() end
@@ -29,7 +31,7 @@ _G.enableCandyEvent     = true        -- [1] Master Switch: Aktifkan penanganan 
 _G.expandCandyHitbox    = false        -- [2] Hitbox Switch: Memperbesar hitbox Candy/Cokelat/dll ke ukuran yang ditentukan
 _G.candyHitboxSize      = Vector3.new(100, 100, 100) -- Ukuran hitbox Candy yang dibesarkan
 _G.candyWaypointNav     = true        -- [3] Navigation Switch: Pandu rute jalan kaki melintasi waypoint permen ke Safe Zone
-_G.candyReachDist       = 8           -- Jarak dasar (studs) horizontal untuk menganggap permen sudah terlewati/terambil (Auto-scaled saat speed kencang)
+_G.candyReachDist       = 1           -- Jarak dasar (studs) horizontal untuk menganggap permen sudah terlewati/terambil (Auto-scaled saat speed kencang)
 _G.candyAntiOvershoot   = true        -- [4] Anti-Overshoot & Drift: Redam momentum saat lari kencang agar tidak muter-muter / miss
 _G.verifyDebrisPickup   = true        -- [5] Debris Checker: Pastikan barang di Debris hilang saat dibawa; jika belum hilang, kembali ke waypoint
 _G.enableFireTouch      = false       -- [6] FireTouch Switch: true: picu firetouchinterest instan, false: nonaktif (murni fisik/hitbox)
@@ -55,7 +57,9 @@ _G.disable3dRender     = false       -- true: Layar freeze / 0% GPU saat AFK far
 _G.muteAudio           = true        -- true: Mute semua audio & reverb game (0% beban CPU audio)
 
 print("--------------------------------------------------")
-print("🚀 [INIT] Memuat KALB Auto Farm V3 (Ultra Anti-Lag & Potato Max Edition)...")
+print("🚀 [INIT] Memuat KALB Auto Farm V5.0 (Safe Potato & Anti-Lag Edition)...")
+print("✨ [VERSION] Build: V5.0 | Feature: Container Emptying & TouchGui Safe")
+print("--------------------------------------------------")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -270,19 +274,45 @@ local function shouldRemoveWorkspaceTarget(inst)
     return WORKSPACE_REMOVE_NAMES[lower] == true
 end
 
-local function handleWorkspaceTarget(inst)
-    if not shouldRemoveWorkspaceTarget(inst) then return false end
-    pcall(function()
-        local lower = string.lower(inst.Name)
-        if lower == "decor" then
-            -- JANGAN :Destroy() folder Decor agar DecorationsHandler bawaan game tidak error 60 FPS (Parent locked)
-            -- Cukup bersihkan seluruh isinya (pohon, rumput, dekorasi 100% musnah tanpa error)
-            inst:ClearAllChildren()
-        else
-            inst:Destroy()
+local function isInsideTargetContainer(inst)
+    if not inst or not inst.Parent then return false end
+    local curr = inst.Parent
+    while curr and curr ~= workspace and curr ~= game do
+        local lower = string.lower(curr.Name)
+        if WORKSPACE_REMOVE_NAMES[lower] then
+            return true
         end
-    end)
-    return true
+        curr = curr.Parent
+    end
+    return false
+end
+
+local function handleWorkspaceTarget(inst)
+    if not inst or not inst.Parent then return false end
+    if isLocalPlayerEntity(inst) or isProtectedEventItem(inst) then return false end
+
+    -- Kasus 1: Instansiasi adalah wadah target itu sendiri (Folder / Model)
+    if shouldRemoveWorkspaceTarget(inst) then
+        pcall(function()
+            if inst:IsA("Folder") or inst:IsA("Model") then
+                -- Kosongkan seluruh isinya (0% beban render GPU, bebas error "Parent is locked")
+                inst:ClearAllChildren()
+            else
+                inst:Destroy()
+            end
+        end)
+        return true
+    end
+
+    -- Kasus 2: Instansiasi adalah objek baru yang dimasukkan ke dalam wadah target yang sudah dikosongkan
+    if isInsideTargetContainer(inst) then
+        pcall(function()
+            inst:Destroy()
+        end)
+        return true
+    end
+
+    return false
 end
 
 local function purgeWorkspaceTargets()
@@ -296,23 +326,33 @@ local function purgeWorkspaceTargets()
 end
 
 -- =============================================
--- 📱 2. PLAYERGUI PURGER (HAPUS SELURUH ISI PLAYERGUI)
+-- 📱 2. PLAYERGUI OPTIMIZER (HIDE ALL SCREENGUI - 0% GPU DRAW CALLS)
 -- =============================================
+local function disableGuiElement(child)
+    if not child then return end
+    pcall(function()
+        -- Jangan matikan kontrol layar sentuh HP (analog & tombol lompat)
+        if child.Name == "TouchGui" then return end
+
+        if child:IsA("ScreenGui") or child:IsA("BillboardGui") or child:IsA("SurfaceGui") then
+            child.Enabled = false
+        end
+    end)
+end
+
 local function purgePlayerGui()
     if not _G.antiLag then return end
     pcall(function()
         local playerGui = lp and (lp:FindFirstChild("PlayerGui") or lp:WaitForChild("PlayerGui", 5))
         if not playerGui then return end
         for _, child in ipairs(playerGui:GetChildren()) do
-            pcall(function() child:Destroy() end)
+            disableGuiElement(child)
         end
         if not playerGui:GetAttribute("Kalb_CleanHooked") then
             playerGui:SetAttribute("Kalb_CleanHooked", true)
             playerGui.ChildAdded:Connect(function(child)
                 if not _G.antiLag then return end
-                task.defer(function()
-                    pcall(function() child:Destroy() end)
-                end)
+                task.defer(disableGuiElement, child)
             end)
         end
     end)
@@ -462,7 +502,7 @@ task.spawn(function()
                 task.wait()
             end
         end
-        logConsole("🚀 [ANTI-LAG] Workspace Targets Purged, PlayerGui Cleared & Map Gray Applied!")
+        logConsole("🚀 [ANTI-LAG] Workspace Targets Purged, PlayerGui Hidden & Map Gray Applied!")
     end
 end)
 
@@ -1594,8 +1634,8 @@ task.spawn(function()
             end)
 
             -- Failsafe Auto-Reset: Jika dalam 1.5 detik karakter tidak mati sendiri, paksa respawn agar bisa teleport ke safe zone untuk kick berikutnya!
-            if stateTimer >= 1.5 then
-                logConsole("💀 [AUTO-RESET] Bot diam 1.5s -> Memaksa respawn agar bisa kembali ke Safe Zone untuk kick berikutnya...")
+            if stateTimer >= 3 then
+                logConsole("💀 [AUTO-RESET] Bot diam 3s -> Memaksa respawn agar bisa kembali ke Safe Zone untuk kick berikutnya...")
                 pcall(function()
                     hum.Health = 0
                     char:BreakJoints()
