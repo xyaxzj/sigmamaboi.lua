@@ -1,5 +1,5 @@
 -- ==============================================================================
--- 🥔 KALB ULTRA LIGHTWEIGHT AUTO FARM V5.0 (SAFE ANTI-LAG & CANDY EVENT EDITION)
+-- 🥔 KALB ULTRA LIGHTWEIGHT AUTO FARM V5.1 (SMOOTH SPRINT CANDY EDITION)
 -- ==============================================================================
 -- Fitur & Alur:
 -- 1. ⚙️ Full Config Mode: Semua pengaturan diatur via variabel _G di baris atas (Tanpa UI)
@@ -57,8 +57,8 @@ _G.disable3dRender     = false       -- true: Layar freeze / 0% GPU saat AFK far
 _G.muteAudio           = true        -- true: Mute semua audio & reverb game (0% beban CPU audio)
 
 print("--------------------------------------------------")
-print("🚀 [INIT] Memuat KALB Auto Farm V5.0 (Safe Potato & Anti-Lag Edition)...")
-print("✨ [VERSION] Build: V5.0 | Feature: Container Emptying & TouchGui Safe")
+print("🚀 [INIT] Memuat KALB Auto Farm V5.1 (Smooth Sprint & Instant Pickup Edition)...")
+print("✨ [VERSION] Build: V5.1 | Smooth Sprint (No Sluggish Brake) & Exact Reach")
 print("--------------------------------------------------")
 
 local Players = game:GetService("Players")
@@ -1719,11 +1719,9 @@ task.spawn(function()
                     local wp = activeCandyWaypoints[bestIdx]
                     currentWaypointTarget = wp
 
-                    -- 🚀 DYNAMIC REACH THRESHOLD: Skala dinamis mengikuti kecepatan lari karakter (Buff In-Game)
+                    -- 🚀 REACH THRESHOLD: Menggunakan _G.candyReachDist murni tanpa tambahan jarak buatan
                     local currentSpeed = (hum and hum.WalkSpeed and hum.WalkSpeed > 0) and hum.WalkSpeed or 16
-                    local baseReach = _G.candyReachDist or 8
-                    local speedReachBonus = (currentSpeed > 16) and (currentSpeed * 0.3) or 0
-                    local reachThreshold = math.max(baseReach, speedReachBonus)
+                    local reachThreshold = _G.candyReachDist or 3
 
                     -- 🔍 CEK DEBRIS: Cek apakah barang permen masih ada di Debris di sekitar waypoint
                     local itemInDebris, itemDist, itemPos = findItemInDebrisNear(wp, 80)
@@ -1740,59 +1738,42 @@ task.spawn(function()
                         touchCandyItem(itemInDebris, hrp)
                     end
 
-                    -- 🛡️ WAYPOINT STUCK WATCHDOG: Jika mencoba waypoint yang sama > 6 detik tanpa perubahan, lewati
+                    -- 🛡️ WAYPOINT STUCK WATCHDOG: Jika mencoba waypoint yang sama > 5 detik tanpa perubahan, lewati
                     waypointStuckTimer = waypointStuckTimer + 0.05
-                    if waypointStuckTimer >= 6.0 then
+                    if waypointStuckTimer >= 5.0 then
                         table.remove(activeCandyWaypoints, bestIdx)
-                        logConsole(string.format("⚠️ [WAYPOINT TIMEOUT] Waypoint (%s) tidak terambil setelah 6s! Melewati ke titik berikutnya... Sisa: %d", itemInDebris and itemInDebris.Name or "Candy", #activeCandyWaypoints))
+                        logConsole(string.format("⚠️ [WAYPOINT TIMEOUT] Melewati '%s' setelah 5s. Sisa: %d", itemInDebris and itemInDebris.Name or "Candy", #activeCandyWaypoints))
                         waypointStuckTimer = 0
                         currentWaypointTarget = nil
                         wp = nil
                     else
                         -- 🛑 KONDISI SUDAH MENCAPAI AREA PERMEN:
-                        if distToTarget <= reachThreshold then
-                            -- ⚡ ANTI-OVERSHOOT BRAKING: Redam inersia saat lari kencang agar tidak muter-muter / bablas
-                            if _G.candyAntiOvershoot ~= false and currentSpeed > 20 then
-                                pcall(function()
-                                    hrp.AssemblyLinearVelocity = Vector3.new(0, hrp.AssemblyLinearVelocity.Y, 0)
-                                end)
-                            end
-
-                            -- 📦 KONDISI KELOLOSAN WAYPOINT:
-                            if shouldVerifyDebris then
-                                if not itemInDebris then
-                                    -- Barang SUDAH HILANG dari Debris (berhasil dibawa)
-                                    table.remove(activeCandyWaypoints, bestIdx)
-                                    currentWaypointTarget = nil
-                                    waypointStuckTimer = 0
-                                    logConsole(string.format("🍬 [COLLECTED] Barang berhasil dibawa (hilang dari Debris)! Sisa waypoint: %d", #activeCandyWaypoints))
-                                else
-                                    -- Barang MASIH ADA di Debris -> Picu touch ulang & tahan posisi sejenak
+                        local reached = (distToTarget <= reachThreshold)
+                        
+                        if shouldVerifyDebris then
+                            if not itemInDebris then
+                                -- Barang SUDAH HILANG dari Debris (berhasil dibawa)
+                                table.remove(activeCandyWaypoints, bestIdx)
+                                currentWaypointTarget = nil
+                                waypointStuckTimer = 0
+                                logConsole(string.format("🍬 [COLLECTED] Barang berhasil dibawa (hilang dari Debris)! Sisa waypoint: %d", #activeCandyWaypoints))
+                            elseif reached then
+                                -- Sudah sampai persis di posisi barang tapi masih ada di Debris -> terus tempel posisinya tanpa rem mendadak
+                                targetPos = Vector3.new(wpTargetPos.X, hrp.Position.Y, wpTargetPos.Z)
+                                if _G.enableFireTouch then
                                     touchCandyItem(itemInDebris, hrp)
-                                    targetPos = Vector3.new(wpTargetPos.X, hrp.Position.Y, wpTargetPos.Z)
-                                    if math.floor(waypointStuckTimer * 10) % 20 == 0 then
-                                        logConsole(string.format("⏳ [CEK DEBRIS] Menyentuh '%s' (jarak: %.1fm, speed: %.0f). Menunggu server...", itemInDebris.Name, distToTarget, currentSpeed))
-                                    end
                                 end
-                            else
-                                -- Mode fallback tanpa verifikasi Debris
+                                if math.floor(waypointStuckTimer * 10) % 20 == 0 then
+                                    logConsole(string.format("⏳ [CEK DEBRIS] Menyentuh '%s' (jarak: %.1fm). Menunggu server...", itemInDebris.Name, distToTarget))
+                                end
+                            end
+                        else
+                            -- Mode fallback tanpa verifikasi Debris
+                            if reached then
                                 table.remove(activeCandyWaypoints, bestIdx)
                                 currentWaypointTarget = nil
                                 waypointStuckTimer = 0
                                 logConsole(string.format("🍬 Waypoint permen terlewati! Sisa waypoint: %d", #activeCandyWaypoints))
-                            end
-                        else
-                            -- Karakter masih dalam perjalanan menuju waypoint (distToTarget > reachThreshold)
-                            -- ⚡ ANTI-DRIFT: Jika speed kencang & mulai mendekati (< 25 studs), luruskan vektor kecepatan agar tidak orbiting
-                            if currentSpeed > 24 and distToTarget < 25 then
-                                pcall(function()
-                                    local toTarget = (Vector3.new(wpTargetPos.X, 0, wpTargetPos.Z) - Vector3.new(hrp.Position.X, 0, hrp.Position.Z)).Unit
-                                    local currentVel = hrp.AssemblyLinearVelocity
-                                    local horizSpeed = Vector2.new(currentVel.X, currentVel.Z).Magnitude
-                                    if horizSpeed > 8 then
-                                        hrp.AssemblyLinearVelocity = Vector3.new(toTarget.X * math.min(horizSpeed, currentSpeed), currentVel.Y, toTarget.Z * math.min(horizSpeed, currentSpeed))
-                                    end
-                                end)
                             end
                         end
                     end
