@@ -1,19 +1,21 @@
 -- ==============================================================================
--- 🥔 KALB ULTRA LIGHTWEIGHT AUTO FARM V4 (CANDY EVENT & TELEPORT KICK EDITION)
+-- 🥔 KALB ULTRA LIGHTWEIGHT AUTO FARM V5.0 (SAFE ANTI-LAG & CANDY EVENT EDITION)
 -- ==============================================================================
 -- Fitur & Alur:
 -- 1. ⚙️ Full Config Mode: Semua pengaturan diatur via variabel _G di baris atas (Tanpa UI)
 -- 2. 🚫 Total Player & Character Purger (100% Bersih & No Lag)
 -- 3. 🍬 Candy Weather Event Engine:
 --    - Mendeteksi rev_AddedWeather "Candy" & rev_candySpawn
---    - Memperbesar hitbox permen ke 200 studs (CanCollide=false, CanTouch=true, CanQuery=true)
---    - Mendukung CarriedCandy, Candy, Chocolate, Cake, Pancakes, Gummy Bear, Ice Cream, Gummy Worm, dll.
---    - Listener dinamis untuk mendaftarkan nama permen baru secara otomatis
+--    - Hitbox, Navigasi Waypoint & Debris Checker
+--    - Mendukung CarriedCandy, Candy, Chocolate, Cake, Pancakes, Gummy Bear, Ice Cream, dll.
 -- 4. 🧭 Candy Waypoint Navigation: Sembari membawa brainrot berjalan ke safe zone, melewati titik permen
--- 5. 💀 Empty Spawn Handler: Jika rev_candySpawn mengirim {}, diam di tempat sampai mati, respawn lalu teleport kick
--- 6. ⚡ Teleportation for Kick: Teleportasi instan ke safe zone saat Idle, Respawn, atau timeout untuk kick
---    (Saat membawa brainrot ke safe zone TETAP MURNI JALAN KAKI)
--- 7. 🥔 Ultra Anti-Lag V3 & Invisible Map (0% Beban Render GPU & No Machine Noise)
+-- 5. 💀 Empty Spawn Handler: Jika rev_candySpawn mengirim {}, diam di tempat sampai mati & respawn
+-- 6. ⚡ Teleportation for Kick: Teleportasi instan ke safe zone saat Idle, Respawn, atau timeout kick
+-- 7. 🥔 Safe Potato & Anti-Lag V5.0:
+--    - Container Emptying (Decor, Walls, Shops, Leaderboards, NPCs, Machines, Portal, Sell)
+--    - PlayerGui Optimizer (Enabled = false & Proteksi TouchGui HP)
+--    - Map Gray Semen, Purge Partikel/Lampu/Decal & Purge Lighting
+--    - Disarm error loop DecorationsHandler 60 FPS
 -- ==============================================================================
 
 if not game:IsLoaded() then game.Loaded:Wait() end
@@ -29,7 +31,7 @@ _G.enableCandyEvent     = true        -- [1] Master Switch: Aktifkan penanganan 
 _G.expandCandyHitbox    = false        -- [2] Hitbox Switch: Memperbesar hitbox Candy/Cokelat/dll ke ukuran yang ditentukan
 _G.candyHitboxSize      = Vector3.new(100, 100, 100) -- Ukuran hitbox Candy yang dibesarkan
 _G.candyWaypointNav     = true        -- [3] Navigation Switch: Pandu rute jalan kaki melintasi waypoint permen ke Safe Zone
-_G.candyReachDist       = 0.5           -- Jarak dasar (studs) horizontal untuk menganggap permen sudah terlewati/terambil (Auto-scaled saat speed kencang)
+_G.candyReachDist       = 1           -- Jarak dasar (studs) horizontal untuk menganggap permen sudah terlewati/terambil (Auto-scaled saat speed kencang)
 _G.candyAntiOvershoot   = true        -- [4] Anti-Overshoot & Drift: Redam momentum saat lari kencang agar tidak muter-muter / miss
 _G.verifyDebrisPickup   = true        -- [5] Debris Checker: Pastikan barang di Debris hilang saat dibawa; jika belum hilang, kembali ke waypoint
 _G.enableFireTouch      = false       -- [6] FireTouch Switch: true: picu firetouchinterest instan, false: nonaktif (murni fisik/hitbox)
@@ -45,23 +47,19 @@ _G.autoSellAll          = true       -- true: Auto Sell All setiap 5 detik via r
 _G.autoWorldTeleport    = true        -- true: Teleport otomatis 1x saat baru dieksekusi via rev_WORLD_TP, false: Nonaktif
 _G.targetWorld          = 2           -- Target ID World untuk teleportasi otomatis (Default: 2)
 _G.autoRemovePlayer     = true        -- true: Hapus player lain dari game.Players & workspace.Players (100% Bersih & No Lag), false: Biarkan
-_G.debugConsoleLog      = true        -- true: Cetak log status/fase/candy ke console (F9), false: Senyap
+_G.debugConsoleLog      = false        -- true: Cetak log status/fase/candy ke console (F9), false: Senyap
 _G.failsafeTimeout      = 25          -- Waktu maksimal (detik) sebelum auto-reset ke Safe Zone jika macet
 
--- ⚡ ULTRA ANTI-LAG & POTATO MODE (PUSH MAX PERFORMANCE)
-_G.antiLag             = true        -- true: Master switch Anti-Lag & Potato Mode Ekstrem
-_G.mapVisual           = "Invisible" -- "Invisible": Visual map pure dihapus/transparan (0% beban render GPU, warna putih hilang), "Gray": Abu-abu semen polos netral, "White": Putih potato, "Default": Warna asli
-_G.optimizePhysics     = false       -- false (Default Aman): Hindari jitter fisika / suara mesin pada mekanisme objek
+-- ⚡ ANTI-LAG & POTATO MODE
+_G.antiLag             = true        -- true: Master switch Anti-Lag (Hapus Folder/Model target, PlayerGui, Partikel, Lighting, Map Gray)
 _G.fpsCap              = 60          -- Batas target FPS (60 hemat baterai & CPU, 30 untuk multi-akun, 0 = default)
 _G.disable3dRender     = false       -- true: Layar freeze / 0% GPU saat AFK farm (Pencet F10 untuk toggle), false: Tampilan visual normal
 _G.muteAudio           = true        -- true: Mute semua audio & reverb game (0% beban CPU audio)
-_G.cleanLighting       = true        -- true: Hapus semua efek visual di Lighting (Sky, Blur, Bloom, Atmosphere, SunRays)
-_G.removeParticles     = true        -- true: Hapus ParticleEmitter, Trail, Beam, Fire, Smoke, Sparkles, Highlight, Lights
-_G.optimizeTerrain     = true        -- true: Matikan gelombang air & dekorasi rumput pada terrain
-_G.cleanClientAssets   = true        -- true: Sembunyikan ClientRenderedAssets & PlacedEggRenders
 
 print("--------------------------------------------------")
-print("🚀 [INIT] Memuat KALB Auto Farm V7.1.2 (Ultra Anti-Lag & Potato Max Edition)...")
+print("🚀 [INIT] Memuat KALB Auto Farm V5.0 (Safe Potato & Anti-Lag Edition)...")
+print("✨ [VERSION] Build: V5.0 | Feature: Container Emptying & TouchGui Safe")
+print("--------------------------------------------------")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -219,10 +217,160 @@ if _G.muteAudio then
 end
 
 -- =============================================
--- ☁️ 2. LIGHTING & ATMOSPHERE REAL-TIME PURGER
+-- 🗑️ 1. WORKSPACE TARGETS PURGER (FOLDERS & MODELS)
+-- =============================================
+local WORKSPACE_REMOVE_NAMES = {
+    -- Folders:
+    ["decor"] = true,
+    ["walls"] = true,
+    ["shops"] = true,
+    ["exclusiveproducts"] = true,
+    ["leaderboards"] = true,
+    ["npcs"] = true,
+    -- Models:
+    ["admin machine"] = true,
+    ["barriers"] = true,
+    ["freegift"] = true,
+    ["fusemachine"] = true,
+    ["machine"] = true,
+    ["poolbillboard"] = true,
+    ["kickupgrades"] = true,
+    ["portal"] = true,
+    ["sell"] = true,
+}
+
+-- Matikan listener OnPreRender dari script game DecorationsHandler agar tidak memicu error spam 60 FPS
+local function disableDecorationsHandler()
+    pcall(function()
+        if getconnections then
+            local signals = { RunService.PreRender, RunService.RenderStepped, RunService.Heartbeat, RunService.Stepped }
+            for _, sig in ipairs(signals) do
+                for _, conn in ipairs(getconnections(sig)) do
+                    pcall(function()
+                        local func = conn.Function
+                        if func then
+                            local info = debug.getinfo and debug.getinfo(func)
+                            local src = info and info.source or tostring(func)
+                            if string.find(string.lower(src), "decorationshandler") then
+                                if conn.Disable then
+                                    conn:Disable()
+                                elseif conn.Disconnect then
+                                    conn:Disconnect()
+                                end
+                            end
+                        end
+                    end)
+                end
+            end
+        end
+    end)
+end
+disableDecorationsHandler()
+
+local function shouldRemoveWorkspaceTarget(inst)
+    if not inst or not inst.Parent then return false end
+    if isLocalPlayerEntity(inst) or isProtectedEventItem(inst) then return false end
+    local lower = string.lower(inst.Name)
+    return WORKSPACE_REMOVE_NAMES[lower] == true
+end
+
+local function isInsideTargetContainer(inst)
+    if not inst or not inst.Parent then return false end
+    local curr = inst.Parent
+    while curr and curr ~= workspace and curr ~= game do
+        local lower = string.lower(curr.Name)
+        if WORKSPACE_REMOVE_NAMES[lower] then
+            return true
+        end
+        curr = curr.Parent
+    end
+    return false
+end
+
+local function handleWorkspaceTarget(inst)
+    if not inst or not inst.Parent then return false end
+    if isLocalPlayerEntity(inst) or isProtectedEventItem(inst) then return false end
+
+    -- Kasus 1: Instansiasi adalah wadah target itu sendiri (Folder / Model)
+    if shouldRemoveWorkspaceTarget(inst) then
+        pcall(function()
+            if inst:IsA("Folder") or inst:IsA("Model") then
+                -- Kosongkan seluruh isinya (0% beban render GPU, bebas error "Parent is locked")
+                inst:ClearAllChildren()
+            else
+                inst:Destroy()
+            end
+        end)
+        return true
+    end
+
+    -- Kasus 2: Instansiasi adalah objek baru yang dimasukkan ke dalam wadah target yang sudah dikosongkan
+    if isInsideTargetContainer(inst) then
+        pcall(function()
+            inst:Destroy()
+        end)
+        return true
+    end
+
+    return false
+end
+
+local function purgeWorkspaceTargets()
+    if not _G.antiLag then return end
+    for _, child in ipairs(workspace:GetChildren()) do
+        handleWorkspaceTarget(child)
+    end
+    for _, desc in ipairs(workspace:GetDescendants()) do
+        handleWorkspaceTarget(desc)
+    end
+end
+
+-- =============================================
+-- 📱 2. PLAYERGUI OPTIMIZER (HIDE ALL SCREENGUI - 0% GPU DRAW CALLS)
+-- =============================================
+local function disableGuiElement(child)
+    if not child then return end
+    pcall(function()
+        -- Jangan matikan kontrol layar sentuh HP (analog & tombol lompat)
+        if child.Name == "TouchGui" then return end
+
+        if child:IsA("ScreenGui") or child:IsA("BillboardGui") or child:IsA("SurfaceGui") then
+            child.Enabled = false
+        end
+    end)
+end
+
+local function purgePlayerGui()
+    if not _G.antiLag then return end
+    pcall(function()
+        local playerGui = lp and (lp:FindFirstChild("PlayerGui") or lp:WaitForChild("PlayerGui", 5))
+        if not playerGui then return end
+        for _, child in ipairs(playerGui:GetChildren()) do
+            disableGuiElement(child)
+        end
+        if not playerGui:GetAttribute("Kalb_CleanHooked") then
+            playerGui:SetAttribute("Kalb_CleanHooked", true)
+            playerGui.ChildAdded:Connect(function(child)
+                if not _G.antiLag then return end
+                task.defer(disableGuiElement, child)
+            end)
+        end
+    end)
+end
+
+if lp then
+    purgePlayerGui()
+    lp.CharacterAdded:Connect(function()
+        task.wait(0.2)
+        purgePlayerGui()
+    end)
+end
+
+-- =============================================
+-- ☁️ 3. LIGHTING & ATMOSPHERE PURGER
 -- =============================================
 local function purgeLighting()
-    if not _G.cleanLighting then return end
+    if not _G.antiLag then return end
     pcall(function()
         Lighting.GlobalShadows = false
         Lighting.FogEnd = 9e9
@@ -243,86 +391,51 @@ end
 purgeLighting()
 
 Lighting.ChildAdded:Connect(function(child)
-    if _G.cleanLighting then
-        task.defer(function()
-            if child:IsA("PostEffect") or child:IsA("BlurEffect") or child:IsA("SunRaysEffect")
-               or child:IsA("ColorCorrectionEffect") or child:IsA("BloomEffect")
-               or child:IsA("DepthOfFieldEffect") or child:IsA("Sky")
-               or child:IsA("Atmosphere") or child:IsA("Clouds") then
-                pcall(function()
-                    child.Enabled = false
-                    child:Destroy()
-                end)
-            end
-        end)
+    if not _G.antiLag then return end
+    task.defer(function()
+        if child:IsA("PostEffect") or child:IsA("BlurEffect") or child:IsA("SunRaysEffect")
+           or child:IsA("ColorCorrectionEffect") or child:IsA("BloomEffect")
+           or child:IsA("DepthOfFieldEffect") or child:IsA("Sky")
+           or child:IsA("Atmosphere") or child:IsA("Clouds") then
+            pcall(function()
+                child.Enabled = false
+                child:Destroy()
+            end)
+        end
+    end)
+end)
+
+-- Terrain & Water Optimization
+pcall(function()
+    local terrain = workspace:FindFirstChildOfClass("Terrain")
+    if terrain then
+        terrain.WaterWaveSize = 0
+        terrain.WaterWaveSpeed = 0
+        terrain.WaterReflectance = 0
+        terrain.WaterTransparency = 0
+        if sethiddenproperty then
+            pcall(function() sethiddenproperty(terrain, "Decoration", false) end)
+        end
     end
 end)
 
 -- =============================================
--- 🌊 3. TERRAIN & WATER OPTIMIZER
+-- 🌫️ 4. MAP GRAY & PARTIKEL EFEK PURGER
 -- =============================================
-if _G.optimizeTerrain then
-    pcall(function()
-        local terrain = workspace:FindFirstChildOfClass("Terrain")
-        if terrain then
-            terrain.WaterWaveSize = 0
-            terrain.WaterWaveSpeed = 0
-            terrain.WaterReflectance = 0
-            terrain.WaterTransparency = 0
-            if sethiddenproperty then
-                pcall(function() sethiddenproperty(terrain, "Decoration", false) end)
-            end
-        end
-    end)
-end
-
--- =============================================
--- 🥚 4. CLIENT ASSETS & PLACED EGGS PURGER
--- =============================================
-local function cleanClientAssets()
-    if not _G.cleanClientAssets then return end
-    pcall(function()
-        local eggFolder = workspace:FindFirstChild("PlacedEggRenders")
-        if eggFolder then
-            for _, d in ipairs(eggFolder:GetDescendants()) do
-                if d:IsA("BasePart") then
-                    d.Transparency = 1
-                    d.CastShadow = false
-                elseif d:IsA("Decal") or d:IsA("Texture") then
-                    d:Destroy()
-                end
-            end
-        end
-        local clientAssets = workspace:FindFirstChild("ClientRenderedAssets")
-        if clientAssets then
-            for _, d in ipairs(clientAssets:GetDescendants()) do
-                if d:IsA("BasePart") then
-                    d.Transparency = 1
-                    d.CastShadow = false
-                elseif d:IsA("Decal") or d:IsA("Texture") then
-                    d:Destroy()
-                end
-            end
-        end
-    end)
-end
-cleanClientAssets()
-
--- =============================================
--- 🥔 5. CORE INSTANCE OPTIMIZER (SMOOTHPLASTIC, WHITE MAP & PURGE FX)
--- =============================================
-local PURGE_CLASSES = {
-    PointLight = true,
-    SpotLight = true,
-    SurfaceLight = true,
+local PURGE_PARTICLE_CLASSES = {
     ParticleEmitter = true,
     Trail = true,
     Beam = true,
     Fire = true,
     Smoke = true,
     Sparkles = true,
+    PointLight = true,
+    SpotLight = true,
+    SurfaceLight = true,
     SurfaceAppearance = true,
 }
+
+local GRAY_COLOR = Color3.fromRGB(140, 140, 140)
 
 local function optimizeInstance(v)
     if not _G.antiLag or not v or not v.Parent then return end
@@ -332,59 +445,39 @@ local function optimizeInstance(v)
     pcall(function()
         local className = v.ClassName
 
-        -- 1. Mute suara individual (HANYA set Volume = 0, JANGAN :Stop() agar tidak restart loop / gredek mesin!)
-        if _G.muteAudio and v:IsA("Sound") then
-            v.Volume = 0
+        -- 1. Hapus partikel efek & sumber cahaya
+        if PURGE_PARTICLE_CLASSES[className] then
+            v:Destroy()
             return
         end
 
-        -- 2. Highlight: JANGAN di-Destroy karena script AnimateBrainrots memakai instance-nya (hindari crash 800+ error)
+        -- 2. Highlight: matikan agar tidak memberatkan rendering / crash AnimateBrainrots
         if v:IsA("Highlight") then
             v.Enabled = false
             return
         end
 
-        -- 3. Purge partikel, cahaya, dan efek visual berat (Hemat GPU shader & draw calls)
-        if _G.removeParticles and PURGE_CLASSES[className] then
-            v:Destroy()
+        -- 3. Mute audio individual jika _G.muteAudio
+        if _G.muteAudio and v:IsA("Sound") then
+            v.Volume = 0
             return
         end
 
-        -- 4. Hapus Decal, Texture, Clothing, ShirtGraphic
+        -- 4. Hapus Decal, Texture, pakaian visual
         if className == "Decal" or className == "Texture" or v:IsA("Clothing") or v:IsA("ShirtGraphic") then
             v:Destroy()
             return
         end
 
-        -- 5. Matikan BillboardGui / SurfaceGui non-math & non-PlayerGui
-        if (v:IsA("BillboardGui") or v:IsA("SurfaceGui")) and not v:IsDescendantOf(lp:WaitForChild("PlayerGui", 1)) then
-            v.Enabled = false
-            v:Destroy()
-            return
-        end
-
-        -- 6. Potato Mesh & BasePart (Invisible / Gray / White Map)
+        -- 5. Ubah seluruh map menjadi Gray polos (SmoothPlastic)
         if v:IsA("BasePart") then
             v.Material = Enum.Material.SmoothPlastic
             v.Reflectance = 0
             v.CastShadow = false
-
-            local mode = _G.mapVisual or (_G.whiteMap and "White" or "Default")
-            if mode == "Invisible" then
-                v.Transparency = 1
-            elseif mode == "Gray" then
-                v.Color = Color3.fromRGB(140, 140, 140)
-            elseif mode == "White" then
-                v.Color = Color3.new(1, 1, 1)
-            end
+            v.Color = GRAY_COLOR
 
             if v:IsA("MeshPart") then
                 v.TextureID = ""
-            end
-
-            -- Physics Optimizer: Hanya pada part Anchored agar tidak merusak mekanisme bergerak
-            if _G.optimizePhysics and v.Anchored then
-                v.CanTouch = false
             end
         elseif v:IsA("SpecialMesh") then
             v.TextureId = ""
@@ -392,50 +485,34 @@ local function optimizeInstance(v)
     end)
 end
 
--- Safe Zone Visual Marker (Penanda titik Safe Zone saat Map Invisible)
-local function ensureSafeZoneMarker()
-    if _G.mapVisual ~= "Invisible" then return end
-    pcall(function()
-        local existing = workspace:FindFirstChild("KALB_SafeZoneMarker")
-        if not existing then
-            local marker = Instance.new("Part")
-            marker.Name = "KALB_SafeZoneMarker"
-            marker.Size = Vector3.new(12, 0.2, 12)
-            marker.Position = Vector3.new(698.030701, 3.2, 233.707077)
-            marker.Anchored = true
-            marker.CanCollide = false
-            marker.CanTouch = false
-            marker.CanQuery = false
-            marker.Material = Enum.Material.Neon
-            marker.Color = Color3.fromRGB(0, 255, 128)
-            marker.Transparency = 0.6
-            marker.Parent = workspace
-        end
-    end)
-end
-ensureSafeZoneMarker()
-
--- Eksekusi awal pembersihan aset ke seluruh workspace (Batching agar tidak freeze di awal)
+-- Eksekusi awal pembersihan aset target, PlayerGui, dan map Gray
 task.spawn(function()
     if _G.antiLag then
+        purgeWorkspaceTargets()
+        purgePlayerGui()
+
         local all = workspace:GetDescendants()
         local count = 0
         for _, v in ipairs(all) do
-            optimizeInstance(v)
+            if not handleWorkspaceTarget(v) then
+                optimizeInstance(v)
+            end
             count = count + 1
             if count % 500 == 0 then
                 task.wait()
             end
         end
-        logConsole("🚀 [ANTI-LAG] Ultra Potato Mode & Hardware Engine Berhasil Diaktifkan!")
+        logConsole("🚀 [ANTI-LAG] Workspace Targets Purged, PlayerGui Hidden & Map Gray Applied!")
     end
 end)
 
 -- Listener Real-Time DescendantAdded untuk Workspace
 workspace.DescendantAdded:Connect(function(descendant)
-    if _G.antiLag then
-        task.defer(optimizeInstance, descendant)
+    if not _G.antiLag then return end
+    if handleWorkspaceTarget(descendant) then
+        return
     end
+    task.defer(optimizeInstance, descendant)
 end)
 
 -- =============================================
@@ -584,10 +661,12 @@ task.spawn(function()
         end
 
         cleanCounter = cleanCounter + 1
-        -- Tiap ~30 detik bersihkan client assets & refresh lighting
+        -- Tiap ~30 detik pastikan target terhapus & refresh lighting & playergui
         if cleanCounter % 10 == 0 then
-            pcall(cleanClientAssets)
+            pcall(disableDecorationsHandler)
             pcall(purgeLighting)
+            pcall(purgePlayerGui)
+            pcall(purgeWorkspaceTargets)
         end
 
         -- Tiap ~60 detik jalankan garbage collector bertahap (non-blocking step)
@@ -1555,8 +1634,8 @@ task.spawn(function()
             end)
 
             -- Failsafe Auto-Reset: Jika dalam 1.5 detik karakter tidak mati sendiri, paksa respawn agar bisa teleport ke safe zone untuk kick berikutnya!
-            if stateTimer >= 1.5 then
-                logConsole("💀 [AUTO-RESET] Bot diam 1.5s -> Memaksa respawn agar bisa kembali ke Safe Zone untuk kick berikutnya...")
+            if stateTimer >= 3 then
+                logConsole("💀 [AUTO-RESET] Bot diam 3s -> Memaksa respawn agar bisa kembali ke Safe Zone untuk kick berikutnya...")
                 pcall(function()
                     hum.Health = 0
                     char:BreakJoints()
