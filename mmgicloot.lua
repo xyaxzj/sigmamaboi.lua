@@ -27,9 +27,12 @@ _G.onlyCandyEvent       = false       -- true: HANYA Auto Kick saat Candy Event 
 -- 🍬 PENGATURAN FITUR CANDY EVENT (DAPAT DIAKTIFKAN / DINONAKTIFKAN SECARA TERPISAH)
 _G.enableCandyEvent     = true        -- [1] Master Switch: Aktifkan penanganan Candy Event (cuaca & spawn permen)
 _G.expandCandyHitbox    = false        -- [2] Hitbox Switch: Memperbesar hitbox Candy/Cokelat/dll ke ukuran yang ditentukan
-_G.candyHitboxSize      = Vector3.new(200, 200, 200) -- Ukuran hitbox Candy yang dibesarkan
+_G.candyHitboxSize      = Vector3.new(100, 100, 100) -- Ukuran hitbox Candy yang dibesarkan
 _G.candyWaypointNav     = true        -- [3] Navigation Switch: Pandu rute jalan kaki melintasi waypoint permen ke Safe Zone
-_G.candyReachDist       = 5          -- Jarak (studs) horizontal untuk menganggap permen sudah terlewati/terambil
+_G.candyReachDist       = 8           -- Jarak dasar (studs) horizontal untuk menganggap permen sudah terlewati/terambil (Auto-scaled saat speed kencang)
+_G.candyAntiOvershoot   = true        -- [4] Anti-Overshoot & Drift: Redam momentum saat lari kencang agar tidak muter-muter / miss
+_G.verifyDebrisPickup   = true        -- [5] Debris Checker: Pastikan barang di Debris hilang saat dibawa; jika belum hilang, kembali ke waypoint
+_G.enableFireTouch      = false       -- [6] FireTouch Switch: true: picu firetouchinterest instan, false: nonaktif (murni fisik/hitbox)
 
 _G.useBrainrotWhitelist = true        -- true: Hanya bawa brainrot di whitelist ke safe zone, false: Bawa semua
 _G.brainrotWhitelist    = {           -- Daftar nama brainrot yang diizinkan (Case-insensitive & Partial match)
@@ -38,22 +41,18 @@ _G.brainrotWhitelist    = {           -- Daftar nama brainrot yang diizinkan (Ca
     "Teacherrina",
 }
 _G.kickDelay            = 0.5         -- Jeda waktu (detik) di Safe Zone sebelum menendang/kick (Default: 0.5 detik, jangan terlalu instant)
-_G.autoSellAll          = false       -- true: Auto Sell All setiap 5 detik via ref_B_SellAll
+_G.autoSellAll          = true       -- true: Auto Sell All setiap 5 detik via ref_B_SellAll
+_G.autoWorldTeleport    = true        -- true: Teleport otomatis 1x saat baru dieksekusi via rev_WORLD_TP, false: Nonaktif
+_G.targetWorld          = 2           -- Target ID World untuk teleportasi otomatis (Default: 2)
 _G.autoRemovePlayer     = true        -- true: Hapus player lain dari game.Players & workspace.Players (100% Bersih & No Lag), false: Biarkan
 _G.debugConsoleLog      = true        -- true: Cetak log status/fase/candy ke console (F9), false: Senyap
 _G.failsafeTimeout      = 25          -- Waktu maksimal (detik) sebelum auto-reset ke Safe Zone jika macet
 
--- ⚡ ULTRA ANTI-LAG & POTATO MODE (PUSH MAX PERFORMANCE)
-_G.antiLag             = true        -- true: Master switch Anti-Lag & Potato Mode Ekstrem
-_G.mapVisual           = "Invisible" -- "Invisible": Visual map pure dihapus/transparan (0% beban render GPU, warna putih hilang), "Gray": Abu-abu semen polos netral, "White": Putih potato, "Default": Warna asli
-_G.optimizePhysics     = false       -- false (Default Aman): Hindari jitter fisika / suara mesin pada mekanisme objek
+-- ⚡ ANTI-LAG & POTATO MODE
+_G.antiLag             = true        -- true: Master switch Anti-Lag (Hapus Folder/Model target, PlayerGui, Partikel, Lighting, Map Gray)
 _G.fpsCap              = 60          -- Batas target FPS (60 hemat baterai & CPU, 30 untuk multi-akun, 0 = default)
 _G.disable3dRender     = false       -- true: Layar freeze / 0% GPU saat AFK farm (Pencet F10 untuk toggle), false: Tampilan visual normal
 _G.muteAudio           = true        -- true: Mute semua audio & reverb game (0% beban CPU audio)
-_G.cleanLighting       = true        -- true: Hapus semua efek visual di Lighting (Sky, Blur, Bloom, Atmosphere, SunRays)
-_G.removeParticles     = true        -- true: Hapus ParticleEmitter, Trail, Beam, Fire, Smoke, Sparkles, Highlight, Lights
-_G.optimizeTerrain     = true        -- true: Matikan gelombang air & dekorasi rumput pada terrain
-_G.cleanClientAssets   = true        -- true: Sembunyikan ClientRenderedAssets & PlacedEggRenders
 
 print("--------------------------------------------------")
 print("🚀 [INIT] Memuat KALB Auto Farm V3 (Ultra Anti-Lag & Potato Max Edition)...")
@@ -214,10 +213,83 @@ if _G.muteAudio then
 end
 
 -- =============================================
--- ☁️ 2. LIGHTING & ATMOSPHERE REAL-TIME PURGER
+-- 🗑️ 1. WORKSPACE TARGETS PURGER (FOLDERS & MODELS)
+-- =============================================
+local WORKSPACE_REMOVE_NAMES = {
+    -- Folders:
+    ["decor"] = true,
+    ["walls"] = true,
+    ["shops"] = true,
+    ["exclusiveproducts"] = true,
+    ["leaderboards"] = true,
+    -- Models:
+    ["admin machine"] = true,
+    ["barriers"] = true,
+    ["freegift"] = true,
+    ["fusemachine"] = true,
+    ["machine"] = true,
+    ["poolbillboard"] = true,
+    ["kickupgrades"] = true,
+    ["portal"] = true,
+}
+
+local function shouldRemoveWorkspaceTarget(inst)
+    if not inst or not inst.Parent then return false end
+    if isLocalPlayerEntity(inst) or isProtectedEventItem(inst) then return false end
+    local lower = string.lower(inst.Name)
+    return WORKSPACE_REMOVE_NAMES[lower] == true
+end
+
+local function purgeWorkspaceTargets()
+    if not _G.antiLag then return end
+    for _, child in ipairs(workspace:GetChildren()) do
+        if shouldRemoveWorkspaceTarget(child) then
+            pcall(function() child:Destroy() end)
+        end
+    end
+    for _, desc in ipairs(workspace:GetDescendants()) do
+        if shouldRemoveWorkspaceTarget(desc) then
+            pcall(function() desc:Destroy() end)
+        end
+    end
+end
+
+-- =============================================
+-- 📱 2. PLAYERGUI PURGER (HAPUS SELURUH ISI PLAYERGUI)
+-- =============================================
+local function purgePlayerGui()
+    if not _G.antiLag then return end
+    pcall(function()
+        local playerGui = lp and (lp:FindFirstChild("PlayerGui") or lp:WaitForChild("PlayerGui", 5))
+        if not playerGui then return end
+        for _, child in ipairs(playerGui:GetChildren()) do
+            pcall(function() child:Destroy() end)
+        end
+        if not playerGui:GetAttribute("Kalb_CleanHooked") then
+            playerGui:SetAttribute("Kalb_CleanHooked", true)
+            playerGui.ChildAdded:Connect(function(child)
+                if not _G.antiLag then return end
+                task.defer(function()
+                    pcall(function() child:Destroy() end)
+                end)
+            end)
+        end
+    end)
+end
+
+if lp then
+    purgePlayerGui()
+    lp.CharacterAdded:Connect(function()
+        task.wait(0.2)
+        purgePlayerGui()
+    end)
+end
+
+-- =============================================
+-- ☁️ 3. LIGHTING & ATMOSPHERE PURGER
 -- =============================================
 local function purgeLighting()
-    if not _G.cleanLighting then return end
+    if not _G.antiLag then return end
     pcall(function()
         Lighting.GlobalShadows = false
         Lighting.FogEnd = 9e9
@@ -238,86 +310,51 @@ end
 purgeLighting()
 
 Lighting.ChildAdded:Connect(function(child)
-    if _G.cleanLighting then
-        task.defer(function()
-            if child:IsA("PostEffect") or child:IsA("BlurEffect") or child:IsA("SunRaysEffect")
-               or child:IsA("ColorCorrectionEffect") or child:IsA("BloomEffect")
-               or child:IsA("DepthOfFieldEffect") or child:IsA("Sky")
-               or child:IsA("Atmosphere") or child:IsA("Clouds") then
-                pcall(function()
-                    child.Enabled = false
-                    child:Destroy()
-                end)
-            end
-        end)
+    if not _G.antiLag then return end
+    task.defer(function()
+        if child:IsA("PostEffect") or child:IsA("BlurEffect") or child:IsA("SunRaysEffect")
+           or child:IsA("ColorCorrectionEffect") or child:IsA("BloomEffect")
+           or child:IsA("DepthOfFieldEffect") or child:IsA("Sky")
+           or child:IsA("Atmosphere") or child:IsA("Clouds") then
+            pcall(function()
+                child.Enabled = false
+                child:Destroy()
+            end)
+        end
+    end)
+end)
+
+-- Terrain & Water Optimization
+pcall(function()
+    local terrain = workspace:FindFirstChildOfClass("Terrain")
+    if terrain then
+        terrain.WaterWaveSize = 0
+        terrain.WaterWaveSpeed = 0
+        terrain.WaterReflectance = 0
+        terrain.WaterTransparency = 0
+        if sethiddenproperty then
+            pcall(function() sethiddenproperty(terrain, "Decoration", false) end)
+        end
     end
 end)
 
 -- =============================================
--- 🌊 3. TERRAIN & WATER OPTIMIZER
+-- 🌫️ 4. MAP GRAY & PARTIKEL EFEK PURGER
 -- =============================================
-if _G.optimizeTerrain then
-    pcall(function()
-        local terrain = workspace:FindFirstChildOfClass("Terrain")
-        if terrain then
-            terrain.WaterWaveSize = 0
-            terrain.WaterWaveSpeed = 0
-            terrain.WaterReflectance = 0
-            terrain.WaterTransparency = 0
-            if sethiddenproperty then
-                pcall(function() sethiddenproperty(terrain, "Decoration", false) end)
-            end
-        end
-    end)
-end
-
--- =============================================
--- 🥚 4. CLIENT ASSETS & PLACED EGGS PURGER
--- =============================================
-local function cleanClientAssets()
-    if not _G.cleanClientAssets then return end
-    pcall(function()
-        local eggFolder = workspace:FindFirstChild("PlacedEggRenders")
-        if eggFolder then
-            for _, d in ipairs(eggFolder:GetDescendants()) do
-                if d:IsA("BasePart") then
-                    d.Transparency = 1
-                    d.CastShadow = false
-                elseif d:IsA("Decal") or d:IsA("Texture") then
-                    d:Destroy()
-                end
-            end
-        end
-        local clientAssets = workspace:FindFirstChild("ClientRenderedAssets")
-        if clientAssets then
-            for _, d in ipairs(clientAssets:GetDescendants()) do
-                if d:IsA("BasePart") then
-                    d.Transparency = 1
-                    d.CastShadow = false
-                elseif d:IsA("Decal") or d:IsA("Texture") then
-                    d:Destroy()
-                end
-            end
-        end
-    end)
-end
-cleanClientAssets()
-
--- =============================================
--- 🥔 5. CORE INSTANCE OPTIMIZER (SMOOTHPLASTIC, WHITE MAP & PURGE FX)
--- =============================================
-local PURGE_CLASSES = {
-    PointLight = true,
-    SpotLight = true,
-    SurfaceLight = true,
+local PURGE_PARTICLE_CLASSES = {
     ParticleEmitter = true,
     Trail = true,
     Beam = true,
     Fire = true,
     Smoke = true,
     Sparkles = true,
+    PointLight = true,
+    SpotLight = true,
+    SurfaceLight = true,
     SurfaceAppearance = true,
 }
+
+local GRAY_COLOR = Color3.fromRGB(140, 140, 140)
 
 local function optimizeInstance(v)
     if not _G.antiLag or not v or not v.Parent then return end
@@ -327,59 +364,39 @@ local function optimizeInstance(v)
     pcall(function()
         local className = v.ClassName
 
-        -- 1. Mute suara individual (HANYA set Volume = 0, JANGAN :Stop() agar tidak restart loop / gredek mesin!)
-        if _G.muteAudio and v:IsA("Sound") then
-            v.Volume = 0
+        -- 1. Hapus partikel efek & sumber cahaya
+        if PURGE_PARTICLE_CLASSES[className] then
+            v:Destroy()
             return
         end
 
-        -- 2. Highlight: JANGAN di-Destroy karena script AnimateBrainrots memakai instance-nya (hindari crash 800+ error)
+        -- 2. Highlight: matikan agar tidak memberatkan rendering / crash AnimateBrainrots
         if v:IsA("Highlight") then
             v.Enabled = false
             return
         end
 
-        -- 3. Purge partikel, cahaya, dan efek visual berat (Hemat GPU shader & draw calls)
-        if _G.removeParticles and PURGE_CLASSES[className] then
-            v:Destroy()
+        -- 3. Mute audio individual jika _G.muteAudio
+        if _G.muteAudio and v:IsA("Sound") then
+            v.Volume = 0
             return
         end
 
-        -- 4. Hapus Decal, Texture, Clothing, ShirtGraphic
+        -- 4. Hapus Decal, Texture, pakaian visual
         if className == "Decal" or className == "Texture" or v:IsA("Clothing") or v:IsA("ShirtGraphic") then
             v:Destroy()
             return
         end
 
-        -- 5. Matikan BillboardGui / SurfaceGui non-math & non-PlayerGui
-        if (v:IsA("BillboardGui") or v:IsA("SurfaceGui")) and not v:IsDescendantOf(lp:WaitForChild("PlayerGui", 1)) then
-            v.Enabled = false
-            v:Destroy()
-            return
-        end
-
-        -- 6. Potato Mesh & BasePart (Invisible / Gray / White Map)
+        -- 5. Ubah seluruh map menjadi Gray polos (SmoothPlastic)
         if v:IsA("BasePart") then
             v.Material = Enum.Material.SmoothPlastic
             v.Reflectance = 0
             v.CastShadow = false
-
-            local mode = _G.mapVisual or (_G.whiteMap and "White" or "Default")
-            if mode == "Invisible" then
-                v.Transparency = 1
-            elseif mode == "Gray" then
-                v.Color = Color3.fromRGB(140, 140, 140)
-            elseif mode == "White" then
-                v.Color = Color3.new(1, 1, 1)
-            end
+            v.Color = GRAY_COLOR
 
             if v:IsA("MeshPart") then
                 v.TextureID = ""
-            end
-
-            -- Physics Optimizer: Hanya pada part Anchored agar tidak merusak mekanisme bergerak
-            if _G.optimizePhysics and v.Anchored then
-                v.CanTouch = false
             end
         elseif v:IsA("SpecialMesh") then
             v.TextureId = ""
@@ -387,50 +404,39 @@ local function optimizeInstance(v)
     end)
 end
 
--- Safe Zone Visual Marker (Penanda titik Safe Zone saat Map Invisible)
-local function ensureSafeZoneMarker()
-    if _G.mapVisual ~= "Invisible" then return end
-    pcall(function()
-        local existing = workspace:FindFirstChild("KALB_SafeZoneMarker")
-        if not existing then
-            local marker = Instance.new("Part")
-            marker.Name = "KALB_SafeZoneMarker"
-            marker.Size = Vector3.new(12, 0.2, 12)
-            marker.Position = Vector3.new(698.030701, 3.2, 233.707077)
-            marker.Anchored = true
-            marker.CanCollide = false
-            marker.CanTouch = false
-            marker.CanQuery = false
-            marker.Material = Enum.Material.Neon
-            marker.Color = Color3.fromRGB(0, 255, 128)
-            marker.Transparency = 0.6
-            marker.Parent = workspace
-        end
-    end)
-end
-ensureSafeZoneMarker()
-
--- Eksekusi awal pembersihan aset ke seluruh workspace (Batching agar tidak freeze di awal)
+-- Eksekusi awal pembersihan aset target, PlayerGui, dan map Gray
 task.spawn(function()
     if _G.antiLag then
+        purgeWorkspaceTargets()
+        purgePlayerGui()
+
         local all = workspace:GetDescendants()
         local count = 0
         for _, v in ipairs(all) do
-            optimizeInstance(v)
+            if shouldRemoveWorkspaceTarget(v) then
+                pcall(function() v:Destroy() end)
+            else
+                optimizeInstance(v)
+            end
             count = count + 1
             if count % 500 == 0 then
                 task.wait()
             end
         end
-        logConsole("🚀 [ANTI-LAG] Ultra Potato Mode & Hardware Engine Berhasil Diaktifkan!")
+        logConsole("🚀 [ANTI-LAG] Workspace Targets Purged, PlayerGui Cleared & Map Gray Applied!")
     end
 end)
 
 -- Listener Real-Time DescendantAdded untuk Workspace
 workspace.DescendantAdded:Connect(function(descendant)
-    if _G.antiLag then
-        task.defer(optimizeInstance, descendant)
+    if not _G.antiLag then return end
+    if shouldRemoveWorkspaceTarget(descendant) then
+        task.defer(function()
+            pcall(function() descendant:Destroy() end)
+        end)
+        return
     end
+    task.defer(optimizeInstance, descendant)
 end)
 
 -- =============================================
@@ -579,10 +585,11 @@ task.spawn(function()
         end
 
         cleanCounter = cleanCounter + 1
-        -- Tiap ~30 detik bersihkan client assets & refresh lighting
+        -- Tiap ~30 detik pastikan target terhapus & refresh lighting & playergui
         if cleanCounter % 10 == 0 then
-            pcall(cleanClientAssets)
             pcall(purgeLighting)
+            pcall(purgePlayerGui)
+            pcall(purgeWorkspaceTargets)
         end
 
         -- Tiap ~60 detik jalankan garbage collector bertahap (non-blocking step)
@@ -706,19 +713,36 @@ local function expandCandyHitbox(inst)
     if expandedCandyObjects[inst] then return end
 
     pcall(function()
-        local targetPart = inst:IsA("BasePart") and inst or inst:FindFirstChildWhichIsA("BasePart", true)
-        if targetPart then
-            targetPart.CanCollide = false
-            targetPart.CanTouch = true
-            targetPart.CanQuery = true
-            targetPart.CastShadow = false
-            targetPart.Transparency = 0.5
-            local targetSize = _G.candyHitboxSize or CANDY_HITBOX_SIZE
-            if targetPart.Size ~= targetSize then
-                targetPart.Size = targetSize
+        local targetSize = _G.candyHitboxSize or CANDY_HITBOX_SIZE
+        local partsExpanded = 0
+        if inst:IsA("BasePart") then
+            inst.CanCollide = false
+            inst.CanTouch = true
+            inst.CanQuery = true
+            inst.CastShadow = false
+            inst.Transparency = 0.5
+            if inst.Size ~= targetSize then
+                inst.Size = targetSize
             end
+            partsExpanded = partsExpanded + 1
+        elseif inst:IsA("Model") then
+            for _, p in ipairs(inst:GetDescendants()) do
+                if p:IsA("BasePart") then
+                    p.CanCollide = false
+                    p.CanTouch = true
+                    p.CanQuery = true
+                    p.CastShadow = false
+                    p.Transparency = 0.5
+                    if p.Size ~= targetSize then
+                        p.Size = targetSize
+                    end
+                    partsExpanded = partsExpanded + 1
+                end
+            end
+        end
+        if partsExpanded > 0 then
             expandedCandyObjects[inst] = true
-            logConsole(string.format("🍬 [CANDY HITBOX] '%s' (%s) berhasil diperbesar ke 200 studs!", inst.Name, targetPart.Name))
+            logConsole(string.format("🍬 [CANDY HITBOX] '%s' (%d part) berhasil diperbesar ke 200 studs!", inst.Name, partsExpanded))
         end
     end)
 end
@@ -780,6 +804,82 @@ task.spawn(function()
     task.wait(0.1)
     pcall(scanAndExpandAllCandies)
 end)
+
+-- =============================================
+-- 🔍 PEMERIKSA STATUS BARANG DI DEBRIS
+-- =============================================
+local function getDebrisItemPosition(inst)
+    if not inst or not inst.Parent then return nil end
+    local ok, pos = pcall(function()
+        if inst:IsA("BasePart") then
+            return inst.Position
+        elseif inst:IsA("Model") then
+            if inst.PrimaryPart then
+                return inst.PrimaryPart.Position
+            end
+            local bp = inst:FindFirstChildWhichIsA("BasePart", true)
+            if bp then return bp.Position end
+            return inst:GetPivot().Position
+        end
+        return nil
+    end)
+    return (ok and pos) or nil
+end
+
+-- 🍬 EKSEKUTOR SENTUHAN INSTAN (FIRETOUCHINTEREST SUPPORT)
+local function touchCandyItem(inst, charHrp)
+    if not _G.enableFireTouch then return end
+    if not inst or not charHrp then return end
+    pcall(function()
+        if firetouchinterest then
+            if inst:IsA("BasePart") then
+                firetouchinterest(charHrp, inst, 0)
+                task.wait()
+                firetouchinterest(charHrp, inst, 1)
+            elseif inst:IsA("Model") then
+                if inst.PrimaryPart then
+                    firetouchinterest(charHrp, inst.PrimaryPart, 0)
+                    task.wait()
+                    firetouchinterest(charHrp, inst.PrimaryPart, 1)
+                end
+                for _, p in ipairs(inst:GetChildren()) do
+                    if p:IsA("BasePart") then
+                        firetouchinterest(charHrp, p, 0)
+                        task.wait()
+                        firetouchinterest(charHrp, p, 1)
+                    end
+                end
+            end
+        end
+    end)
+end
+
+-- Mencari apakah barang/permen di dekat koordinat waypoint masih ada di folder Debris
+-- Mengembalikan: itemInstance (jika masih ada), jarakHorizontal, posisiItem
+local function findItemInDebrisNear(pos, maxDist)
+    local debris = workspace:FindFirstChild("Debris")
+    if not debris or not pos then return nil, math.huge, nil end
+    local searchDist = maxDist or 80
+    local closestItem = nil
+    local closestDist = math.huge
+    local closestPos = nil
+
+    for _, child in ipairs(debris:GetChildren()) do
+        if isCandyItem(child) then
+            local p = getDebrisItemPosition(child)
+            if p then
+                local d = (Vector3.new(pos.X, 0, pos.Z) - Vector3.new(p.X, 0, p.Z)).Magnitude
+                if d <= searchDist and d < closestDist then
+                    closestDist = d
+                    closestItem = child
+                    closestPos = p
+                end
+            end
+        end
+    end
+
+    return closestItem, closestDist, closestPos
+end
 
 -- =============================================
 -- 🧠 VARIABEL STATE MACHINE & POSISI
@@ -989,6 +1089,33 @@ local rev_RemovedWeather = findRemote("rev_RemovedWeather", "RemoteEvent")
 local rev_candySpawn = findRemote("rev_candySpawn", "RemoteEvent")
 
 local ref_B_SellAll = findRemote("ref_B_SellAll", "RemoteFunction")
+local rev_WORLD_TP = findRemote("rev_WORLD_TP", "RemoteEvent")
+
+-- =============================================
+-- 🌍 AUTO WORLD TELEPORT (1X SAAT BARU EXECUTE)
+-- =============================================
+task.spawn(function()
+    if _G.autoWorldTeleport ~= false then
+        pcall(function()
+            local targetWorld = (type(_G.targetWorld) == "number") and _G.targetWorld or 2
+            local tpRemote = rev_WORLD_TP or findRemote("rev_WORLD_TP", "RemoteEvent")
+            if not tpRemote then
+                local shared = ReplicatedStorage:FindFirstChild("Shared")
+                local packages = shared and shared:FindFirstChild("Packages")
+                local net = packages and packages:FindFirstChild("Network")
+                tpRemote = net and net:FindFirstChild("rev_WORLD_TP")
+            end
+
+            if tpRemote then
+                tpRemote:FireServer(targetWorld)
+                logConsole(string.format("🌍 [WORLD TP] rev_WORLD_TP:FireServer(%s) berhasil dieksekusi 1x!", tostring(targetWorld)))
+            else
+                game:GetService("ReplicatedStorage").Shared.Packages.Network.rev_WORLD_TP:FireServer(targetWorld)
+                logConsole(string.format("🌍 [WORLD TP] rev_WORLD_TP:FireServer(%s) dipanggil langsung!", tostring(targetWorld)))
+            end
+        end)
+    end
+end)
 
 -- =============================================
 -- 💰 AUTO SELL ALL (SETIAP 5 DETIK)
@@ -1487,59 +1614,110 @@ task.spawn(function()
             -- Navigasi sembari melewati koordinat permen
             local targetPos = safeZone
             if isWaypointNavEnabled() and #activeCandyWaypoints > 0 then
+                -- 1. Pertahankan target aktif atau pilih waypoint terdekat baru
                 local bestIdx = nil
                 local bestDist = math.huge
-                for i, pos in ipairs(activeCandyWaypoints) do
-                    local d = (Vector3.new(hrp.Position.X, 0, hrp.Position.Z) - Vector3.new(pos.X, 0, pos.Z)).Magnitude
-                    if d < bestDist then
-                        bestDist = d
-                        bestIdx = i
+
+                if currentWaypointTarget then
+                    for i, pos in ipairs(activeCandyWaypoints) do
+                        if (pos - currentWaypointTarget).Magnitude < 0.5 then
+                            bestIdx = i
+                            bestDist = (Vector3.new(hrp.Position.X, 0, hrp.Position.Z) - Vector3.new(pos.X, 0, pos.Z)).Magnitude
+                            break
+                        end
+                    end
+                end
+
+                if not bestIdx then
+                    for i, pos in ipairs(activeCandyWaypoints) do
+                        local d = (Vector3.new(hrp.Position.X, 0, hrp.Position.Z) - Vector3.new(pos.X, 0, pos.Z)).Magnitude
+                        if d < bestDist then
+                            bestDist = d
+                            bestIdx = i
+                        end
                     end
                 end
 
                 if bestIdx then
                     local wp = activeCandyWaypoints[bestIdx]
-                    local reachThreshold = _G.candyReachDist or 25
+                    currentWaypointTarget = wp
 
-                    -- 🛡️ WAYPOINT STUCK WATCHDOG: Jika karakter mencoba mencapai waypoint yang sama selama > 6 detik, lewati waypoint tersebut!
-                    if currentWaypointTarget == wp then
-                        waypointStuckTimer = waypointStuckTimer + 0.05
-                        if waypointStuckTimer >= 6.0 then
-                            table.remove(activeCandyWaypoints, bestIdx)
-                            logConsole(string.format("⚠️ [WAYPOINT STUCK] Waypoint tidak terjangkau dalam 6s! Melewati ke titik berikutnya... Sisa: %d", #activeCandyWaypoints))
-                            waypointStuckTimer = 0
-                            currentWaypointTarget = nil
-                            wp = nil
-                        end
-                    else
-                        currentWaypointTarget = wp
-                        waypointStuckTimer = 0
+                    -- 🚀 DYNAMIC REACH THRESHOLD: Skala dinamis mengikuti kecepatan lari karakter (Buff In-Game)
+                    local currentSpeed = (hum and hum.WalkSpeed and hum.WalkSpeed > 0) and hum.WalkSpeed or 16
+                    local baseReach = _G.candyReachDist or 8
+                    local speedReachBonus = (currentSpeed > 16) and (currentSpeed * 0.3) or 0
+                    local reachThreshold = math.max(baseReach, speedReachBonus)
+
+                    -- 🔍 CEK DEBRIS: Cek apakah barang permen masih ada di Debris di sekitar waypoint
+                    local itemInDebris, itemDist, itemPos = findItemInDebrisNear(wp, 80)
+                    local shouldVerifyDebris = (_G.verifyDebrisPickup ~= false)
+
+                    -- Target pergerakan: utamakan posisi aktual item di Debris jika ada, Y rata tanah agar karakter tidak loncat/stutter
+                    local wpTargetPos = itemPos or wp
+                    targetPos = Vector3.new(wpTargetPos.X, hrp.Position.Y, wpTargetPos.Z)
+
+                    local distToTarget = (Vector3.new(hrp.Position.X, 0, hrp.Position.Z) - Vector3.new(wpTargetPos.X, 0, wpTargetPos.Z)).Magnitude
+
+                    -- 🍬 SENTUHAN AKTIF (PROACTIVE TOUCH): Picu touch saat sudah dekat (< 80 studs) jika firetouch aktif
+                    if _G.enableFireTouch and itemInDebris and distToTarget <= 80 then
+                        touchCandyItem(itemInDebris, hrp)
                     end
 
-                    if wp and bestDist <= reachThreshold then
+                    -- 🛡️ WAYPOINT STUCK WATCHDOG: Jika mencoba waypoint yang sama > 6 detik tanpa perubahan, lewati
+                    waypointStuckTimer = waypointStuckTimer + 0.05
+                    if waypointStuckTimer >= 6.0 then
                         table.remove(activeCandyWaypoints, bestIdx)
-                        currentWaypointTarget = nil
+                        logConsole(string.format("⚠️ [WAYPOINT TIMEOUT] Waypoint (%s) tidak terambil setelah 6s! Melewati ke titik berikutnya... Sisa: %d", itemInDebris and itemInDebris.Name or "Candy", #activeCandyWaypoints))
                         waypointStuckTimer = 0
-                        logConsole(string.format("🍬 Waypoint permen terlewati/terambil! Sisa waypoint: %d", #activeCandyWaypoints))
-                        if #activeCandyWaypoints > 0 then
-                            local nextIdx = 1
-                            local nextDist = math.huge
-                            for i, pos in ipairs(activeCandyWaypoints) do
-                                local d = (Vector3.new(hrp.Position.X, 0, hrp.Position.Z) - Vector3.new(pos.X, 0, pos.Z)).Magnitude
-                                if d < nextDist then
-                                    nextDist = d
-                                    nextIdx = i
-                                end
+                        currentWaypointTarget = nil
+                        wp = nil
+                    else
+                        -- 🛑 KONDISI SUDAH MENCAPAI AREA PERMEN:
+                        if distToTarget <= reachThreshold then
+                            -- ⚡ ANTI-OVERSHOOT BRAKING: Redam inersia saat lari kencang agar tidak muter-muter / bablas
+                            if _G.candyAntiOvershoot ~= false and currentSpeed > 20 then
+                                pcall(function()
+                                    hrp.AssemblyLinearVelocity = Vector3.new(0, hrp.AssemblyLinearVelocity.Y, 0)
+                                end)
                             end
-                            wp = activeCandyWaypoints[nextIdx]
-                        else
-                            wp = nil
-                        end
-                    end
 
-                    if wp then
-                        -- Sesuaikan koordinat Y agar karakter tidak terantuk ke bawah tanah
-                        targetPos = Vector3.new(wp.X, math.max(wp.Y, hrp.Position.Y), wp.Z)
+                            -- 📦 KONDISI KELOLOSAN WAYPOINT:
+                            if shouldVerifyDebris then
+                                if not itemInDebris then
+                                    -- Barang SUDAH HILANG dari Debris (berhasil dibawa)
+                                    table.remove(activeCandyWaypoints, bestIdx)
+                                    currentWaypointTarget = nil
+                                    waypointStuckTimer = 0
+                                    logConsole(string.format("🍬 [COLLECTED] Barang berhasil dibawa (hilang dari Debris)! Sisa waypoint: %d", #activeCandyWaypoints))
+                                else
+                                    -- Barang MASIH ADA di Debris -> Picu touch ulang & tahan posisi sejenak
+                                    touchCandyItem(itemInDebris, hrp)
+                                    targetPos = Vector3.new(wpTargetPos.X, hrp.Position.Y, wpTargetPos.Z)
+                                    if math.floor(waypointStuckTimer * 10) % 20 == 0 then
+                                        logConsole(string.format("⏳ [CEK DEBRIS] Menyentuh '%s' (jarak: %.1fm, speed: %.0f). Menunggu server...", itemInDebris.Name, distToTarget, currentSpeed))
+                                    end
+                                end
+                            else
+                                -- Mode fallback tanpa verifikasi Debris
+                                table.remove(activeCandyWaypoints, bestIdx)
+                                currentWaypointTarget = nil
+                                waypointStuckTimer = 0
+                                logConsole(string.format("🍬 Waypoint permen terlewati! Sisa waypoint: %d", #activeCandyWaypoints))
+                            end
+                        else
+                            -- Karakter masih dalam perjalanan menuju waypoint (distToTarget > reachThreshold)
+                            -- ⚡ ANTI-DRIFT: Jika speed kencang & mulai mendekati (< 25 studs), luruskan vektor kecepatan agar tidak orbiting
+                            if currentSpeed > 24 and distToTarget < 25 then
+                                pcall(function()
+                                    local toTarget = (Vector3.new(wpTargetPos.X, 0, wpTargetPos.Z) - Vector3.new(hrp.Position.X, 0, hrp.Position.Z)).Unit
+                                    local currentVel = hrp.AssemblyLinearVelocity
+                                    local horizSpeed = Vector2.new(currentVel.X, currentVel.Z).Magnitude
+                                    if horizSpeed > 8 then
+                                        hrp.AssemblyLinearVelocity = Vector3.new(toTarget.X * math.min(horizSpeed, currentSpeed), currentVel.Y, toTarget.Z * math.min(horizSpeed, currentSpeed))
+                                    end
+                                end)
+                            end
+                        end
                     end
                 end
             else
@@ -1550,7 +1728,9 @@ task.spawn(function()
             -- Bot TETAP MURNI JALAN KAKI via MoveTo
             hum:MoveTo(targetPos)
 
-            if distToSafeZone < 5 then
+            -- 🛡️ HANYA masuk Safe Zone jika SEMUA waypoint permen sudah tuntas diambil (atau tidak aktif)
+            local waypointsPending = isWaypointNavEnabled() and (#activeCandyWaypoints > 0)
+            if distToSafeZone < 5 and not waypointsPending then
                 currentWaypointTarget = nil
                 waypointStuckTimer = 0
                 targetAction = "WaitingForCollected"
