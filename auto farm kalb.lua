@@ -32,6 +32,7 @@ _G.candyWaypointNav     = true        -- [3] Navigation Switch: Pandu rute jalan
 _G.candyReachDist       = 8           -- Jarak dasar (studs) horizontal untuk menganggap permen sudah terlewati/terambil (Auto-scaled saat speed kencang)
 _G.candyAntiOvershoot   = true        -- [4] Anti-Overshoot & Drift: Redam momentum saat lari kencang agar tidak muter-muter / miss
 _G.verifyDebrisPickup   = true        -- [5] Debris Checker: Pastikan barang di Debris hilang saat dibawa; jika belum hilang, kembali ke waypoint
+_G.enableFireTouch      = false       -- [6] FireTouch Switch: true: picu firetouchinterest instan, false: nonaktif (murni fisik/hitbox)
 
 _G.useBrainrotWhitelist = true        -- true: Hanya bawa brainrot di whitelist ke safe zone, false: Bawa semua
 _G.brainrotWhitelist    = {           -- Daftar nama brainrot yang diizinkan (Case-insensitive & Partial match)
@@ -39,7 +40,7 @@ _G.brainrotWhitelist    = {           -- Daftar nama brainrot yang diizinkan (Ca
     "Tricerabob",
     "Teacherrina",
 }
-_G.kickDelay            = 0.7         -- Jeda waktu (detik) di Safe Zone sebelum menendang/kick (Default: 0.5 detik, jangan terlalu instant)
+_G.kickDelay            = 0.5         -- Jeda waktu (detik) di Safe Zone sebelum menendang/kick (Default: 0.5 detik, jangan terlalu instant)
 _G.autoSellAll          = true       -- true: Auto Sell All setiap 5 detik via ref_B_SellAll
 _G.autoWorldTeleport    = true        -- true: Teleport otomatis 1x saat baru dieksekusi via rev_WORLD_TP, false: Nonaktif
 _G.targetWorld          = 2           -- Target ID World untuk teleportasi otomatis (Default: 2)
@@ -60,7 +61,7 @@ _G.optimizeTerrain     = true        -- true: Matikan gelombang air & dekorasi r
 _G.cleanClientAssets   = true        -- true: Sembunyikan ClientRenderedAssets & PlacedEggRenders
 
 print("--------------------------------------------------")
-print("🚀 [INIT] Memuat KALB Auto Farm V6.1 (Ultra Anti-Lag & Potato Max Edition)...")
+print("🚀 [INIT] Memuat KALB Auto Farm V3 (Ultra Anti-Lag & Potato Max Edition)...")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -825,6 +826,7 @@ end
 
 -- 🍬 EKSEKUTOR SENTUHAN INSTAN (FIRETOUCHINTEREST SUPPORT)
 local function touchCandyItem(inst, charHrp)
+    if not _G.enableFireTouch then return end
     if not inst or not charHrp then return end
     pcall(function()
         if firetouchinterest then
@@ -1654,8 +1656,8 @@ task.spawn(function()
 
                     local distToTarget = (Vector3.new(hrp.Position.X, 0, hrp.Position.Z) - Vector3.new(wpTargetPos.X, 0, wpTargetPos.Z)).Magnitude
 
-                    -- 🍬 SENTUHAN AKTIF (PROACTIVE TOUCH): Picu touch saat sudah dekat (< 80 studs)
-                    if itemInDebris and distToTarget <= 80 then
+                    -- 🍬 SENTUHAN AKTIF (PROACTIVE TOUCH): Picu touch saat sudah dekat (< 80 studs) jika firetouch aktif
+                    if _G.enableFireTouch and itemInDebris and distToTarget <= 80 then
                         touchCandyItem(itemInDebris, hrp)
                     end
 
