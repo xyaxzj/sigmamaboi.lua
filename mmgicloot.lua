@@ -222,6 +222,7 @@ local WORKSPACE_REMOVE_NAMES = {
     ["shops"] = true,
     ["exclusiveproducts"] = true,
     ["leaderboards"] = true,
+    ["npcs"] = true,
     -- Models:
     ["admin machine"] = true,
     ["barriers"] = true,
@@ -231,7 +232,36 @@ local WORKSPACE_REMOVE_NAMES = {
     ["poolbillboard"] = true,
     ["kickupgrades"] = true,
     ["portal"] = true,
+    ["sell"] = true,
 }
+
+-- Matikan listener OnPreRender dari script game DecorationsHandler agar tidak memicu error spam 60 FPS
+local function disableDecorationsHandler()
+    pcall(function()
+        if getconnections then
+            local signals = { RunService.PreRender, RunService.RenderStepped, RunService.Heartbeat, RunService.Stepped }
+            for _, sig in ipairs(signals) do
+                for _, conn in ipairs(getconnections(sig)) do
+                    pcall(function()
+                        local func = conn.Function
+                        if func then
+                            local info = debug.getinfo and debug.getinfo(func)
+                            local src = info and info.source or tostring(func)
+                            if string.find(string.lower(src), "decorationshandler") then
+                                if conn.Disable then
+                                    conn:Disable()
+                                elseif conn.Disconnect then
+                                    conn:Disconnect()
+                                end
+                            end
+                        end
+                    end)
+                end
+            end
+        end
+    end)
+end
+disableDecorationsHandler()
 
 local function shouldRemoveWorkspaceTarget(inst)
     if not inst or not inst.Parent then return false end
@@ -240,17 +270,28 @@ local function shouldRemoveWorkspaceTarget(inst)
     return WORKSPACE_REMOVE_NAMES[lower] == true
 end
 
+local function handleWorkspaceTarget(inst)
+    if not shouldRemoveWorkspaceTarget(inst) then return false end
+    pcall(function()
+        local lower = string.lower(inst.Name)
+        if lower == "decor" then
+            -- JANGAN :Destroy() folder Decor agar DecorationsHandler bawaan game tidak error 60 FPS (Parent locked)
+            -- Cukup bersihkan seluruh isinya (pohon, rumput, dekorasi 100% musnah tanpa error)
+            inst:ClearAllChildren()
+        else
+            inst:Destroy()
+        end
+    end)
+    return true
+end
+
 local function purgeWorkspaceTargets()
     if not _G.antiLag then return end
     for _, child in ipairs(workspace:GetChildren()) do
-        if shouldRemoveWorkspaceTarget(child) then
-            pcall(function() child:Destroy() end)
-        end
+        handleWorkspaceTarget(child)
     end
     for _, desc in ipairs(workspace:GetDescendants()) do
-        if shouldRemoveWorkspaceTarget(desc) then
-            pcall(function() desc:Destroy() end)
-        end
+        handleWorkspaceTarget(desc)
     end
 end
 
@@ -413,9 +454,7 @@ task.spawn(function()
         local all = workspace:GetDescendants()
         local count = 0
         for _, v in ipairs(all) do
-            if shouldRemoveWorkspaceTarget(v) then
-                pcall(function() v:Destroy() end)
-            else
+            if not handleWorkspaceTarget(v) then
                 optimizeInstance(v)
             end
             count = count + 1
@@ -430,10 +469,7 @@ end)
 -- Listener Real-Time DescendantAdded untuk Workspace
 workspace.DescendantAdded:Connect(function(descendant)
     if not _G.antiLag then return end
-    if shouldRemoveWorkspaceTarget(descendant) then
-        task.defer(function()
-            pcall(function() descendant:Destroy() end)
-        end)
+    if handleWorkspaceTarget(descendant) then
         return
     end
     task.defer(optimizeInstance, descendant)
@@ -587,6 +623,7 @@ task.spawn(function()
         cleanCounter = cleanCounter + 1
         -- Tiap ~30 detik pastikan target terhapus & refresh lighting & playergui
         if cleanCounter % 10 == 0 then
+            pcall(disableDecorationsHandler)
             pcall(purgeLighting)
             pcall(purgePlayerGui)
             pcall(purgeWorkspaceTargets)
