@@ -29,8 +29,9 @@ _G.enableCandyEvent     = true        -- [1] Master Switch: Aktifkan penanganan 
 _G.expandCandyHitbox    = true        -- [2] Hitbox Switch: Memperbesar hitbox Candy/Cokelat/dll ke ukuran yang ditentukan
 _G.candyHitboxSize      = Vector3.new(100, 100, 100) -- Ukuran hitbox Candy yang dibesarkan
 _G.candyWaypointNav     = true        -- [3] Navigation Switch: Pandu rute jalan kaki melintasi waypoint permen ke Safe Zone
-_G.candyReachDist       = 1          -- Jarak (studs) horizontal untuk menganggap permen sudah terlewati/terambil
-_G.verifyDebrisPickup   = true        -- [4] Debris Checker: Pastikan barang di Debris hilang saat dibawa; jika belum hilang, kembali ke waypoint
+_G.candyReachDist       = 8           -- Jarak dasar (studs) horizontal untuk menganggap permen sudah terlewati/terambil (Auto-scaled saat speed kencang)
+_G.candyAntiOvershoot   = true        -- [4] Anti-Overshoot & Drift: Redam momentum saat lari kencang agar tidak muter-muter / miss
+_G.verifyDebrisPickup   = true        -- [5] Debris Checker: Pastikan barang di Debris hilang saat dibawa; jika belum hilang, kembali ke waypoint
 
 _G.useBrainrotWhitelist = true        -- true: Hanya bawa brainrot di whitelist ke safe zone, false: Bawa semua
 _G.brainrotWhitelist    = {           -- Daftar nama brainrot yang diizinkan (Case-insensitive & Partial match)
@@ -38,12 +39,12 @@ _G.brainrotWhitelist    = {           -- Daftar nama brainrot yang diizinkan (Ca
     "Tricerabob",
     "Teacherrina",
 }
-_G.kickDelay            = 0.5         -- Jeda waktu (detik) di Safe Zone sebelum menendang/kick (Default: 0.5 detik, jangan terlalu instant)
+_G.kickDelay            = 0.7         -- Jeda waktu (detik) di Safe Zone sebelum menendang/kick (Default: 0.5 detik, jangan terlalu instant)
 _G.autoSellAll          = true       -- true: Auto Sell All setiap 5 detik via ref_B_SellAll
 _G.autoWorldTeleport    = true        -- true: Teleport otomatis 1x saat baru dieksekusi via rev_WORLD_TP, false: Nonaktif
 _G.targetWorld          = 2           -- Target ID World untuk teleportasi otomatis (Default: 2)
 _G.autoRemovePlayer     = true        -- true: Hapus player lain dari game.Players & workspace.Players (100% Bersih & No Lag), false: Biarkan
-_G.debugConsoleLog      = false        -- true: Cetak log status/fase/candy ke console (F9), false: Senyap
+_G.debugConsoleLog      = true        -- true: Cetak log status/fase/candy ke console (F9), false: Senyap
 _G.failsafeTimeout      = 25          -- Waktu maksimal (detik) sebelum auto-reset ke Safe Zone jika macet
 
 -- ⚡ ULTRA ANTI-LAG & POTATO MODE (PUSH MAX PERFORMANCE)
@@ -59,7 +60,7 @@ _G.optimizeTerrain     = true        -- true: Matikan gelombang air & dekorasi r
 _G.cleanClientAssets   = true        -- true: Sembunyikan ClientRenderedAssets & PlacedEggRenders
 
 print("--------------------------------------------------")
-print("🚀 [INIT] Memuat KALB Auto Farm V5.6.1 (Ultra Anti-Lag & Potato Max Edition)...")
+print("🚀 [INIT] Memuat KALB Auto Farm V3 (Ultra Anti-Lag & Potato Max Edition)...")
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -709,19 +710,36 @@ local function expandCandyHitbox(inst)
     if expandedCandyObjects[inst] then return end
 
     pcall(function()
-        local targetPart = inst:IsA("BasePart") and inst or inst:FindFirstChildWhichIsA("BasePart", true)
-        if targetPart then
-            targetPart.CanCollide = false
-            targetPart.CanTouch = true
-            targetPart.CanQuery = true
-            targetPart.CastShadow = false
-            targetPart.Transparency = 0.5
-            local targetSize = _G.candyHitboxSize or CANDY_HITBOX_SIZE
-            if targetPart.Size ~= targetSize then
-                targetPart.Size = targetSize
+        local targetSize = _G.candyHitboxSize or CANDY_HITBOX_SIZE
+        local partsExpanded = 0
+        if inst:IsA("BasePart") then
+            inst.CanCollide = false
+            inst.CanTouch = true
+            inst.CanQuery = true
+            inst.CastShadow = false
+            inst.Transparency = 0.5
+            if inst.Size ~= targetSize then
+                inst.Size = targetSize
             end
+            partsExpanded = partsExpanded + 1
+        elseif inst:IsA("Model") then
+            for _, p in ipairs(inst:GetDescendants()) do
+                if p:IsA("BasePart") then
+                    p.CanCollide = false
+                    p.CanTouch = true
+                    p.CanQuery = true
+                    p.CastShadow = false
+                    p.Transparency = 0.5
+                    if p.Size ~= targetSize then
+                        p.Size = targetSize
+                    end
+                    partsExpanded = partsExpanded + 1
+                end
+            end
+        end
+        if partsExpanded > 0 then
             expandedCandyObjects[inst] = true
-            logConsole(string.format("🍬 [CANDY HITBOX] '%s' (%s) berhasil diperbesar ke 200 studs!", inst.Name, targetPart.Name))
+            logConsole(string.format("🍬 [CANDY HITBOX] '%s' (%d part) berhasil diperbesar ke 200 studs!", inst.Name, partsExpanded))
         end
     end)
 end
@@ -805,12 +823,39 @@ local function getDebrisItemPosition(inst)
     return (ok and pos) or nil
 end
 
+-- 🍬 EKSEKUTOR SENTUHAN INSTAN (FIRETOUCHINTEREST SUPPORT)
+local function touchCandyItem(inst, charHrp)
+    if not inst or not charHrp then return end
+    pcall(function()
+        if firetouchinterest then
+            if inst:IsA("BasePart") then
+                firetouchinterest(charHrp, inst, 0)
+                task.wait()
+                firetouchinterest(charHrp, inst, 1)
+            elseif inst:IsA("Model") then
+                if inst.PrimaryPart then
+                    firetouchinterest(charHrp, inst.PrimaryPart, 0)
+                    task.wait()
+                    firetouchinterest(charHrp, inst.PrimaryPart, 1)
+                end
+                for _, p in ipairs(inst:GetChildren()) do
+                    if p:IsA("BasePart") then
+                        firetouchinterest(charHrp, p, 0)
+                        task.wait()
+                        firetouchinterest(charHrp, p, 1)
+                    end
+                end
+            end
+        end
+    end)
+end
+
 -- Mencari apakah barang/permen di dekat koordinat waypoint masih ada di folder Debris
 -- Mengembalikan: itemInstance (jika masih ada), jarakHorizontal, posisiItem
 local function findItemInDebrisNear(pos, maxDist)
     local debris = workspace:FindFirstChild("Debris")
     if not debris or not pos then return nil, math.huge, nil end
-    local searchDist = maxDist or 45
+    local searchDist = maxDist or 80
     local closestItem = nil
     local closestDist = math.huge
     local closestPos = nil
@@ -1592,53 +1637,81 @@ task.spawn(function()
                 if bestIdx then
                     local wp = activeCandyWaypoints[bestIdx]
                     currentWaypointTarget = wp
-                    local reachThreshold = _G.candyReachDist or 5
+
+                    -- 🚀 DYNAMIC REACH THRESHOLD: Skala dinamis mengikuti kecepatan lari karakter (Buff In-Game)
+                    local currentSpeed = (hum and hum.WalkSpeed and hum.WalkSpeed > 0) and hum.WalkSpeed or 16
+                    local baseReach = _G.candyReachDist or 8
+                    local speedReachBonus = (currentSpeed > 16) and (currentSpeed * 0.3) or 0
+                    local reachThreshold = math.max(baseReach, speedReachBonus)
 
                     -- 🔍 CEK DEBRIS: Cek apakah barang permen masih ada di Debris di sekitar waypoint
-                    local itemInDebris, itemDist, itemPos = findItemInDebrisNear(wp, 45)
+                    local itemInDebris, itemDist, itemPos = findItemInDebrisNear(wp, 80)
                     local shouldVerifyDebris = (_G.verifyDebrisPickup ~= false)
 
-                    -- Target pergerakan: utamakan posisi aktual item di Debris jika ada
+                    -- Target pergerakan: utamakan posisi aktual item di Debris jika ada, Y rata tanah agar karakter tidak loncat/stutter
                     local wpTargetPos = itemPos or wp
-                    targetPos = Vector3.new(wpTargetPos.X, math.max(wpTargetPos.Y, hrp.Position.Y), wpTargetPos.Z)
+                    targetPos = Vector3.new(wpTargetPos.X, hrp.Position.Y, wpTargetPos.Z)
 
-                    -- 🛡️ WAYPOINT STUCK WATCHDOG: Jika mencoba waypoint yang sama > 8 detik tanpa perubahan, lewati
+                    local distToTarget = (Vector3.new(hrp.Position.X, 0, hrp.Position.Z) - Vector3.new(wpTargetPos.X, 0, wpTargetPos.Z)).Magnitude
+
+                    -- 🍬 SENTUHAN AKTIF (PROACTIVE TOUCH): Picu touch saat sudah dekat (< 80 studs)
+                    if itemInDebris and distToTarget <= 80 then
+                        touchCandyItem(itemInDebris, hrp)
+                    end
+
+                    -- 🛡️ WAYPOINT STUCK WATCHDOG: Jika mencoba waypoint yang sama > 6 detik tanpa perubahan, lewati
                     waypointStuckTimer = waypointStuckTimer + 0.05
-                    if waypointStuckTimer >= 8.0 then
+                    if waypointStuckTimer >= 6.0 then
                         table.remove(activeCandyWaypoints, bestIdx)
-                        logConsole(string.format("⚠️ [WAYPOINT TIMEOUT] Waypoint (%s) tidak terambil setelah 8s! Melewati ke titik berikutnya... Sisa: %d", itemInDebris and itemInDebris.Name or "Candy", #activeCandyWaypoints))
+                        logConsole(string.format("⚠️ [WAYPOINT TIMEOUT] Waypoint (%s) tidak terambil setelah 6s! Melewati ke titik berikutnya... Sisa: %d", itemInDebris and itemInDebris.Name or "Candy", #activeCandyWaypoints))
                         waypointStuckTimer = 0
                         currentWaypointTarget = nil
                         wp = nil
                     else
-                        local distToTarget = (Vector3.new(hrp.Position.X, 0, hrp.Position.Z) - Vector3.new(wpTargetPos.X, 0, wpTargetPos.Z)).Magnitude
+                        -- 🛑 KONDISI SUDAH MENCAPAI AREA PERMEN:
+                        if distToTarget <= reachThreshold then
+                            -- ⚡ ANTI-OVERSHOOT BRAKING: Redam inersia saat lari kencang agar tidak muter-muter / bablas
+                            if _G.candyAntiOvershoot ~= false and currentSpeed > 20 then
+                                pcall(function()
+                                    hrp.AssemblyLinearVelocity = Vector3.new(0, hrp.AssemblyLinearVelocity.Y, 0)
+                                end)
+                            end
 
-                        -- 📦 KONDISI KELOLOSAN WAYPOINT:
-                        -- Jika verifikasi Debris aktif: Selesai HANYA JIKA barang sudah hilang dari Debris!
-                        -- Jika barang BELUM HILANG dari Debris: bot TIDAK menghapus waypoint dan KEMBALI mendekat ke waypoint tersebut!
-                        if shouldVerifyDebris then
-                            if not itemInDebris then
-                                -- Barang SUDAH HILANG dari Debris (berhasil dibawa)
-                                table.remove(activeCandyWaypoints, bestIdx)
-                                currentWaypointTarget = nil
-                                waypointStuckTimer = 0
-                                logConsole(string.format("🍬 [COLLECTED] Barang berhasil dibawa (hilang dari Debris)! Sisa waypoint: %d", #activeCandyWaypoints))
-                            else
-                                -- Barang MASIH ADA di Debris -> Belum hilang!
-                                -- Jika karakter sudah sempat berada di dekat titik atau lewat, kembali / tetap fokus ke titik barang
-                                if distToTarget <= reachThreshold then
+                            -- 📦 KONDISI KELOLOSAN WAYPOINT:
+                            if shouldVerifyDebris then
+                                if not itemInDebris then
+                                    -- Barang SUDAH HILANG dari Debris (berhasil dibawa)
+                                    table.remove(activeCandyWaypoints, bestIdx)
+                                    currentWaypointTarget = nil
+                                    waypointStuckTimer = 0
+                                    logConsole(string.format("🍬 [COLLECTED] Barang berhasil dibawa (hilang dari Debris)! Sisa waypoint: %d", #activeCandyWaypoints))
+                                else
+                                    -- Barang MASIH ADA di Debris -> Picu touch ulang & tahan posisi sejenak
+                                    touchCandyItem(itemInDebris, hrp)
+                                    targetPos = Vector3.new(wpTargetPos.X, hrp.Position.Y, wpTargetPos.Z)
                                     if math.floor(waypointStuckTimer * 10) % 20 == 0 then
-                                        logConsole(string.format("⏳ [CEK DEBRIS] Barang '%s' belum hilang dari Debris (jarak: %.1fm). Kembali mendekat ke waypoint...", itemInDebris.Name, distToTarget))
+                                        logConsole(string.format("⏳ [CEK DEBRIS] Menyentuh '%s' (jarak: %.1fm, speed: %.0f). Menunggu server...", itemInDebris.Name, distToTarget, currentSpeed))
                                     end
                                 end
-                            end
-                        else
-                            -- Mode fallback tanpa verifikasi Debris (hanya cek jarak)
-                            if distToTarget <= reachThreshold then
+                            else
+                                -- Mode fallback tanpa verifikasi Debris
                                 table.remove(activeCandyWaypoints, bestIdx)
                                 currentWaypointTarget = nil
                                 waypointStuckTimer = 0
                                 logConsole(string.format("🍬 Waypoint permen terlewati! Sisa waypoint: %d", #activeCandyWaypoints))
+                            end
+                        else
+                            -- Karakter masih dalam perjalanan menuju waypoint (distToTarget > reachThreshold)
+                            -- ⚡ ANTI-DRIFT: Jika speed kencang & mulai mendekati (< 25 studs), luruskan vektor kecepatan agar tidak orbiting
+                            if currentSpeed > 24 and distToTarget < 25 then
+                                pcall(function()
+                                    local toTarget = (Vector3.new(wpTargetPos.X, 0, wpTargetPos.Z) - Vector3.new(hrp.Position.X, 0, hrp.Position.Z)).Unit
+                                    local currentVel = hrp.AssemblyLinearVelocity
+                                    local horizSpeed = Vector2.new(currentVel.X, currentVel.Z).Magnitude
+                                    if horizSpeed > 8 then
+                                        hrp.AssemblyLinearVelocity = Vector3.new(toTarget.X * math.min(horizSpeed, currentSpeed), currentVel.Y, toTarget.Z * math.min(horizSpeed, currentSpeed))
+                                    end
+                                end)
                             end
                         end
                     end
