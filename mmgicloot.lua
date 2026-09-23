@@ -44,8 +44,8 @@ _G.brainrotWhitelist    = {           -- Daftar nama brainrot yang diizinkan (Ca
 }
 _G.kickDelay            = 0.5         -- Jeda waktu (detik) di Safe Zone sebelum menendang/kick (Default: 0.5 detik, jangan terlalu instant)
 _G.autoSellAll          = true       -- true: Auto Sell All setiap 5 detik via ref_B_SellAll
-_G.autoWorldTeleport    = true        -- true: Teleport otomatis 1x saat baru dieksekusi via rev_WORLD_TP, false: Nonaktif
-_G.targetWorld          = 2           -- Target ID World untuk teleportasi otomatis (Default: 2)
+_G.autoWorldTeleport    = false        -- true: Teleport otomatis 1x saat baru dieksekusi via rev_WORLD_TP, false: Nonaktif
+_G.targetWorld          = 1           -- Target ID World untuk teleportasi otomatis (Default: 2)
 _G.autoRemovePlayer     = true        -- true: Hapus player lain dari game.Players & workspace.Players (100% Bersih & No Lag), false: Biarkan
 _G.debugConsoleLog      = false        -- true: Cetak log status/fase/candy ke console (F9), false: Senyap
 _G.failsafeTimeout      = 25          -- Waktu maksimal (detik) sebelum auto-reset ke Safe Zone jika macet
@@ -245,7 +245,7 @@ end
 -- =============================================
 local WORKSPACE_REMOVE_NAMES = {
     -- Folders:
-    ["decor"] = true,
+    ["decor"] = false,
     ["walls"] = true,
     ["shops"] = true,
     ["exclusiveproducts"] = true,
