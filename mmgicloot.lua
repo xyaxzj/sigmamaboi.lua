@@ -1,5 +1,5 @@
 -- ==============================================================================
--- 🥔 KALB ULTRA LIGHTWEIGHT AUTO FARM V6.1.2 (SMOOTH SPRINT CANDY EDITION)
+-- 🥔 KALB ULTRA LIGHTWEIGHT AUTO FARM V7.1.2 (SMOOTH SPRINT CANDY EDITION)
 -- ==============================================================================
 -- Fitur & Alur:
 -- 1. ⚙️ Full Config Mode: Semua pengaturan diatur via variabel _G di baris atas (Tanpa UI)
