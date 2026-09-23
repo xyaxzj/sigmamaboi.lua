@@ -57,10 +57,10 @@ _G.disable3dRender     = false       -- true: Layar freeze / 0% GPU saat AFK far
 _G.muteAudio           = true        -- true: Mute semua audio & reverb game (0% beban CPU audio)
 
 -- 🥔 EKSTREM ANTI-LAG & HARDWARE OPTIMIZER (PLAN V1)
-_G.destroyNonCollideDecor = true     -- [Poin 2] true: Musnahkan dekorasi non-solid (:Destroy() jika CanCollide == false)
-_G.cutPhysicsInvisible    = true     -- [Poin 1] true: Matikan CanTouch & CanQuery part map statis (40-60% CPU Physics save)
+_G.destroyNonCollideDecor = false     -- [Poin 2] true: Musnahkan dekorasi non-solid (:Destroy() jika CanCollide == false)
+_G.cutPhysicsInvisible    = false     -- [Poin 1] true: Matikan CanTouch & CanQuery part map statis (40-60% CPU Physics save)
 _G.cullFogHorizon         = true     -- [Poin 3] true: Potong jarak pandang render GPU (100 studs Fog Cutoff)
-_G.freezeBotAnimation     = true     -- [Poin 4] true: Matikan animasi skeletal & state humanoid (Climbing, Swimming, etc.)
+_G.freezeBotAnimation     = false     -- [Poin 4] true: Matikan animasi skeletal & state humanoid (Climbing, Swimming, etc.)
 _G.adaptiveFpsCap         = false     -- [Poin 6] true: 15 FPS saat diam/nunggu, 60 FPS saat jalan aktif (Dingin & Hemat Baterai)
 
 print("--------------------------------------------------")
