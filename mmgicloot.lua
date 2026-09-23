@@ -1,5 +1,5 @@
 -- ==============================================================================
--- 🥔 KALB ULTRA LIGHTWEIGHT AUTO FARM V5.2.1 (SMOOTH SPRINT CANDY EDITION)
+-- 🥔 KALB ULTRA LIGHTWEIGHT AUTO FARM V6.1.2 (SMOOTH SPRINT CANDY EDITION)
 -- ==============================================================================
 -- Fitur & Alur:
 -- 1. ⚙️ Full Config Mode: Semua pengaturan diatur via variabel _G di baris atas (Tanpa UI)
@@ -42,12 +42,12 @@ _G.brainrotWhitelist    = {           -- Daftar nama brainrot yang diizinkan (Ca
     "Tricerabob",
     "Teacherrina",
 }
-_G.kickDelay            = 1.2         -- Jeda waktu (detik) di Safe Zone sebelum menendang/kick (Default: 0.5 detik, jangan terlalu instant)
+_G.kickDelay            = 0.5         -- Jeda waktu (detik) di Safe Zone sebelum menendang/kick (Default: 0.5 detik, jangan terlalu instant)
 _G.autoSellAll          = true       -- true: Auto Sell All setiap 5 detik via ref_B_SellAll
-_G.autoWorldTeleport    = false        -- true: Teleport otomatis 1x saat baru dieksekusi via rev_WORLD_TP, false: Nonaktif
-_G.targetWorld          = 1           -- Target ID World untuk teleportasi otomatis (Default: 2)
+_G.autoWorldTeleport    = true        -- true: Teleport otomatis 1x saat baru dieksekusi via rev_WORLD_TP, false: Nonaktif
+_G.targetWorld          = 2           -- Target ID World untuk teleportasi otomatis (Default: 2)
 _G.autoRemovePlayer     = true        -- true: Hapus player lain dari game.Players & workspace.Players (100% Bersih & No Lag), false: Biarkan
-_G.debugConsoleLog      = true        -- true: Cetak log status/fase/candy ke console (F9), false: Senyap
+_G.debugConsoleLog      = false        -- true: Cetak log status/fase/candy ke console (F9), false: Senyap
 _G.failsafeTimeout      = 25          -- Waktu maksimal (detik) sebelum auto-reset ke Safe Zone jika macet
 
 -- ⚡ ANTI-LAG & POTATO MODE
@@ -56,9 +56,16 @@ _G.fpsCap              = 60          -- Batas target FPS (60 hemat baterai & CPU
 _G.disable3dRender     = false       -- true: Layar freeze / 0% GPU saat AFK farm (Pencet F10 untuk toggle), false: Tampilan visual normal
 _G.muteAudio           = true        -- true: Mute semua audio & reverb game (0% beban CPU audio)
 
+-- 🥔 EKSTREM ANTI-LAG & HARDWARE OPTIMIZER (PLAN V1)
+_G.destroyNonCollideDecor = true     -- [Poin 2] true: Musnahkan dekorasi non-solid (:Destroy() jika CanCollide == false)
+_G.cutPhysicsInvisible    = true     -- [Poin 1] true: Matikan CanTouch & CanQuery part map statis (40-60% CPU Physics save)
+_G.cullFogHorizon         = true     -- [Poin 3] true: Potong jarak pandang render GPU (100 studs Fog Cutoff)
+_G.freezeBotAnimation     = true     -- [Poin 4] true: Matikan animasi skeletal & state humanoid (Climbing, Swimming, etc.)
+_G.adaptiveFpsCap         = false     -- [Poin 6] true: 15 FPS saat diam/nunggu, 60 FPS saat jalan aktif (Dingin & Hemat Baterai)
+
 print("--------------------------------------------------")
-print("🚀 [INIT] Memuat KALB Auto Farm V5.1 (Smooth Sprint & Instant Pickup Edition)...")
-print("✨ [VERSION] Build: V5.1 | Smooth Sprint (No Sluggish Brake) & Exact Reach")
+print("🚀 [INIT] Memuat KALB Auto Farm V5.2 (Extreme Anti-Lag & Crash-Proof Edition)...")
+print("✨ [VERSION] Build: V5.2 | 7 Extreme Anti-Lag Points & Lag-Proof Watchdog")
 print("--------------------------------------------------")
 
 local Players = game:GetService("Players")
@@ -138,11 +145,18 @@ local function isLocalPlayerEntity(inst)
     return false
 end
 
+local myPlotInstance = nil
+
 local function isProtectedEventItem(inst)
     if not inst then return false end
     local name = inst.Name
-    if name == "PlotSign" or name == "KALB_SafeZoneMarker" then return true end
+    if name == "PlotSign" or name == "KALB_SafeZoneMarker" or name == "Debris" then return true end
     if isCandyItem(inst) then return true end
+
+    local debris = workspace:FindFirstChild("Debris")
+    if debris and (inst == debris or inst:IsDescendantOf(debris)) then return true end
+
+    if myPlotInstance and (inst == myPlotInstance or inst:IsDescendantOf(myPlotInstance)) then return true end
 
     local p = inst.Parent
     if not p or p == workspace or p == game then return false end
@@ -150,7 +164,7 @@ local function isProtectedEventItem(inst)
     local curr = p
     while curr and curr ~= workspace and curr ~= game do
         local cName = curr.Name
-        if cName == "PlotSign" or cName == "KALB_SafeZoneMarker" or isCandyItem(curr) then
+        if cName == "PlotSign" or cName == "KALB_SafeZoneMarker" or cName == "Debris" or isCandyItem(curr) then
             return true
         end
         curr = curr.Parent
@@ -172,7 +186,17 @@ pcall(function()
     end
 end)
 
--- Target FPS Cap
+-- Target FPS Cap & Dynamic Adaptive FPS (Poin 6)
+local currentAdaptiveFps = nil
+local function setAdaptiveFps(targetFps)
+    if not _G.adaptiveFpsCap or not setfpscap or typeof(setfpscap) ~= "function" then return end
+    if currentAdaptiveFps == targetFps then return end
+    currentAdaptiveFps = targetFps
+    pcall(function()
+        setfpscap(targetFps)
+    end)
+end
+
 if _G.fpsCap and _G.fpsCap > 0 then
     pcall(function()
         if setfpscap and typeof(setfpscap) == "function" then
@@ -358,11 +382,46 @@ local function purgePlayerGui()
     end)
 end
 
+-- =============================================
+-- 🏃 2B. HUMANOID STATE & SKELETAL ANIMATION STRIPPER (POIN 4)
+-- =============================================
+local function optimizeCharacter(char)
+    if not char then return end
+    pcall(function()
+        local hum = char:FindFirstChildOfClass("Humanoid") or char:WaitForChild("Humanoid", 3)
+        if hum and _G.freezeBotAnimation then
+            hum:SetStateEnabled(Enum.HumanoidStateType.Climbing, false)
+            hum:SetStateEnabled(Enum.HumanoidStateType.Swimming, false)
+            hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
+            hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+
+            local animator = hum:FindFirstChildOfClass("Animator") or hum:WaitForChild("Animator", 2)
+            if animator then
+                for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+                    pcall(function() track:Stop(0) end)
+                end
+                if not animator:GetAttribute("Kalb_AnimHooked") then
+                    animator:SetAttribute("Kalb_AnimHooked", true)
+                    animator.AnimationPlayed:Connect(function(track)
+                        if _G.freezeBotAnimation then
+                            task.defer(function() pcall(function() track:Stop(0) end) end)
+                        end
+                    end)
+                end
+            end
+        end
+    end)
+end
+
 if lp then
     purgePlayerGui()
-    lp.CharacterAdded:Connect(function()
+    if lp.Character then
+        optimizeCharacter(lp.Character)
+    end
+    lp.CharacterAdded:Connect(function(newChar)
         task.wait(0.2)
         purgePlayerGui()
+        optimizeCharacter(newChar)
     end)
 end
 
@@ -373,10 +432,19 @@ local function purgeLighting()
     if not _G.antiLag then return end
     pcall(function()
         Lighting.GlobalShadows = false
-        Lighting.FogEnd = 9e9
         Lighting.Brightness = 1
         Lighting.ClockTime = 14
         Lighting.OutdoorAmbient = Color3.fromRGB(128, 128, 128)
+
+        -- [POIN 3] GPU Fog Horizon Clipping (Render Distance Cutoff)
+        if _G.cullFogHorizon then
+            Lighting.FogStart = 50
+            Lighting.FogEnd   = 100
+            Lighting.FogColor = Color3.new(0, 0, 0)
+        else
+            Lighting.FogEnd = 9e9
+        end
+
         for _, v in ipairs(Lighting:GetChildren()) do
             if v:IsA("PostEffect") or v:IsA("BlurEffect") or v:IsA("SunRaysEffect")
                or v:IsA("ColorCorrectionEffect") or v:IsA("BloomEffect")
@@ -469,15 +537,29 @@ local function optimizeInstance(v)
             return
         end
 
-        -- 5. Ubah seluruh map menjadi Gray polos (SmoothPlastic)
+        -- 5. Part Map Processing (Solid vs Non-Solid & Physics Stripping)
         if v:IsA("BasePart") then
+            -- [POIN 2] Pemusnahan Objek Dekorasi Non-Solid (CanCollide == false)
+            if _G.destroyNonCollideDecor and v.CanCollide == false and v.Anchored then
+                v:Destroy()
+                return
+            end
+
+            -- [POIN 1] CPU Physics & Raycast Stripping (CanTouch & CanQuery = false)
+            if _G.cutPhysicsInvisible and v.Anchored then
+                v.CanTouch = false
+                v.CanQuery = false
+            end
+
             v.Material = Enum.Material.SmoothPlastic
             v.Reflectance = 0
             v.CastShadow = false
             v.Color = GRAY_COLOR
 
+            -- [POIN 5] Mesh LOD Rendah
             if v:IsA("MeshPart") then
                 v.TextureID = ""
+                pcall(function() v.RenderFidelity = Enum.RenderFidelity.Performance end)
             end
         elseif v:IsA("SpecialMesh") then
             v.TextureId = ""
@@ -693,6 +775,7 @@ local function isMyPlot(plotModel)
             if nameLabel and nameLabel:IsA("TextLabel") then
                 local t = nameLabel.Text
                 if t and (t == lpName or t:find(lpName, 1, true) or (lpDisplayName ~= "" and (t == lpDisplayName or t:find(lpDisplayName, 1, true)))) then
+                    myPlotInstance = plotModel
                     return true
                 end
             end
@@ -700,6 +783,7 @@ local function isMyPlot(plotModel)
             if icon and (icon:IsA("ImageLabel") or icon:IsA("ImageButton")) then
                 local img = icon.Image
                 if img and img:find(myUidStr, 1, true) then
+                    myPlotInstance = plotModel
                     return true
                 end
             end
@@ -721,7 +805,10 @@ local function isMyPlot(plotModel)
             end
             return false
         end)
-        if ok and result then return true end
+        if ok and result then
+            myPlotInstance = plotModel
+            return true
+        end
     end
 
     return false
@@ -1475,388 +1562,404 @@ local function executeKick()
 end
 
 -- =============================================
--- ⚙️ MAIN LOOP (STATE MACHINE AUTO FARM)
+-- ⚙️ MAIN LOOP (STATE MACHINE AUTO FARM - CRASH-PROOF & ADAPTIVE FPS)
 -- =============================================
 task.spawn(function()
     while task.wait(0.05) do
         if not _G.autoFarm then continue end
 
-        local char = lp.Character
-        local hum = char and char:FindFirstChild("Humanoid")
-        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        local loopSuccess, loopError = pcall(function()
+            local char = lp.Character
+            -- Proteksi stale character / karakter yang belum siap di Workspace
+            if not char or not char.Parent or not char:IsDescendantOf(workspace) then return end
 
-        if not hum or not hrp then continue end 
+            local hum = char:FindFirstChild("Humanoid")
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            if not hum or not hrp or not hrp.Parent then return end 
 
-        -- [ PENDETEKSI MATI & RESPAWN ]
-        if hum.Health <= 0 then
-            targetAction = "WaitingRespawn"
-            lastAction = "WaitingRespawn"
-            globalStuckTimer = 0
-            kickRetryCount = 0
-            kickAcceptedByServer = false
-            activeCandyWaypoints = {}
-            emptyCandySpawnReceived = false
-            continue 
-        end
-
-        if targetAction == "WaitingRespawn" and hum.Health > 0 then
-            -- RESPAWN SELESAI: LANGSUNG TELEPORTASI KE SAFE ZONE UNTUK KICK!
-            teleportToSafeZone(hrp)
-            targetAction = "Idle"
-            lastAction = "Idle"
-            kickRetryCount = 0
-            kickAcceptedByServer = false
-            stateTimer = 0
-            activeCandyWaypoints = {}
-            emptyCandySpawnReceived = false
-            lastRewardBrainrotName = ""
-            logConsole("Karakter Respawn -> Teleportasi instan ke Safe Zone untuk Kick...")
-        end
-
-        -- [ PENGATUR WAKTU & FAILSAFE RESET ]
-        if targetAction ~= lastAction then
-            globalStuckTimer = 0
-            stateTimer = 0 
-            lastAction = targetAction
-            logConsole("Transisi Fase -> " .. tostring(targetAction))
-        else
-            globalStuckTimer = globalStuckTimer + 0.05
-            stateTimer = stateTimer + 0.05 
-            
-            local maxTimeout = _G.failsafeTimeout or 25
-            if globalStuckTimer >= maxTimeout and targetAction ~= "WalkToSafeZone" then
-                globalStuckTimer = 0
-                stateTimer = 0
-                lastRewardBrainrotName = ""
-                emptyCandySpawnReceived = false
-                teleportToSafeZone(hrp)
-                targetAction = "Idle"
-                logConsole("🚨 Failsafe Triggered: Teleportasi reset ke Idle Safe Zone")
-                continue
-            end
-        end
-
-        local distToSafeZone = (hrp.Position - safeZone).Magnitude
-
-        -- [ FASE 1: IDLE / NENDANG DI SAFE ZONE (TELEPORTASI INSTAN JIKA JAUH) ]
-        if targetAction == "Idle" then
-            if distToSafeZone > 5 then
-                teleportToSafeZone(hrp)
+            -- [POIN 6] Adaptive FPS Cap (15 FPS saat diam/nunggu, 60 FPS saat jalan aktif)
+            if targetAction == "WalkToSafeZone" then
+                setAdaptiveFps(_G.fpsCap or 60)
             else
-                if shouldKick() then
-                    local delayKick = (_G.kickDelay and _G.kickDelay > 0) and _G.kickDelay or 0.5
-                    if stateTimer >= delayKick then
-                        pcall(function()
-                            hrp.AssemblyLinearVelocity = Vector3.zero
-                            hrp.AssemblyAngularVelocity = Vector3.zero
-                        end)
-                        kickRetryCount = 0
-                        kickAcceptedByServer = false
-                        phase2Fired = false
-                        collectedFired = false
-                        kickEndedFired = false
-                        emptyCandySpawnReceived = false
-                        lastRewardBrainrotName = ""
-                        executeKick()
-                        targetAction = "WaitingForPhase2"
-                    end
-                else
-                    task.wait(0.1)
-                end
+                setAdaptiveFps(15)
             end
 
-        -- [ FASE 2: NUNGGU PHASE 2 DARI SERVER / DETEKSI EMPTY SPAWN / WHITELIST CHECK ]
-        elseif targetAction == "WaitingForPhase2" then
-            if phase2Fired or collectedFired or kickEndedFired then
-                phase2Fired = false
+            -- [ PENDETEKSI MATI & RESPAWN ]
+            if hum.Health <= 0 then
+                targetAction = "WaitingRespawn"
+                lastAction = "WaitingRespawn"
+                globalStuckTimer = 0
                 kickRetryCount = 0
                 kickAcceptedByServer = false
+                activeCandyWaypoints = {}
+                emptyCandySpawnReceived = false
+                return 
+            end
 
-                -- Pengecekan Whitelist & Candy Override
-                local isWhitelisted = _G.useBrainrotWhitelist and isBrainrotWhitelisted(lastRewardBrainrotName)
-                local bypassWl = shouldBypassWhitelist()
+            if targetAction == "WaitingRespawn" and hum.Health > 0 then
+                -- RESPAWN SELESAI: LANGSUNG TELEPORTASI KE SAFE ZONE UNTUK KICK!
+                teleportToSafeZone(hrp)
+                targetAction = "Idle"
+                lastAction = "Idle"
+                kickRetryCount = 0
+                kickAcceptedByServer = false
+                stateTimer = 0
+                activeCandyWaypoints = {}
+                emptyCandySpawnReceived = false
+                lastRewardBrainrotName = ""
+                logConsole("Karakter Respawn -> Teleportasi instan ke Safe Zone untuk Kick...")
+            end
 
-                local isAllowed = false
-                if bypassWl then
-                    isAllowed = true
-                elseif isWhitelisted then
-                    isAllowed = true
-                elseif not _G.useBrainrotWhitelist and not emptyCandySpawnReceived and (not _G.onlyCandyEvent or hasCandyOnMap()) then
-                    isAllowed = true
-                end
-
-                if isAllowed then
-                    targetAction = "WalkToSafeZone"
-                    if bypassWl and _G.useBrainrotWhitelist and not isWhitelisted then
-                        logConsole(string.format("🍬 [EVENT OVERRIDE] Ada permen di map! Brainrot '%s' tetap dibawa ke Safe Zone sembari ambil permen...", tostring(lastRewardBrainrotName)))
-                    else
-                        logConsole(string.format("✅ [PASSED] Membawa Brainrot '%s' Menuju Safe Zone", tostring(lastRewardBrainrotName)))
-                    end
-                else
-                    targetAction = "StayStillUntilDead"
-                    if emptyCandySpawnReceived then
-                        logConsole(string.format("🛑 [EMPTY CANDY SPAWN] Koordinat permen kosong ({}) & Brainrot '%s' bukan whitelist! Bot diam di tempat...", tostring(lastRewardBrainrotName)))
-                    elseif not hasCandyOnMap() and isCandyEventOngoing() then
-                        logConsole(string.format("🛑 [NO CANDY ON MAP] Gada permen yang spawn di map & Brainrot '%s' bukan whitelist! Bot diam di tempat...", tostring(lastRewardBrainrotName)))
-                    else
-                        logConsole(string.format("🛑 [WHITELIST REJECTED] Brainrot '%s' TIDAK ada di whitelist! Bot diam di tempat (tidak dibawa ke safe zone)...", tostring(lastRewardBrainrotName)))
-                    end
-                end
-
-            -- Kondisi 1: Kick belum terdaftar sama sekali di server setelah 3 detik -> Retry
-            elseif not kickAcceptedByServer and stateTimer >= 3.0 and not phase2Fired and not collectedFired and not kickEndedFired then
-                if kickRetryCount < MAX_KICK_RETRIES then
-                    kickRetryCount = kickRetryCount + 1
+            -- [ PENGATUR WAKTU & FAILSAFE RESET ]
+            if targetAction ~= lastAction then
+                globalStuckTimer = 0
+                stateTimer = 0 
+                lastAction = targetAction
+                logConsole("Transisi Fase -> " .. tostring(targetAction))
+            else
+                globalStuckTimer = globalStuckTimer + 0.05
+                stateTimer = stateTimer + 0.05 
+                
+                local maxTimeout = _G.failsafeTimeout or 25
+                if globalStuckTimer >= maxTimeout and targetAction ~= "WalkToSafeZone" then
+                    globalStuckTimer = 0
                     stateTimer = 0
-                    logConsole(string.format("⚠️ [RETRY] Kick belum terdaftar di server, mencoba kick ulang #%d/%d...", kickRetryCount, MAX_KICK_RETRIES))
-                    executeKick()
+                    lastRewardBrainrotName = ""
+                    emptyCandySpawnReceived = false
+                    teleportToSafeZone(hrp)
+                    targetAction = "Idle"
+                    logConsole("🚨 Failsafe Triggered: Teleportasi reset ke Idle Safe Zone")
+                    return
+                end
+            end
+
+            local distToSafeZone = (hrp.Position - safeZone).Magnitude
+
+            -- [ FASE 1: IDLE / NENDANG DI SAFE ZONE (TELEPORTASI INSTAN JIKA JAUH) ]
+            if targetAction == "Idle" then
+                if distToSafeZone > 5 then
+                    teleportToSafeZone(hrp)
                 else
-                    logConsole(string.format("🚨 [FAILSAFE] Gagal respon setelah %d kali retry! Memaksa Respawn/Reset Karakter...", MAX_KICK_RETRIES))
+                    if shouldKick() then
+                        local delayKick = (_G.kickDelay and _G.kickDelay > 0) and _G.kickDelay or 0.5
+                        if stateTimer >= delayKick then
+                            pcall(function()
+                                hrp.AssemblyLinearVelocity = Vector3.zero
+                                hrp.AssemblyAngularVelocity = Vector3.zero
+                            end)
+                            kickRetryCount = 0
+                            kickAcceptedByServer = false
+                            phase2Fired = false
+                            collectedFired = false
+                            kickEndedFired = false
+                            emptyCandySpawnReceived = false
+                            lastRewardBrainrotName = ""
+                            executeKick()
+                            targetAction = "WaitingForPhase2"
+                        end
+                    else
+                        task.wait(0.1)
+                    end
+                end
+
+            -- [ FASE 2: NUNGGU PHASE 2 DARI SERVER / DETEKSI EMPTY SPAWN / WHITELIST CHECK ]
+            elseif targetAction == "WaitingForPhase2" then
+                if phase2Fired or collectedFired or kickEndedFired then
+                    phase2Fired = false
                     kickRetryCount = 0
                     kickAcceptedByServer = false
-                    stateTimer = 0
-                    targetAction = "WaitingRespawn"
+
+                    -- Pengecekan Whitelist & Candy Override
+                    local isWhitelisted = _G.useBrainrotWhitelist and isBrainrotWhitelisted(lastRewardBrainrotName)
+                    local bypassWl = shouldBypassWhitelist()
+
+                    local isAllowed = false
+                    if bypassWl then
+                        isAllowed = true
+                    elseif isWhitelisted then
+                        isAllowed = true
+                    elseif not _G.useBrainrotWhitelist and not emptyCandySpawnReceived and (not _G.onlyCandyEvent or hasCandyOnMap()) then
+                        isAllowed = true
+                    end
+
+                    if isAllowed then
+                        targetAction = "WalkToSafeZone"
+                        if bypassWl and _G.useBrainrotWhitelist and not isWhitelisted then
+                            logConsole(string.format("🍬 [EVENT OVERRIDE] Ada permen di map! Brainrot '%s' tetap dibawa ke Safe Zone sembari ambil permen...", tostring(lastRewardBrainrotName)))
+                        else
+                            logConsole(string.format("✅ [PASSED] Membawa Brainrot '%s' Menuju Safe Zone", tostring(lastRewardBrainrotName)))
+                        end
+                    else
+                        targetAction = "StayStillUntilDead"
+                        if emptyCandySpawnReceived then
+                            logConsole(string.format("🛑 [EMPTY CANDY SPAWN] Koordinat permen kosong ({}) & Brainrot '%s' bukan whitelist! Bot diam di tempat...", tostring(lastRewardBrainrotName)))
+                        elseif not hasCandyOnMap() and isCandyEventOngoing() then
+                            logConsole(string.format("🛑 [NO CANDY ON MAP] Gada permen yang spawn di map & Brainrot '%s' bukan whitelist! Bot diam di tempat...", tostring(lastRewardBrainrotName)))
+                        else
+                            logConsole(string.format("🛑 [WHITELIST REJECTED] Brainrot '%s' TIDAK ada di whitelist! Bot diam di tempat (tidak dibawa ke safe zone)...", tostring(lastRewardBrainrotName)))
+                        end
+                    end
+
+                -- Kondisi 1: Kick belum terdaftar sama sekali di server setelah 3 detik -> Retry
+                elseif not kickAcceptedByServer and stateTimer >= 3.0 and not phase2Fired and not collectedFired and not kickEndedFired then
+                    if kickRetryCount < MAX_KICK_RETRIES then
+                        kickRetryCount = kickRetryCount + 1
+                        stateTimer = 0
+                        logConsole(string.format("⚠️ [RETRY] Kick belum terdaftar di server, mencoba kick ulang #%d/%d...", kickRetryCount, MAX_KICK_RETRIES))
+                        executeKick()
+                    else
+                        logConsole(string.format("🚨 [FAILSAFE] Gagal respon setelah %d kali retry! Memaksa Respawn/Reset Karakter...", MAX_KICK_RETRIES))
+                        kickRetryCount = 0
+                        kickAcceptedByServer = false
+                        stateTimer = 0
+                        targetAction = "WaitingRespawn"
+                        pcall(function()
+                            if hum then hum.Health = 0 end
+                            if char then char:BreakJoints() end
+                        end)
+                    end
+
+                -- Kondisi 2: Kick sudah diterima server (bola sedang terbang), tunggu hingga maksimal 20 detik
+                elseif stateTimer >= 20.0 then
+                    kickAcceptedByServer = false
+                    targetAction = "Idle"
+                    teleportToSafeZone(hrp)
+                    logConsole("🚨 Phase 2 Timeout (20s) -> Teleportasi reset ke Safe Zone")
+                end
+
+            -- [ FASE KHUSUS: DIAM DI TEMPAT SAMPAI MATI (JIKA CANDY SPAWN KOSONG {} ATAU TIDAK LOLOS WHITELIST) ]
+            elseif targetAction == "StayStillUntilDead" then
+                -- 🛡️ SECURITY CHECK: Jika reward ternyata ter-collect saat sedang diam, langsung teleport ke Safe Zone untuk kick!
+                if collectedFired then
+                    collectedFired = false
+                    teleportToSafeZone(hrp)
+                    mutationCount = mutationCount + 1
+                    phase2Fired = false
+                    kickRetryCount = 0
+                    kickAcceptedByServer = false
+                    activeCandyWaypoints = {}
+                    emptyCandySpawnReceived = false
+                    lastRewardBrainrotName = ""
+
+                    if shouldKick() then
+                        local delayKick = (_G.kickDelay and _G.kickDelay > 0) and _G.kickDelay or 0.5
+                        task.wait(delayKick)
+                        executeKick()
+                        targetAction = "WaitingForPhase2"
+                        logConsole(string.format("⚡ [COLLECTED SECURITY] Reward Collected saat diam! Teleport ke Safe Zone & Re-Kick (Jeda %.1fs)! Total: %d", delayKick, mutationCount))
+                    else
+                        targetAction = "Idle"
+                        logConsole(string.format("⚡ [COLLECTED SECURITY] Reward Collected saat diam! Standby di Safe Zone. Total: %d", mutationCount))
+                    end
+                    return
+                end
+
+                -- BOT MURNI DIAM DI TEMPAT SAMPAI MATI / AUTO-RESET (DILARANG JALAN KE SAFE ZONE!)
+                pcall(function()
+                    hum:MoveTo(hrp.Position)
+                    hrp.AssemblyLinearVelocity = Vector3.zero
+                    hrp.AssemblyAngularVelocity = Vector3.zero
+                end)
+
+                -- Failsafe Auto-Reset: Jika dalam 3 detik karakter tidak mati sendiri, paksa respawn agar bisa teleport ke safe zone untuk kick berikutnya!
+                if stateTimer >= 3 then
+                    logConsole("💀 [AUTO-RESET] Bot diam 3s -> Memaksa respawn agar bisa kembali ke Safe Zone untuk kick berikutnya...")
                     pcall(function()
-                        if hum then hum.Health = 0 end
-                        if char then char:BreakJoints() end
+                        hum.Health = 0
+                        char:BreakJoints()
                     end)
                 end
 
-            -- Kondisi 2: Kick sudah diterima server (bola sedang terbang), tunggu hingga maksimal 20 detik
-            elseif stateTimer >= 20.0 then
-                kickAcceptedByServer = false
-                targetAction = "Idle"
-                teleportToSafeZone(hrp)
-                logConsole("🚨 Phase 2 Timeout (20s) -> Teleportasi reset ke Safe Zone")
-            end
-
-        -- [ FASE KHUSUS: DIAM DI TEMPAT SAMPAI MATI (JIKA CANDY SPAWN KOSONG {} ATAU TIDAK LOLOS WHITELIST) ]
-        elseif targetAction == "StayStillUntilDead" then
-            -- 🛡️ SECURITY CHECK: Jika reward ternyata ter-collect saat sedang diam, langsung teleport ke Safe Zone untuk kick!
-            if collectedFired then
-                collectedFired = false
-                teleportToSafeZone(hrp)
-                mutationCount = mutationCount + 1
-                phase2Fired = false
-                kickRetryCount = 0
-                kickAcceptedByServer = false
-                activeCandyWaypoints = {}
-                emptyCandySpawnReceived = false
-                lastRewardBrainrotName = ""
-
-                if shouldKick() then
-                    local delayKick = (_G.kickDelay and _G.kickDelay > 0) and _G.kickDelay or 0.5
-                    task.wait(delayKick)
-                    executeKick()
-                    targetAction = "WaitingForPhase2"
-                    logConsole(string.format("⚡ [COLLECTED SECURITY] Reward Collected saat diam! Teleport ke Safe Zone & Re-Kick (Jeda %.1fs)! Total: %d", delayKick, mutationCount))
-                else
-                    targetAction = "Idle"
-                    logConsole(string.format("⚡ [COLLECTED SECURITY] Reward Collected saat diam! Standby di Safe Zone. Total: %d", mutationCount))
-                end
-                continue
-            end
-
-            -- BOT MURNI DIAM DI TEMPAT SAMPAI MATI / AUTO-RESET (DILARANG JALAN KE SAFE ZONE!)
-            pcall(function()
-                hum:MoveTo(hrp.Position)
-                hrp.AssemblyLinearVelocity = Vector3.zero
-                hrp.AssemblyAngularVelocity = Vector3.zero
-            end)
-
-            -- Failsafe Auto-Reset: Jika dalam 1.5 detik karakter tidak mati sendiri, paksa respawn agar bisa teleport ke safe zone untuk kick berikutnya!
-            if stateTimer >= 3 then
-                logConsole("💀 [AUTO-RESET] Bot diam 3s -> Memaksa respawn agar bisa kembali ke Safe Zone untuk kick berikutnya...")
-                pcall(function()
-                    hum.Health = 0
-                    char:BreakJoints()
-                end)
-            end
-            -- Menunggu karakter mati sendiri jika tidak ada event (hum.Health <= 0 akan ditangkap oleh pendeteksi mati di atas)
-
-        -- [ FASE 3: JALAN KAKI MEMBAWA BRAINROT MENUJU SAFE ZONE (JANGAN TELEPORTASI!) ]
-        elseif targetAction == "WalkToSafeZone" then
-            -- 🛡️ FAILSAFE TIMEOUT KHUSUS JALAN KAKI: Jika jalan kaki melebihi 45 detik, paksa teleport ke Safe Zone
-            if stateTimer >= 45.0 then
-                logConsole("🚨 [WALK TIMEOUT] Terlalu lama berjalan (45s) -> Memaksa teleport ke Safe Zone!")
-                teleportToSafeZone(hrp)
-                targetAction = "WaitingForCollected"
-                activeCandyWaypoints = {}
-                currentWaypointTarget = nil
-                waypointStuckTimer = 0
-                continue
-            end
-
-            -- 🛡️ SECURITY CHECK: Jika reward sudah ter-collect oleh server / UI di tengah jalan, langsung teleport & kick lagi!
-            if collectedFired then
-                collectedFired = false
-                teleportToSafeZone(hrp)
-                mutationCount = mutationCount + 1
-                phase2Fired = false
-                kickRetryCount = 0
-                kickAcceptedByServer = false
-                activeCandyWaypoints = {}
-                currentWaypointTarget = nil
-                waypointStuckTimer = 0
-                emptyCandySpawnReceived = false
-                lastRewardBrainrotName = ""
-
-                if shouldKick() then
-                    local delayKick = (_G.kickDelay and _G.kickDelay > 0) and _G.kickDelay or 0.5
-                    task.wait(delayKick)
-                    executeKick()
-                    targetAction = "WaitingForPhase2"
-                    logConsole(string.format("⚡ [COLLECTED SECURITY] Barang sudah Collected di tengah jalan! Langsung teleport ke Safe Zone & Re-Kick (Jeda %.1fs)! Total: %d", delayKick, mutationCount))
-                else
-                    targetAction = "Idle"
-                    logConsole(string.format("⚡ [COLLECTED SECURITY] Barang sudah Collected! Standby di Safe Zone. Total: %d", mutationCount))
-                end
-                continue
-            end
-
-            pcall(function()
-                if hum.WalkSpeed < 16 then hum.WalkSpeed = 16 end
-                if hrp.Anchored then hrp.Anchored = false end
-            end)
-
-            -- Navigasi sembari melewati koordinat permen
-            local targetPos = safeZone
-            if isWaypointNavEnabled() and #activeCandyWaypoints > 0 then
-                -- 1. Pertahankan target aktif atau pilih waypoint terdekat baru
-                local bestIdx = nil
-                local bestDist = math.huge
-
-                if currentWaypointTarget then
-                    for i, pos in ipairs(activeCandyWaypoints) do
-                        if (pos - currentWaypointTarget).Magnitude < 0.5 then
-                            bestIdx = i
-                            bestDist = (Vector3.new(hrp.Position.X, 0, hrp.Position.Z) - Vector3.new(pos.X, 0, pos.Z)).Magnitude
-                            break
-                        end
-                    end
+            -- [ FASE 3: JALAN KAKI MEMBAWA BRAINROT MENUJU SAFE ZONE (JANGAN TELEPORTASI!) ]
+            elseif targetAction == "WalkToSafeZone" then
+                -- 🛡️ FAILSAFE TIMEOUT KHUSUS JALAN KAKI: Jika jalan kaki melebihi 45 detik, paksa teleport ke Safe Zone
+                if stateTimer >= 45.0 then
+                    logConsole("🚨 [WALK TIMEOUT] Terlalu lama berjalan (45s) -> Memaksa teleport ke Safe Zone!")
+                    teleportToSafeZone(hrp)
+                    targetAction = "WaitingForCollected"
+                    activeCandyWaypoints = {}
+                    currentWaypointTarget = nil
+                    waypointStuckTimer = 0
+                    return
                 end
 
-                if not bestIdx then
-                    for i, pos in ipairs(activeCandyWaypoints) do
-                        local d = (Vector3.new(hrp.Position.X, 0, hrp.Position.Z) - Vector3.new(pos.X, 0, pos.Z)).Magnitude
-                        if d < bestDist then
-                            bestDist = d
-                            bestIdx = i
-                        end
-                    end
-                end
+                -- 🛡️ SECURITY CHECK: Jika reward sudah ter-collect oleh server / UI di tengah jalan, langsung teleport & kick lagi!
+                if collectedFired then
+                    collectedFired = false
+                    teleportToSafeZone(hrp)
+                    mutationCount = mutationCount + 1
+                    phase2Fired = false
+                    kickRetryCount = 0
+                    kickAcceptedByServer = false
+                    activeCandyWaypoints = {}
+                    currentWaypointTarget = nil
+                    waypointStuckTimer = 0
+                    emptyCandySpawnReceived = false
+                    lastRewardBrainrotName = ""
 
-                if bestIdx then
-                    local wp = activeCandyWaypoints[bestIdx]
-                    currentWaypointTarget = wp
-
-                    -- 🚀 REACH THRESHOLD: Menggunakan _G.candyReachDist murni tanpa tambahan jarak buatan
-                    local currentSpeed = (hum and hum.WalkSpeed and hum.WalkSpeed > 0) and hum.WalkSpeed or 16
-                    local reachThreshold = _G.candyReachDist or 3
-
-                    -- 🔍 CEK DEBRIS: Cek apakah barang permen masih ada di Debris di sekitar waypoint
-                    local itemInDebris, itemDist, itemPos = findItemInDebrisNear(wp, 80)
-                    local shouldVerifyDebris = (_G.verifyDebrisPickup ~= false)
-
-                    -- Target pergerakan: utamakan posisi aktual item di Debris jika ada, Y rata tanah agar karakter tidak loncat/stutter
-                    local wpTargetPos = itemPos or wp
-                    targetPos = Vector3.new(wpTargetPos.X, hrp.Position.Y, wpTargetPos.Z)
-
-                    local distToTarget = (Vector3.new(hrp.Position.X, 0, hrp.Position.Z) - Vector3.new(wpTargetPos.X, 0, wpTargetPos.Z)).Magnitude
-
-                    -- 🍬 SENTUHAN AKTIF (PROACTIVE TOUCH): Picu touch saat sudah dekat (< 80 studs) jika firetouch aktif
-                    if _G.enableFireTouch and itemInDebris and distToTarget <= 80 then
-                        touchCandyItem(itemInDebris, hrp)
-                    end
-
-                    -- 🛡️ WAYPOINT STUCK WATCHDOG: Jika mencoba waypoint yang sama > 5 detik tanpa perubahan, lewati
-                    waypointStuckTimer = waypointStuckTimer + 0.05
-                    if waypointStuckTimer >= 5.0 then
-                        table.remove(activeCandyWaypoints, bestIdx)
-                        logConsole(string.format("⚠️ [WAYPOINT TIMEOUT] Melewati '%s' setelah 5s. Sisa: %d", itemInDebris and itemInDebris.Name or "Candy", #activeCandyWaypoints))
-                        waypointStuckTimer = 0
-                        currentWaypointTarget = nil
-                        wp = nil
+                    if shouldKick() then
+                        local delayKick = (_G.kickDelay and _G.kickDelay > 0) and _G.kickDelay or 0.5
+                        task.wait(delayKick)
+                        executeKick()
+                        targetAction = "WaitingForPhase2"
+                        logConsole(string.format("⚡ [COLLECTED SECURITY] Barang sudah Collected di tengah jalan! Langsung teleport ke Safe Zone & Re-Kick (Jeda %.1fs)! Total: %d", delayKick, mutationCount))
                     else
-                        -- 🛑 KONDISI SUDAH MENCAPAI AREA PERMEN:
-                        local reached = (distToTarget <= reachThreshold)
-                        
-                        if shouldVerifyDebris then
-                            if not itemInDebris then
-                                -- Barang SUDAH HILANG dari Debris (berhasil dibawa)
-                                table.remove(activeCandyWaypoints, bestIdx)
-                                currentWaypointTarget = nil
-                                waypointStuckTimer = 0
-                                logConsole(string.format("🍬 [COLLECTED] Barang berhasil dibawa (hilang dari Debris)! Sisa waypoint: %d", #activeCandyWaypoints))
-                            elseif reached then
-                                -- Sudah sampai persis di posisi barang tapi masih ada di Debris -> terus tempel posisinya tanpa rem mendadak
-                                targetPos = Vector3.new(wpTargetPos.X, hrp.Position.Y, wpTargetPos.Z)
-                                if _G.enableFireTouch then
-                                    touchCandyItem(itemInDebris, hrp)
-                                end
-                                if math.floor(waypointStuckTimer * 10) % 20 == 0 then
-                                    logConsole(string.format("⏳ [CEK DEBRIS] Menyentuh '%s' (jarak: %.1fm). Menunggu server...", itemInDebris.Name, distToTarget))
-                                end
-                            end
-                        else
-                            -- Mode fallback tanpa verifikasi Debris
-                            if reached then
-                                table.remove(activeCandyWaypoints, bestIdx)
-                                currentWaypointTarget = nil
-                                waypointStuckTimer = 0
-                                logConsole(string.format("🍬 Waypoint permen terlewati! Sisa waypoint: %d", #activeCandyWaypoints))
+                        targetAction = "Idle"
+                        logConsole(string.format("⚡ [COLLECTED SECURITY] Barang sudah Collected! Standby di Safe Zone. Total: %d", mutationCount))
+                    end
+                    return
+                end
+
+                pcall(function()
+                    if hum.WalkSpeed < 16 then hum.WalkSpeed = 16 end
+                    if hrp.Anchored then hrp.Anchored = false end
+                end)
+
+                -- Navigasi sembari melewati koordinat permen
+                local targetPos = safeZone
+                if isWaypointNavEnabled() and #activeCandyWaypoints > 0 then
+                    -- 1. Pertahankan target aktif atau pilih waypoint terdekat baru
+                    local bestIdx = nil
+                    local bestDist = math.huge
+
+                    if currentWaypointTarget then
+                        for i, pos in ipairs(activeCandyWaypoints) do
+                            if (pos - currentWaypointTarget).Magnitude < 0.5 then
+                                bestIdx = i
+                                bestDist = (Vector3.new(hrp.Position.X, 0, hrp.Position.Z) - Vector3.new(pos.X, 0, pos.Z)).Magnitude
+                                break
                             end
                         end
                     end
-                end
-            else
-                currentWaypointTarget = nil
-                waypointStuckTimer = 0
-            end
 
-            -- Bot TETAP MURNI JALAN KAKI via MoveTo
-            hum:MoveTo(targetPos)
+                    if not bestIdx then
+                        for i, pos in ipairs(activeCandyWaypoints) do
+                            local d = (Vector3.new(hrp.Position.X, 0, hrp.Position.Z) - Vector3.new(pos.X, 0, pos.Z)).Magnitude
+                            if d < bestDist then
+                                bestDist = d
+                                bestIdx = i
+                            end
+                        end
+                    end
 
-            -- 🛡️ HANYA masuk Safe Zone jika SEMUA waypoint permen sudah tuntas diambil (atau tidak aktif)
-            local waypointsPending = isWaypointNavEnabled() and (#activeCandyWaypoints > 0)
-            if distToSafeZone < 5 and not waypointsPending then
-                currentWaypointTarget = nil
-                waypointStuckTimer = 0
-                targetAction = "WaitingForCollected"
-                logConsole("Tiba di Safe Zone -> Menunggu Reward Collected")
-            end
+                    if bestIdx then
+                        local wp = activeCandyWaypoints[bestIdx]
+                        currentWaypointTarget = wp
 
-        -- [ FASE 4: NUNGGU COLLECTED & RE-KICK INSTAN (TELEPORTASI KE SAFEZONE UNTUK KICK) ]
-        elseif targetAction == "WaitingForCollected" then
-            if distToSafeZone >= 5 then
-                teleportToSafeZone(hrp)
-            end
+                        -- 🚀 REACH THRESHOLD: Menggunakan _G.candyReachDist murni tanpa tambahan jarak buatan
+                        local currentSpeed = (hum and hum.WalkSpeed and hum.WalkSpeed > 0) and hum.WalkSpeed or 16
+                        local reachThreshold = _G.candyReachDist or 3
 
-            if collectedFired or kickEndedFired or stateTimer >= 2.5 then
-                collectedFired = false
-                kickEndedFired = false
-                mutationCount = mutationCount + 1
-                phase2Fired = false
-                kickRetryCount = 0
-                kickAcceptedByServer = false
-                activeCandyWaypoints = {}
-                emptyCandySpawnReceived = false
-                lastRewardBrainrotName = ""
+                        -- 🔍 CEK DEBRIS: Cek apakah barang permen masih ada di Debris di sekitar waypoint
+                        local itemInDebris, itemDist, itemPos = findItemInDebrisNear(wp, 80)
+                        local shouldVerifyDebris = (_G.verifyDebrisPickup ~= false)
 
-                -- Pastikan posisi presisi di SafeZone via teleportasi
-                teleportToSafeZone(hrp)
+                        -- Target pergerakan: utamakan posisi aktual item di Debris jika ada, Y rata tanah agar karakter tidak loncat/stutter
+                        local wpTargetPos = itemPos or wp
+                        targetPos = Vector3.new(wpTargetPos.X, hrp.Position.Y, wpTargetPos.Z)
 
-                if shouldKick() then
-                    local delayKick = (_G.kickDelay and _G.kickDelay > 0) and _G.kickDelay or 0.5
-                    task.wait(delayKick)
-                    executeKick()
-                    targetAction = "WaitingForPhase2"
-                    logConsole(string.format("🎉 Total Mutasi: %d | Re-Kick (Jeda %.1fs)!", mutationCount, delayKick))
+                        local distToTarget = (Vector3.new(hrp.Position.X, 0, hrp.Position.Z) - Vector3.new(wpTargetPos.X, 0, wpTargetPos.Z)).Magnitude
+
+                        -- 🍬 SENTUHAN AKTIF (PROACTIVE TOUCH): Picu touch saat sudah dekat (< 80 studs) jika firetouch aktif
+                        if _G.enableFireTouch and itemInDebris and distToTarget <= 80 then
+                            touchCandyItem(itemInDebris, hrp)
+                        end
+
+                        -- 🛡️ WAYPOINT STUCK WATCHDOG: Jika mencoba waypoint yang sama > 5 detik tanpa perubahan, lewati
+                        waypointStuckTimer = waypointStuckTimer + 0.05
+                        if waypointStuckTimer >= 5.0 then
+                            table.remove(activeCandyWaypoints, bestIdx)
+                            logConsole(string.format("⚠️ [WAYPOINT TIMEOUT] Melewati '%s' setelah 5s. Sisa: %d", itemInDebris and itemInDebris.Name or "Candy", #activeCandyWaypoints))
+                            waypointStuckTimer = 0
+                            currentWaypointTarget = nil
+                            wp = nil
+                        else
+                            -- 🛑 KONDISI SUDAH MENCAPAI AREA PERMEN:
+                            local reached = (distToTarget <= reachThreshold)
+                            
+                            if shouldVerifyDebris then
+                                if not itemInDebris then
+                                    -- Barang SUDAH HILANG dari Debris (berhasil dibawa)
+                                    table.remove(activeCandyWaypoints, bestIdx)
+                                    currentWaypointTarget = nil
+                                    waypointStuckTimer = 0
+                                    logConsole(string.format("🍬 [COLLECTED] Barang berhasil dibawa (hilang dari Debris)! Sisa waypoint: %d", #activeCandyWaypoints))
+                                elseif reached then
+                                    -- Sudah sampai persis di posisi barang tapi masih ada di Debris -> terus tempel posisinya tanpa rem mendadak
+                                    targetPos = Vector3.new(wpTargetPos.X, hrp.Position.Y, wpTargetPos.Z)
+                                    if _G.enableFireTouch then
+                                        touchCandyItem(itemInDebris, hrp)
+                                    end
+                                    if math.floor(waypointStuckTimer * 10) % 20 == 0 then
+                                        logConsole(string.format("⏳ [CEK DEBRIS] Menyentuh '%s' (jarak: %.1fm). Menunggu server...", itemInDebris.Name, distToTarget))
+                                    end
+                                end
+                            else
+                                -- Mode fallback tanpa verifikasi Debris
+                                if reached then
+                                    table.remove(activeCandyWaypoints, bestIdx)
+                                    currentWaypointTarget = nil
+                                    waypointStuckTimer = 0
+                                    logConsole(string.format("🍬 Waypoint permen terlewati! Sisa waypoint: %d", #activeCandyWaypoints))
+                                end
+                            end
+                        end
+                    end
                 else
-                    targetAction = "Idle"
-                    logConsole(string.format("🎉 Total Mutasi: %d | Ronde Tuntas -> Standby di Safe Zone (Menunggu Event Candy)", mutationCount))
+                    currentWaypointTarget = nil
+                    waypointStuckTimer = 0
+                end
+
+                -- Bot TETAP MURNI JALAN KAKI via MoveTo (Proteksi pcall)
+                pcall(function()
+                    hum:MoveTo(targetPos)
+                end)
+
+                -- 🛡️ HANYA masuk Safe Zone jika SEMUA waypoint permen sudah tuntas diambil (atau tidak aktif)
+                local waypointsPending = isWaypointNavEnabled() and (#activeCandyWaypoints > 0)
+                if distToSafeZone < 5 and not waypointsPending then
+                    currentWaypointTarget = nil
+                    waypointStuckTimer = 0
+                    targetAction = "WaitingForCollected"
+                    logConsole("Tiba di Safe Zone -> Menunggu Reward Collected")
+                end
+
+            -- [ FASE 4: NUNGGU COLLECTED & RE-KICK INSTAN (TELEPORTASI KE SAFEZONE UNTUK KICK) ]
+            elseif targetAction == "WaitingForCollected" then
+                if distToSafeZone >= 5 then
+                    teleportToSafeZone(hrp)
+                end
+
+                if collectedFired or kickEndedFired or stateTimer >= 2.5 then
+                    collectedFired = false
+                    kickEndedFired = false
+                    mutationCount = mutationCount + 1
+                    phase2Fired = false
+                    kickRetryCount = 0
+                    kickAcceptedByServer = false
+                    activeCandyWaypoints = {}
+                    emptyCandySpawnReceived = false
+                    lastRewardBrainrotName = ""
+
+                    -- Pastikan posisi presisi di SafeZone via teleportasi
+                    teleportToSafeZone(hrp)
+
+                    if shouldKick() then
+                        local delayKick = (_G.kickDelay and _G.kickDelay > 0) and _G.kickDelay or 0.5
+                        task.wait(delayKick)
+                        executeKick()
+                        targetAction = "WaitingForPhase2"
+                        logConsole(string.format("🎉 Total Mutasi: %d | Re-Kick (Jeda %.1fs)!", mutationCount, delayKick))
+                    else
+                        targetAction = "Idle"
+                        logConsole(string.format("🎉 Total Mutasi: %d | Ronde Tuntas -> Standby di Safe Zone (Menunggu Event Candy)", mutationCount))
+                    end
                 end
             end
+        end)
+
+        if not loopSuccess and _G.debugConsoleLog then
+            logConsole("⚠️ [LOOP CRASH PREVENTED] " .. tostring(loopError))
         end
     end
 end)
