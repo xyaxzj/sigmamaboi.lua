@@ -28,8 +28,8 @@ _G.onlyCandyEvent       = false       -- true: HANYA Auto Kick saat Candy Event 
 
 -- 🍬 PENGATURAN FITUR CANDY EVENT (DAPAT DIAKTIFKAN / DINONAKTIFKAN SECARA TERPISAH)
 _G.enableCandyEvent     = true        -- [1] Master Switch: Aktifkan penanganan Candy Event (cuaca & spawn permen)
-_G.expandCandyHitbox    = true        -- [2] Hitbox Switch: Memperbesar hitbox Candy/Cokelat/dll ke ukuran yang ditentukan
-_G.candyHitboxSize      = Vector3.new(200, 200, 200) -- Ukuran hitbox Candy yang dibesarkan
+_G.expandCandyHitbox    = false        -- [2] Hitbox Switch: Memperbesar hitbox Candy/Cokelat/dll ke ukuran yang ditentukan
+_G.candyHitboxSize      = Vector3.new(100, 100, 100) -- Ukuran hitbox Candy yang dibesarkan
 _G.candyWaypointNav     = true        -- [3] Navigation Switch: Pandu rute jalan kaki melintasi waypoint permen ke Safe Zone
 _G.candyReachDist       = 1           -- Jarak dasar (studs) horizontal untuk menganggap permen sudah terlewati/terambil (Auto-scaled saat speed kencang)
 _G.candyAntiOvershoot   = true        -- [4] Anti-Overshoot & Drift: Redam momentum saat lari kencang agar tidak muter-muter / miss
@@ -891,9 +891,24 @@ local function getDebrisItemPosition(inst)
         if inst:IsA("BasePart") then
             return inst.Position
         elseif inst:IsA("Model") then
+            -- 1. Prioritaskan Handle (Part utama item/tool permen)
+            local handle = inst:FindFirstChild("Handle")
+            if handle and handle:IsA("BasePart") then
+                return handle.Position
+            end
+
+            -- 2. Prioritaskan Root (Part basis/weld root model)
+            local root = inst:FindFirstChild("Root")
+            if root and root:IsA("BasePart") then
+                return root.Position
+            end
+
+            -- 3. PrimaryPart jika telah diset oleh server
             if inst.PrimaryPart then
                 return inst.PrimaryPart.Position
             end
+
+            -- 4. Fallback ke BasePart pertama atau GetPivot
             local bp = inst:FindFirstChildWhichIsA("BasePart", true)
             if bp then return bp.Position end
             return inst:GetPivot().Position
@@ -914,13 +929,29 @@ local function touchCandyItem(inst, charHrp)
                 task.wait()
                 firetouchinterest(charHrp, inst, 1)
             elseif inst:IsA("Model") then
-                if inst.PrimaryPart then
+                -- Sentuh part utama (Handle & Root) terlebih dahulu secara presisi
+                local handle = inst:FindFirstChild("Handle")
+                if handle and handle:IsA("BasePart") then
+                    firetouchinterest(charHrp, handle, 0)
+                    task.wait()
+                    firetouchinterest(charHrp, handle, 1)
+                end
+
+                local root = inst:FindFirstChild("Root")
+                if root and root:IsA("BasePart") then
+                    firetouchinterest(charHrp, root, 0)
+                    task.wait()
+                    firetouchinterest(charHrp, root, 1)
+                end
+
+                if inst.PrimaryPart and inst.PrimaryPart ~= handle and inst.PrimaryPart ~= root then
                     firetouchinterest(charHrp, inst.PrimaryPart, 0)
                     task.wait()
                     firetouchinterest(charHrp, inst.PrimaryPart, 1)
                 end
+
                 for _, p in ipairs(inst:GetChildren()) do
-                    if p:IsA("BasePart") then
+                    if p:IsA("BasePart") and p ~= handle and p ~= root then
                         firetouchinterest(charHrp, p, 0)
                         task.wait()
                         firetouchinterest(charHrp, p, 1)
