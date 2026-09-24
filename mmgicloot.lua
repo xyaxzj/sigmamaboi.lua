@@ -1,1969 +1,1682 @@
 -- ==============================================================================
--- 🥔 KALB ULTRA LIGHTWEIGHT AUTO FARM V7.1.2 (SMOOTH SPRINT CANDY EDITION)
+-- 💎 MIRAGE DEX MOBILE V1.0 (NEXT-GEN DARK GLASSMORPHISM DEX EXPLORER)
 -- ==============================================================================
--- Fitur & Alur:
--- 1. ⚙️ Full Config Mode: Semua pengaturan diatur via variabel _G di baris atas (Tanpa UI)
--- 2. 🚫 Total Player & Character Purger (100% Bersih & No Lag)
--- 3. 🍬 Candy Weather Event Engine:
---    - Mendeteksi rev_AddedWeather "Candy" & rev_candySpawn
---    - Hitbox, Navigasi Waypoint & Debris Checker
---    - Mendukung CarriedCandy, Candy, Chocolate, Cake, Pancakes, Gummy Bear, Ice Cream, dll.
--- 4. 🧭 Candy Waypoint Navigation: Sembari membawa brainrot berjalan ke safe zone, melewati titik permen
--- 5. 💀 Empty Spawn Handler: Jika rev_candySpawn mengirim {}, diam di tempat sampai mati & respawn
--- 6. ⚡ Teleportation for Kick: Teleportasi instan ke safe zone saat Idle, Respawn, atau timeout kick
--- 7. 🥔 Safe Potato & Anti-Lag V5.0:
---    - Container Emptying (Decor, Walls, Shops, Leaderboards, NPCs, Machines, Portal, Sell)
---    - PlayerGui Optimizer (Enabled = false & Proteksi TouchGui HP)
---    - Map Gray Semen, Purge Partikel/Lampu/Decal & Purge Lighting
---    - Disarm error loop DecorationsHandler 60 FPS
+-- Fitur Utama:
+-- 1. 📱 Mobile-First Touch Ergonomics: Tombol 40px+, touch-friendly drag bubble, modal action sheet
+-- 2. 🌳 Lazy-Loading Hierarchy Tree: Ekstraksi on-demand (No-Lag / Anti-Freeze pada game berat)
+-- 3. ⚙️ Live Property Inspector & Editor: Lihat & ubah Vector3, CFrame, Color3, Booleans, Numbers, Strings
+-- 4. 📡 Real-Time Remote Spy & Caller: Tangkap InvokeServer / FireServer, inspect argumen, replay test fire
+-- 5. 📜 Script Viewer & Decompiler: Integrasi decompile() executor + copy source code instan
+-- 6. ⚡ Context Action Suite: Teleport to Part, Copy Path, Clone, Destroy, Clear Children
+-- 7. 🎨 Dark Obsidian Glassmorphism UI: Tampilan ultra premium, frosted glass, smooth tween
 -- ==============================================================================
 
 if not game:IsLoaded() then game.Loaded:Wait() end
 
--- ==============================================================================
--- ⚙️ KONFIGURASI PENGGUNA (UBAH SESUAI KEBUTUHAN DI SINI)
--- ==============================================================================
-_G.autoFarm             = true        -- true: Auto Farm Aktif, false: Nonaktif
-_G.onlyCandyEvent       = false       -- true: HANYA Auto Kick saat Candy Event aktif, false: Auto kick nonstop
-
--- 🍬 PENGATURAN FITUR CANDY EVENT (DAPAT DIAKTIFKAN / DINONAKTIFKAN SECARA TERPISAH)
-_G.enableCandyEvent     = true        -- [1] Master Switch: Aktifkan penanganan Candy Event (cuaca & spawn permen)
-_G.expandCandyHitbox    = false        -- [2] Hitbox Switch: Memperbesar hitbox Candy/Cokelat/dll ke ukuran yang ditentukan
-_G.candyHitboxSize      = Vector3.new(100, 100, 100) -- Ukuran hitbox Candy yang dibesarkan
-_G.candyWaypointNav     = true        -- [3] Navigation Switch: Pandu rute jalan kaki melintasi waypoint permen ke Safe Zone
-_G.candyReachDist       = 1           -- Jarak dasar (studs) horizontal untuk menganggap permen sudah terlewati/terambil (Auto-scaled saat speed kencang)
-_G.candyAntiOvershoot   = true        -- [4] Anti-Overshoot & Drift: Redam momentum saat lari kencang agar tidak muter-muter / miss
-_G.verifyDebrisPickup   = true        -- [5] Debris Checker: Pastikan barang di Debris hilang saat dibawa; jika belum hilang, kembali ke waypoint
-_G.enableFireTouch      = false       -- [6] FireTouch Switch: true: picu firetouchinterest instan, false: nonaktif (murni fisik/hitbox)
-
-_G.useBrainrotWhitelist = true        -- true: Hanya bawa brainrot di whitelist ke safe zone, false: Bawa semua
-_G.brainrotWhitelist    = {           -- Daftar nama brainrot yang diizinkan (Case-insensitive & Partial match)
-    "Chocolate Gangster",
-    "Tricerabob",
-    "Teacherrina",
-}
-_G.kickDelay            = 0.5         -- Jeda waktu (detik) di Safe Zone sebelum menendang/kick (Default: 0.5 detik, jangan terlalu instant)
-_G.autoSellAll          = true       -- true: Auto Sell All setiap 5 detik via ref_B_SellAll
-_G.autoWorldTeleport    = false        -- true: Teleport otomatis 1x saat baru dieksekusi via rev_WORLD_TP, false: Nonaktif
-_G.targetWorld          = 1           -- Target ID World untuk teleportasi otomatis (Default: 2)
-_G.autoRemovePlayer     = true        -- true: Hapus player lain dari game.Players & workspace.Players (100% Bersih & No Lag), false: Biarkan
-_G.debugConsoleLog      = false        -- true: Cetak log status/fase/candy ke console (F9), false: Senyap
-_G.failsafeTimeout      = 25          -- Waktu maksimal (detik) sebelum auto-reset ke Safe Zone jika macet
-
--- ⚡ ANTI-LAG & POTATO MODE
-_G.antiLag             = true        -- true: Master switch Anti-Lag (Hapus Folder/Model target, PlayerGui, Partikel, Lighting, Map Gray)
-_G.fpsCap              = 120          -- Batas target FPS (60 hemat baterai & CPU, 30 untuk multi-akun, 0 = default)
-_G.disable3dRender     = false       -- true: Layar freeze / 0% GPU saat AFK farm (Pencet F10 untuk toggle), false: Tampilan visual normal
-_G.muteAudio           = true        -- true: Mute semua audio & reverb game (0% beban CPU audio)
-
--- 🥔 EKSTREM ANTI-LAG & HARDWARE OPTIMIZER (PLAN V1)
-_G.destroyNonCollideDecor = false     -- [Poin 2] true: Musnahkan dekorasi non-solid (:Destroy() jika CanCollide == false)
-_G.cutPhysicsInvisible    = false     -- [Poin 1] true: Matikan CanTouch & CanQuery part map statis (40-60% CPU Physics save)
-_G.cullFogHorizon         = true     -- [Poin 3] true: Potong jarak pandang render GPU (100 studs Fog Cutoff)
-_G.freezeBotAnimation     = false     -- [Poin 4] true: Matikan animasi skeletal & state humanoid (Climbing, Swimming, etc.)
-_G.adaptiveFpsCap         = false     -- [Poin 6] true: 15 FPS saat diam/nunggu, 60 FPS saat jalan aktif (Dingin & Hemat Baterai)
-
-print("--------------------------------------------------")
-print("🚀 [INIT] Memuat KALB Auto Farm V5.2 (Extreme Anti-Lag & Crash-Proof Edition)...")
-print("✨ [VERSION] Build: V5.2 | 7 Extreme Anti-Lag Points & Lag-Proof Watchdog")
-print("--------------------------------------------------")
-
 local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
-local Lighting = game:GetService("Lighting")
-local VirtualUser = game:GetService("VirtualUser")
-local SoundService = game:GetService("SoundService")
+local CoreGui = game:GetService("CoreGui")
+local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
-local UserSettingsService = (type(UserSettings) == "function" and pcall(UserSettings)) and UserSettings() or nil
+local RunService = game:GetService("RunService")
+local TextService = game:GetService("TextService")
+local HttpService = game:GetService("HttpService")
 
 local lp = Players.LocalPlayer
-if not lp then
-    local count = 0
-    repeat
-        task.wait(0.05)
-        lp = Players.LocalPlayer
-        count = count + 1
-    until lp or count > 50
+while not lp do
+    task.wait(0.1)
+    lp = Players.LocalPlayer
 end
 
-local lpName = lp and lp.Name or ""
-local lpDisplayName = lp and lp.DisplayName or ""
-local myUidStr = lp and tostring(lp.UserId) or ""
+-- ==============================================================================
+-- 📋 UNIVERSAL CLIPBOARD HELPER
+-- ==============================================================================
+local function setClipboardText(text)
+    text = tostring(text or "")
+    local success = false
+    if setclipboard then
+        pcall(function() setclipboard(text); success = true end)
+    elseif toclipboard then
+        pcall(function() toclipboard(text); success = true end)
+    elseif syn and syn.write_clipboard then
+        pcall(function() syn.write_clipboard(text); success = true end)
+    elseif Clipboard and Clipboard.set then
+        pcall(function() Clipboard.set(text); success = true end)
+    end
+    return success
+end
 
-local targetAction = "Idle"
-local lastAction = "Idle"
+-- ==============================================================================
+-- 🎨 TEMA WARNA & DESIGN TOKENS (DARK GLASSMORPHISM)
+-- ==============================================================================
+local THEME = {
+    BgMain          = Color3.fromRGB(15, 17, 26),
+    BgCard          = Color3.fromRGB(22, 26, 40),
+    BgCardHover     = Color3.fromRGB(30, 36, 56),
+    BgInput         = Color3.fromRGB(18, 21, 32),
+    BorderSubtle    = Color3.fromRGB(45, 53, 76),
+    BorderFocus     = Color3.fromRGB(99, 102, 241),
+    AccentPurple    = Color3.fromRGB(139, 92, 246),
+    AccentCyan      = Color3.fromRGB(56, 189, 248),
+    AccentEmerald   = Color3.fromRGB(52, 211, 153),
+    AccentRose      = Color3.fromRGB(244, 63, 94),
+    AccentAmber     = Color3.fromRGB(245, 158, 11),
+    TextPrimary     = Color3.fromRGB(243, 244, 246),
+    TextSecondary   = Color3.fromRGB(156, 163, 175),
+    TextMuted       = Color3.fromRGB(100, 110, 130),
+}
 
-local function logConsole(...)
-    if _G.debugConsoleLog == false then return end
-    local count = select("#", ...)
-    if count == 1 then
-        local msg = select(1, ...)
-        print(string.format("🤖 [KALB-FARM] [%s] %s", tostring(targetAction), tostring(msg)))
+-- ==============================================================================
+-- 🏷️ MAPPING ICON KELAS ROBLOX
+-- ==============================================================================
+local CLASS_ICONS = {
+    Workspace           = "🌐",
+    Players             = "👥",
+    Player              = "👤",
+    Lighting            = "💡",
+    ReplicatedStorage   = "⚡",
+    ReplicatedFirst     = "⚡",
+    StarterGui          = "📱",
+    StarterPack         = "🎒",
+    StarterPlayer       = "🏃",
+    SoundService        = "🔊",
+    TextChatService     = "💬",
+    Chat                = "💬",
+    CoreGui             = "🛡️",
+    MaterialService     = "🧱",
+    Debris              = "🗑️",
+    
+    -- Objek Game
+    Folder              = "📁",
+    Model               = "📦",
+    Part                = "🧱",
+    MeshPart            = "💠",
+    WedgePart           = "📐",
+    TrussPart           = "🪜",
+    SpawnLocation       = "🏁",
+    Terrain             = "🏔️",
+    Humanoid            = "❤️",
+    HumanoidRootPart    = "⚓",
+    Accessory           = "👒",
+    Shirt               = "👕",
+    Pants               = "👖",
+    Tool                = "🗡️",
+    Camera              = "📷",
+    
+    -- Script & Logic
+    Script              = "📜",
+    LocalScript         = "💻",
+    ModuleScript        = "📦",
+    RemoteEvent         = "📡",
+    RemoteFunction      = "🔄",
+    BindableEvent       = "🪢",
+    BindableFunction    = "🔁",
+    
+    -- Visual & Lighting
+    Decal               = "🖼️",
+    Texture             = "🎨",
+    ParticleEmitter     = "✨",
+    PointLight          = "💡",
+    SpotLight           = "🔦",
+    SurfaceLight        = "💡",
+    Beam                = "⚡",
+    Trail               = "〰️",
+    Highlight           = "🌟",
+    Sky                 = "☁️",
+    Atmosphere          = "🌫️",
+    
+    -- UI
+    ScreenGui           = "🖥️",
+    Frame               = "⬜",
+    TextLabel           = "🔤",
+    TextButton          = "🔘",
+    ImageLabel          = "🖼️",
+    ImageButton         = "🔘",
+    TextBox             = "⌨️",
+    ScrollingFrame      = "📜",
+    BillboardGui        = "🏷️",
+    SurfaceGui          = "🪧",
+    
+    -- Values
+    StringValue         = "🏷️",
+    IntValue            = "🔢",
+    NumberValue         = "🔢",
+    BoolValue           = "🔘",
+    ObjectValue         = "🔗",
+    CFrameValue         = "🧭",
+    Vector3Value        = "📐",
+    Color3Value         = "🎨",
+    
+    -- Physics
+    Weld                = "🔗",
+    Motor6D             = "🦾",
+    Attachment          = "📍",
+    ClickDetector       = "👆",
+    ProximityPrompt     = "⌨️",
+    TouchTransmitter    = "⚡",
+    Sound               = "🎵",
+    Animation           = "🎬",
+    AnimationTrack      = "🎞️"
+}
+
+local function getClassIcon(className)
+    return CLASS_ICONS[className] or "🔹"
+end
+
+-- ==============================================================================
+-- 🛡️ GUI CONTAINER (CORE GUI / GET HUI / PLAYERGUID DEFENSIVE)
+-- ==============================================================================
+local guiParent = nil
+pcall(function()
+    if gethui then
+        guiParent = gethui()
+    elseif CoreGui then
+        guiParent = CoreGui
+    end
+end)
+if not guiParent then
+    guiParent = lp:WaitForChild("PlayerGui")
+end
+
+-- Bersihkan versi sebelumnya jika ada
+local oldGui = guiParent:FindFirstChild("MiRaGeDexMobileGui")
+if oldGui then oldGui:Destroy() end
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "MiRaGeDexMobileGui"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.DisplayOrder = 999999
+ScreenGui.Parent = guiParent
+
+-- ==============================================================================
+-- 🔔 SISTEM TOAST NOTIFIKASI
+-- ==============================================================================
+local ToastContainer = Instance.new("Frame")
+ToastContainer.Name = "ToastContainer"
+ToastContainer.Size = UDim2.new(0, 320, 0, 50)
+ToastContainer.Position = UDim2.new(0.5, -160, 0, 15)
+ToastContainer.BackgroundTransparency = 1
+ToastContainer.ZIndex = 1000
+ToastContainer.Parent = ScreenGui
+
+local function showToast(title, message, color)
+    color = color or THEME.AccentCyan
+    local toast = Instance.new("Frame")
+    toast.Size = UDim2.new(1, 0, 0, 48)
+    toast.Position = UDim2.new(0, 0, -1.2, 0)
+    toast.BackgroundColor3 = THEME.BgCard
+    toast.BorderSizePixel = 0
+    toast.ZIndex = 1001
+    toast.Parent = ToastContainer
+
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 8)
+    corner.Parent = toast
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = color
+    stroke.Thickness = 1.2
+    stroke.Parent = toast
+
+    local bar = Instance.new("Frame")
+    bar.Size = UDim2.new(0, 4, 1, -12)
+    bar.Position = UDim2.new(0, 6, 0, 6)
+    bar.BackgroundColor3 = color
+    bar.BorderSizePixel = 0
+    bar.ZIndex = 1002
+    bar.Parent = toast
+    local barCorner = Instance.new("UICorner")
+    barCorner.CornerRadius = UDim.new(1, 0)
+    barCorner.Parent = bar
+
+    local titleLbl = Instance.new("TextLabel")
+    titleLbl.Size = UDim2.new(1, -24, 0, 18)
+    titleLbl.Position = UDim2.new(0, 18, 0, 6)
+    titleLbl.BackgroundTransparency = 1
+    titleLbl.Font = Enum.Font.GothamBold
+    titleLbl.Text = title
+    titleLbl.TextColor3 = THEME.TextPrimary
+    titleLbl.TextSize = 13
+    titleLbl.TextXAlignment = Enum.TextXAlignment.Left
+    titleLbl.ZIndex = 1002
+    titleLbl.Parent = toast
+
+    local msgLbl = Instance.new("TextLabel")
+    msgLbl.Size = UDim2.new(1, -24, 0, 16)
+    msgLbl.Position = UDim2.new(0, 18, 0, 24)
+    msgLbl.BackgroundTransparency = 1
+    msgLbl.Font = Enum.Font.Gotham
+    msgLbl.Text = message
+    msgLbl.TextColor3 = THEME.TextSecondary
+    msgLbl.TextSize = 11
+    msgLbl.TextXAlignment = Enum.TextXAlignment.Left
+    msgLbl.TextTruncate = Enum.TextTruncate.AtEnd
+    msgLbl.ZIndex = 1002
+    msgLbl.Parent = toast
+
+    -- Animasi Slide In & Out
+    toast:TweenPosition(UDim2.new(0, 0, 0, 0), Enum.EasingDirection.Out, Enum.EasingStyle.Quart, 0.35, true)
+    task.delay(2.6, function()
+        pcall(function()
+            toast:TweenPosition(UDim2.new(0, 0, -1.5, 0), Enum.EasingDirection.In, Enum.EasingStyle.Quart, 0.3, true, function()
+                toast:Destroy()
+            end)
+        end)
+    end)
+end
+
+-- ==============================================================================
+-- 📱 DRAG HELPER UNIVERSAL (TOUCH & MOUSE SUPPORT)
+-- ==============================================================================
+local function makeDraggable(dragHandle, mainFrame)
+    local dragging = false
+    local dragInput, dragStart, startPos
+
+    dragHandle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = mainFrame.Position
+
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+
+    dragHandle.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - dragStart
+            mainFrame.Position = UDim2.new(
+                startPos.X.Scale,
+                startPos.X.Offset + delta.X,
+                startPos.Y.Scale,
+                startPos.Y.Offset + delta.Y
+            )
+        end
+    end)
+end
+
+-- ==============================================================================
+-- 🔮 FLOATING TOGGLE BUBBLE (MOBILE QUICK BUTTON)
+-- ==============================================================================
+local Bubble = Instance.new("Frame")
+Bubble.Name = "FloatingBubble"
+Bubble.Size = UDim2.new(0, 52, 0, 52)
+Bubble.Position = UDim2.new(0, 20, 0.5, -26)
+Bubble.BackgroundColor3 = THEME.BgCard
+Bubble.BorderSizePixel = 0
+Bubble.Active = true
+Bubble.ZIndex = 500
+Bubble.Parent = ScreenGui
+
+local BubbleCorner = Instance.new("UICorner")
+BubbleCorner.CornerRadius = UDim.new(1, 0)
+BubbleCorner.Parent = Bubble
+
+local BubbleStroke = Instance.new("UIStroke")
+BubbleStroke.Color = THEME.AccentPurple
+BubbleStroke.Thickness = 1.6
+BubbleStroke.Parent = Bubble
+
+local BubbleIcon = Instance.new("TextLabel")
+BubbleIcon.Size = UDim2.new(1, 0, 1, 0)
+BubbleIcon.BackgroundTransparency = 1
+BubbleIcon.Font = Enum.Font.GothamBold
+BubbleIcon.Text = "💎"
+BubbleIcon.TextSize = 22
+BubbleIcon.TextColor3 = THEME.TextPrimary
+BubbleIcon.ZIndex = 501
+BubbleIcon.Parent = Bubble
+
+makeDraggable(Bubble, Bubble)
+
+-- ==============================================================================
+-- 🖥️ MAIN DEX WINDOW (GLASSMORPHISM PANEL)
+-- ==============================================================================
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+
+-- Ukuran responsif: Adaptif untuk Mobile landscape & Portrait
+local screenSize = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1280, 720)
+local defaultW = math.clamp(screenSize.X * 0.72, 360, 560)
+local defaultH = math.clamp(screenSize.Y * 0.85, 340, 520)
+
+MainFrame.Size = UDim2.new(0, defaultW, 0, defaultH)
+MainFrame.Position = UDim2.new(0.5, -defaultW / 2, 0.5, -defaultH / 2)
+MainFrame.BackgroundColor3 = THEME.BgMain
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.ClipsDescendants = false
+MainFrame.ZIndex = 100
+MainFrame.Parent = ScreenGui
+
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 10)
+MainCorner.Parent = MainFrame
+
+local MainStroke = Instance.new("UIStroke")
+MainStroke.Color = THEME.BorderSubtle
+MainStroke.Thickness = 1.4
+MainStroke.Parent = MainFrame
+
+-- Toggle Window via Bubble
+local isDexOpen = true
+local function toggleDexVisibility()
+    isDexOpen = not isDexOpen
+    MainFrame.Visible = isDexOpen
+    if isDexOpen then
+        BubbleStroke.Color = THEME.AccentPurple
+        showToast("💎 MiRaGe Dex", "Dex Explorer Ditampilkan", THEME.AccentPurple)
     else
-        print(...)
+        BubbleStroke.Color = THEME.BorderSubtle
+        showToast("💎 MiRaGe Dex", "Dex Diminimize (Tekan bubble untuk membuka)", THEME.TextSecondary)
     end
 end
 
--- =============================================
--- 🛡️ FILTER & PROTEKSI ENTITAS LOKAL & CANDY EVENT
--- =============================================
-local CANDY_NAMES = {
-    ["carriedcandy"] = true,
-    ["candy"] = true,
-    ["chocolate"] = true,
-    ["cake"] = true,
-    ["pancakes"] = true,
-    ["gummy bear"] = true,
-    ["ice cream"] = true,
-    ["gummy worm"] = true,
-}
-
-local function registerCandyName(name)
-    if not name or name == "" then return end
-    CANDY_NAMES[string.lower(name)] = true
-end
-
-local function isCandyItem(inst)
-    if not inst then return false end
-    local lowerName = string.lower(inst.Name)
-    if CANDY_NAMES[lowerName] then return true end
-    for candyName, _ in pairs(CANDY_NAMES) do
-        if string.find(lowerName, candyName, 1, true) then
-            return true
-        end
-    end
-    return false
-end
-
-local function isLocalPlayerEntity(inst)
-    if not inst then return false end
-    if lp and inst == lp then return true end
-    if lp and lp.Character and (inst == lp.Character or inst:IsDescendantOf(lp.Character)) then return true end
-    local name = inst.Name
-    if name == lpName or (lpDisplayName ~= "" and name == lpDisplayName) then return true end
-    return false
-end
-
-local myPlotInstance = nil
-
-local function isProtectedEventItem(inst)
-    if not inst then return false end
-    local name = inst.Name
-    if name == "PlotSign" or name == "KALB_SafeZoneMarker" or name == "Debris" then return true end
-    if isCandyItem(inst) then return true end
-
-    local debris = workspace:FindFirstChild("Debris")
-    if debris and (inst == debris or inst:IsDescendantOf(debris)) then return true end
-
-    if myPlotInstance and (inst == myPlotInstance or inst:IsDescendantOf(myPlotInstance)) then return true end
-
-    local p = inst.Parent
-    if not p or p == workspace or p == game then return false end
-
-    local curr = p
-    while curr and curr ~= workspace and curr ~= game do
-        local cName = curr.Name
-        if cName == "PlotSign" or cName == "KALB_SafeZoneMarker" or cName == "Debris" or isCandyItem(curr) then
-            return true
-        end
-        curr = curr.Parent
-    end
-    return false
-end
-
--- =============================================
--- ⚡ 1. ENGINE & HARDWARE OPTIMIZER
--- =============================================
--- Native Quality Level 1 (Engine Setting Terendah)
-pcall(function()
-    if settings and settings().Rendering then
-        settings().Rendering.QualityLevel = 1
-    end
-    if UserSettingsService then
-        local ugs = UserSettingsService:GetService("UserGameSettings")
-        if ugs then ugs.SavedQualityLevel = Enum.SavedQualitySetting.QualityLevel1 end
+Bubble.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        local startPos = input.Position
+        local conn
+        conn = input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                conn:Disconnect()
+                local dist = (input.Position - startPos).Magnitude
+                if dist < 8 then -- Anggap sebagai tap (bukan drag)
+                    toggleDexVisibility()
+                end
+            end
+        end)
     end
 end)
 
--- Target FPS Cap & Dynamic Adaptive FPS (Poin 6)
-local currentAdaptiveFps = nil
-local function setAdaptiveFps(targetFps)
-    if not _G.adaptiveFpsCap or not setfpscap or typeof(setfpscap) ~= "function" then return end
-    if currentAdaptiveFps == targetFps then return end
-    currentAdaptiveFps = targetFps
-    pcall(function()
-        setfpscap(targetFps)
-    end)
-end
+-- ==============================================================================
+-- 🔝 HEADER & TITLE BAR
+-- ==============================================================================
+local Header = Instance.new("Frame")
+Header.Name = "Header"
+Header.Size = UDim2.new(1, 0, 0, 42)
+Header.BackgroundColor3 = THEME.BgCard
+Header.BorderSizePixel = 0
+Header.ZIndex = 101
+Header.Parent = MainFrame
 
-if _G.fpsCap and _G.fpsCap > 0 then
-    pcall(function()
-        if setfpscap and typeof(setfpscap) == "function" then
-            setfpscap(_G.fpsCap)
-        end
-    end)
-end
+local HeaderCorner = Instance.new("UICorner")
+HeaderCorner.CornerRadius = UDim.new(0, 10)
+HeaderCorner.Parent = Header
 
--- 3D Rendering (0% GPU AFK) & Hotkey F10 Toggle
-if _G.disable3dRender then
-    pcall(function()
-        RunService:Set3dRenderingEnabled(false)
-    end)
-end
+makeDraggable(Header, MainFrame)
 
-pcall(function()
-    UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if not gameProcessed and input.KeyCode == Enum.KeyCode.F10 then
-            _G.disable3dRender = not _G.disable3dRender
-            pcall(function()
-                RunService:Set3dRenderingEnabled(not _G.disable3dRender)
-            end)
-            logConsole("🎮 [3D RENDER] Toggled: " .. (_G.disable3dRender and "OFF (0% GPU AFK)" or "ON"))
-        end
-    end)
+local TitleLabel = Instance.new("TextLabel")
+TitleLabel.Size = UDim2.new(1, -120, 1, 0)
+TitleLabel.Position = UDim2.new(0, 14, 0, 0)
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Font = Enum.Font.GothamBold
+TitleLabel.Text = "💎 MiRaGe Dex Mobile <font color=\"#8B5CF6\">v1.0</font>"
+TitleLabel.RichText = true
+TitleLabel.TextColor3 = THEME.TextPrimary
+TitleLabel.TextSize = 14
+TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+TitleLabel.ZIndex = 102
+TitleLabel.Parent = Header
+
+-- Tombol Minimize & Close (Besar untuk sentuhan mobile)
+local MinBtn = Instance.new("TextButton")
+MinBtn.Size = UDim2.new(0, 32, 0, 32)
+MinBtn.Position = UDim2.new(1, -74, 0, 5)
+MinBtn.BackgroundColor3 = THEME.BgInput
+MinBtn.Font = Enum.Font.GothamBold
+MinBtn.Text = "—"
+MinBtn.TextColor3 = THEME.TextSecondary
+MinBtn.TextSize = 13
+MinBtn.ZIndex = 103
+MinBtn.Parent = Header
+local MinCorner = Instance.new("UICorner")
+MinCorner.CornerRadius = UDim.new(0, 6)
+MinCorner.Parent = MinBtn
+MinBtn.MouseButton1Click:Connect(toggleDexVisibility)
+
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size = UDim2.new(0, 32, 0, 32)
+CloseBtn.Position = UDim2.new(1, -38, 0, 5)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(220, 38, 38)
+CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.Text = "✕"
+CloseBtn.TextColor3 = Color3.new(1, 1, 1)
+CloseBtn.TextSize = 13
+CloseBtn.ZIndex = 103
+CloseBtn.Parent = Header
+local CloseCorner = Instance.new("UICorner")
+CloseCorner.CornerRadius = UDim.new(0, 6)
+CloseCorner.Parent = CloseBtn
+CloseBtn.MouseButton1Click:Connect(function()
+    ScreenGui:Destroy()
 end)
 
--- Total Audio Mute (0% CPU Audio Processing)
-if _G.muteAudio then
-    pcall(function()
-        if UserSettingsService then
-            local ugs = UserSettingsService:GetService("UserGameSettings")
-            if ugs then ugs.MasterVolume = 0 end
-        end
-        SoundService.AmbientReverb = Enum.ReverbType.NoReverb
-        for _, sg in ipairs(SoundService:GetDescendants()) do
-            if sg:IsA("SoundGroup") then
-                sg.Volume = 0
-            end
-        end
-    end)
+-- ==============================================================================
+-- 📑 TAB NAVIGATION BAR (4 TABS MOBILE ERGONOMIC)
+-- ==============================================================================
+local TabBar = Instance.new("Frame")
+TabBar.Name = "TabBar"
+TabBar.Size = UDim2.new(1, -16, 0, 36)
+TabBar.Position = UDim2.new(0, 8, 0, 48)
+TabBar.BackgroundColor3 = THEME.BgInput
+TabBar.BorderSizePixel = 0
+TabBar.ZIndex = 105
+TabBar.Parent = MainFrame
+
+local TabBarCorner = Instance.new("UICorner")
+TabBarCorner.CornerRadius = UDim.new(0, 8)
+TabBarCorner.Parent = TabBar
+
+local TabBarLayout = Instance.new("UIListLayout")
+TabBarLayout.FillDirection = Enum.FillDirection.Horizontal
+TabBarLayout.SortOrder = Enum.SortOrder.LayoutOrder
+TabBarLayout.Padding = UDim.new(0, 4)
+TabBarLayout.Parent = TabBar
+
+local TabButtons = {}
+local TabPanels = {}
+local activeTab = "Explorer"
+
+local function switchTab(tabName)
+    activeTab = tabName
+    for name, btn in pairs(TabButtons) do
+        local isActive = (name == tabName)
+        btn.BackgroundColor3 = isActive and THEME.AccentPurple or Color3.fromRGB(0, 0, 0)
+        btn.BackgroundTransparency = isActive and 0 or 1
+        btn.TextColor3 = isActive and Color3.new(1, 1, 1) or THEME.TextSecondary
+    end
+    for name, panel in pairs(TabPanels) do
+        panel.Visible = (name == tabName)
+    end
 end
 
--- =============================================
--- 🗑️ 1. WORKSPACE TARGETS PURGER (FOLDERS & MODELS)
--- =============================================
-local WORKSPACE_REMOVE_NAMES = {
-    -- Folders:
-    ["decor"] = false,
-    ["walls"] = true,
-    ["shops"] = true,
-    ["exclusiveproducts"] = true,
-    ["leaderboards"] = true,
-    ["npcs"] = true,
-    -- Models:
-    ["admin machine"] = true,
-    ["barriers"] = true,
-    ["freegift"] = true,
-    ["fusemachine"] = true,
-    ["machine"] = true,
-    ["poolbillboard"] = true,
-    ["kickupgrades"] = true,
-    ["portal"] = true,
-    ["sell"] = true,
+local TAB_DEFS = {
+    { ID = "Explorer",   Name = "🌳 Explorer" },
+    { ID = "Properties", Name = "⚙️ Properties" },
+    { ID = "RemoteSpy",  Name = "📡 Remote Spy" },
+    { ID = "ScriptView", Name = "📜 Script" },
 }
 
--- Matikan listener OnPreRender dari script game DecorationsHandler agar tidak memicu error spam 60 FPS
-local function disableDecorationsHandler()
-    pcall(function()
-        if getconnections then
-            local signals = { RunService.PreRender, RunService.RenderStepped, RunService.Heartbeat, RunService.Stepped }
-            for _, sig in ipairs(signals) do
-                for _, conn in ipairs(getconnections(sig)) do
-                    pcall(function()
-                        local func = conn.Function
-                        if func then
-                            local info = debug.getinfo and debug.getinfo(func)
-                            local src = info and info.source or tostring(func)
-                            if string.find(string.lower(src), "decorationshandler") then
-                                if conn.Disable then
-                                    conn:Disable()
-                                elseif conn.Disconnect then
-                                    conn:Disconnect()
-                                end
-                            end
-                        end
-                    end)
-                end
-            end
-        end
+for i, def in ipairs(TAB_DEFS) do
+    local btn = Instance.new("TextButton")
+    btn.Name = "Tab_" .. def.ID
+    btn.Size = UDim2.new(0.25, -3, 1, 0)
+    btn.BackgroundTransparency = (def.ID == "Explorer") and 0 or 1
+    btn.BackgroundColor3 = (def.ID == "Explorer") and THEME.AccentPurple or Color3.fromRGB(0, 0, 0)
+    btn.Font = Enum.Font.GothamBold
+    btn.Text = def.Name
+    btn.TextColor3 = (def.ID == "Explorer") and Color3.new(1, 1, 1) or THEME.TextSecondary
+    btn.TextSize = 11
+    btn.LayoutOrder = i
+    btn.ZIndex = 106
+    btn.Parent = TabBar
+
+    local btnCorner = Instance.new("UICorner")
+    btnCorner.CornerRadius = UDim.new(0, 6)
+    btnCorner.Parent = btn
+
+    btn.MouseButton1Click:Connect(function()
+        switchTab(def.ID)
     end)
-end
-disableDecorationsHandler()
-
-local function shouldRemoveWorkspaceTarget(inst)
-    if not inst or not inst.Parent then return false end
-    if isLocalPlayerEntity(inst) or isProtectedEventItem(inst) then return false end
-    local lower = string.lower(inst.Name)
-    return WORKSPACE_REMOVE_NAMES[lower] == true
+    TabButtons[def.ID] = btn
 end
 
-local function isInsideTargetContainer(inst)
-    if not inst or not inst.Parent then return false end
-    local curr = inst.Parent
-    while curr and curr ~= workspace and curr ~= game do
-        local lower = string.lower(curr.Name)
-        if WORKSPACE_REMOVE_NAMES[lower] then
-            return true
-        end
-        curr = curr.Parent
-    end
-    return false
+-- ==============================================================================
+-- 📦 CONTAINER HALAMAN PANEL
+-- ==============================================================================
+local ContentContainer = Instance.new("Frame")
+ContentContainer.Name = "ContentContainer"
+ContentContainer.Size = UDim2.new(1, -16, 1, -92)
+ContentContainer.Position = UDim2.new(0, 8, 0, 88)
+ContentContainer.BackgroundTransparency = 1
+ContentContainer.ZIndex = 110
+ContentContainer.Parent = MainFrame
+
+local function createPanel(name)
+    local f = Instance.new("Frame")
+    f.Name = "Panel_" .. name
+    f.Size = UDim2.new(1, 0, 1, 0)
+    f.BackgroundTransparency = 1
+    f.Visible = (name == "Explorer")
+    f.ZIndex = 111
+    f.Parent = ContentContainer
+    TabPanels[name] = f
+    return f
 end
 
-local function handleWorkspaceTarget(inst)
-    if not inst or not inst.Parent then return false end
-    if isLocalPlayerEntity(inst) or isProtectedEventItem(inst) then return false end
+local ExplorerPanel   = createPanel("Explorer")
+local PropertiesPanel = createPanel("Properties")
+local RemoteSpyPanel  = createPanel("RemoteSpy")
+local ScriptPanel     = createPanel("ScriptView")
 
-    -- Kasus 1: Instansiasi adalah wadah target itu sendiri (Folder / Model)
-    if shouldRemoveWorkspaceTarget(inst) then
-        pcall(function()
-            if inst:IsA("Folder") or inst:IsA("Model") then
-                -- Kosongkan seluruh isinya (0% beban render GPU, bebas error "Parent is locked")
-                inst:ClearAllChildren()
-            else
-                inst:Destroy()
-            end
-        end)
-        return true
-    end
+-- Shared Variable untuk Instance Terpilih
+local selectedInstance = nil
+local updatePropertiesView = nil
+local openInScriptViewer = nil
 
-    -- Kasus 2: Instansiasi adalah objek baru yang dimasukkan ke dalam wadah target yang sudah dikosongkan
-    if isInsideTargetContainer(inst) then
-        pcall(function()
-            inst:Destroy()
-        end)
-        return true
-    end
+-- ==============================================================================
+-- 🌳 TAB 1: EXPLORER TREE ENGINE (LAZY LOADING & REAL-TIME SEARCH)
+-- ==============================================================================
+-- Baris Pencarian
+local SearchBarContainer = Instance.new("Frame")
+SearchBarContainer.Size = UDim2.new(1, 0, 0, 36)
+SearchBarContainer.Position = UDim2.new(0, 0, 0, 0)
+SearchBarContainer.BackgroundColor3 = THEME.BgCard
+SearchBarContainer.BorderSizePixel = 0
+SearchBarContainer.ZIndex = 112
+SearchBarContainer.Parent = ExplorerPanel
 
-    return false
-end
+local SearchCorner = Instance.new("UICorner")
+SearchCorner.CornerRadius = UDim.new(0, 8)
+SearchCorner.Parent = SearchBarContainer
 
-local function purgeWorkspaceTargets()
-    if not _G.antiLag then return end
-    for _, child in ipairs(workspace:GetChildren()) do
-        handleWorkspaceTarget(child)
-    end
-    for _, desc in ipairs(workspace:GetDescendants()) do
-        handleWorkspaceTarget(desc)
-    end
-end
+local SearchStroke = Instance.new("UIStroke")
+SearchStroke.Color = THEME.BorderSubtle
+SearchStroke.Thickness = 1
+SearchStroke.Parent = SearchBarContainer
 
--- =============================================
--- 📱 2. PLAYERGUI OPTIMIZER (HIDE ALL SCREENGUI - 0% GPU DRAW CALLS)
--- =============================================
-local function disableGuiElement(child)
-    if not child then return end
-    pcall(function()
-        -- Jangan matikan kontrol layar sentuh HP (analog & tombol lompat)
-        if child.Name == "TouchGui" then return end
+local SearchBox = Instance.new("TextBox")
+SearchBox.Size = UDim2.new(1, -70, 1, 0)
+SearchBox.Position = UDim2.new(0, 10, 0, 0)
+SearchBox.BackgroundTransparency = 1
+SearchBox.Font = Enum.Font.Gotham
+SearchBox.PlaceholderText = "🔍 Cari objek / class di Game..."
+SearchBox.PlaceholderColor3 = THEME.TextMuted
+SearchBox.Text = ""
+SearchBox.TextColor3 = THEME.TextPrimary
+SearchBox.TextSize = 12
+SearchBox.TextXAlignment = Enum.TextXAlignment.Left
+SearchBox.ClearTextOnFocus = false
+SearchBox.ZIndex = 113
+SearchBox.Parent = SearchBarContainer
 
-        if child:IsA("ScreenGui") or child:IsA("BillboardGui") or child:IsA("SurfaceGui") then
-            child.Enabled = false
-        end
-    end)
-end
+local ClearSearchBtn = Instance.new("TextButton")
+ClearSearchBtn.Size = UDim2.new(0, 26, 0, 26)
+ClearSearchBtn.Position = UDim2.new(1, -62, 0, 5)
+ClearSearchBtn.BackgroundColor3 = THEME.BgInput
+ClearSearchBtn.Font = Enum.Font.GothamBold
+ClearSearchBtn.Text = "✕"
+ClearSearchBtn.TextColor3 = THEME.TextMuted
+ClearSearchBtn.TextSize = 11
+ClearSearchBtn.ZIndex = 114
+ClearSearchBtn.Parent = SearchBarContainer
+local ClearCorner = Instance.new("UICorner")
+ClearCorner.CornerRadius = UDim.new(0, 4)
+ClearCorner.Parent = ClearSearchBtn
 
-local function purgePlayerGui()
-    if not _G.antiLag then return end
-    pcall(function()
-        local playerGui = lp and (lp:FindFirstChild("PlayerGui") or lp:WaitForChild("PlayerGui", 5))
-        if not playerGui then return end
-        for _, child in ipairs(playerGui:GetChildren()) do
-            disableGuiElement(child)
-        end
-        if not playerGui:GetAttribute("Kalb_CleanHooked") then
-            playerGui:SetAttribute("Kalb_CleanHooked", true)
-            playerGui.ChildAdded:Connect(function(child)
-                if not _G.antiLag then return end
-                task.defer(disableGuiElement, child)
-            end)
-        end
-    end)
-end
+local RefreshTreeBtn = Instance.new("TextButton")
+RefreshTreeBtn.Size = UDim2.new(0, 26, 0, 26)
+RefreshTreeBtn.Position = UDim2.new(1, -32, 0, 5)
+RefreshTreeBtn.BackgroundColor3 = THEME.BgInput
+RefreshTreeBtn.Font = Enum.Font.GothamBold
+RefreshTreeBtn.Text = "🔄"
+RefreshTreeBtn.TextColor3 = THEME.TextPrimary
+RefreshTreeBtn.TextSize = 12
+RefreshTreeBtn.ZIndex = 114
+RefreshTreeBtn.Parent = SearchBarContainer
+local RefCorner = Instance.new("UICorner")
+RefCorner.CornerRadius = UDim.new(0, 4)
+RefCorner.Parent = RefreshTreeBtn
 
--- =============================================
--- 🏃 2B. HUMANOID STATE & SKELETAL ANIMATION STRIPPER (POIN 4)
--- =============================================
-local function optimizeCharacter(char)
-    if not char then return end
-    pcall(function()
-        local hum = char:FindFirstChildOfClass("Humanoid") or char:WaitForChild("Humanoid", 3)
-        if hum and _G.freezeBotAnimation then
-            hum:SetStateEnabled(Enum.HumanoidStateType.Climbing, false)
-            hum:SetStateEnabled(Enum.HumanoidStateType.Swimming, false)
-            hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
-            hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+-- Path Bar (Breadcrumb)
+local PathBar = Instance.new("Frame")
+PathBar.Size = UDim2.new(1, 0, 0, 26)
+PathBar.Position = UDim2.new(0, 0, 0, 40)
+PathBar.BackgroundColor3 = THEME.BgInput
+PathBar.BorderSizePixel = 0
+PathBar.ZIndex = 112
+PathBar.Parent = ExplorerPanel
 
-            local animator = hum:FindFirstChildOfClass("Animator") or hum:WaitForChild("Animator", 2)
-            if animator then
-                for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
-                    pcall(function() track:Stop(0) end)
-                end
-                if not animator:GetAttribute("Kalb_AnimHooked") then
-                    animator:SetAttribute("Kalb_AnimHooked", true)
-                    animator.AnimationPlayed:Connect(function(track)
-                        if _G.freezeBotAnimation then
-                            task.defer(function() pcall(function() track:Stop(0) end) end)
-                        end
-                    end)
-                end
-            end
-        end
-    end)
-end
+local PathCorner = Instance.new("UICorner")
+PathCorner.CornerRadius = UDim.new(0, 6)
+PathCorner.Parent = PathBar
 
-if lp then
-    purgePlayerGui()
-    if lp.Character then
-        optimizeCharacter(lp.Character)
-    end
-    lp.CharacterAdded:Connect(function(newChar)
-        task.wait(0.2)
-        purgePlayerGui()
-        optimizeCharacter(newChar)
-    end)
-end
+local PathLabel = Instance.new("TextLabel")
+PathLabel.Size = UDim2.new(1, -70, 1, 0)
+PathLabel.Position = UDim2.new(0, 8, 0, 0)
+PathLabel.BackgroundTransparency = 1
+PathLabel.Font = Enum.Font.Code
+PathLabel.Text = "📍 Belum ada objek terpilih"
+PathLabel.TextColor3 = THEME.AccentCyan
+PathLabel.TextSize = 10
+PathLabel.TextXAlignment = Enum.TextXAlignment.Left
+PathLabel.TextTruncate = Enum.TextTruncate.AtEnd
+PathLabel.ZIndex = 113
+PathLabel.Parent = PathBar
 
--- =============================================
--- ☁️ 3. LIGHTING & ATMOSPHERE PURGER
--- =============================================
-local function purgeLighting()
-    if not _G.antiLag then return end
-    pcall(function()
-        Lighting.GlobalShadows = false
-        Lighting.Brightness = 1
-        Lighting.ClockTime = 14
-        Lighting.OutdoorAmbient = Color3.fromRGB(128, 128, 128)
+local CopyPathBtn = Instance.new("TextButton")
+CopyPathBtn.Size = UDim2.new(0, 58, 0, 20)
+CopyPathBtn.Position = UDim2.new(1, -62, 0, 3)
+CopyPathBtn.BackgroundColor3 = THEME.BgCard
+CopyPathBtn.Font = Enum.Font.GothamBold
+CopyPathBtn.Text = "📋 Copy"
+CopyPathBtn.TextColor3 = THEME.TextPrimary
+CopyPathBtn.TextSize = 9
+CopyPathBtn.ZIndex = 114
+CopyPathBtn.Parent = PathBar
+local CopyPathCorner = Instance.new("UICorner")
+CopyPathCorner.CornerRadius = UDim.new(0, 4)
+CopyPathCorner.Parent = CopyPathBtn
 
-        -- [POIN 3] GPU Fog Horizon Clipping (Render Distance Cutoff)
-        if _G.cullFogHorizon then
-            Lighting.FogStart = 50
-            Lighting.FogEnd   = 100
-            Lighting.FogColor = Color3.new(0, 0, 0)
+-- Scrolling Container Tree View
+local TreeScroll = Instance.new("ScrollingFrame")
+TreeScroll.Size = UDim2.new(1, 0, 1, -72)
+TreeScroll.Position = UDim2.new(0, 0, 0, 72)
+TreeScroll.BackgroundColor3 = THEME.BgCard
+TreeScroll.BorderSizePixel = 0
+TreeScroll.ScrollBarThickness = 5
+TreeScroll.ScrollBarImageColor3 = THEME.BorderSubtle
+TreeScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+TreeScroll.ZIndex = 112
+TreeScroll.Parent = ExplorerPanel
+
+local TreeCorner = Instance.new("UICorner")
+TreeCorner.CornerRadius = UDim.new(0, 8)
+TreeCorner.Parent = TreeScroll
+
+local TreeLayout = Instance.new("UIListLayout")
+TreeLayout.SortOrder = Enum.SortOrder.LayoutOrder
+TreeLayout.Padding = UDim.new(0, 2)
+TreeLayout.Parent = TreeScroll
+
+TreeLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    TreeScroll.CanvasSize = UDim2.new(0, 0, 0, TreeLayout.AbsoluteContentSize.Y + 12)
+end)
+
+-- ==============================================================================
+-- 📋 FUNGSI FORMAT PATH INSTANCE
+-- ==============================================================================
+local function getInstancePath(inst)
+    if not inst then return "nil" end
+    local parts = {}
+    local curr = inst
+    while curr and curr ~= game do
+        local name = curr.Name
+        if string.find(name, "[^%w_]") then
+            table.insert(parts, 1, string.format('["%s"]', name))
         else
-            Lighting.FogEnd = 9e9
+            table.insert(parts, 1, (curr.Parent == game and "" or ".") .. name)
         end
-
-        for _, v in ipairs(Lighting:GetChildren()) do
-            if v:IsA("PostEffect") or v:IsA("BlurEffect") or v:IsA("SunRaysEffect")
-               or v:IsA("ColorCorrectionEffect") or v:IsA("BloomEffect")
-               or v:IsA("DepthOfFieldEffect") or v:IsA("Sky")
-               or v:IsA("Atmosphere") or v:IsA("Clouds") then
-                v.Enabled = false
-                v:Destroy()
-            end
-        end
-    end)
+        curr = curr.Parent
+    end
+    if inst.Parent == game then
+        return string.format('game:GetService("%s")', inst.ClassName)
+    end
+    return "game" .. table.concat(parts, "")
 end
-purgeLighting()
 
-Lighting.ChildAdded:Connect(function(child)
-    if not _G.antiLag then return end
-    task.defer(function()
-        if child:IsA("PostEffect") or child:IsA("BlurEffect") or child:IsA("SunRaysEffect")
-           or child:IsA("ColorCorrectionEffect") or child:IsA("BloomEffect")
-           or child:IsA("DepthOfFieldEffect") or child:IsA("Sky")
-           or child:IsA("Atmosphere") or child:IsA("Clouds") then
-            pcall(function()
-                child.Enabled = false
-                child:Destroy()
-            end)
-        end
-    end)
-end)
-
--- Terrain & Water Optimization
-pcall(function()
-    local terrain = workspace:FindFirstChildOfClass("Terrain")
-    if terrain then
-        terrain.WaterWaveSize = 0
-        terrain.WaterWaveSpeed = 0
-        terrain.WaterReflectance = 0
-        terrain.WaterTransparency = 0
-        if sethiddenproperty then
-            pcall(function() sethiddenproperty(terrain, "Decoration", false) end)
-        end
+CopyPathBtn.MouseButton1Click:Connect(function()
+    if selectedInstance then
+        local p = getInstancePath(selectedInstance)
+        setClipboardText(p)
+        showToast("📋 Copy Path", p, THEME.AccentCyan)
+    else
+        showToast("⚠️ Peringatan", "Pilih objek terlebih dahulu!", THEME.AccentAmber)
     end
 end)
 
--- =============================================
--- 🌫️ 4. MAP GRAY & PARTIKEL EFEK PURGER
--- =============================================
-local PURGE_PARTICLE_CLASSES = {
-    ParticleEmitter = true,
-    Trail = true,
-    Beam = true,
-    Fire = true,
-    Smoke = true,
-    Sparkles = true,
-    PointLight = true,
-    SpotLight = true,
-    SurfaceLight = true,
-    SurfaceAppearance = true,
-}
+-- ==============================================================================
+-- 📑 CONTEXT ACTION MODAL SHEET (ACTION MENU MOBILE)
+-- ==============================================================================
+local ActionModal = Instance.new("Frame")
+ActionModal.Name = "ActionModal"
+ActionModal.Size = UDim2.new(1, 0, 1, 0)
+ActionModal.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+ActionModal.BackgroundTransparency = 0.45
+ActionModal.Visible = false
+ActionModal.ZIndex = 800
+ActionModal.Parent = MainFrame
 
-local GRAY_COLOR = Color3.fromRGB(140, 140, 140)
+local ModalCard = Instance.new("Frame")
+ModalCard.Size = UDim2.new(0, 310, 0, 360)
+ModalCard.Position = UDim2.new(0.5, -155, 0.5, -180)
+ModalCard.BackgroundColor3 = THEME.BgCard
+ModalCard.BorderSizePixel = 0
+ModalCard.ZIndex = 801
+ModalCard.Parent = ActionModal
 
-local function optimizeInstance(v)
-    if not _G.antiLag or not v or not v.Parent then return end
-    if isLocalPlayerEntity(v) then return end
-    if isProtectedEventItem(v) then return end
+local ModalCorner = Instance.new("UICorner")
+ModalCorner.CornerRadius = UDim.new(0, 12)
+ModalCorner.Parent = ModalCard
 
-    pcall(function()
-        local className = v.ClassName
+local ModalStroke = Instance.new("UIStroke")
+ModalStroke.Color = THEME.AccentPurple
+ModalStroke.Thickness = 1.4
+ModalStroke.Parent = ModalCard
 
-        -- 1. Hapus partikel efek & sumber cahaya
-        if PURGE_PARTICLE_CLASSES[className] then
-            v:Destroy()
-            return
-        end
+local ModalTitle = Instance.new("TextLabel")
+ModalTitle.Size = UDim2.new(1, -20, 0, 28)
+ModalTitle.Position = UDim2.new(0, 12, 0, 8)
+ModalTitle.BackgroundTransparency = 1
+ModalTitle.Font = Enum.Font.GothamBold
+ModalTitle.Text = "⚡ Quick Action Menu"
+ModalTitle.TextColor3 = THEME.TextPrimary
+ModalTitle.TextSize = 13
+ModalTitle.TextXAlignment = Enum.TextXAlignment.Left
+ModalTitle.ZIndex = 802
+ModalTitle.Parent = ModalCard
 
-        -- 2. Highlight: matikan agar tidak memberatkan rendering / crash AnimateBrainrots
-        if v:IsA("Highlight") then
-            v.Enabled = false
-            return
-        end
+local ModalSub = Instance.new("TextLabel")
+ModalSub.Size = UDim2.new(1, -20, 0, 18)
+ModalSub.Position = UDim2.new(0, 12, 0, 32)
+ModalSub.BackgroundTransparency = 1
+ModalSub.Font = Enum.Font.Code
+ModalSub.Text = "Target: Part"
+ModalSub.TextColor3 = THEME.AccentCyan
+ModalSub.TextSize = 10
+ModalSub.TextXAlignment = Enum.TextXAlignment.Left
+ModalSub.TextTruncate = Enum.TextTruncate.AtEnd
+ModalSub.ZIndex = 802
+ModalSub.Parent = ModalCard
 
-        -- 3. Mute audio individual jika _G.muteAudio
-        if _G.muteAudio and v:IsA("Sound") then
-            v.Volume = 0
-            return
-        end
+local ActionScroll = Instance.new("ScrollingFrame")
+ActionScroll.Size = UDim2.new(1, -16, 1, -95)
+ActionScroll.Position = UDim2.new(0, 8, 0, 56)
+ActionScroll.BackgroundTransparency = 1
+ActionScroll.ScrollBarThickness = 3
+ActionScroll.ScrollBarImageColor3 = THEME.BorderSubtle
+ActionScroll.CanvasSize = UDim2.new(0, 0, 0, 320)
+ActionScroll.ZIndex = 802
+ActionScroll.Parent = ModalCard
 
-        -- 4. Hapus Decal, Texture, pakaian visual
-        if className == "Decal" or className == "Texture" or v:IsA("Clothing") or v:IsA("ShirtGraphic") then
-            v:Destroy()
-            return
-        end
+local ActionLayout = Instance.new("UIListLayout")
+ActionLayout.SortOrder = Enum.SortOrder.LayoutOrder
+ActionLayout.Padding = UDim.new(0, 4)
+ActionLayout.Parent = ActionScroll
 
-        -- 5. Part Map Processing (Solid vs Non-Solid & Physics Stripping)
-        if v:IsA("BasePart") then
-            -- [POIN 2] Pemusnahan Objek Dekorasi Non-Solid (CanCollide == false)
-            if _G.destroyNonCollideDecor and v.CanCollide == false and v.Anchored then
-                v:Destroy()
-                return
-            end
+local ModalCloseBtn = Instance.new("TextButton")
+ModalCloseBtn.Size = UDim2.new(1, -16, 0, 30)
+ModalCloseBtn.Position = UDim2.new(0, 8, 1, -36)
+ModalCloseBtn.BackgroundColor3 = THEME.BgInput
+ModalCloseBtn.Font = Enum.Font.GothamBold
+ModalCloseBtn.Text = "Tutup"
+ModalCloseBtn.TextColor3 = THEME.TextSecondary
+ModalCloseBtn.TextSize = 11
+ModalCloseBtn.ZIndex = 803
+ModalCloseBtn.Parent = ModalCard
+local MCBCorner = Instance.new("UICorner")
+MCBCorner.CornerRadius = UDim.new(0, 6)
+MCBCorner.Parent = ModalCloseBtn
+ModalCloseBtn.MouseButton1Click:Connect(function()
+    ActionModal.Visible = false
+end)
 
-            -- [POIN 1] CPU Physics & Raycast Stripping (CanTouch & CanQuery = false)
-            if _G.cutPhysicsInvisible and v.Anchored then
-                v.CanTouch = false
-                v.CanQuery = false
-            end
+local function openActionModal(inst)
+    if not inst then return end
+    selectedInstance = inst
+    PathLabel.Text = getInstancePath(inst)
+    ModalSub.Text = string.format("[%s] %s", inst.ClassName, inst.Name)
+    ActionModal.Visible = true
+end
 
-            v.Material = Enum.Material.SmoothPlastic
-            v.Reflectance = 0
-            v.CastShadow = false
-            v.Color = GRAY_COLOR
+local function addActionButton(name, icon, color, callback)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, 0, 0, 36)
+    btn.BackgroundColor3 = THEME.BgInput
+    btn.Font = Enum.Font.Gotham
+    btn.Text = string.format("  %s  %s", icon, name)
+    btn.TextColor3 = color or THEME.TextPrimary
+    btn.TextSize = 11
+    btn.TextXAlignment = Enum.TextXAlignment.Left
+    btn.ZIndex = 803
+    btn.Parent = ActionScroll
 
-            -- [POIN 5] Mesh LOD Rendah
-            if v:IsA("MeshPart") then
-                v.TextureID = ""
-                pcall(function() v.RenderFidelity = Enum.RenderFidelity.Performance end)
-            end
-        elseif v:IsA("SpecialMesh") then
-            v.TextureId = ""
-        end
+    local bCorner = Instance.new("UICorner")
+    bCorner.CornerRadius = UDim.new(0, 6)
+    bCorner.Parent = btn
+
+    btn.MouseButton1Click:Connect(function()
+        ActionModal.Visible = false
+        pcall(callback)
     end)
 end
 
--- Eksekusi awal pembersihan aset target, PlayerGui, dan map Gray
-task.spawn(function()
-    if _G.antiLag then
-        purgeWorkspaceTargets()
-        purgePlayerGui()
-
-        local all = workspace:GetDescendants()
-        local count = 0
-        for _, v in ipairs(all) do
-            if not handleWorkspaceTarget(v) then
-                optimizeInstance(v)
-            end
-            count = count + 1
-            if count % 500 == 0 then
-                task.wait()
-            end
+-- Pilihan Aksi Cepat
+addActionButton("Teleport Karakter ke Part", "🚀", THEME.AccentEmerald, function()
+    if not selectedInstance then return end
+    local pos = nil
+    if selectedInstance:IsA("BasePart") then
+        pos = selectedInstance.Position
+    elseif selectedInstance:IsA("Model") then
+        local cf = selectedInstance:GetPivot()
+        pos = cf.Position
+    end
+    if pos then
+        local char = lp.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            hrp.CFrame = CFrame.new(pos + Vector3.new(0, 4, 0))
+            showToast("🚀 Teleport Sukses", "Karakter dipindahkan ke " .. selectedInstance.Name, THEME.AccentEmerald)
         end
-        logConsole("🚀 [ANTI-LAG] Workspace Targets Purged, PlayerGui Hidden & Map Gray Applied!")
+    else
+        showToast("⚠️ Gagal", "Objek tidak memiliki koordinat posisi fisik!", THEME.AccentRose)
     end
 end)
 
--- Listener Real-Time DescendantAdded untuk Workspace
-workspace.DescendantAdded:Connect(function(descendant)
-    if not _G.antiLag then return end
-    if handleWorkspaceTarget(descendant) then
+addActionButton("Inspeksi Properties", "⚙️", THEME.AccentPurple, function()
+    if selectedInstance and updatePropertiesView then
+        switchTab("Properties")
+        updatePropertiesView(selectedInstance)
+    end
+end)
+
+addActionButton("Lihat Script (Decompile)", "📜", THEME.AccentCyan, function()
+    if selectedInstance and openInScriptViewer then
+        switchTab("ScriptView")
+        openInScriptViewer(selectedInstance)
+    end
+end)
+
+addActionButton("Salin Full Path", "📋", THEME.TextPrimary, function()
+    if selectedInstance then
+        local p = getInstancePath(selectedInstance)
+        setClipboardText(p)
+        showToast("📋 Copied", p, THEME.AccentCyan)
+    end
+end)
+
+addActionButton("Salin Nama Objek", "🏷️", THEME.TextPrimary, function()
+    if selectedInstance then
+        setClipboardText(selectedInstance.Name)
+        showToast("📋 Copied Name", selectedInstance.Name, THEME.TextPrimary)
+    end
+end)
+
+addActionButton("Salin ClassName", "💠", THEME.TextPrimary, function()
+    if selectedInstance then
+        setClipboardText(selectedInstance.ClassName)
+        showToast("📋 Copied Class", selectedInstance.ClassName, THEME.TextPrimary)
+    end
+end)
+
+addActionButton("Duplikasi / Clone Objek", "📦", THEME.AccentAmber, function()
+    if selectedInstance and selectedInstance.Archivable then
+        pcall(function()
+            local clone = selectedInstance:Clone()
+            clone.Parent = selectedInstance.Parent
+            showToast("📦 Berhasil Di-clone", clone.Name, THEME.AccentAmber)
+        end)
+    else
+        showToast("⚠️ Gagal Clone", "Objek tidak dapat di-clone!", THEME.AccentRose)
+    end
+end)
+
+addActionButton("Hapus Seluruh Anak (ClearChildren)", "🧹", THEME.AccentRose, function()
+    if selectedInstance then
+        pcall(function()
+            selectedInstance:ClearAllChildren()
+            showToast("🧹 Clear All Children", "Seluruh isi objek dihapus", THEME.AccentRose)
+        end)
+    end
+end)
+
+addActionButton("Musnahkan Objek (:Destroy())", "🗑️", Color3.fromRGB(239, 68, 68), function()
+    if selectedInstance then
+        local n = selectedInstance.Name
+        pcall(function() selectedInstance:Destroy() end)
+        showToast("🗑️ Objek Dimusnahkan", n .. " (:Destroy() berhasil)", THEME.AccentRose)
+    end
+end)
+
+-- ==============================================================================
+-- 🌲 TREE VIEW RENDERING ENGINE (LAZY ON-DEMAND EXPANSION)
+-- ==============================================================================
+local treeNodes = {}
+
+local function createTreeNode(inst, depth, parentContainer)
+    depth = depth or 0
+    if not inst then return nil end
+
+    local row = Instance.new("Frame")
+    row.Name = "Row_" .. inst.Name
+    row.Size = UDim2.new(1, -4, 0, 36) -- Tinggi 36px ramah sentuhan layar HP
+    row.BackgroundColor3 = THEME.BgCard
+    row.BackgroundTransparency = 1
+    row.BorderSizePixel = 0
+    row.ZIndex = 115
+    row.Parent = parentContainer
+
+    local rowCorner = Instance.new("UICorner")
+    rowCorner.CornerRadius = UDim.new(0, 5)
+    rowCorner.Parent = row
+
+    local rowBtn = Instance.new("TextButton")
+    rowBtn.Size = UDim2.new(1, -38, 1, 0)
+    rowBtn.Position = UDim2.new(0, 0, 0, 0)
+    rowBtn.BackgroundTransparency = 1
+    rowBtn.Text = ""
+    rowBtn.ZIndex = 116
+    rowBtn.Parent = row
+
+    -- Expand/Collapse Arrow
+    local hasChildren = (#inst:GetChildren() > 0)
+    local arrowBtn = Instance.new("TextButton")
+    arrowBtn.Size = UDim2.new(0, 24, 0, 24)
+    arrowBtn.Position = UDim2.new(0, depth * 14 + 4, 0.5, -12)
+    arrowBtn.BackgroundTransparency = 1
+    arrowBtn.Font = Enum.Font.GothamBold
+    arrowBtn.Text = hasChildren and "▶" or "•"
+    arrowBtn.TextColor3 = hasChildren and THEME.AccentPurple or THEME.TextMuted
+    arrowBtn.TextSize = 11
+    arrowBtn.ZIndex = 117
+    arrowBtn.Parent = row
+
+    -- Icon Class
+    local iconLbl = Instance.new("TextLabel")
+    iconLbl.Size = UDim2.new(0, 22, 0, 22)
+    iconLbl.Position = UDim2.new(0, depth * 14 + 28, 0.5, -11)
+    iconLbl.BackgroundTransparency = 1
+    iconLbl.Font = Enum.Font.Gotham
+    iconLbl.Text = getClassIcon(inst.ClassName)
+    iconLbl.TextSize = 13
+    iconLbl.ZIndex = 117
+    iconLbl.Parent = row
+
+    -- Nama Instance & ClassName
+    local nameLbl = Instance.new("TextLabel")
+    nameLbl.Size = UDim2.new(1, -(depth * 14 + 54), 1, 0)
+    nameLbl.Position = UDim2.new(0, depth * 14 + 52, 0, 0)
+    nameLbl.BackgroundTransparency = 1
+    nameLbl.Font = Enum.Font.GothamMedium
+    nameLbl.Text = string.format("%s <font color=\"#6B7280\">(%s)</font>", inst.Name, inst.ClassName)
+    nameLbl.RichText = true
+    nameLbl.TextColor3 = THEME.TextPrimary
+    nameLbl.TextSize = 11
+    nameLbl.TextXAlignment = Enum.TextXAlignment.Left
+    nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
+    nameLbl.ZIndex = 117
+    nameLbl.Parent = row
+
+    -- Tombol Action Menu Cepat [⋮] (Khusus Sentuhan Mobile)
+    local actBtn = Instance.new("TextButton")
+    actBtn.Size = UDim2.new(0, 32, 0, 28)
+    actBtn.Position = UDim2.new(1, -34, 0.5, -14)
+    actBtn.BackgroundColor3 = THEME.BgInput
+    actBtn.Font = Enum.Font.GothamBold
+    actBtn.Text = "⋮"
+    actBtn.TextColor3 = THEME.TextSecondary
+    actBtn.TextSize = 14
+    actBtn.ZIndex = 118
+    actBtn.Parent = row
+    local actCorner = Instance.new("UICorner")
+    actCorner.CornerRadius = UDim.new(0, 4)
+    actCorner.Parent = actBtn
+
+    actBtn.MouseButton1Click:Connect(function()
+        openActionModal(inst)
+    end)
+
+    -- Container Anak Objek
+    local childrenContainer = Instance.new("Frame")
+    childrenContainer.Name = "ChildrenOf_" .. inst.Name
+    childrenContainer.Size = UDim2.new(1, 0, 0, 0)
+    childrenContainer.BackgroundTransparency = 1
+    childrenContainer.AutomaticSize = Enum.AutomaticSize.Y
+    childrenContainer.Visible = false
+    childrenContainer.ZIndex = 115
+    childrenContainer.Parent = parentContainer
+
+    local cLayout = Instance.new("UIListLayout")
+    cLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    cLayout.Padding = UDim.new(0, 2)
+    cLayout.Parent = childrenContainer
+
+    local isExpanded = false
+    local childrenLoaded = false
+
+    local function toggleExpand()
+        if not hasChildren then return end
+        isExpanded = not isExpanded
+        arrowBtn.Text = isExpanded and "▼" or "▶"
+        arrowBtn.TextColor3 = isExpanded and THEME.AccentCyan or THEME.AccentPurple
+
+        if isExpanded and not childrenLoaded then
+            childrenLoaded = true
+            local kids = inst:GetChildren()
+            for _, child in ipairs(kids) do
+                createTreeNode(child, depth + 1, childrenContainer)
+            end
+        end
+        childrenContainer.Visible = isExpanded
+    end
+
+    arrowBtn.MouseButton1Click:Connect(toggleExpand)
+
+    rowBtn.MouseButton1Click:Connect(function()
+        selectedInstance = inst
+        PathLabel.Text = getInstancePath(inst)
+
+        -- Highlight visual baris
+        for _, otherRow in pairs(treeNodes) do
+            if otherRow and otherRow.Parent then
+                otherRow.BackgroundTransparency = 1
+            end
+        end
+        row.BackgroundTransparency = 0.4
+        row.BackgroundColor3 = THEME.AccentPurple
+
+        if updatePropertiesView then
+            updatePropertiesView(inst)
+        end
+    end)
+
+    table.insert(treeNodes, row)
+    return row
+end
+
+local function populateRootServices()
+    for _, child in ipairs(TreeScroll:GetChildren()) do
+        if child:IsA("Frame") then child:Destroy() end
+    end
+    treeNodes = {}
+
+    local ROOT_SERVICES = {
+        workspace,
+        Players,
+        game:GetService("Lighting"),
+        game:GetService("ReplicatedStorage"),
+        game:GetService("ReplicatedFirst"),
+        game:GetService("StarterGui"),
+        game:GetService("StarterPack"),
+        game:GetService("StarterPlayer"),
+        game:GetService("SoundService"),
+        game:GetService("TextChatService"),
+        game:GetService("MaterialService"),
+    }
+    pcall(function() table.insert(ROOT_SERVICES, CoreGui) end)
+
+    for _, s in ipairs(ROOT_SERVICES) do
+        if s then
+            createTreeNode(s, 0, TreeScroll)
+        end
+    end
+end
+
+populateRootServices()
+RefreshTreeBtn.MouseButton1Click:Connect(populateRootServices)
+
+-- Search Engine Real-Time
+local function executeSearch(query)
+    query = string.lower(query or "")
+    if query == "" then
+        populateRootServices()
         return
     end
-    task.defer(optimizeInstance, descendant)
-end)
 
--- =============================================
--- 🚫 6. TOTAL PLAYER & CHARACTER PURGER (100% BERSIH)
--- =============================================
-local function purgeOtherPlayer(player)
-    if not _G.autoRemovePlayer or not player or player == lp or player.Name == lpName then return end
-    
-    pcall(function()
-        if player.Character then
-            player.Character:ClearAllChildren()
-            player.Character:Destroy()
+    for _, child in ipairs(TreeScroll:GetChildren()) do
+        if child:IsA("Frame") then child:Destroy() end
+    end
+    treeNodes = {}
+
+    local count = 0
+    local maxResults = 60 -- Limit agar tidak lag/freeze di Mobile
+
+    local function searchDescendants(parent)
+        for _, child in ipairs(parent:GetChildren()) do
+            if count >= maxResults then return end
+            local cName = string.lower(child.Name)
+            local cClass = string.lower(child.ClassName)
+
+            if string.find(cName, query, 1, true) or string.find(cClass, query, 1, true) then
+                createTreeNode(child, 0, TreeScroll)
+                count = count + 1
+            end
+            pcall(function() searchDescendants(child) end)
         end
-    end)
-    pcall(function()
-        player:ClearAllChildren()
-        player:Destroy()
-    end)
+    end
+
+    searchDescendants(game)
+    showToast("🔍 Hasil Pencarian", string.format("Ditemukan %d objek untuk '%s'", count, query), THEME.AccentCyan)
 end
 
-local function purgeOtherCharacter(charModel)
-    if not _G.autoRemovePlayer or not charModel then return end
-    if isLocalPlayerEntity(charModel) then return end
-    if charModel.Name == "Plots" or charModel.Name == "Debris" or charModel.Name == "NPCs" then return end
-
-    pcall(function()
-        for _, v in ipairs(charModel:GetDescendants()) do
-            if v:IsA("BasePart") then
-                v.Transparency = 1
-                v.CanCollide = false
-                v.CanTouch = false
-                v.CanQuery = false
-            elseif v:IsA("Decal") or v:IsA("Texture") or v:IsA("BillboardGui") or v:IsA("SurfaceGui") or v:IsA("Highlight") then
-                v.Enabled = false
-                v:Destroy()
-            end
-        end
-        charModel:ClearAllChildren()
-        charModel:Destroy()
-    end)
-end
-
-local function scanAndPurgeAllOtherPlayers()
-    if not _G.autoRemovePlayer then return end
-
-    -- 1. Bersihkan dari game:GetService("Players")
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= lp then
-            purgeOtherPlayer(p)
-        end
-    end
-    for _, child in ipairs(Players:GetChildren()) do
-        if child ~= lp and child:IsA("Player") then
-            purgeOtherPlayer(child)
-        end
-    end
-
-    -- 2. Bersihkan dari workspace.Players folder
-    local wsPlayers = workspace:FindFirstChild("Players")
-    if wsPlayers then
-        for _, child in ipairs(wsPlayers:GetChildren()) do
-            if child.Name ~= "Plots" and not isLocalPlayerEntity(child) then
-                purgeOtherCharacter(child)
-            end
-        end
-    end
-
-    -- 3. Bersihkan dari workspace root (karakter liar)
-    for _, child in ipairs(workspace:GetChildren()) do
-        if child:IsA("Model") and not isLocalPlayerEntity(child) and child.Name ~= "Plots" and child.Name ~= "Debris" and child.Name ~= "NPCs" and child.Name ~= "Players" then
-            if child:FindFirstChildOfClass("Humanoid") or child:FindFirstChild("HumanoidRootPart") or child:FindFirstChild("Head") then
-                purgeOtherCharacter(child)
-            end
-        end
-    end
-end
-
--- Eksekusi awal pembersihan player & karakter
-scanAndPurgeAllOtherPlayers()
-
--- Event Listener saat ada Player baru join
-Players.PlayerAdded:Connect(function(player)
-    if not _G.autoRemovePlayer then return end
-    if player ~= lp then
-        task.defer(function()
-            purgeOtherPlayer(player)
-        end)
-        player.CharacterAdded:Connect(function(char)
-            task.defer(function()
-                purgeOtherCharacter(char)
-            end)
-        end)
+SearchBox.FocusLost:Connect(function(enterPressed)
+    if enterPressed or SearchBox.Text ~= "" then
+        executeSearch(SearchBox.Text)
     end
 end)
 
-Players.ChildAdded:Connect(function(child)
-    if not _G.autoRemovePlayer then return end
-    if child ~= lp and child:IsA("Player") then
-        task.defer(function()
-            purgeOtherPlayer(child)
-        end)
-    end
+ClearSearchBtn.MouseButton1Click:Connect(function()
+    SearchBox.Text = ""
+    populateRootServices()
 end)
 
--- Listener khusus untuk workspace.Players
-local function setupWsPlayersListener(folder)
-    if not folder then return end
-    for _, child in ipairs(folder:GetChildren()) do
-        if child.Name ~= "Plots" and not isLocalPlayerEntity(child) then
-            purgeOtherCharacter(child)
-        end
-    end
-    folder.ChildAdded:Connect(function(child)
-        if not _G.autoRemovePlayer then return end
-        task.defer(function()
-            if child.Name ~= "Plots" and not isLocalPlayerEntity(child) then
-                purgeOtherCharacter(child)
-            end
-        end)
-    end)
-end
+-- ==============================================================================
+-- ⚙️ TAB 2: LIVE PROPERTY INSPECTOR & EDITOR
+-- ==============================================================================
+local PropHeader = Instance.new("Frame")
+PropHeader.Size = UDim2.new(1, 0, 0, 36)
+PropHeader.BackgroundColor3 = THEME.BgCard
+PropHeader.BorderSizePixel = 0
+PropHeader.ZIndex = 112
+PropHeader.Parent = PropertiesPanel
 
-local wsPlayers = workspace:FindFirstChild("Players")
-if wsPlayers then
-    setupWsPlayersListener(wsPlayers)
-end
+local PHCorner = Instance.new("UICorner")
+PHCorner.CornerRadius = UDim.new(0, 8)
+PHCorner.Parent = PropHeader
 
-workspace.ChildAdded:Connect(function(child)
-    if child.Name == "Players" then
-        task.defer(function() setupWsPlayersListener(child) end)
-    elseif child:IsA("Model") and not isLocalPlayerEntity(child) and child.Name ~= "Plots" and child.Name ~= "Debris" and child.Name ~= "NPCs" then
-        task.defer(function()
-            if child:FindFirstChildOfClass("Humanoid") or child:FindFirstChild("HumanoidRootPart") or child:FindFirstChild("Head") then
-                purgeOtherCharacter(child)
-            end
-        end)
-    end
+local PropTitle = Instance.new("TextLabel")
+PropTitle.Size = UDim2.new(1, -16, 1, 0)
+PropTitle.Position = UDim2.new(0, 10, 0, 0)
+PropTitle.BackgroundTransparency = 1
+PropTitle.Font = Enum.Font.GothamBold
+PropTitle.Text = "⚙️ Properties: (Pilih objek di Explorer)"
+PropTitle.TextColor3 = THEME.TextPrimary
+PropTitle.TextSize = 12
+PropTitle.TextXAlignment = Enum.TextXAlignment.Left
+PropTitle.TextTruncate = Enum.TextTruncate.AtEnd
+PropTitle.ZIndex = 113
+PropTitle.Parent = PropHeader
+
+local PropScroll = Instance.new("ScrollingFrame")
+PropScroll.Size = UDim2.new(1, 0, 1, -44)
+PropScroll.Position = UDim2.new(0, 0, 0, 44)
+PropScroll.BackgroundColor3 = THEME.BgCard
+PropScroll.BorderSizePixel = 0
+PropScroll.ScrollBarThickness = 5
+PropScroll.ScrollBarImageColor3 = THEME.BorderSubtle
+PropScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+PropScroll.ZIndex = 112
+PropScroll.Parent = PropertiesPanel
+
+local PSCorner = Instance.new("UICorner")
+PSCorner.CornerRadius = UDim.new(0, 8)
+PSCorner.Parent = PropScroll
+
+local PropLayout = Instance.new("UIListLayout")
+PropLayout.SortOrder = Enum.SortOrder.LayoutOrder
+PropLayout.Padding = UDim.new(0, 3)
+PropLayout.Parent = PropScroll
+
+PropLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    PropScroll.CanvasSize = UDim2.new(0, 0, 0, PropLayout.AbsoluteContentSize.Y + 14)
 end)
 
--- Background Sweeper Loop (Backup sweeper dengan interval santai agar hemat CPU)
-task.spawn(function()
-    local cleanCounter = 0
-    while task.wait(3.0) do
-        if _G.autoRemovePlayer then
-            pcall(scanAndPurgeAllOtherPlayers)
-        end
+local function addPropertyRow(inst, propName, propValue, propType)
+    local row = Instance.new("Frame")
+    row.Size = UDim2.new(1, -6, 0, 38)
+    row.BackgroundColor3 = THEME.BgInput
+    row.BorderSizePixel = 0
+    row.ZIndex = 113
+    row.Parent = PropScroll
 
-        cleanCounter = cleanCounter + 1
-        -- Tiap ~30 detik pastikan target terhapus & refresh lighting & playergui
-        if cleanCounter % 10 == 0 then
-            pcall(disableDecorationsHandler)
-            pcall(purgeLighting)
-            pcall(purgePlayerGui)
-            pcall(purgeWorkspaceTargets)
-        end
+    local rCorner = Instance.new("UICorner")
+    rCorner.CornerRadius = UDim.new(0, 6)
+    rCorner.Parent = row
 
-        -- Tiap ~60 detik jalankan garbage collector bertahap (non-blocking step)
-        if cleanCounter >= 20 then
-            cleanCounter = 0
-            pcall(function()
-                if collectgarbage then collectgarbage("step", 100) end
-            end)
-        end
-    end
-end)
+    local nameLbl = Instance.new("TextLabel")
+    nameLbl.Size = UDim2.new(0.42, -6, 1, 0)
+    nameLbl.Position = UDim2.new(0, 8, 0, 0)
+    nameLbl.BackgroundTransparency = 1
+    nameLbl.Font = Enum.Font.GothamMedium
+    nameLbl.Text = propName
+    nameLbl.TextColor3 = THEME.TextPrimary
+    nameLbl.TextSize = 11
+    nameLbl.TextXAlignment = Enum.TextXAlignment.Left
+    nameLbl.ZIndex = 114
+    nameLbl.Parent = row
 
--- =============================================
--- 🎯 DETEKTOR PLOT SENDIRI & REMOVER PLOT LAIN
--- =============================================
-local function isMyPlot(plotModel)
-    if not plotModel or not plotModel:IsA("Model") then return false end
+    -- Kontrol Editor Interaktif
+    if propType == "boolean" then
+        local toggleBtn = Instance.new("TextButton")
+        toggleBtn.Size = UDim2.new(0, 56, 0, 26)
+        toggleBtn.Position = UDim2.new(1, -64, 0.5, -13)
+        toggleBtn.BackgroundColor3 = propValue and THEME.AccentEmerald or Color3.fromRGB(60, 65, 80)
+        toggleBtn.Font = Enum.Font.GothamBold
+        toggleBtn.Text = propValue and "TRUE" or "FALSE"
+        toggleBtn.TextColor3 = Color3.new(1, 1, 1)
+        toggleBtn.TextSize = 10
+        toggleBtn.ZIndex = 114
+        toggleBtn.Parent = row
+        local tCorner = Instance.new("UICorner")
+        tCorner.CornerRadius = UDim.new(0, 5)
+        tCorner.Parent = toggleBtn
 
-    local sign = plotModel:FindFirstChild("PlotSign", true)
-    if sign then
-        local pps = sign:FindFirstChild("PlayerPlotSign", true)
-        if pps then
-            local nameLabel = pps:FindFirstChild("PlayerName", true)
-            if nameLabel and nameLabel:IsA("TextLabel") then
-                local t = nameLabel.Text
-                if t and (t == lpName or t:find(lpName, 1, true) or (lpDisplayName ~= "" and (t == lpDisplayName or t:find(lpDisplayName, 1, true)))) then
-                    myPlotInstance = plotModel
-                    return true
-                end
-            end
-            local icon = pps:FindFirstChild("PlayerIcon", true)
-            if icon and (icon:IsA("ImageLabel") or icon:IsA("ImageButton")) then
-                local img = icon.Image
-                if img and img:find(myUidStr, 1, true) then
-                    myPlotInstance = plotModel
-                    return true
-                end
-            end
-        end
-    end
-
-    for _, item in ipairs(plotModel:GetDescendants()) do
-        local ok, result = pcall(function()
-            if item:IsA("TextLabel") then
-                local t = item.Text
-                if t and (t == lpName or (lpDisplayName ~= "" and t == lpDisplayName)) then
-                    return true
-                end
-            elseif item:IsA("StringValue") or item:IsA("ObjectValue") or item:IsA("IntValue") or item:IsA("NumberValue") then
-                local v = item.Value
-                if v == lpName or v == lp or tostring(v) == myUidStr then
-                    return true
-                end
-            end
-            return false
-        end)
-        if ok and result then
-            myPlotInstance = plotModel
-            return true
-        end
-    end
-
-    return false
-end
-
-local function cleanPlots(plotsFolder)
-    if not plotsFolder then return end
-    for _, plot in ipairs(plotsFolder:GetChildren()) do
-        if plot:IsA("Model") and not isMyPlot(plot) then
-            pcall(function() plot:Destroy() end)
-        end
-    end
-    plotsFolder.ChildAdded:Connect(function(plot)
-        task.wait(0.2)
-        if plot:IsA("Model") and not isMyPlot(plot) then
-            pcall(function() plot:Destroy() end)
-        end
-    end)
-end
-
-local plotsFolder = workspace:FindFirstChild("Plots") or (workspace:FindFirstChild("Players") and workspace.Players:FindFirstChild("Plots"))
-if plotsFolder then
-    task.spawn(function()
-        task.wait(1.5) -- Beri waktu agar plot lokal selesai dimuat server sebelum membersihkan plot lain
-        cleanPlots(plotsFolder)
-    end)
-end
-
--- =============================================
--- 🍬 CANDY WEATHER EVENT ENGINE (HITBOX EXPANDER & WAYPOINT SYSTEM)
--- =============================================
-local function isCandyEventEnabled()
-    if _G.enableCandyEvent ~= nil then
-        return _G.enableCandyEvent == true
-    end
-    if _G.autoCandyEvent ~= nil then
-        return _G.autoCandyEvent == true
-    end
-    return true
-end
-
-local function isHitboxExpanderEnabled()
-    if _G.expandCandyHitbox ~= nil then
-        return _G.expandCandyHitbox == true
-    end
-    if _G.autoCandyEvent ~= nil then
-        return _G.autoCandyEvent == true
-    end
-    return true
-end
-
-local function isWaypointNavEnabled()
-    if _G.candyWaypointNav ~= nil then
-        return _G.candyWaypointNav == true
-    end
-    return true
-end
-
-local CANDY_HITBOX_SIZE = _G.candyHitboxSize or Vector3.new(200, 200, 200)
-local isCandyEventActive = false
-local expandedCandyObjects = setmetatable({}, { __mode = "k" })
-
-local function expandCandyHitbox(inst)
-    if not isHitboxExpanderEnabled() or not inst or not inst.Parent then return end
-    if not isCandyItem(inst) then return end
-    if expandedCandyObjects[inst] then return end
-
-    pcall(function()
-        local targetSize = _G.candyHitboxSize or CANDY_HITBOX_SIZE
-        local partsExpanded = 0
-        if inst:IsA("BasePart") then
-            inst.CanCollide = false
-            inst.CanTouch = true
-            inst.CanQuery = true
-            inst.CastShadow = false
-            inst.Transparency = 0.5
-            if inst.Size ~= targetSize then
-                inst.Size = targetSize
-            end
-            partsExpanded = partsExpanded + 1
-        elseif inst:IsA("Model") then
-            for _, p in ipairs(inst:GetDescendants()) do
-                if p:IsA("BasePart") then
-                    p.CanCollide = false
-                    p.CanTouch = true
-                    p.CanQuery = true
-                    p.CastShadow = false
-                    p.Transparency = 0.5
-                    if p.Size ~= targetSize then
-                        p.Size = targetSize
-                    end
-                    partsExpanded = partsExpanded + 1
-                end
-            end
-        end
-        if partsExpanded > 0 then
-            expandedCandyObjects[inst] = true
-            logConsole(string.format("🍬 [CANDY HITBOX] '%s' (%d part) berhasil diperbesar ke 200 studs!", inst.Name, partsExpanded))
-        end
-    end)
-end
-
--- Pemindai semua permen di Debris
-local function scanAndExpandAllCandies()
-    if not isHitboxExpanderEnabled() then return end
-
-    -- Bersihkan cache item yang sudah musnah
-    for obj, _ in pairs(expandedCandyObjects) do
-        if not obj or not obj.Parent then
-            expandedCandyObjects[obj] = nil
-        end
-    end
-
-    local debris = workspace:FindFirstChild("Debris")
-    if debris then
-        for _, child in ipairs(debris:GetChildren()) do
-            if isCandyItem(child) then
-                expandCandyHitbox(child)
-            end
-        end
-    end
-end
-
--- Listener Debris (Menangkap permen baru instan di folder Debris)
-local function hookDebrisListener(debrisFolder)
-    if not debrisFolder then return end
-    debrisFolder.ChildAdded:Connect(function(child)
-        task.defer(function()
-            if not child or not child.Parent then return end
-            if isHitboxExpanderEnabled() and isCandyItem(child) then
-                expandCandyHitbox(child)
+        toggleBtn.MouseButton1Click:Connect(function()
+            local newVal = not propValue
+            local ok = pcall(function() inst[propName] = newVal end)
+            if ok then
+                propValue = newVal
+                toggleBtn.BackgroundColor3 = propValue and THEME.AccentEmerald or Color3.fromRGB(60, 65, 80)
+                toggleBtn.Text = propValue and "TRUE" or "FALSE"
+                showToast("⚙️ Property", string.format("%s = %s", propName, tostring(newVal)), THEME.AccentEmerald)
             end
         end)
-    end)
-end
-
-local initialDebris = workspace:FindFirstChild("Debris")
-if initialDebris then
-    hookDebrisListener(initialDebris)
-end
-
-workspace.ChildAdded:Connect(function(child)
-    if child.Name == "Debris" then
-        task.defer(function() hookDebrisListener(child) end)
-    end
-end)
-
--- Background Scanner Loop Candy (tiap 0.8 detik sebagai backup listener)
-task.spawn(function()
-    while task.wait(0.8) do
-        pcall(scanAndExpandAllCandies)
-    end
-end)
-
--- Scan awal saat script pertama kali jalan
-task.spawn(function()
-    task.wait(0.1)
-    pcall(scanAndExpandAllCandies)
-end)
-
--- =============================================
--- 🔍 PEMERIKSA STATUS BARANG DI DEBRIS
--- =============================================
-local function getDebrisItemPosition(inst)
-    if not inst or not inst.Parent then return nil end
-    local ok, pos = pcall(function()
-        if inst:IsA("BasePart") then
-            return inst.Position
-        elseif inst:IsA("Model") then
-            -- 1. Prioritaskan Handle (Part utama item/tool permen)
-            local handle = inst:FindFirstChild("Handle")
-            if handle and handle:IsA("BasePart") then
-                return handle.Position
-            end
-
-            -- 2. Prioritaskan Root (Part basis/weld root model)
-            local root = inst:FindFirstChild("Root")
-            if root and root:IsA("BasePart") then
-                return root.Position
-            end
-
-            -- 3. PrimaryPart jika telah diset oleh server
-            if inst.PrimaryPart then
-                return inst.PrimaryPart.Position
-            end
-
-            -- 4. Fallback ke BasePart pertama atau GetPivot
-            local bp = inst:FindFirstChildWhichIsA("BasePart", true)
-            if bp then return bp.Position end
-            return inst:GetPivot().Position
-        end
-        return nil
-    end)
-    return (ok and pos) or nil
-end
-
--- 🍬 EKSEKUTOR SENTUHAN INSTAN (FIRETOUCHINTEREST SUPPORT)
-local function touchCandyItem(inst, charHrp)
-    if not _G.enableFireTouch then return end
-    if not inst or not charHrp then return end
-    pcall(function()
-        if firetouchinterest then
-            if inst:IsA("BasePart") then
-                firetouchinterest(charHrp, inst, 0)
-                task.wait()
-                firetouchinterest(charHrp, inst, 1)
-            elseif inst:IsA("Model") then
-                -- Sentuh part utama (Handle & Root) terlebih dahulu secara presisi
-                local handle = inst:FindFirstChild("Handle")
-                if handle and handle:IsA("BasePart") then
-                    firetouchinterest(charHrp, handle, 0)
-                    task.wait()
-                    firetouchinterest(charHrp, handle, 1)
-                end
-
-                local root = inst:FindFirstChild("Root")
-                if root and root:IsA("BasePart") then
-                    firetouchinterest(charHrp, root, 0)
-                    task.wait()
-                    firetouchinterest(charHrp, root, 1)
-                end
-
-                if inst.PrimaryPart and inst.PrimaryPart ~= handle and inst.PrimaryPart ~= root then
-                    firetouchinterest(charHrp, inst.PrimaryPart, 0)
-                    task.wait()
-                    firetouchinterest(charHrp, inst.PrimaryPart, 1)
-                end
-
-                for _, p in ipairs(inst:GetChildren()) do
-                    if p:IsA("BasePart") and p ~= handle and p ~= root then
-                        firetouchinterest(charHrp, p, 0)
-                        task.wait()
-                        firetouchinterest(charHrp, p, 1)
-                    end
-                end
-            end
-        end
-    end)
-end
-
--- Mencari apakah barang/permen di dekat koordinat waypoint masih ada di folder Debris
--- Mengembalikan: itemInstance (jika masih ada), jarakHorizontal, posisiItem
-local function findItemInDebrisNear(pos, maxDist)
-    local debris = workspace:FindFirstChild("Debris")
-    if not debris or not pos then return nil, math.huge, nil end
-    local searchDist = maxDist or 80
-    local closestItem = nil
-    local closestDist = math.huge
-    local closestPos = nil
-
-    for _, child in ipairs(debris:GetChildren()) do
-        if isCandyItem(child) then
-            local p = getDebrisItemPosition(child)
-            if p then
-                local d = (Vector3.new(pos.X, 0, pos.Z) - Vector3.new(p.X, 0, p.Z)).Magnitude
-                if d <= searchDist and d < closestDist then
-                    closestDist = d
-                    closestItem = child
-                    closestPos = p
-                end
-            end
-        end
-    end
-
-    return closestItem, closestDist, closestPos
-end
-
--- =============================================
--- 🧠 VARIABEL STATE MACHINE & POSISI
--- =============================================
-local stateTimer = 0               
-local globalStuckTimer = 0         
-local mutationCount = 0            
-local lastRewardDesc = "None"
-local kickRetryCount = 0
-local MAX_KICK_RETRIES = 2
-local kickAcceptedByServer = false
-local safeZone = Vector3.new(698.030701, 3.298559, 233.707077)
-local safeZoneCFrame = CFrame.new(698.030701, 3.298559, 233.707077, -0.061024, -0.000000, 0.998136, -0.000000, 1.000000, 0.000000, -0.998136, -0.000000, -0.061024)
-
--- Variabel Navigasi Permen & Anti-Stuck Watchdog
-local activeCandyWaypoints = {}
-local currentWaypointTarget = nil
-local waypointStuckTimer = 0
-local emptyCandySpawnReceived = false
-local lastRewardBrainrotName = ""
-
--- Teleportasi Instan ke Safe Zone (Dipakai saat Kick / Idle / Respawn / Timeout)
-local function teleportToSafeZone(hrp)
-    if not hrp then return end
-    pcall(function()
-        hrp.AssemblyLinearVelocity = Vector3.zero
-        hrp.AssemblyAngularVelocity = Vector3.zero
-        hrp.CFrame = safeZoneCFrame
-    end)
-end
-
-local cachedWeatherService = nil
-local function getWeatherService()
-    if cachedWeatherService ~= nil then return cachedWeatherService end
-    local ok, res = pcall(function()
-        local svLoader = ReplicatedStorage:FindFirstChild("Modules") and ReplicatedStorage.Modules:FindFirstChild("ServicesLoader")
-        if svLoader and svLoader:FindFirstChild("WeatherService_Client") then
-            return require(svLoader.WeatherService_Client)
-        end
-        return nil
-    end)
-    if ok and res then
-        cachedWeatherService = res
-        return res
-    end
-    return nil
-end
-
-local function isWeatherServiceCandyActive()
-    local ws = getWeatherService()
-    if ws and type(ws.Events) == "table" then
-        local now = os.time()
-        for eName, endTs in pairs(ws.Events) do
-            if string.find(string.lower(tostring(eName)), "candy") then
-                if type(endTs) ~= "number" or endTs > now then
-                    return true
-                end
-            end
-        end
-    end
-    return false
-end
-
-local function checkCandyEventActive()
-    if isCandyEventActive then return true end
-    if isWeatherServiceCandyActive() then
-        isCandyEventActive = true
-        return true
-    end
-    -- HANYA cek folder Debris (JANGAN cek workspace karena ada objek dekorasi map statis)
-    local debris = workspace:FindFirstChild("Debris")
-    if debris then
-        for _, child in ipairs(debris:GetChildren()) do
-            if isCandyItem(child) then
-                isCandyEventActive = true
-                return true
-            end
-        end
-    end
-    return false
-end
-
-local function isCandyEventOngoing()
-    if not isCandyEventEnabled() then return false end
-    if isCandyEventActive then return true end
-    if #activeCandyWaypoints > 0 then return true end
-    if isWeatherServiceCandyActive() then
-        isCandyEventActive = true
-        return true
-    end
-    if checkCandyEventActive() then
-        isCandyEventActive = true
-        return true
-    end
-    return false
-end
-
--- Pengecekan apakah ada Permen Nyata di Map (Waypoints aktif dari rev_candySpawn atau item di Debris)
-local function hasCandyOnMap()
-    if #activeCandyWaypoints > 0 then return true end
-
-    -- Cek Debris folder (HANYA objek di Debris, JANGAN cek workspace karena ada objek map statis)
-    local debris = workspace:FindFirstChild("Debris")
-    if debris then
-        for _, child in ipairs(debris:GetChildren()) do
-            if isCandyItem(child) then
-                return true
-            end
-        end
-    end
-
-    return false
-end
-
--- Pengecekan Event Override: HANYA bypass whitelist jika:
--- 1. Candy Event aktif
--- 2. rev_candySpawn TIDAK mengirim {} (empty)
--- 3. Ada permen nyata (waypoint aktif atau item di Debris)
-local function shouldBypassWhitelist()
-    if not isCandyEventEnabled() then return false end
-    if not isCandyEventOngoing() then return false end
-    if emptyCandySpawnReceived then return false end
-    if #activeCandyWaypoints > 0 then return true end
-    if hasCandyOnMap() then return true end
-    return false
-end
-
--- Validasi Brainrot Whitelist
-local function isBrainrotWhitelisted(name)
-    if not _G.useBrainrotWhitelist then return true end
-    if not _G.brainrotWhitelist or #_G.brainrotWhitelist == 0 then return true end
-    if not name or name == "" then return false end
-
-    local lowerName = string.lower(tostring(name))
-    for _, wlName in ipairs(_G.brainrotWhitelist) do
-        local cleanWl = string.lower(tostring(wlName))
-        if cleanWl ~= "" and (lowerName == cleanWl or string.find(lowerName, cleanWl, 1, true)) then
-            return true
-        end
-    end
-    return false
-end
-
-local function shouldKick()
-    if not _G.autoFarm then return false end
-    if _G.onlyCandyEvent then
-        return isCandyEventOngoing()
-    end
-    return true
-end
-
--- =============================================
--- 🛡️ ANTI AFK (MURNI TANPA KLIK APAPUN)
--- =============================================
-pcall(function()
-    if getconnections then
-        for _, conn in ipairs(getconnections(lp.Idled)) do
-            conn:Disable()
-        end
-    end
-end)
-
-lp.Idled:Connect(function()
-    pcall(function()
-        if getconnections then
-            for _, conn in ipairs(getconnections(lp.Idled)) do
-                conn:Disable()
-            end
-        end
-        if VirtualUser then
-            VirtualUser:CaptureController()
-            VirtualUser:ClickButton2(Vector2.new())
-        end
-    end)
-end)
-
--- =============================================
--- 📡 DAFTAR REMOTE NETWORK RESMI & AUTO-RESOLVER
--- =============================================
-local networkFolder = nil
-pcall(function()
-    local shared = ReplicatedStorage:FindFirstChild("Shared") or ReplicatedStorage:WaitForChild("Shared", 3)
-    local packages = shared and (shared:FindFirstChild("Packages") or shared:WaitForChild("Packages", 3))
-    networkFolder = packages and (packages:FindFirstChild("Network") or packages:WaitForChild("Network", 3))
-end)
-
-local function findRemote(name, className)
-    if networkFolder then
-        local r = networkFolder:FindFirstChild(name)
-        if r and (not className or r:IsA(className)) then return r end
-    end
-    for _, r in ipairs(ReplicatedStorage:GetDescendants()) do
-        if r.Name == name and (not className or r:IsA(className)) then
-            return r
-        end
-    end
-    return nil
-end
-
-local ref_KickEvent = findRemote("ref_KickEvent", "RemoteFunction")
-local kickRemote = findRemote("rev_KickEvent", "RemoteEvent")
-local rev_kickPhase2 = findRemote("rev_kickPhase2", "RemoteEvent")
-local rev_Collected = findRemote("rev_Collected", "RemoteEvent")
-local rev_KickEventEnded = findRemote("rev_KickEventEnded", "RemoteEvent")
-local rev_AddedWeather = findRemote("rev_AddedWeather", "RemoteEvent")
-local rev_RemovedWeather = findRemote("rev_RemovedWeather", "RemoteEvent")
-local rev_candySpawn = findRemote("rev_candySpawn", "RemoteEvent")
-
-local ref_B_SellAll = findRemote("ref_B_SellAll", "RemoteFunction")
-local rev_WORLD_TP = findRemote("rev_WORLD_TP", "RemoteEvent")
-
--- =============================================
--- 🌍 AUTO WORLD TELEPORT (1X SAAT BARU EXECUTE)
--- =============================================
-task.spawn(function()
-    if _G.autoWorldTeleport ~= false then
-        pcall(function()
-            local targetWorld = (type(_G.targetWorld) == "number") and _G.targetWorld or 2
-            local tpRemote = rev_WORLD_TP or findRemote("rev_WORLD_TP", "RemoteEvent")
-            if not tpRemote then
-                local shared = ReplicatedStorage:FindFirstChild("Shared")
-                local packages = shared and shared:FindFirstChild("Packages")
-                local net = packages and packages:FindFirstChild("Network")
-                tpRemote = net and net:FindFirstChild("rev_WORLD_TP")
-            end
-
-            if tpRemote then
-                tpRemote:FireServer(targetWorld)
-                logConsole(string.format("🌍 [WORLD TP] rev_WORLD_TP:FireServer(%s) berhasil dieksekusi 1x!", tostring(targetWorld)))
-            else
-                game:GetService("ReplicatedStorage").Shared.Packages.Network.rev_WORLD_TP:FireServer(targetWorld)
-                logConsole(string.format("🌍 [WORLD TP] rev_WORLD_TP:FireServer(%s) dipanggil langsung!", tostring(targetWorld)))
-            end
-        end)
-    end
-end)
-
--- =============================================
--- 💰 AUTO SELL ALL (SETIAP 5 DETIK)
--- =============================================
-task.spawn(function()
-    while task.wait(5) do
-        if not _G.autoFarm or not _G.autoSellAll then continue end
-        pcall(function()
-            local sellRemote = ref_B_SellAll or (networkFolder and networkFolder:FindFirstChild("ref_B_SellAll"))
-            if sellRemote then
-                sellRemote:InvokeServer()
-            end
-        end)
-    end
-end)
-
--- =============================================
--- 🎮 LAPIS 1: ULTRA-LIGHTWEIGHT CONTROLLER HOOK (ZERO-FREEZE & NON-BLOCKING)
--- =============================================
-local cachedGameController = nil
-
-local function getGameController()
-    if cachedGameController and type(cachedGameController.Kick) == "function" then
-        return cachedGameController
-    end
-
-    if getgc then
-        local ok, tables = pcall(function() return getgc(true) end)
-        if ok and type(tables) == "table" then
-            for _, item in ipairs(tables) do
-                if type(item) == "table" then
-                    if rawget(item, "CanKick") ~= nil and type(rawget(item, "Kick")) == "function" then
-                        cachedGameController = item
-                        return item
-                    end
-                end
-            end
-        end
-    end
-
-    return nil
-end
-
--- Pre-fetch controller saat script pertama kali dimuat
-task.spawn(function()
-    task.wait(1)
-    getGameController()
-end)
-
--- =============================================
--- 📡 LISTENER EVENT SERVER (REAL-TIME RECEPTOR)
--- =============================================
-local phase2Fired = false
-local collectedFired = false
-local kickEndedFired = false
-
-local function setupServerEventListeners()
-    local p2 = rev_kickPhase2 or findRemote("rev_kickPhase2", "RemoteEvent")
-    if p2 then
-        p2.OnClientEvent:Connect(function(rewardTable, ...)
-            phase2Fired = true
-            pcall(function()
-                if type(rewardTable) == "table" and rewardTable[1] then
-                    lastRewardBrainrotName = tostring(rewardTable[1].Name or "")
-                    local mutation = tostring(rewardTable[1].Mutation or "Normal")
-                    lastRewardDesc = string.format("%s [%s]", lastRewardBrainrotName ~= "" and lastRewardBrainrotName or "Brainrot", mutation)
-                    logConsole(string.format("🎉 Gacha Reward Masuk: %s", lastRewardDesc))
-                elseif type(rewardTable) == "table" and rewardTable.Name then
-                    lastRewardBrainrotName = tostring(rewardTable.Name or "")
-                    lastRewardDesc = lastRewardBrainrotName
-                    logConsole(string.format("🎉 Gacha Reward Masuk: %s", lastRewardDesc))
-                end
-            end)
-        end)
-    end
-
-    local col = rev_Collected or findRemote("rev_Collected", "RemoteEvent")
-    if col then
-        col.OnClientEvent:Connect(function(...)
-            collectedFired = true
-            logConsole("📥 [SERVER EVENT] rev_Collected diterima!")
-            -- 🛡️ SECURITY TELEPORT: Jika reward sudah collected, segera teleport ke Safe Zone
-            pcall(function()
-                local char = lp.Character
-                local hrp = char and char:FindFirstChild("HumanoidRootPart")
-                if hrp and (targetAction == "WalkToSafeZone" or targetAction == "StayStillUntilDead" or targetAction == "WaitingForCollected") then
-                    teleportToSafeZone(hrp)
-                end
-            end)
-        end)
-    end
-
-    -- 🛡️ SECURITY LISTENER: Deteksi Teks / Pop-up "Collected" di PlayerGui
-    pcall(function()
-        local pGui = lp:FindFirstChild("PlayerGui") or lp:WaitForChild("PlayerGui", 2)
-        if pGui then
-            pGui.DescendantAdded:Connect(function(desc)
-                if desc:IsA("TextLabel") or desc:IsA("TextButton") then
-                    local txt = string.lower(tostring(desc.Text or ""))
-                    if string.find(txt, "collected") then
-                        collectedFired = true
-                        logConsole("📥 [UI SECURITY] Teks 'Collected' terdeteksi di PlayerGui! Memicu security teleport...")
-                        pcall(function()
-                            local char = lp.Character
-                            local hrp = char and char:FindFirstChild("HumanoidRootPart")
-                            if hrp and (targetAction == "WalkToSafeZone" or targetAction == "StayStillUntilDead" or targetAction == "WaitingForCollected") then
-                                teleportToSafeZone(hrp)
-                            end
-                        end)
-                    end
-                end
-            end)
-        end
-    end)
-
-    local ended = rev_KickEventEnded or findRemote("rev_KickEventEnded", "RemoteEvent")
-    if ended then
-        ended.OnClientEvent:Connect(function(...)
-            kickEndedFired = true
-        end)
-    end
-
-    local addW = rev_AddedWeather or findRemote("rev_AddedWeather", "RemoteEvent")
-    if addW then
-        addW.OnClientEvent:Connect(function(weatherType, ...)
-            local wStr = string.lower(tostring(weatherType or ""))
-            if string.find(wStr, "candy") then
-                if isCandyEventEnabled() then
-                    isCandyEventActive = true
-                    logConsole("🍬 Event Cuaca: CANDY EVENT AKTIF! Memulai Candy Hitbox Expander & Auto Navigator...")
-                end
-            end
-        end)
-    end
-
-    local remW = rev_RemovedWeather or findRemote("rev_RemovedWeather", "RemoteEvent")
-    if remW then
-        remW.OnClientEvent:Connect(function(weatherType, ...)
-            local wStr = string.lower(tostring(weatherType or ""))
-            if string.find(wStr, "candy") then
-                isCandyEventActive = false
-                activeCandyWaypoints = {}
-                emptyCandySpawnReceived = false
-                logConsole("☁️ Event Cuaca: Candy Event Selesai. Standby di Safe Zone...")
-            end
-        end)
-    end
-
-    -- Listener rev_candySpawn (Koordinat Permen & Empty Spawn Detector)
-    local candyRemote = rev_candySpawn or findRemote("rev_candySpawn", "RemoteEvent")
-    if candyRemote then
-        candyRemote.OnClientEvent:Connect(function(spawnData, ...)
-            pcall(function()
-                kickAcceptedByServer = true
-                if not isCandyEventEnabled() then return end
-                logConsole("🍬 [EVENT REMOTE] rev_candySpawn diterima!")
-                if type(spawnData) == "table" then
-                    local count = 0
-                    local newWaypoints = {}
-                    for _, item in pairs(spawnData) do
-                        count = count + 1
-                        if type(item) == "table" then
-                            if item.Name then
-                                registerCandyName(item.Name)
-                            end
-                            if item.Position and typeof(item.Position) == "Vector3" then
-                                table.insert(newWaypoints, item.Position)
-                            elseif item.CFrame and typeof(item.CFrame) == "CFrame" then
-                                table.insert(newWaypoints, item.CFrame.Position)
-                            end
-                        elseif typeof(item) == "Vector3" then
-                            table.insert(newWaypoints, item)
-                        end
-                    end
-
-                    if count == 0 or #newWaypoints == 0 then
-                        emptyCandySpawnReceived = true
-                        activeCandyWaypoints = {}
-                        logConsole("⚠️ [CANDY SPAWN] Data kosong ({}) diterima! Tidak ada permen yang spawn.")
-                    else
-                        emptyCandySpawnReceived = false
-                        activeCandyWaypoints = newWaypoints
-                        logConsole(string.format("🍬 [CANDY SPAWN] Berhasil mendeteksi %d titik permen untuk waypoint navigasi!", #activeCandyWaypoints))
-                    end
-                elseif spawnData == nil then
-                    emptyCandySpawnReceived = true
-                    activeCandyWaypoints = {}
-                    logConsole("⚠️ [CANDY SPAWN] Data nil diterima! Tidak ada permen yang spawn.")
-                end
-            end)
-        end)
-    end
-end
-setupServerEventListeners()
-
--- =============================================
--- 🚀 FUNGSI EKSEKUSI TENDANGAN REINFORCED (LAPIS 1 + LAPIS 3 NETWORK)
--- =============================================
-local function executeKick()
-    local timestamp = nil
-    pcall(function() timestamp = workspace:GetServerTimeNow() end)
-    if not timestamp or type(timestamp) ~= "number" or timestamp <= 0 then
-        timestamp = tick()
-    end
-
-    logConsole("⚡ Mengeksekusi Kick (Lapis 1 Controller Hook + Lapis 3 Network)...")
-
-    -- 🎮 LAPIS 1: Direct GameController Hook (Buka Kunci Cooldown & Panggil Kick Asli di Game)
-    pcall(function()
-        local controller = getGameController()
-        if controller then
-            if controller.UnblockKick then pcall(function() controller:UnblockKick() end) end
-            if controller.ResetCooldown then pcall(function() controller:ResetCooldown() end) end
-            controller.CanKick = true
-            if controller.InGame ~= nil then controller.InGame = false end
-            if controller.Status ~= nil and controller.Status == "InKick" then controller.Status = "Lobby" end
-            pcall(function() controller:Kick(1, 1) end)
-        end
-    end)
-
-    -- 📡 LAPIS 3: Network Remote Invocation (Jalur Resmi Server Non-Blocking & Konfirmasi Sukses)
-    task.spawn(function()
-        pcall(function()
-            local targetRemote = ref_KickEvent or (networkFolder and networkFolder:FindFirstChild("ref_KickEvent"))
-            if not targetRemote then
-                for _, r in pairs(ReplicatedStorage:GetDescendants()) do
-                    if r:IsA("RemoteFunction") and r.Name == "ref_KickEvent" then
-                        targetRemote = r
-                        ref_KickEvent = r
-                        break
-                    end
-                end
-            end
-
-            if targetRemote and targetRemote:IsA("RemoteFunction") then
-                local res = targetRemote:InvokeServer(1, 1, timestamp)
-                if res == true or (type(res) == "table" and res[1] == true) then
-                    kickAcceptedByServer = true
-                    logConsole("✅ [SERVER CONFIRMED] Tendangan resmi terdaftar di server! Bola sedang terbang...")
-                end
-            end
-
-            local fallbackEvent = kickRemote or (networkFolder and networkFolder:FindFirstChild("rev_KickEvent"))
-            if fallbackEvent and fallbackEvent:IsA("RemoteEvent") then
-                fallbackEvent:FireServer(1, 1, timestamp)
-            end
-        end)
-    end)
-end
-
--- =============================================
--- ⚙️ MAIN LOOP (STATE MACHINE AUTO FARM - CRASH-PROOF & ADAPTIVE FPS)
--- =============================================
-task.spawn(function()
-    while task.wait(0.05) do
-        if not _G.autoFarm then continue end
-
-        local loopSuccess, loopError = pcall(function()
-            local char = lp.Character
-            -- Proteksi stale character / karakter yang belum siap di Workspace
-            if not char or not char.Parent or not char:IsDescendantOf(workspace) then return end
-
-            local hum = char:FindFirstChild("Humanoid")
-            local hrp = char:FindFirstChild("HumanoidRootPart")
-            if not hum or not hrp or not hrp.Parent then return end 
-
-            -- [POIN 6] Adaptive FPS Cap (15 FPS saat diam/nunggu, 60 FPS saat jalan aktif)
-            if targetAction == "WalkToSafeZone" then
-                setAdaptiveFps(_G.fpsCap or 60)
-            else
-                setAdaptiveFps(15)
-            end
-
-            -- [ PENDETEKSI MATI & RESPAWN ]
-            if hum.Health <= 0 then
-                targetAction = "WaitingRespawn"
-                lastAction = "WaitingRespawn"
-                globalStuckTimer = 0
-                kickRetryCount = 0
-                kickAcceptedByServer = false
-                activeCandyWaypoints = {}
-                emptyCandySpawnReceived = false
-                return 
-            end
-
-            if targetAction == "WaitingRespawn" and hum.Health > 0 then
-                -- RESPAWN SELESAI: LANGSUNG TELEPORTASI KE SAFE ZONE UNTUK KICK!
-                teleportToSafeZone(hrp)
-                targetAction = "Idle"
-                lastAction = "Idle"
-                kickRetryCount = 0
-                kickAcceptedByServer = false
-                stateTimer = 0
-                activeCandyWaypoints = {}
-                emptyCandySpawnReceived = false
-                lastRewardBrainrotName = ""
-                logConsole("Karakter Respawn -> Teleportasi instan ke Safe Zone untuk Kick...")
-            end
-
-            -- [ PENGATUR WAKTU & FAILSAFE RESET ]
-            if targetAction ~= lastAction then
-                globalStuckTimer = 0
-                stateTimer = 0 
-                lastAction = targetAction
-                logConsole("Transisi Fase -> " .. tostring(targetAction))
-            else
-                globalStuckTimer = globalStuckTimer + 0.05
-                stateTimer = stateTimer + 0.05 
-                
-                local maxTimeout = _G.failsafeTimeout or 25
-                if globalStuckTimer >= maxTimeout and targetAction ~= "WalkToSafeZone" then
-                    globalStuckTimer = 0
-                    stateTimer = 0
-                    lastRewardBrainrotName = ""
-                    emptyCandySpawnReceived = false
-                    teleportToSafeZone(hrp)
-                    targetAction = "Idle"
-                    logConsole("🚨 Failsafe Triggered: Teleportasi reset ke Idle Safe Zone")
-                    return
-                end
-            end
-
-            local distToSafeZone = (hrp.Position - safeZone).Magnitude
-
-            -- [ FASE 1: IDLE / NENDANG DI SAFE ZONE (TELEPORTASI INSTAN JIKA JAUH) ]
-            if targetAction == "Idle" then
-                if distToSafeZone > 5 then
-                    teleportToSafeZone(hrp)
-                else
-                    if shouldKick() then
-                        local delayKick = (_G.kickDelay and _G.kickDelay > 0) and _G.kickDelay or 0.5
-                        if stateTimer >= delayKick then
-                            pcall(function()
-                                hrp.AssemblyLinearVelocity = Vector3.zero
-                                hrp.AssemblyAngularVelocity = Vector3.zero
-                            end)
-                            kickRetryCount = 0
-                            kickAcceptedByServer = false
-                            phase2Fired = false
-                            collectedFired = false
-                            kickEndedFired = false
-                            emptyCandySpawnReceived = false
-                            lastRewardBrainrotName = ""
-                            executeKick()
-                            targetAction = "WaitingForPhase2"
-                        end
-                    else
-                        task.wait(0.1)
-                    end
-                end
-
-            -- [ FASE 2: NUNGGU PHASE 2 DARI SERVER / DETEKSI EMPTY SPAWN / WHITELIST CHECK ]
-            elseif targetAction == "WaitingForPhase2" then
-                if phase2Fired or collectedFired or kickEndedFired then
-                    phase2Fired = false
-                    kickRetryCount = 0
-                    kickAcceptedByServer = false
-
-                    -- Pengecekan Whitelist & Candy Override
-                    local isWhitelisted = _G.useBrainrotWhitelist and isBrainrotWhitelisted(lastRewardBrainrotName)
-                    local bypassWl = shouldBypassWhitelist()
-
-                    local isAllowed = false
-                    if bypassWl then
-                        isAllowed = true
-                    elseif isWhitelisted then
-                        isAllowed = true
-                    elseif not _G.useBrainrotWhitelist and not emptyCandySpawnReceived and (not _G.onlyCandyEvent or hasCandyOnMap()) then
-                        isAllowed = true
-                    end
-
-                    if isAllowed then
-                        targetAction = "WalkToSafeZone"
-                        if bypassWl and _G.useBrainrotWhitelist and not isWhitelisted then
-                            logConsole(string.format("🍬 [EVENT OVERRIDE] Ada permen di map! Brainrot '%s' tetap dibawa ke Safe Zone sembari ambil permen...", tostring(lastRewardBrainrotName)))
-                        else
-                            logConsole(string.format("✅ [PASSED] Membawa Brainrot '%s' Menuju Safe Zone", tostring(lastRewardBrainrotName)))
-                        end
-                    else
-                        targetAction = "StayStillUntilDead"
-                        if emptyCandySpawnReceived then
-                            logConsole(string.format("🛑 [EMPTY CANDY SPAWN] Koordinat permen kosong ({}) & Brainrot '%s' bukan whitelist! Bot diam di tempat...", tostring(lastRewardBrainrotName)))
-                        elseif not hasCandyOnMap() and isCandyEventOngoing() then
-                            logConsole(string.format("🛑 [NO CANDY ON MAP] Gada permen yang spawn di map & Brainrot '%s' bukan whitelist! Bot diam di tempat...", tostring(lastRewardBrainrotName)))
-                        else
-                            logConsole(string.format("🛑 [WHITELIST REJECTED] Brainrot '%s' TIDAK ada di whitelist! Bot diam di tempat (tidak dibawa ke safe zone)...", tostring(lastRewardBrainrotName)))
-                        end
-                    end
-
-                -- Kondisi 1: Kick belum terdaftar sama sekali di server setelah 3 detik -> Retry
-                elseif not kickAcceptedByServer and stateTimer >= 3.0 and not phase2Fired and not collectedFired and not kickEndedFired then
-                    if kickRetryCount < MAX_KICK_RETRIES then
-                        kickRetryCount = kickRetryCount + 1
-                        stateTimer = 0
-                        logConsole(string.format("⚠️ [RETRY] Kick belum terdaftar di server, mencoba kick ulang #%d/%d...", kickRetryCount, MAX_KICK_RETRIES))
-                        executeKick()
-                    else
-                        logConsole(string.format("🚨 [FAILSAFE] Gagal respon setelah %d kali retry! Memaksa Respawn/Reset Karakter...", MAX_KICK_RETRIES))
-                        kickRetryCount = 0
-                        kickAcceptedByServer = false
-                        stateTimer = 0
-                        targetAction = "WaitingRespawn"
-                        pcall(function()
-                            if hum then hum.Health = 0 end
-                            if char then char:BreakJoints() end
-                        end)
-                    end
-
-                -- Kondisi 2: Kick sudah diterima server (bola sedang terbang), tunggu hingga maksimal 20 detik
-                elseif stateTimer >= 20.0 then
-                    kickAcceptedByServer = false
-                    targetAction = "Idle"
-                    teleportToSafeZone(hrp)
-                    logConsole("🚨 Phase 2 Timeout (20s) -> Teleportasi reset ke Safe Zone")
-                end
-
-            -- [ FASE KHUSUS: DIAM DI TEMPAT SAMPAI MATI (JIKA CANDY SPAWN KOSONG {} ATAU TIDAK LOLOS WHITELIST) ]
-            elseif targetAction == "StayStillUntilDead" then
-                -- 🛡️ SECURITY CHECK: Jika reward ternyata ter-collect saat sedang diam, langsung teleport ke Safe Zone untuk kick!
-                if collectedFired then
-                    collectedFired = false
-                    teleportToSafeZone(hrp)
-                    mutationCount = mutationCount + 1
-                    phase2Fired = false
-                    kickRetryCount = 0
-                    kickAcceptedByServer = false
-                    activeCandyWaypoints = {}
-                    emptyCandySpawnReceived = false
-                    lastRewardBrainrotName = ""
-
-                    if shouldKick() then
-                        local delayKick = (_G.kickDelay and _G.kickDelay > 0) and _G.kickDelay or 0.5
-                        task.wait(delayKick)
-                        executeKick()
-                        targetAction = "WaitingForPhase2"
-                        logConsole(string.format("⚡ [COLLECTED SECURITY] Reward Collected saat diam! Teleport ke Safe Zone & Re-Kick (Jeda %.1fs)! Total: %d", delayKick, mutationCount))
-                    else
-                        targetAction = "Idle"
-                        logConsole(string.format("⚡ [COLLECTED SECURITY] Reward Collected saat diam! Standby di Safe Zone. Total: %d", mutationCount))
-                    end
-                    return
-                end
-
-                -- BOT MURNI DIAM DI TEMPAT SAMPAI MATI / AUTO-RESET (DILARANG JALAN KE SAFE ZONE!)
+    else
+        local valBox = Instance.new("TextBox")
+        valBox.Size = UDim2.new(0.56, -6, 0, 26)
+        valBox.Position = UDim2.new(0.44, 0, 0.5, -13)
+        valBox.BackgroundColor3 = THEME.BgCard
+        valBox.Font = Enum.Font.Code
+        valBox.Text = tostring(propValue)
+        valBox.TextColor3 = THEME.AccentCyan
+        valBox.TextSize = 10
+        valBox.ClearTextOnFocus = false
+        valBox.ZIndex = 114
+        valBox.Parent = row
+        local vbCorner = Instance.new("UICorner")
+        vbCorner.CornerRadius = UDim.new(0, 4)
+        vbCorner.Parent = valBox
+
+        valBox.FocusLost:Connect(function(enterPressed)
+            if enterPressed then
+                local txt = valBox.Text
                 pcall(function()
-                    hum:MoveTo(hrp.Position)
-                    hrp.AssemblyLinearVelocity = Vector3.zero
-                    hrp.AssemblyAngularVelocity = Vector3.zero
+                    if propType == "number" then
+                        inst[propName] = tonumber(txt) or inst[propName]
+                    elseif propType == "string" then
+                        inst[propName] = txt
+                    end
                 end)
+            end
+        end)
+    end
+end
 
-                -- Failsafe Auto-Reset: Jika dalam 3 detik karakter tidak mati sendiri, paksa respawn agar bisa teleport ke safe zone untuk kick berikutnya!
-                if stateTimer >= 3 then
-                    logConsole("💀 [AUTO-RESET] Bot diam 3s -> Memaksa respawn agar bisa kembali ke Safe Zone untuk kick berikutnya...")
-                    pcall(function()
-                        hum.Health = 0
-                        char:BreakJoints()
+updatePropertiesView = function(inst)
+    if not inst then return end
+    PropTitle.Text = string.format("⚙️ [%s] %s", inst.ClassName, inst.Name)
+
+    for _, c in ipairs(PropScroll:GetChildren()) do
+        if c:IsA("Frame") then c:Destroy() end
+    end
+
+    local COMMON_PROPS = {
+        "Name", "ClassName", "Parent",
+        "Position", "Size", "Orientation", "CFrame",
+        "Transparency", "Reflectance", "Material", "Color", "CastShadow",
+        "CanCollide", "Anchored", "CanTouch", "CanQuery", "Massless",
+        "Value", "WalkSpeed", "JumpPower", "Health", "MaxHealth",
+        "Enabled", "Visible", "Text", "SoundId", "Volume", "Playing"
+    }
+
+    for _, prop in ipairs(COMMON_PROPS) do
+        local ok, val = pcall(function() return inst[prop] end)
+        if ok and val ~= nil then
+            addPropertyRow(inst, prop, val, typeof(val))
+        end
+    end
+end
+
+-- ==============================================================================
+-- 📡 TAB 3: REAL-TIME REMOTE SPY & NETWORK CALLER
+-- ==============================================================================
+local RemoteSpyLogs = {}
+local isSpyPaused = false
+
+local RSHeader = Instance.new("Frame")
+RSHeader.Size = UDim2.new(1, 0, 0, 36)
+RSHeader.BackgroundColor3 = THEME.BgCard
+RSHeader.BorderSizePixel = 0
+RSHeader.ZIndex = 112
+RSHeader.Parent = RemoteSpyPanel
+
+local RSHCorner = Instance.new("UICorner")
+RSHCorner.CornerRadius = UDim.new(0, 8)
+RSHCorner.Parent = RSHeader
+
+local RSTitle = Instance.new("TextLabel")
+RSTitle.Size = UDim2.new(1, -120, 1, 0)
+RSTitle.Position = UDim2.new(0, 10, 0, 0)
+RSTitle.BackgroundTransparency = 1
+RSTitle.Font = Enum.Font.GothamBold
+RSTitle.Text = "📡 Network Traffic Logger (Hooking Active)"
+RSTitle.TextColor3 = THEME.TextPrimary
+RSTitle.TextSize = 12
+RSTitle.TextXAlignment = Enum.TextXAlignment.Left
+RSTitle.ZIndex = 113
+RSTitle.Parent = RSHeader
+
+local ClearSpyBtn = Instance.new("TextButton")
+ClearSpyBtn.Size = UDim2.new(0, 52, 0, 26)
+ClearSpyBtn.Position = UDim2.new(1, -114, 0, 5)
+ClearSpyBtn.BackgroundColor3 = THEME.BgInput
+ClearSpyBtn.Font = Enum.Font.GothamBold
+ClearSpyBtn.Text = "Clear"
+ClearSpyBtn.TextColor3 = THEME.TextSecondary
+ClearSpyBtn.TextSize = 10
+ClearSpyBtn.ZIndex = 114
+ClearSpyBtn.Parent = RSHeader
+local CSBCorner = Instance.new("UICorner")
+CSBCorner.CornerRadius = UDim.new(0, 5)
+CSBCorner.Parent = ClearSpyBtn
+
+local PauseSpyBtn = Instance.new("TextButton")
+PauseSpyBtn.Size = UDim2.new(0, 52, 0, 26)
+PauseSpyBtn.Position = UDim2.new(1, -58, 0, 5)
+PauseSpyBtn.BackgroundColor3 = THEME.BgInput
+PauseSpyBtn.Font = Enum.Font.GothamBold
+PauseSpyBtn.Text = "Pause"
+PauseSpyBtn.TextColor3 = THEME.AccentCyan
+PauseSpyBtn.TextSize = 10
+PauseSpyBtn.ZIndex = 114
+PauseSpyBtn.Parent = RSHeader
+local PSBCorner = Instance.new("UICorner")
+PSBCorner.CornerRadius = UDim.new(0, 5)
+PSBCorner.Parent = PauseSpyBtn
+
+local SpyScroll = Instance.new("ScrollingFrame")
+SpyScroll.Size = UDim2.new(1, 0, 1, -44)
+SpyScroll.Position = UDim2.new(0, 0, 0, 44)
+SpyScroll.BackgroundColor3 = THEME.BgCard
+SpyScroll.BorderSizePixel = 0
+SpyScroll.ScrollBarThickness = 5
+SpyScroll.ScrollBarImageColor3 = THEME.BorderSubtle
+SpyScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+SpyScroll.ZIndex = 112
+SpyScroll.Parent = RemoteSpyPanel
+
+local SpyCorner = Instance.new("UICorner")
+SpyCorner.CornerRadius = UDim.new(0, 8)
+SpyCorner.Parent = SpyScroll
+
+local SpyLayout = Instance.new("UIListLayout")
+SpyLayout.SortOrder = Enum.SortOrder.LayoutOrder
+SpyLayout.Padding = UDim.new(0, 3)
+SpyLayout.Parent = SpyScroll
+
+SpyLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    SpyScroll.CanvasSize = UDim2.new(0, 0, 0, SpyLayout.AbsoluteContentSize.Y + 12)
+end)
+
+local function serializeValue(val)
+    local t = typeof(val)
+    if t == "string" then
+        return string.format("%q", val)
+    elseif t == "Vector3" then
+        return string.format("Vector3.new(%.2f, %.2f, %.2f)", val.X, val.Y, val.Z)
+    elseif t == "CFrame" then
+        return string.format("CFrame.new(%.2f, %.2f, %.2f)", val.Position.X, val.Position.Y, val.Position.Z)
+    elseif t == "Instance" then
+        return getInstancePath(val)
+    elseif t == "table" then
+        return "{...}"
+    else
+        return tostring(val)
+    end
+end
+
+local function addRemoteLog(method, remoteInst, args)
+    if isSpyPaused or not remoteInst then return end
+
+    local timeStr = os.date("%X")
+    local row = Instance.new("Frame")
+    row.Size = UDim2.new(1, -6, 0, 44)
+    row.BackgroundColor3 = THEME.BgInput
+    row.BorderSizePixel = 0
+    row.ZIndex = 113
+    row.Parent = SpyScroll
+
+    local rCorner = Instance.new("UICorner")
+    rCorner.CornerRadius = UDim.new(0, 6)
+    rCorner.Parent = row
+
+    local tag = Instance.new("TextLabel")
+    tag.Size = UDim2.new(0, 64, 0, 18)
+    tag.Position = UDim2.new(0, 6, 0, 5)
+    tag.BackgroundColor3 = (method == "InvokeServer") and THEME.AccentPurple or THEME.AccentCyan
+    tag.Font = Enum.Font.GothamBold
+    tag.Text = (method == "InvokeServer") and "INVOKE" or "FIRE"
+    tag.TextColor3 = Color3.new(1, 1, 1)
+    tag.TextSize = 9
+    tag.ZIndex = 114
+    tag.Parent = row
+    local tagCorner = Instance.new("UICorner")
+    tagCorner.CornerRadius = UDim.new(0, 4)
+    tagCorner.Parent = tag
+
+    local titleLbl = Instance.new("TextLabel")
+    titleLbl.Size = UDim2.new(1, -170, 0, 18)
+    titleLbl.Position = UDim2.new(0, 76, 0, 5)
+    titleLbl.BackgroundTransparency = 1
+    titleLbl.Font = Enum.Font.GothamBold
+    titleLbl.Text = string.format("%s (%s)", remoteInst.Name, timeStr)
+    titleLbl.TextColor3 = THEME.TextPrimary
+    titleLbl.TextSize = 11
+    titleLbl.TextXAlignment = Enum.TextXAlignment.Left
+    titleLbl.TextTruncate = Enum.TextTruncate.AtEnd
+    titleLbl.ZIndex = 114
+    titleLbl.Parent = row
+
+    local argStrParts = {}
+    for i, a in ipairs(args) do
+        table.insert(argStrParts, string.format("#%d: %s", i, serializeValue(a)))
+    end
+    local argSummary = #argStrParts > 0 and table.concat(argStrParts, ", ") or "(No Arguments)"
+
+    local subLbl = Instance.new("TextLabel")
+    subLbl.Size = UDim2.new(1, -90, 0, 16)
+    subLbl.Position = UDim2.new(0, 6, 0, 24)
+    subLbl.BackgroundTransparency = 1
+    subLbl.Font = Enum.Font.Code
+    subLbl.Text = argSummary
+    subLbl.TextColor3 = THEME.TextMuted
+    subLbl.TextSize = 9
+    subLbl.TextXAlignment = Enum.TextXAlignment.Left
+    subLbl.TextTruncate = Enum.TextTruncate.AtEnd
+    subLbl.ZIndex = 114
+    subLbl.Parent = row
+
+    -- Tombol Re-fire / Test Invoke
+    local fireBtn = Instance.new("TextButton")
+    fireBtn.Size = UDim2.new(0, 38, 0, 24)
+    fireBtn.Position = UDim2.new(1, -84, 0.5, -12)
+    fireBtn.BackgroundColor3 = THEME.AccentEmerald
+    fireBtn.Font = Enum.Font.GothamBold
+    fireBtn.Text = "⚡ Test"
+    fireBtn.TextColor3 = Color3.new(1, 1, 1)
+    fireBtn.TextSize = 9
+    fireBtn.ZIndex = 115
+    fireBtn.Parent = row
+    local fCorner = Instance.new("UICorner")
+    fCorner.CornerRadius = UDim.new(0, 4)
+    fCorner.Parent = fireBtn
+
+    fireBtn.MouseButton1Click:Connect(function()
+        pcall(function()
+            if remoteInst:IsA("RemoteFunction") then
+                remoteInst:InvokeServer(unpack(args))
+            elseif remoteInst:IsA("RemoteEvent") then
+                remoteInst:FireServer(unpack(args))
+            end
+            showToast("⚡ Remote Fired", "Berhasil test eksekusi " .. remoteInst.Name, THEME.AccentEmerald)
+        end)
+    end)
+
+    -- Tombol Salin Script Call
+    local copyCallBtn = Instance.new("TextButton")
+    copyCallBtn.Size = UDim2.new(0, 38, 0, 24)
+    copyCallBtn.Position = UDim2.new(1, -42, 0.5, -12)
+    copyCallBtn.BackgroundColor3 = THEME.BgCard
+    copyCallBtn.Font = Enum.Font.GothamBold
+    copyCallBtn.Text = "📋 Code"
+    copyCallBtn.TextColor3 = THEME.TextPrimary
+    copyCallBtn.TextSize = 8
+    copyCallBtn.ZIndex = 115
+    copyCallBtn.Parent = row
+    local cCorner = Instance.new("UICorner")
+    cCorner.CornerRadius = UDim.new(0, 4)
+    cCorner.Parent = copyCallBtn
+
+    copyCallBtn.MouseButton1Click:Connect(function()
+        local code = string.format("%s:%s(%s)", getInstancePath(remoteInst), method, table.concat(argStrParts, ", "))
+        setClipboardText(code)
+        showToast("📋 Code Copied", code, THEME.AccentCyan)
+    end)
+
+    table.insert(RemoteSpyLogs, row)
+end
+
+ClearSpyBtn.MouseButton1Click:Connect(function()
+    for _, item in ipairs(RemoteSpyLogs) do
+        if item and item.Parent then item:Destroy() end
+    end
+    RemoteSpyLogs = {}
+end)
+
+PauseSpyBtn.MouseButton1Click:Connect(function()
+    isSpyPaused = not isSpyPaused
+    PauseSpyBtn.Text = isSpyPaused and "Resume" or "Pause"
+    PauseSpyBtn.TextColor3 = isSpyPaused and THEME.AccentRose or THEME.AccentCyan
+end)
+
+-- Hooking __namecall untuk menangkap tendangan/remote game
+pcall(function()
+    if hookmetamethod then
+        local oldNamecall
+        oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
+            local method = getnamecallmethod()
+            if typeof(self) == "Instance" then
+                if method == "FireServer" or method == "InvokeServer" then
+                    local args = {...}
+                    task.defer(function()
+                        addRemoteLog(method, self, args)
                     end)
                 end
-
-            -- [ FASE 3: JALAN KAKI MEMBAWA BRAINROT MENUJU SAFE ZONE (JANGAN TELEPORTASI!) ]
-            elseif targetAction == "WalkToSafeZone" then
-                -- 🛡️ FAILSAFE TIMEOUT KHUSUS JALAN KAKI: Jika jalan kaki melebihi 45 detik, paksa teleport ke Safe Zone
-                if stateTimer >= 45.0 then
-                    logConsole("🚨 [WALK TIMEOUT] Terlalu lama berjalan (45s) -> Memaksa teleport ke Safe Zone!")
-                    teleportToSafeZone(hrp)
-                    targetAction = "WaitingForCollected"
-                    activeCandyWaypoints = {}
-                    currentWaypointTarget = nil
-                    waypointStuckTimer = 0
-                    return
-                end
-
-                -- 🛡️ SECURITY CHECK: Jika reward sudah ter-collect oleh server / UI di tengah jalan, langsung teleport & kick lagi!
-                if collectedFired then
-                    collectedFired = false
-                    teleportToSafeZone(hrp)
-                    mutationCount = mutationCount + 1
-                    phase2Fired = false
-                    kickRetryCount = 0
-                    kickAcceptedByServer = false
-                    activeCandyWaypoints = {}
-                    currentWaypointTarget = nil
-                    waypointStuckTimer = 0
-                    emptyCandySpawnReceived = false
-                    lastRewardBrainrotName = ""
-
-                    if shouldKick() then
-                        local delayKick = (_G.kickDelay and _G.kickDelay > 0) and _G.kickDelay or 0.5
-                        task.wait(delayKick)
-                        executeKick()
-                        targetAction = "WaitingForPhase2"
-                        logConsole(string.format("⚡ [COLLECTED SECURITY] Barang sudah Collected di tengah jalan! Langsung teleport ke Safe Zone & Re-Kick (Jeda %.1fs)! Total: %d", delayKick, mutationCount))
-                    else
-                        targetAction = "Idle"
-                        logConsole(string.format("⚡ [COLLECTED SECURITY] Barang sudah Collected! Standby di Safe Zone. Total: %d", mutationCount))
-                    end
-                    return
-                end
-
-                pcall(function()
-                    if hum.WalkSpeed < 16 then hum.WalkSpeed = 16 end
-                    if hrp.Anchored then hrp.Anchored = false end
-                end)
-
-                -- Navigasi sembari melewati koordinat permen
-                local targetPos = safeZone
-                if isWaypointNavEnabled() and #activeCandyWaypoints > 0 then
-                    -- 1. Pertahankan target aktif atau pilih waypoint terdekat baru
-                    local bestIdx = nil
-                    local bestDist = math.huge
-
-                    if currentWaypointTarget then
-                        for i, pos in ipairs(activeCandyWaypoints) do
-                            if (pos - currentWaypointTarget).Magnitude < 0.5 then
-                                bestIdx = i
-                                bestDist = (Vector3.new(hrp.Position.X, 0, hrp.Position.Z) - Vector3.new(pos.X, 0, pos.Z)).Magnitude
-                                break
-                            end
-                        end
-                    end
-
-                    if not bestIdx then
-                        for i, pos in ipairs(activeCandyWaypoints) do
-                            local d = (Vector3.new(hrp.Position.X, 0, hrp.Position.Z) - Vector3.new(pos.X, 0, pos.Z)).Magnitude
-                            if d < bestDist then
-                                bestDist = d
-                                bestIdx = i
-                            end
-                        end
-                    end
-
-                    if bestIdx then
-                        local wp = activeCandyWaypoints[bestIdx]
-                        currentWaypointTarget = wp
-
-                        -- 🚀 REACH THRESHOLD: Menggunakan _G.candyReachDist murni tanpa tambahan jarak buatan
-                        local currentSpeed = (hum and hum.WalkSpeed and hum.WalkSpeed > 0) and hum.WalkSpeed or 16
-                        local reachThreshold = _G.candyReachDist or 3
-
-                        -- 🔍 CEK DEBRIS: Cek apakah barang permen masih ada di Debris di sekitar waypoint
-                        local itemInDebris, itemDist, itemPos = findItemInDebrisNear(wp, 80)
-                        local shouldVerifyDebris = (_G.verifyDebrisPickup ~= false)
-
-                        -- Target pergerakan: utamakan posisi aktual item di Debris jika ada, Y rata tanah agar karakter tidak loncat/stutter
-                        local wpTargetPos = itemPos or wp
-                        targetPos = Vector3.new(wpTargetPos.X, hrp.Position.Y, wpTargetPos.Z)
-
-                        local distToTarget = (Vector3.new(hrp.Position.X, 0, hrp.Position.Z) - Vector3.new(wpTargetPos.X, 0, wpTargetPos.Z)).Magnitude
-
-                        -- 🍬 SENTUHAN AKTIF (PROACTIVE TOUCH): Picu touch saat sudah dekat (< 80 studs) jika firetouch aktif
-                        if _G.enableFireTouch and itemInDebris and distToTarget <= 80 then
-                            touchCandyItem(itemInDebris, hrp)
-                        end
-
-                        -- 🛡️ WAYPOINT STUCK WATCHDOG: Jika mencoba waypoint yang sama > 5 detik tanpa perubahan, lewati
-                        waypointStuckTimer = waypointStuckTimer + 0.05
-                        if waypointStuckTimer >= 5.0 then
-                            table.remove(activeCandyWaypoints, bestIdx)
-                            logConsole(string.format("⚠️ [WAYPOINT TIMEOUT] Melewati '%s' setelah 5s. Sisa: %d", itemInDebris and itemInDebris.Name or "Candy", #activeCandyWaypoints))
-                            waypointStuckTimer = 0
-                            currentWaypointTarget = nil
-                            wp = nil
-                        else
-                            -- 🛑 KONDISI SUDAH MENCAPAI AREA PERMEN:
-                            local reached = (distToTarget <= reachThreshold)
-                            
-                            if shouldVerifyDebris then
-                                if not itemInDebris then
-                                    -- Barang SUDAH HILANG dari Debris (berhasil dibawa)
-                                    table.remove(activeCandyWaypoints, bestIdx)
-                                    currentWaypointTarget = nil
-                                    waypointStuckTimer = 0
-                                    logConsole(string.format("🍬 [COLLECTED] Barang berhasil dibawa (hilang dari Debris)! Sisa waypoint: %d", #activeCandyWaypoints))
-                                elseif reached then
-                                    -- Sudah sampai persis di posisi barang tapi masih ada di Debris -> terus tempel posisinya tanpa rem mendadak
-                                    targetPos = Vector3.new(wpTargetPos.X, hrp.Position.Y, wpTargetPos.Z)
-                                    if _G.enableFireTouch then
-                                        touchCandyItem(itemInDebris, hrp)
-                                    end
-                                    if math.floor(waypointStuckTimer * 10) % 20 == 0 then
-                                        logConsole(string.format("⏳ [CEK DEBRIS] Menyentuh '%s' (jarak: %.1fm). Menunggu server...", itemInDebris.Name, distToTarget))
-                                    end
-                                end
-                            else
-                                -- Mode fallback tanpa verifikasi Debris
-                                if reached then
-                                    table.remove(activeCandyWaypoints, bestIdx)
-                                    currentWaypointTarget = nil
-                                    waypointStuckTimer = 0
-                                    logConsole(string.format("🍬 Waypoint permen terlewati! Sisa waypoint: %d", #activeCandyWaypoints))
-                                end
-                            end
-                        end
-                    end
-                else
-                    currentWaypointTarget = nil
-                    waypointStuckTimer = 0
-                end
-
-                -- Bot TETAP MURNI JALAN KAKI via MoveTo (Proteksi pcall)
-                pcall(function()
-                    hum:MoveTo(targetPos)
-                end)
-
-                -- 🛡️ HANYA masuk Safe Zone jika SEMUA waypoint permen sudah tuntas diambil (atau tidak aktif)
-                local waypointsPending = isWaypointNavEnabled() and (#activeCandyWaypoints > 0)
-                if distToSafeZone < 5 and not waypointsPending then
-                    currentWaypointTarget = nil
-                    waypointStuckTimer = 0
-                    targetAction = "WaitingForCollected"
-                    logConsole("Tiba di Safe Zone -> Menunggu Reward Collected")
-                end
-
-            -- [ FASE 4: NUNGGU COLLECTED & RE-KICK INSTAN (TELEPORTASI KE SAFEZONE UNTUK KICK) ]
-            elseif targetAction == "WaitingForCollected" then
-                if distToSafeZone >= 5 then
-                    teleportToSafeZone(hrp)
-                end
-
-                if collectedFired or kickEndedFired or stateTimer >= 2.5 then
-                    collectedFired = false
-                    kickEndedFired = false
-                    mutationCount = mutationCount + 1
-                    phase2Fired = false
-                    kickRetryCount = 0
-                    kickAcceptedByServer = false
-                    activeCandyWaypoints = {}
-                    emptyCandySpawnReceived = false
-                    lastRewardBrainrotName = ""
-
-                    -- Pastikan posisi presisi di SafeZone via teleportasi
-                    teleportToSafeZone(hrp)
-
-                    if shouldKick() then
-                        local delayKick = (_G.kickDelay and _G.kickDelay > 0) and _G.kickDelay or 0.5
-                        task.wait(delayKick)
-                        executeKick()
-                        targetAction = "WaitingForPhase2"
-                        logConsole(string.format("🎉 Total Mutasi: %d | Re-Kick (Jeda %.1fs)!", mutationCount, delayKick))
-                    else
-                        targetAction = "Idle"
-                        logConsole(string.format("🎉 Total Mutasi: %d | Ronde Tuntas -> Standby di Safe Zone (Menunggu Event Candy)", mutationCount))
-                    end
-                end
             end
-        end)
-
-        if not loopSuccess and _G.debugConsoleLog then
-            logConsole("⚠️ [LOOP CRASH PREVENTED] " .. tostring(loopError))
-        end
+            return oldNamecall(self, ...)
+        end))
     end
 end)
 
+-- ==============================================================================
+-- 📜 TAB 4: SCRIPT VIEWER & DECOMPILER
+-- ==============================================================================
+local ScriptHeader = Instance.new("Frame")
+ScriptHeader.Size = UDim2.new(1, 0, 0, 36)
+ScriptHeader.BackgroundColor3 = THEME.BgCard
+ScriptHeader.BorderSizePixel = 0
+ScriptHeader.ZIndex = 112
+ScriptHeader.Parent = ScriptPanel
+
+local SHCorner = Instance.new("UICorner")
+SHCorner.CornerRadius = UDim.new(0, 8)
+SHCorner.Parent = ScriptHeader
+
+local ScriptTitle = Instance.new("TextLabel")
+ScriptTitle.Size = UDim2.new(1, -160, 1, 0)
+ScriptTitle.Position = UDim2.new(0, 10, 0, 0)
+ScriptTitle.BackgroundTransparency = 1
+ScriptTitle.Font = Enum.Font.GothamBold
+ScriptTitle.Text = "📜 Script Viewer: (Pilih Script di Explorer)"
+ScriptTitle.TextColor3 = THEME.TextPrimary
+ScriptTitle.TextSize = 12
+ScriptTitle.TextXAlignment = Enum.TextXAlignment.Left
+ScriptTitle.TextTruncate = Enum.TextTruncate.AtEnd
+ScriptTitle.ZIndex = 113
+ScriptTitle.Parent = ScriptHeader
+
+local DecompileBtn = Instance.new("TextButton")
+DecompileBtn.Size = UDim2.new(0, 76, 0, 26)
+DecompileBtn.Position = UDim2.new(1, -152, 0, 5)
+DecompileBtn.BackgroundColor3 = THEME.AccentPurple
+DecompileBtn.Font = Enum.Font.GothamBold
+DecompileBtn.Text = "⚡ Decompile"
+DecompileBtn.TextColor3 = Color3.new(1, 1, 1)
+DecompileBtn.TextSize = 10
+DecompileBtn.ZIndex = 114
+DecompileBtn.Parent = ScriptHeader
+local DBCorner = Instance.new("UICorner")
+DBCorner.CornerRadius = UDim.new(0, 5)
+DBCorner.Parent = DecompileBtn
+
+local CopyScriptBtn = Instance.new("TextButton")
+CopyScriptBtn.Size = UDim2.new(0, 68, 0, 26)
+CopyScriptBtn.Position = UDim2.new(1, -72, 0, 5)
+CopyScriptBtn.BackgroundColor3 = THEME.BgInput
+CopyScriptBtn.Font = Enum.Font.GothamBold
+CopyScriptBtn.Text = "📋 Copy"
+CopyScriptBtn.TextColor3 = THEME.TextPrimary
+CopyScriptBtn.TextSize = 10
+CopyScriptBtn.ZIndex = 114
+CopyScriptBtn.Parent = ScriptHeader
+local CSB2Corner = Instance.new("UICorner")
+CSB2Corner.CornerRadius = UDim.new(0, 5)
+CSB2Corner.Parent = CopyScriptBtn
+
+local ScriptBox = Instance.new("TextBox")
+ScriptBox.Size = UDim2.new(1, 0, 1, -44)
+ScriptBox.Position = UDim2.new(0, 0, 0, 44)
+ScriptBox.BackgroundColor3 = THEME.BgCard
+ScriptBox.BorderSizePixel = 0
+ScriptBox.Font = Enum.Font.Code
+ScriptBox.Text = "-- Silakan pilih LocalScript / ModuleScript di Explorer lalu tekan 'Decompile'"
+ScriptBox.TextColor3 = THEME.TextPrimary
+ScriptBox.TextSize = 11
+ScriptBox.TextXAlignment = Enum.TextXAlignment.Left
+ScriptBox.TextYAlignment = Enum.TextYAlignment.Top
+ScriptBox.MultiLine = true
+ScriptBox.ClearTextOnFocus = false
+ScriptBox.ZIndex = 112
+ScriptBox.Parent = ScriptPanel
+
+local SBCorner = Instance.new("UICorner")
+SBCorner.CornerRadius = UDim.new(0, 8)
+SBCorner.Parent = ScriptBox
+
+openInScriptViewer = function(scriptInst)
+    if not scriptInst then return end
+    selectedInstance = scriptInst
+    ScriptTitle.Text = string.format("📜 [%s] %s", scriptInst.ClassName, scriptInst.Name)
+
+    if not (scriptInst:IsA("LocalScript") or scriptInst:IsA("ModuleScript")) then
+        ScriptBox.Text = string.format("-- '%s' adalah objek berkelas '%s', bukan Script!", scriptInst.Name, scriptInst.ClassName)
+        return
+    end
+
+    ScriptBox.Text = "-- Membaca script " .. scriptInst.Name .. "...\n-- Tekan tombol '⚡ Decompile' untuk membaca source code lengkap."
+end
+
+DecompileBtn.MouseButton1Click:Connect(function()
+    if not selectedInstance or not (selectedInstance:IsA("LocalScript") or selectedInstance:IsA("ModuleScript")) then
+        showToast("⚠️ Peringatan", "Pilih LocalScript atau ModuleScript terlebih dahulu!", THEME.AccentAmber)
+        return
+    end
+
+    showToast("⚡ Decompiler", "Sedang men-decompile script...", THEME.AccentPurple)
+    ScriptBox.Text = "-- Memulai proses decompile, mohon tunggu beberapa detik..."
+
+    task.spawn(function()
+        local decompiledSource = nil
+        local decompileFunc = decompile or (syn and syn.decompile) or (fluxus and fluxus.decompile)
+
+        if decompileFunc and type(decompileFunc) == "function" then
+            local ok, res = pcall(function() return decompileFunc(selectedInstance) end)
+            if ok and res then
+                decompiledSource = tostring(res)
+            end
+        end
+
+        if not decompiledSource or decompiledSource == "" then
+            decompiledSource = string.format("-- [DECOMPILE GAGAL / EXECUTOR TIDAK SUPPORT]\n-- Script: %s\n-- Path: %s\n-- Executor Anda belum menyediakan fungsi decompile() yang kompatibel.", selectedInstance.Name, getInstancePath(selectedInstance))
+        end
+
+        ScriptBox.Text = decompiledSource
+        showToast("✅ Sukses", "Decompile selesai!", THEME.AccentEmerald)
+    end)
+end)
+
+CopyScriptBtn.MouseButton1Click:Connect(function()
+    if ScriptBox.Text ~= "" then
+        setClipboardText(ScriptBox.Text)
+        showToast("📋 Script Copied", "Source code disalin ke clipboard!", THEME.AccentCyan)
+    end
+end)
+
+-- ==============================================================================
+-- 🚀 READY INITIALIZATION
+-- ==============================================================================
+showToast("💎 MiRaGe Dex Mobile", "Dex Explorer Siap Digunakan!", THEME.AccentPurple)
 print("--------------------------------------------------")
-print("🚀 [SUKSES] KALB Candy Event & Teleport Kick Auto Farm Siap Berjalan!")
+print("💎 [SUKSES] MiRaGe Dex Mobile V1.0 Berhasil Dimuat!")
+print("✨ [FITUR] Explorer, Properties, Remote Spy, Script Decompiler & Quick Actions Ready.")
 print("--------------------------------------------------")
