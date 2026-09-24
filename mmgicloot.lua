@@ -1,5 +1,5 @@
 -- ==============================================================================
--- 💎 MIRAGE DEX MOBILE V2.1 (ULTIMATE RESIZABLE DARK GLASSMORPHISM DEX EXPLORER)
+-- 💎 MIRAGE DEX MOBILE V2.2 (ULTIMATE RESIZABLE DARK GLASSMORPHISM DEX EXPLORER)
 -- ==============================================================================
 -- Changelog & Refinements (V2.0):
 -- 1. 🗚 Resizable Window: Grip resize handle di pojok kanan bawah (drag untuk ubah ukuran bebas di HP & PC)
@@ -1972,45 +1972,66 @@ openInScriptViewer = function(scriptInst)
 end
 
 -- ==============================================================================
--- 🔬 UNIVERSAL DECOMPILER ENGINE (DELTA, CODEX, FLUXUS, WAVE, SYNAPSE, ARCEUS)
+-- 🔬 UNIVERSAL DECOMPILER ENGINE (DELTA, CODEX, LIME, FLUXUS, WAVE, SYNAPSE)
 -- ==============================================================================
+local function isActualErrorOutput(str)
+    if not str or type(str) ~= "string" or #str == 0 then return true end
+    local lower = string.lower(str)
+    -- Hanya anggap error jika teks pendek dan diawali pesan kegagalan decompiler sistem
+    if #str < 120 and (string.find(lower, "error") or string.find(lower, "failed") or string.find(lower, "disabled") or string.find(lower, "not implemented") or string.find(lower, "unsupported")) then
+        return true
+    end
+    return false
+end
+
 local function executeUniversalDecompile(scriptInst)
     if not scriptInst then return nil, "No Script" end
 
-    -- TIER 1: Direct .Source Property
+    local diagReports = {}
+
+    -- TIER 1: Direct .Source Property (Jika environment membuka akses source)
     local okSource, rawSource = pcall(function() return scriptInst.Source end)
     if okSource and type(rawSource) == "string" and #rawSource > 0 then
         return rawSource, "Direct Source Access"
     end
+    table.insert(diagReports, string.format("• .Source Property: %s", okSource and (type(rawSource) == "string" and #rawSource > 0 and "Tersedia" or "Kosong") or "Terkunci / Restricted"))
 
-    -- TIER 2: Deteksi Seluruh API Decompiler Executor
+    -- TIER 2: Deteksi Seluruh Global Decompiler Function
     local decompileAPIs = {
-        { Name = "decompile()", Func = decompile },
-        { Name = "syn.decompile()", Func = syn and syn.decompile },
-        { Name = "fluxus.decompile()", Func = fluxus and fluxus.decompile },
-        { Name = "getgenv().decompile()", Func = getgenv and getgenv().decompile },
-        { Name = "getrenv().decompile()", Func = getrenv and getrenv().decompile },
+        { Name = "decompile", Func = decompile },
+        { Name = "getgenv().decompile", Func = getgenv and getgenv().decompile },
+        { Name = "syn.decompile", Func = syn and syn.decompile },
+        { Name = "fluxus.decompile", Func = fluxus and fluxus.decompile },
+        { Name = "getrenv().decompile", Func = getrenv and getrenv().decompile },
     }
 
     for _, api in ipairs(decompileAPIs) do
         if type(api.Func) == "function" then
             local ok, res = pcall(function() return api.Func(scriptInst) end)
-            if ok and type(res) == "string" and #res > 0 and not string.find(string.lower(res), "error") then
+            if ok and type(res) == "string" and #res > 0 and not isActualErrorOutput(res) then
                 return res, api.Name
+            else
+                local errMsg = ok and (type(res) == "string" and res:sub(1, 100) or tostring(res)) or tostring(res)
+                table.insert(diagReports, string.format("• %s: Fungsi Ada, namun gagal dipanggil (%s)", api.Name, errMsg))
             end
-            -- Mode fallback dengan timeout / flags
-            local ok2, res2 = pcall(function() return api.Func(scriptInst, 15) end)
-            if ok2 and type(res2) == "string" and #res2 > 0 then
-                return res2, api.Name .. " (Extended)"
+
+            -- Coba fallback parameter timeout / mode
+            local ok2, res2 = pcall(function() return api.Func(scriptInst, 20) end)
+            if ok2 and type(res2) == "string" and #res2 > 0 and not isActualErrorOutput(res2) then
+                return res2, api.Name .. " (Timeout Mode)"
             end
+        else
+            table.insert(diagReports, string.format("• %s: Tidak Disediakan oleh Executor (nil)", api.Name))
         end
     end
 
     -- TIER 3: Disassembler Bytecode
     local bc = nil
     if getscriptbytecode then
-        pcall(function() bc = getscriptbytecode(scriptInst) end)
+        local okBc, bRes = pcall(function() return getscriptbytecode(scriptInst) end)
+        if okBc and bRes then bc = bRes end
     end
+
     if disassemble and bc then
         local ok, disRes = pcall(function() return disassemble(bc) end)
         if ok and type(disRes) == "string" and #disRes > 0 then
@@ -2018,17 +2039,29 @@ local function executeUniversalDecompile(scriptInst)
         end
     end
 
-    -- TIER 4: Fallback Constant & String Dumper
+    -- TIER 4: Fallback Constant, String & Diagnostic Report
     local dumpParts = {
         string.format("-- ========================================================"),
-        string.format("-- ⚠️ DECOMPILE GAGAL / EXECUTOR BELUM MENYEDIAKAN DECOMPILER"),
-        string.format("-- Objek : %s (%s)", scriptInst.Name, scriptInst.ClassName),
-        string.format("-- Path  : %s", getInstancePath(scriptInst)),
+        string.format("-- ⚠️ STATUS DECOMPILER PADA EXECUTOR SAAT INI"),
+        string.format("-- Objek    : %s (%s)", scriptInst.Name, scriptInst.ClassName),
+        string.format("-- Path     : %s", getInstancePath(scriptInst)),
         string.format("-- ========================================================"),
+        string.format("-- ℹ️ PENTING TENTANG SKOR sUNC (100%% sUNC):"),
+        string.format("-- Skor sUNC (senS' Unified Naming Convention) HANYA menguji"),
+        string.format("-- fungsi dasar environment (hook, memory, files, crypt)."),
+        string.format("-- Fitur 'decompile' BUKAN bagian dari tes sUNC! Banyak executor"),
+        string.format("-- ber-skor 100%% sUNC namun server decompiler-nya belum aktif."),
+        string.format(""),
+        string.format("-- 🔍 HASIL DIAGNOSTIK API PADA EXECUTOR ANDA:"),
     }
 
+    for _, d in ipairs(diagReports) do
+        table.insert(dumpParts, "-- " .. d)
+    end
+
     if bc then
-        table.insert(dumpParts, string.format("-- Bytecode Length: %d bytes", #bc))
+        table.insert(dumpParts, "")
+        table.insert(dumpParts, string.format("-- 📦 Bytecode Script Ditemukan: %d bytes (getscriptbytecode = OK)", #bc))
     end
 
     -- Ekstrak konstanta string via debug / getconstants jika tersedia
@@ -2036,14 +2069,15 @@ local function executeUniversalDecompile(scriptInst)
     if getConstantsFunc and type(getConstantsFunc) == "function" then
         local okC, consts = pcall(function() return getConstantsFunc(scriptInst) end)
         if okC and type(consts) == "table" and #consts > 0 then
-            table.insert(dumpParts, "-- Daftar Konstanta / String di dalam Script:")
+            table.insert(dumpParts, "")
+            table.insert(dumpParts, "-- 🏷️ DAFTAR STRING & KONSTANTA YANG DITEMUKAN DI DALAM SCRIPT:")
             for idx, cVal in ipairs(consts) do
                 table.insert(dumpParts, string.format("  [%d] = %s", idx, serializeValue(cVal)))
             end
         end
     end
 
-    return table.concat(dumpParts, "\n"), "Fallback Metadata Dump"
+    return table.concat(dumpParts, "\n"), "Diagnostic Metadata Dump"
 end
 
 DecompileBtn.MouseButton1Click:Connect(function()
