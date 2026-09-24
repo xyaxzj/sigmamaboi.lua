@@ -1,5 +1,5 @@
 -- ==============================================================================
--- 💎 MIRAGE DEX MOBILE V2.0 (ULTIMATE RESIZABLE DARK GLASSMORPHISM DEX EXPLORER)
+-- 💎 MIRAGE DEX MOBILE V2.1 (ULTIMATE RESIZABLE DARK GLASSMORPHISM DEX EXPLORER)
 -- ==============================================================================
 -- Changelog & Refinements (V2.0):
 -- 1. 🗚 Resizable Window: Grip resize handle di pojok kanan bawah (drag untuk ubah ukuran bebas di HP & PC)
