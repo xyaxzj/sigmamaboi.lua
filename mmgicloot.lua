@@ -1,5 +1,5 @@
 -- ==============================================================================
--- 💎 MIRAGE DEX MOBILE V2.2 (ULTIMATE RESIZABLE DARK GLASSMORPHISM DEX EXPLORER)
+-- 💎 MIRAGE DEX MOBILE V2.0 (ULTIMATE RESIZABLE DARK GLASSMORPHISM DEX EXPLORER)
 -- ==============================================================================
 -- Changelog & Refinements (V2.0):
 -- 1. 🗚 Resizable Window: Grip resize handle di pojok kanan bawah (drag untuk ubah ukuran bebas di HP & PC)
@@ -658,21 +658,24 @@ local openInScriptViewer = nil
 local function getInstancePath(inst)
     if not inst then return "nil" end
     if inst == game then return "game" end
+    if inst.Parent == game then
+        return string.format('game:GetService("%s")', inst.ClassName)
+    end
+
     local parts = {}
     local curr = inst
-    while curr and curr ~= game do
+    while curr and curr.Parent and curr.Parent ~= game do
         local name = curr.Name
         if string.find(name, "[^%w_]") then
             table.insert(parts, 1, string.format('["%s"]', name))
         else
-            table.insert(parts, 1, (curr.Parent == game and "" or ".") .. name)
+            table.insert(parts, 1, "." .. name)
         end
         curr = curr.Parent
     end
-    if inst.Parent == game then
-        return string.format('game:GetService("%s")', inst.ClassName)
-    end
-    return "game" .. table.concat(parts, "")
+
+    local serviceName = curr and curr.ClassName or (curr and curr.Name or "Workspace")
+    return string.format('game:GetService("%s")', serviceName) .. table.concat(parts, "")
 end
 
 -- ==============================================================================
@@ -2022,6 +2025,43 @@ local function executeUniversalDecompile(scriptInst)
             end
         else
             table.insert(diagReports, string.format("• %s: Tidak Disediakan oleh Executor (nil)", api.Name))
+        end
+    end
+
+    -- TIER 2.5: Khusus ModuleScript -> require() Data Dump (Bypass Bytecode Version 12)
+    if scriptInst:IsA("ModuleScript") then
+        local dumpTableFunc
+        dumpTableFunc = function(tbl, indent, depth)
+            indent = indent or "  "
+            depth = depth or 0
+            if depth > 5 then return "{ ... (Batas Kedalaman Tabel) }" end
+            if type(tbl) ~= "table" then return serializeValue(tbl) end
+
+            local keys = {}
+            for k in pairs(tbl) do table.insert(keys, k) end
+            if #keys == 0 then return "{}" end
+
+            local lines = {"{"}
+            for _, k in ipairs(keys) do
+                local v = tbl[k]
+                local keyStr = (type(k) == "string" and string.match(k, "^[%a_][%w_]*$")) and k or string.format("[%s]", serializeValue(k))
+                if type(v) == "table" then
+                    table.insert(lines, string.format("%s%s = %s,", indent, keyStr, dumpTableFunc(v, indent .. "  ", depth + 1)))
+                else
+                    table.insert(lines, string.format("%s%s = %s,", indent, keyStr, serializeValue(v)))
+                end
+            end
+            table.insert(lines, string.rep("  ", depth) .. "}")
+            return table.concat(lines, "\n")
+        end
+
+        local okReq, modReturn = pcall(function() return require(scriptInst) end)
+        if okReq then
+            local dumped = dumpTableFunc(modReturn, "  ", 0)
+            local modContent = string.format("-- ========================================================\n-- 📦 [REQUIRE DUMP: 100%% ORIGINAL CLIENT DATA]\n-- Objek : %s (ModuleScript)\n-- Path  : %s\n-- Info  : Decompiler Lime gagal (unsupported bytecode v12),\n--         tetapi isi data modul BERHASIL di-dump via require()!\n-- ========================================================\n\nreturn %s", scriptInst.Name, getInstancePath(scriptInst), dumped)
+            return modContent, "Client require() Table Dump"
+        else
+            table.insert(diagReports, string.format("• require(): Gagal me-require module (%s)", tostring(modReturn)))
         end
     end
 
