@@ -1,14 +1,14 @@
 -- ==============================================================================
--- 💎 MIRAGE DEX MOBILE V1.0 (NEXT-GEN DARK GLASSMORPHISM DEX EXPLORER)
+-- 💎 MIRAGE DEX MOBILE V2.0 (ULTIMATE RESIZABLE DARK GLASSMORPHISM DEX EXPLORER)
 -- ==============================================================================
--- Fitur Utama:
--- 1. 📱 Mobile-First Touch Ergonomics: Tombol 40px+, touch-friendly drag bubble, modal action sheet
--- 2. 🌳 Lazy-Loading Hierarchy Tree: Ekstraksi on-demand (No-Lag / Anti-Freeze pada game berat)
--- 3. ⚙️ Live Property Inspector & Editor: Lihat & ubah Vector3, CFrame, Color3, Booleans, Numbers, Strings
--- 4. 📡 Real-Time Remote Spy & Caller: Tangkap InvokeServer / FireServer, inspect argumen, replay test fire
--- 5. 📜 Script Viewer & Decompiler: Integrasi decompile() executor + copy source code instan
--- 6. ⚡ Context Action Suite: Teleport to Part, Copy Path, Clone, Destroy, Clear Children
--- 7. 🎨 Dark Obsidian Glassmorphism UI: Tampilan ultra premium, frosted glass, smooth tween
+-- Changelog & Refinements (V2.0):
+-- 1. 🗚 Resizable Window: Grip resize handle di pojok kanan bawah (drag untuk ubah ukuran bebas di HP & PC)
+-- 2. ➖ Minimize Only (No Accident Close): Tombol [✕] diganti dengan [—] Minimize (aman dari kepencet tutup)
+-- 3. 🌐 Full DataModel & Nil Instances: Menampilkan SELURUH game service, game:GetChildren(), serta 👻 Nil Instances (getnilinstances)
+-- 4. ⚙️ Exhaustive Studio Property Grid: Inspeksi properti lengkap per kategori (Transform, Physics, Appearance, Identity, Values, Humanoid, Guis, Lights, dll.)
+-- 5. 📜 Universal Multi-Tier Decompiler: Mendukung Delta, Codex, Fluxus, Wave, Synapse, Hydrogen, direct .Source, dan Constant Dumper Fallback
+-- 6. 📡 Advanced Remote Spy & Replay: Intercept __namecall, inspect parameter, test Fire/Invoke, copy script call
+-- 7. ⚡ Context Action Suite: Teleport, Copy Path, Clone, Destroy, Clear Children, Save Script to File
 -- ==============================================================================
 
 if not game:IsLoaded() then game.Loaded:Wait() end
@@ -28,7 +28,7 @@ while not lp do
 end
 
 -- ==============================================================================
--- 📋 UNIVERSAL CLIPBOARD HELPER
+-- 📋 UNIVERSAL CLIPBOARD & FILE HELPER
 -- ==============================================================================
 local function setClipboardText(text)
     text = tostring(text or "")
@@ -43,6 +43,16 @@ local function setClipboardText(text)
         pcall(function() Clipboard.set(text); success = true end)
     end
     return success
+end
+
+local function saveScriptToFile(fileName, content)
+    if writefile then
+        pcall(function()
+            writefile(fileName, content)
+        end)
+        return true
+    end
+    return false
 end
 
 -- ==============================================================================
@@ -63,18 +73,22 @@ local THEME = {
     TextPrimary     = Color3.fromRGB(243, 244, 246),
     TextSecondary   = Color3.fromRGB(156, 163, 175),
     TextMuted       = Color3.fromRGB(100, 110, 130),
+    SectionHeader   = Color3.fromRGB(35, 42, 65),
 }
 
 -- ==============================================================================
--- 🏷️ MAPPING ICON KELAS ROBLOX
+-- 🏷️ MAPPING ICON KELAS ROBLOX LENGKAP
 -- ==============================================================================
 local CLASS_ICONS = {
-    Workspace           = "🌐",
+    DataModel           = "🌐",
+    Workspace           = "🌍",
     Players             = "👥",
     Player              = "👤",
     Lighting            = "💡",
     ReplicatedStorage   = "⚡",
     ReplicatedFirst     = "⚡",
+    ServerScriptService = "🛡️",
+    ServerStorage       = "📦",
     StarterGui          = "📱",
     StarterPack         = "🎒",
     StarterPlayer       = "🏃",
@@ -84,8 +98,16 @@ local CLASS_ICONS = {
     CoreGui             = "🛡️",
     MaterialService     = "🧱",
     Debris              = "🗑️",
+    Teams               = "🚩",
+    Team                = "🏳️",
+    TweenService        = "🎬",
+    UserInputService    = "🎮",
+    RunService          = "⚙️",
+    TeleportService     = "🌀",
+    CollectionService   = "🏷️",
+    NilInstances        = "👻",
     
-    -- Objek Game
+    -- Objek Game & Geometri
     Folder              = "📁",
     Model               = "📦",
     Part                = "🧱",
@@ -123,6 +145,7 @@ local CLASS_ICONS = {
     Highlight           = "🌟",
     Sky                 = "☁️",
     Atmosphere          = "🌫️",
+    Clouds              = "☁️",
     
     -- UI
     ScreenGui           = "🖥️",
@@ -155,7 +178,8 @@ local CLASS_ICONS = {
     TouchTransmitter    = "⚡",
     Sound               = "🎵",
     Animation           = "🎬",
-    AnimationTrack      = "🎞️"
+    AnimationTrack      = "🎞️",
+    SpecialMesh         = "💠"
 }
 
 local function getClassIcon(className)
@@ -177,7 +201,6 @@ if not guiParent then
     guiParent = lp:WaitForChild("PlayerGui")
 end
 
--- Bersihkan versi sebelumnya jika ada
 local oldGui = guiParent:FindFirstChild("MiRaGeDexMobileGui")
 if oldGui then oldGui:Destroy() end
 
@@ -254,7 +277,6 @@ local function showToast(title, message, color)
     msgLbl.ZIndex = 1002
     msgLbl.Parent = toast
 
-    -- Animasi Slide In & Out
     toast:TweenPosition(UDim2.new(0, 0, 0, 0), Enum.EasingDirection.Out, Enum.EasingStyle.Quart, 0.35, true)
     task.delay(2.6, function()
         pcall(function()
@@ -340,15 +362,14 @@ BubbleIcon.Parent = Bubble
 makeDraggable(Bubble, Bubble)
 
 -- ==============================================================================
--- 🖥️ MAIN DEX WINDOW (GLASSMORPHISM PANEL)
+-- 🖥️ MAIN DEX WINDOW (GLASSMORPHISM RESIZABLE PANEL)
 -- ==============================================================================
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
 
--- Ukuran responsif: Adaptif untuk Mobile landscape & Portrait
 local screenSize = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1280, 720)
-local defaultW = math.clamp(screenSize.X * 0.72, 360, 560)
-local defaultH = math.clamp(screenSize.Y * 0.85, 340, 520)
+local defaultW = math.clamp(screenSize.X * 0.75, 360, 620)
+local defaultH = math.clamp(screenSize.Y * 0.82, 340, 540)
 
 MainFrame.Size = UDim2.new(0, defaultW, 0, defaultH)
 MainFrame.Position = UDim2.new(0.5, -defaultW / 2, 0.5, -defaultH / 2)
@@ -367,6 +388,56 @@ local MainStroke = Instance.new("UIStroke")
 MainStroke.Color = THEME.BorderSubtle
 MainStroke.Thickness = 1.4
 MainStroke.Parent = MainFrame
+
+-- ==============================================================================
+-- 🗚 RESIZABLE GRIP HANDLE (POJOK KANAN BAWAH)
+-- ==============================================================================
+local ResizeHandle = Instance.new("TextButton")
+ResizeHandle.Name = "ResizeHandle"
+ResizeHandle.Size = UDim2.new(0, 28, 0, 28)
+ResizeHandle.Position = UDim2.new(1, -28, 1, -28)
+ResizeHandle.BackgroundTransparency = 1
+ResizeHandle.Font = Enum.Font.GothamBold
+ResizeHandle.Text = "⋰"
+ResizeHandle.TextColor3 = THEME.AccentCyan
+ResizeHandle.TextSize = 16
+ResizeHandle.ZIndex = 250
+ResizeHandle.Parent = MainFrame
+
+local isResizing = false
+local resizeStartPos = Vector2.zero
+local resizeStartSize = Vector2.zero
+
+ResizeHandle.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        isResizing = true
+        resizeStartPos = Vector2.new(input.Position.X, input.Position.Y)
+        resizeStartSize = Vector2.new(MainFrame.AbsoluteSize.X, MainFrame.AbsoluteSize.Y)
+        ResizeHandle.TextColor3 = THEME.AccentPurple
+
+        local conn
+        conn = input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                isResizing = false
+                ResizeHandle.TextColor3 = THEME.AccentCyan
+                conn:Disconnect()
+            end
+        end)
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if isResizing and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local deltaX = input.Position.X - resizeStartPos.X
+        local deltaY = input.Position.Y - resizeStartPos.Y
+        
+        local camSize = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1920, 1080)
+        local newW = math.clamp(resizeStartSize.X + deltaX, 320, camSize.X * 0.96)
+        local newH = math.clamp(resizeStartSize.Y + deltaY, 260, camSize.Y * 0.95)
+
+        MainFrame.Size = UDim2.new(0, newW, 0, newH)
+    end
+end)
 
 -- Toggle Window via Bubble
 local isDexOpen = true
@@ -390,7 +461,7 @@ Bubble.InputBegan:Connect(function(input)
             if input.UserInputState == Enum.UserInputState.End then
                 conn:Disconnect()
                 local dist = (input.Position - startPos).Magnitude
-                if dist < 8 then -- Anggap sebagai tap (bukan drag)
+                if dist < 8 then
                     toggleDexVisibility()
                 end
             end
@@ -399,7 +470,7 @@ Bubble.InputBegan:Connect(function(input)
 end)
 
 -- ==============================================================================
--- 🔝 HEADER & TITLE BAR
+-- 🔝 HEADER & TITLE BAR (HANYA TOMBOL MINIMIZE & MAXIMIZE - NO ACCIDENTAL CLOSE)
 -- ==============================================================================
 local Header = Instance.new("Frame")
 Header.Name = "Header"
@@ -416,11 +487,11 @@ HeaderCorner.Parent = Header
 makeDraggable(Header, MainFrame)
 
 local TitleLabel = Instance.new("TextLabel")
-TitleLabel.Size = UDim2.new(1, -120, 1, 0)
+TitleLabel.Size = UDim2.new(1, -90, 1, 0)
 TitleLabel.Position = UDim2.new(0, 14, 0, 0)
 TitleLabel.BackgroundTransparency = 1
 TitleLabel.Font = Enum.Font.GothamBold
-TitleLabel.Text = "💎 MiRaGe Dex Mobile <font color=\"#8B5CF6\">v1.0</font>"
+TitleLabel.Text = "💎 MiRaGe Dex Mobile <font color=\"#8B5CF6\">v2.0</font>"
 TitleLabel.RichText = true
 TitleLabel.TextColor3 = THEME.TextPrimary
 TitleLabel.TextSize = 14
@@ -428,38 +499,55 @@ TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
 TitleLabel.ZIndex = 102
 TitleLabel.Parent = Header
 
--- Tombol Minimize & Close (Besar untuk sentuhan mobile)
+-- Tombol Maximize/Compact & Minimize
+local isMaximized = false
+local savedPreMaxSize = MainFrame.Size
+local savedPreMaxPos = MainFrame.Position
+
+local MaxBtn = Instance.new("TextButton")
+MaxBtn.Size = UDim2.new(0, 32, 0, 32)
+MaxBtn.Position = UDim2.new(1, -74, 0, 5)
+MaxBtn.BackgroundColor3 = THEME.BgInput
+MaxBtn.Font = Enum.Font.GothamBold
+MaxBtn.Text = "🗖"
+MaxBtn.TextColor3 = THEME.AccentCyan
+MaxBtn.TextSize = 13
+MaxBtn.ZIndex = 103
+MaxBtn.Parent = Header
+local MaxCorner = Instance.new("UICorner")
+MaxCorner.CornerRadius = UDim.new(0, 6)
+MaxCorner.Parent = MaxBtn
+
+MaxBtn.MouseButton1Click:Connect(function()
+    isMaximized = not isMaximized
+    if isMaximized then
+        savedPreMaxSize = MainFrame.Size
+        savedPreMaxPos = MainFrame.Position
+        local camSize = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1280, 720)
+        MainFrame.Size = UDim2.new(0, camSize.X * 0.94, 0, camSize.Y * 0.92)
+        MainFrame.Position = UDim2.new(0.5, -(camSize.X * 0.94) / 2, 0.5, -(camSize.Y * 0.92) / 2)
+        MaxBtn.Text = "🗗"
+    else
+        MainFrame.Size = savedPreMaxSize
+        MainFrame.Position = savedPreMaxPos
+        MaxBtn.Text = "🗖"
+    end
+end)
+
 local MinBtn = Instance.new("TextButton")
 MinBtn.Size = UDim2.new(0, 32, 0, 32)
-MinBtn.Position = UDim2.new(1, -74, 0, 5)
-MinBtn.BackgroundColor3 = THEME.BgInput
+MinBtn.Position = UDim2.new(1, -38, 0, 5)
+MinBtn.BackgroundColor3 = THEME.AccentPurple
 MinBtn.Font = Enum.Font.GothamBold
 MinBtn.Text = "—"
-MinBtn.TextColor3 = THEME.TextSecondary
-MinBtn.TextSize = 13
+MinBtn.TextColor3 = Color3.new(1, 1, 1)
+MinBtn.TextSize = 14
 MinBtn.ZIndex = 103
 MinBtn.Parent = Header
 local MinCorner = Instance.new("UICorner")
 MinCorner.CornerRadius = UDim.new(0, 6)
 MinCorner.Parent = MinBtn
 MinBtn.MouseButton1Click:Connect(toggleDexVisibility)
-
-local CloseBtn = Instance.new("TextButton")
-CloseBtn.Size = UDim2.new(0, 32, 0, 32)
-CloseBtn.Position = UDim2.new(1, -38, 0, 5)
-CloseBtn.BackgroundColor3 = Color3.fromRGB(220, 38, 38)
-CloseBtn.Font = Enum.Font.GothamBold
-CloseBtn.Text = "✕"
-CloseBtn.TextColor3 = Color3.new(1, 1, 1)
-CloseBtn.TextSize = 13
-CloseBtn.ZIndex = 103
-CloseBtn.Parent = Header
-local CloseCorner = Instance.new("UICorner")
-CloseCorner.CornerRadius = UDim.new(0, 6)
-CloseCorner.Parent = CloseBtn
-CloseBtn.MouseButton1Click:Connect(function()
-    ScreenGui:Destroy()
-end)
 
 -- ==============================================================================
 -- 📑 TAB NAVIGATION BAR (4 TABS MOBILE ERGONOMIC)
@@ -559,15 +647,37 @@ local PropertiesPanel = createPanel("Properties")
 local RemoteSpyPanel  = createPanel("RemoteSpy")
 local ScriptPanel     = createPanel("ScriptView")
 
--- Shared Variable untuk Instance Terpilih
+-- Shared Variables
 local selectedInstance = nil
 local updatePropertiesView = nil
 local openInScriptViewer = nil
 
 -- ==============================================================================
--- 🌳 TAB 1: EXPLORER TREE ENGINE (LAZY LOADING & REAL-TIME SEARCH)
+-- 📋 FUNGSI FORMAT PATH INSTANCE LENGKAP
 -- ==============================================================================
--- Baris Pencarian
+local function getInstancePath(inst)
+    if not inst then return "nil" end
+    if inst == game then return "game" end
+    local parts = {}
+    local curr = inst
+    while curr and curr ~= game do
+        local name = curr.Name
+        if string.find(name, "[^%w_]") then
+            table.insert(parts, 1, string.format('["%s"]', name))
+        else
+            table.insert(parts, 1, (curr.Parent == game and "" or ".") .. name)
+        end
+        curr = curr.Parent
+    end
+    if inst.Parent == game then
+        return string.format('game:GetService("%s")', inst.ClassName)
+    end
+    return "game" .. table.concat(parts, "")
+end
+
+-- ==============================================================================
+-- 🌳 TAB 1: EXPLORER TREE ENGINE (FULL SERVICES, NIL INSTANCES & LAZY EXPANSION)
+-- ==============================================================================
 local SearchBarContainer = Instance.new("Frame")
 SearchBarContainer.Size = UDim2.new(1, 0, 0, 36)
 SearchBarContainer.Position = UDim2.new(0, 0, 0, 0)
@@ -590,7 +700,7 @@ SearchBox.Size = UDim2.new(1, -70, 1, 0)
 SearchBox.Position = UDim2.new(0, 10, 0, 0)
 SearchBox.BackgroundTransparency = 1
 SearchBox.Font = Enum.Font.Gotham
-SearchBox.PlaceholderText = "🔍 Cari objek / class di Game..."
+SearchBox.PlaceholderText = "🔍 Cari objek / class di Game & Nil..."
 SearchBox.PlaceholderColor3 = THEME.TextMuted
 SearchBox.Text = ""
 SearchBox.TextColor3 = THEME.TextPrimary
@@ -668,6 +778,16 @@ local CopyPathCorner = Instance.new("UICorner")
 CopyPathCorner.CornerRadius = UDim.new(0, 4)
 CopyPathCorner.Parent = CopyPathBtn
 
+CopyPathBtn.MouseButton1Click:Connect(function()
+    if selectedInstance then
+        local p = getInstancePath(selectedInstance)
+        setClipboardText(p)
+        showToast("📋 Copy Path", p, THEME.AccentCyan)
+    else
+        showToast("⚠️ Peringatan", "Pilih objek terlebih dahulu!", THEME.AccentAmber)
+    end
+end)
+
 -- Scrolling Container Tree View
 local TreeScroll = Instance.new("ScrollingFrame")
 TreeScroll.Size = UDim2.new(1, 0, 1, -72)
@@ -690,43 +810,11 @@ TreeLayout.Padding = UDim.new(0, 2)
 TreeLayout.Parent = TreeScroll
 
 TreeLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-    TreeScroll.CanvasSize = UDim2.new(0, 0, 0, TreeLayout.AbsoluteContentSize.Y + 12)
+    TreeScroll.CanvasSize = UDim2.new(0, 0, 0, TreeLayout.AbsoluteContentSize.Y + 14)
 end)
 
 -- ==============================================================================
--- 📋 FUNGSI FORMAT PATH INSTANCE
--- ==============================================================================
-local function getInstancePath(inst)
-    if not inst then return "nil" end
-    local parts = {}
-    local curr = inst
-    while curr and curr ~= game do
-        local name = curr.Name
-        if string.find(name, "[^%w_]") then
-            table.insert(parts, 1, string.format('["%s"]', name))
-        else
-            table.insert(parts, 1, (curr.Parent == game and "" or ".") .. name)
-        end
-        curr = curr.Parent
-    end
-    if inst.Parent == game then
-        return string.format('game:GetService("%s")', inst.ClassName)
-    end
-    return "game" .. table.concat(parts, "")
-end
-
-CopyPathBtn.MouseButton1Click:Connect(function()
-    if selectedInstance then
-        local p = getInstancePath(selectedInstance)
-        setClipboardText(p)
-        showToast("📋 Copy Path", p, THEME.AccentCyan)
-    else
-        showToast("⚠️ Peringatan", "Pilih objek terlebih dahulu!", THEME.AccentAmber)
-    end
-end)
-
--- ==============================================================================
--- 📑 CONTEXT ACTION MODAL SHEET (ACTION MENU MOBILE)
+-- 📑 CONTEXT ACTION MODAL SHEET (BOTTOM SHEET MOBILE)
 -- ==============================================================================
 local ActionModal = Instance.new("Frame")
 ActionModal.Name = "ActionModal"
@@ -738,8 +826,8 @@ ActionModal.ZIndex = 800
 ActionModal.Parent = MainFrame
 
 local ModalCard = Instance.new("Frame")
-ModalCard.Size = UDim2.new(0, 310, 0, 360)
-ModalCard.Position = UDim2.new(0.5, -155, 0.5, -180)
+ModalCard.Size = UDim2.new(0, 310, 0, 380)
+ModalCard.Position = UDim2.new(0.5, -155, 0.5, -190)
 ModalCard.BackgroundColor3 = THEME.BgCard
 ModalCard.BorderSizePixel = 0
 ModalCard.ZIndex = 801
@@ -759,7 +847,7 @@ ModalTitle.Size = UDim2.new(1, -20, 0, 28)
 ModalTitle.Position = UDim2.new(0, 12, 0, 8)
 ModalTitle.BackgroundTransparency = 1
 ModalTitle.Font = Enum.Font.GothamBold
-ModalTitle.Text = "⚡ Quick Action Menu"
+ModalTitle.Text = "⚡ Context Action Menu"
 ModalTitle.TextColor3 = THEME.TextPrimary
 ModalTitle.TextSize = 13
 ModalTitle.TextXAlignment = Enum.TextXAlignment.Left
@@ -785,7 +873,7 @@ ActionScroll.Position = UDim2.new(0, 8, 0, 56)
 ActionScroll.BackgroundTransparency = 1
 ActionScroll.ScrollBarThickness = 3
 ActionScroll.ScrollBarImageColor3 = THEME.BorderSubtle
-ActionScroll.CanvasSize = UDim2.new(0, 0, 0, 320)
+ActionScroll.CanvasSize = UDim2.new(0, 0, 0, 360)
 ActionScroll.ZIndex = 802
 ActionScroll.Parent = ModalCard
 
@@ -841,7 +929,6 @@ local function addActionButton(name, icon, color, callback)
     end)
 end
 
--- Pilihan Aksi Cepat
 addActionButton("Teleport Karakter ke Part", "🚀", THEME.AccentEmerald, function()
     if not selectedInstance then return end
     local pos = nil
@@ -870,7 +957,7 @@ addActionButton("Inspeksi Properties", "⚙️", THEME.AccentPurple, function()
     end
 end)
 
-addActionButton("Lihat Script (Decompile)", "📜", THEME.AccentCyan, function()
+addActionButton("Buka di Script Viewer", "📜", THEME.AccentCyan, function()
     if selectedInstance and openInScriptViewer then
         switchTab("ScriptView")
         openInScriptViewer(selectedInstance)
@@ -929,17 +1016,17 @@ addActionButton("Musnahkan Objek (:Destroy())", "🗑️", Color3.fromRGB(239, 6
 end)
 
 -- ==============================================================================
--- 🌲 TREE VIEW RENDERING ENGINE (LAZY ON-DEMAND EXPANSION)
+-- 🌲 TREE VIEW RENDERING ENGINE (LAZY ON-DEMAND EXPANSION & REAL-TIME UPDATES)
 -- ==============================================================================
 local treeNodes = {}
 
-local function createTreeNode(inst, depth, parentContainer)
+local function createTreeNode(inst, depth, parentContainer, customDisplayName, customIcon)
     depth = depth or 0
     if not inst then return nil end
 
     local row = Instance.new("Frame")
-    row.Name = "Row_" .. inst.Name
-    row.Size = UDim2.new(1, -4, 0, 36) -- Tinggi 36px ramah sentuhan layar HP
+    row.Name = "Row_" .. (inst.Name or "Unnamed")
+    row.Size = UDim2.new(1, -4, 0, 36)
     row.BackgroundColor3 = THEME.BgCard
     row.BackgroundTransparency = 1
     row.BorderSizePixel = 0
@@ -958,8 +1045,11 @@ local function createTreeNode(inst, depth, parentContainer)
     rowBtn.ZIndex = 116
     rowBtn.Parent = row
 
-    -- Expand/Collapse Arrow
-    local hasChildren = (#inst:GetChildren() > 0)
+    local hasChildren = false
+    pcall(function()
+        hasChildren = (#inst:GetChildren() > 0)
+    end)
+
     local arrowBtn = Instance.new("TextButton")
     arrowBtn.Size = UDim2.new(0, 24, 0, 24)
     arrowBtn.Position = UDim2.new(0, depth * 14 + 4, 0.5, -12)
@@ -971,24 +1061,22 @@ local function createTreeNode(inst, depth, parentContainer)
     arrowBtn.ZIndex = 117
     arrowBtn.Parent = row
 
-    -- Icon Class
     local iconLbl = Instance.new("TextLabel")
     iconLbl.Size = UDim2.new(0, 22, 0, 22)
     iconLbl.Position = UDim2.new(0, depth * 14 + 28, 0.5, -11)
     iconLbl.BackgroundTransparency = 1
     iconLbl.Font = Enum.Font.Gotham
-    iconLbl.Text = getClassIcon(inst.ClassName)
+    iconLbl.Text = customIcon or getClassIcon(inst.ClassName)
     iconLbl.TextSize = 13
     iconLbl.ZIndex = 117
     iconLbl.Parent = row
 
-    -- Nama Instance & ClassName
     local nameLbl = Instance.new("TextLabel")
     nameLbl.Size = UDim2.new(1, -(depth * 14 + 54), 1, 0)
     nameLbl.Position = UDim2.new(0, depth * 14 + 52, 0, 0)
     nameLbl.BackgroundTransparency = 1
     nameLbl.Font = Enum.Font.GothamMedium
-    nameLbl.Text = string.format("%s <font color=\"#6B7280\">(%s)</font>", inst.Name, inst.ClassName)
+    nameLbl.Text = customDisplayName or string.format("%s <font color=\"#6B7280\">(%s)</font>", inst.Name, inst.ClassName)
     nameLbl.RichText = true
     nameLbl.TextColor3 = THEME.TextPrimary
     nameLbl.TextSize = 11
@@ -997,7 +1085,6 @@ local function createTreeNode(inst, depth, parentContainer)
     nameLbl.ZIndex = 117
     nameLbl.Parent = row
 
-    -- Tombol Action Menu Cepat [⋮] (Khusus Sentuhan Mobile)
     local actBtn = Instance.new("TextButton")
     actBtn.Size = UDim2.new(0, 32, 0, 28)
     actBtn.Position = UDim2.new(1, -34, 0.5, -14)
@@ -1016,7 +1103,6 @@ local function createTreeNode(inst, depth, parentContainer)
         openActionModal(inst)
     end)
 
-    -- Container Anak Objek
     local childrenContainer = Instance.new("Frame")
     childrenContainer.Name = "ChildrenOf_" .. inst.Name
     childrenContainer.Size = UDim2.new(1, 0, 0, 0)
@@ -1034,17 +1120,37 @@ local function createTreeNode(inst, depth, parentContainer)
     local isExpanded = false
     local childrenLoaded = false
 
+    local function loadChildNodes()
+        for _, c in ipairs(childrenContainer:GetChildren()) do
+            if c:IsA("Frame") then c:Destroy() end
+        end
+        local ok, kids = pcall(function() return inst:GetChildren() end)
+        if ok and kids then
+            for _, child in ipairs(kids) do
+                createTreeNode(child, depth + 1, childrenContainer)
+            end
+        end
+    end
+
     local function toggleExpand()
-        if not hasChildren then return end
         isExpanded = not isExpanded
         arrowBtn.Text = isExpanded and "▼" or "▶"
         arrowBtn.TextColor3 = isExpanded and THEME.AccentCyan or THEME.AccentPurple
 
-        if isExpanded and not childrenLoaded then
-            childrenLoaded = true
-            local kids = inst:GetChildren()
-            for _, child in ipairs(kids) do
-                createTreeNode(child, depth + 1, childrenContainer)
+        if isExpanded then
+            if not childrenLoaded then
+                childrenLoaded = true
+                loadChildNodes()
+                
+                -- Real-Time Child Listeners
+                pcall(function()
+                    inst.ChildAdded:Connect(function()
+                        if isExpanded then loadChildNodes() end
+                    end)
+                    inst.ChildRemoved:Connect(function()
+                        if isExpanded then loadChildNodes() end
+                    end)
+                end)
             end
         end
         childrenContainer.Visible = isExpanded
@@ -1056,7 +1162,6 @@ local function createTreeNode(inst, depth, parentContainer)
         selectedInstance = inst
         PathLabel.Text = getInstancePath(inst)
 
-        -- Highlight visual baris
         for _, otherRow in pairs(treeNodes) do
             if otherRow and otherRow.Parent then
                 otherRow.BackgroundTransparency = 1
@@ -1074,38 +1179,137 @@ local function createTreeNode(inst, depth, parentContainer)
     return row
 end
 
+-- ==============================================================================
+-- 🌐 POPULATE FULL ROBLOX SERVICES & NIL INSTANCES
+-- ==============================================================================
 local function populateRootServices()
     for _, child in ipairs(TreeScroll:GetChildren()) do
         if child:IsA("Frame") then child:Destroy() end
     end
     treeNodes = {}
 
-    local ROOT_SERVICES = {
-        workspace,
-        Players,
-        game:GetService("Lighting"),
-        game:GetService("ReplicatedStorage"),
-        game:GetService("ReplicatedFirst"),
-        game:GetService("StarterGui"),
-        game:GetService("StarterPack"),
-        game:GetService("StarterPlayer"),
-        game:GetService("SoundService"),
-        game:GetService("TextChatService"),
-        game:GetService("MaterialService"),
-    }
-    pcall(function() table.insert(ROOT_SERVICES, CoreGui) end)
+    -- 1. Root DataModel (game)
+    local rootRow = createTreeNode(game, 0, TreeScroll, "🌐 DataModel (game)", "🌐")
 
-    for _, s in ipairs(ROOT_SERVICES) do
-        if s then
-            createTreeNode(s, 0, TreeScroll)
+    -- 2. Daftar Service Lengkap (Termasuk yang hidden)
+    local KNOWN_SERVICES = {
+        "Workspace", "Players", "Lighting", "ReplicatedFirst", "ReplicatedStorage",
+        "ServerScriptService", "ServerStorage", "StarterGui", "StarterPack",
+        "StarterPlayer", "Teams", "SoundService", "Chat", "TextChatService",
+        "LocalizationService", "JointsService", "Debris", "TweenService",
+        "MaterialService", "TestService", "CoreGui"
+    }
+
+    local renderedServices = {}
+
+    -- Tambahkan yang sudah ada di game:GetChildren()
+    for _, child in ipairs(game:GetChildren()) do
+        renderedServices[child.ClassName] = true
+        createTreeNode(child, 1, TreeScroll)
+    end
+
+    -- Tambahkan service resmi lainnya via game:GetService()
+    for _, sName in ipairs(KNOWN_SERVICES) do
+        if not renderedServices[sName] then
+            pcall(function()
+                local s = game:GetService(sName)
+                if s then
+                    renderedServices[sName] = true
+                    createTreeNode(s, 1, TreeScroll)
+                end
+            end)
         end
     end
+
+    -- 3. 👻 NIL INSTANCES (GETNILINSTANCES INTEGRATION)
+    task.spawn(function()
+        local getNilFunc = getnilinstances or (getgenv and getgenv().getnilinstances) or (syn and syn.get_nil_instances)
+        if getNilFunc and type(getNilFunc) == "function" then
+            local ok, nilList = pcall(getNilFunc)
+            if ok and type(nilList) == "table" and #nilList > 0 then
+                -- Buat virtual folder Nil Instances di Tree
+                local nilRow = Instance.new("Frame")
+                nilRow.Name = "Row_NilInstances"
+                nilRow.Size = UDim2.new(1, -4, 0, 36)
+                nilRow.BackgroundColor3 = THEME.BgCard
+                nilRow.BackgroundTransparency = 1
+                nilRow.ZIndex = 115
+                nilRow.Parent = TreeScroll
+
+                local nrCorner = Instance.new("UICorner")
+                nrCorner.CornerRadius = UDim.new(0, 5)
+                nrCorner.Parent = nilRow
+
+                local nArrow = Instance.new("TextButton")
+                nArrow.Size = UDim2.new(0, 24, 0, 24)
+                nArrow.Position = UDim2.new(0, 18, 0.5, -12)
+                nArrow.BackgroundTransparency = 1
+                nArrow.Font = Enum.Font.GothamBold
+                nArrow.Text = "▶"
+                nArrow.TextColor3 = THEME.AccentEmerald
+                nArrow.TextSize = 11
+                nArrow.ZIndex = 117
+                nArrow.Parent = nilRow
+
+                local nIcon = Instance.new("TextLabel")
+                nIcon.Size = UDim2.new(0, 22, 0, 22)
+                nIcon.Position = UDim2.new(0, 42, 0.5, -11)
+                nIcon.BackgroundTransparency = 1
+                nIcon.Font = Enum.Font.Gotham
+                nIcon.Text = "👻"
+                nIcon.TextSize = 13
+                nIcon.ZIndex = 117
+                nIcon.Parent = nilRow
+
+                local nName = Instance.new("TextLabel")
+                nName.Size = UDim2.new(1, -70, 1, 0)
+                nName.Position = UDim2.new(0, 68, 0, 0)
+                nName.BackgroundTransparency = 1
+                nName.Font = Enum.Font.GothamBold
+                nName.Text = string.format("Nil Instances <font color=\"#10B981\">(%d Objek)</font>", #nilList)
+                nName.RichText = true
+                nName.TextColor3 = THEME.AccentEmerald
+                nName.TextSize = 11
+                nName.TextXAlignment = Enum.TextXAlignment.Left
+                nName.ZIndex = 117
+                nName.Parent = nilRow
+
+                local nilContainer = Instance.new("Frame")
+                nilContainer.Name = "NilChildrenContainer"
+                nilContainer.Size = UDim2.new(1, 0, 0, 0)
+                nilContainer.BackgroundTransparency = 1
+                nilContainer.AutomaticSize = Enum.AutomaticSize.Y
+                nilContainer.Visible = false
+                nilContainer.ZIndex = 115
+                nilContainer.Parent = TreeScroll
+
+                local nilLayout = Instance.new("UIListLayout")
+                nilLayout.SortOrder = Enum.SortOrder.LayoutOrder
+                nilLayout.Padding = UDim.new(0, 2)
+                nilLayout.Parent = nilContainer
+
+                local nilExpanded = false
+                nArrow.MouseButton1Click:Connect(function()
+                    nilExpanded = not nilExpanded
+                    nArrow.Text = nilExpanded and "▼" or "▶"
+                    if nilExpanded and #nilContainer:GetChildren() <= 1 then
+                        for _, nInst in ipairs(nilList) do
+                            if typeof(nInst) == "Instance" then
+                                createTreeNode(nInst, 2, nilContainer)
+                            end
+                        end
+                    end
+                    nilContainer.Visible = nilExpanded
+                end)
+            end
+        end
+    end)
 end
 
 populateRootServices()
 RefreshTreeBtn.MouseButton1Click:Connect(populateRootServices)
 
--- Search Engine Real-Time
+-- Search Engine
 local function executeSearch(query)
     query = string.lower(query or "")
     if query == "" then
@@ -1119,7 +1323,7 @@ local function executeSearch(query)
     treeNodes = {}
 
     local count = 0
-    local maxResults = 60 -- Limit agar tidak lag/freeze di Mobile
+    local maxResults = 80
 
     local function searchDescendants(parent)
         for _, child in ipairs(parent:GetChildren()) do
@@ -1151,7 +1355,7 @@ ClearSearchBtn.MouseButton1Click:Connect(function()
 end)
 
 -- ==============================================================================
--- ⚙️ TAB 2: LIVE PROPERTY INSPECTOR & EDITOR
+-- ⚙️ TAB 2: EXHAUSTIVE STUDIO PROPERTY INSPECTOR & LIVE EDITOR
 -- ==============================================================================
 local PropHeader = Instance.new("Frame")
 PropHeader.Size = UDim2.new(1, 0, 0, 36)
@@ -1198,19 +1402,44 @@ PropLayout.Padding = UDim.new(0, 3)
 PropLayout.Parent = PropScroll
 
 PropLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-    PropScroll.CanvasSize = UDim2.new(0, 0, 0, PropLayout.AbsoluteContentSize.Y + 14)
+    PropScroll.CanvasSize = UDim2.new(0, 0, 0, PropLayout.AbsoluteContentSize.Y + 16)
 end)
+
+local function addCategoryHeader(title)
+    local cat = Instance.new("Frame")
+    cat.Size = UDim2.new(1, -6, 0, 24)
+    cat.BackgroundColor3 = THEME.SectionHeader
+    cat.BorderSizePixel = 0
+    cat.ZIndex = 113
+    cat.Parent = PropScroll
+
+    local cCorner = Instance.new("UICorner")
+    cCorner.CornerRadius = UDim.new(0, 4)
+    cCorner.Parent = cat
+
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(1, -12, 1, 0)
+    lbl.Position = UDim2.new(0, 8, 0, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.Font = Enum.Font.GothamBold
+    lbl.Text = title
+    lbl.TextColor3 = THEME.AccentCyan
+    lbl.TextSize = 10
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.ZIndex = 114
+    lbl.Parent = cat
+end
 
 local function addPropertyRow(inst, propName, propValue, propType)
     local row = Instance.new("Frame")
-    row.Size = UDim2.new(1, -6, 0, 38)
+    row.Size = UDim2.new(1, -6, 0, 36)
     row.BackgroundColor3 = THEME.BgInput
     row.BorderSizePixel = 0
     row.ZIndex = 113
     row.Parent = PropScroll
 
     local rCorner = Instance.new("UICorner")
-    rCorner.CornerRadius = UDim.new(0, 6)
+    rCorner.CornerRadius = UDim.new(0, 5)
     rCorner.Parent = row
 
     local nameLbl = Instance.new("TextLabel")
@@ -1222,14 +1451,15 @@ local function addPropertyRow(inst, propName, propValue, propType)
     nameLbl.TextColor3 = THEME.TextPrimary
     nameLbl.TextSize = 11
     nameLbl.TextXAlignment = Enum.TextXAlignment.Left
+    nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
     nameLbl.ZIndex = 114
     nameLbl.Parent = row
 
-    -- Kontrol Editor Interaktif
+    -- Kontrol Editor Berdasarkan Tipe Data
     if propType == "boolean" then
         local toggleBtn = Instance.new("TextButton")
-        toggleBtn.Size = UDim2.new(0, 56, 0, 26)
-        toggleBtn.Position = UDim2.new(1, -64, 0.5, -13)
+        toggleBtn.Size = UDim2.new(0, 56, 0, 24)
+        toggleBtn.Position = UDim2.new(1, -62, 0.5, -12)
         toggleBtn.BackgroundColor3 = propValue and THEME.AccentEmerald or Color3.fromRGB(60, 65, 80)
         toggleBtn.Font = Enum.Font.GothamBold
         toggleBtn.Text = propValue and "TRUE" or "FALSE"
@@ -1238,7 +1468,7 @@ local function addPropertyRow(inst, propName, propValue, propType)
         toggleBtn.ZIndex = 114
         toggleBtn.Parent = row
         local tCorner = Instance.new("UICorner")
-        tCorner.CornerRadius = UDim.new(0, 5)
+        tCorner.CornerRadius = UDim.new(0, 4)
         tCorner.Parent = toggleBtn
 
         toggleBtn.MouseButton1Click:Connect(function()
@@ -1251,10 +1481,47 @@ local function addPropertyRow(inst, propName, propValue, propType)
                 showToast("⚙️ Property", string.format("%s = %s", propName, tostring(newVal)), THEME.AccentEmerald)
             end
         end)
+    elseif propType == "Color3" then
+        local colorSwatch = Instance.new("Frame")
+        colorSwatch.Size = UDim2.new(0, 24, 0, 24)
+        colorSwatch.Position = UDim2.new(0.44, 0, 0.5, -12)
+        colorSwatch.BackgroundColor3 = propValue
+        colorSwatch.BorderSizePixel = 0
+        colorSwatch.ZIndex = 114
+        colorSwatch.Parent = row
+        local csCorner = Instance.new("UICorner")
+        csCorner.CornerRadius = UDim.new(0, 4)
+        csCorner.Parent = colorSwatch
+
+        local valBox = Instance.new("TextBox")
+        valBox.Size = UDim2.new(0.56, -34, 0, 24)
+        valBox.Position = UDim2.new(0.44, 30, 0.5, -12)
+        valBox.BackgroundColor3 = THEME.BgCard
+        valBox.Font = Enum.Font.Code
+        valBox.Text = string.format("%d, %d, %d", math.floor(propValue.R*255), math.floor(propValue.G*255), math.floor(propValue.B*255))
+        valBox.TextColor3 = THEME.AccentCyan
+        valBox.TextSize = 10
+        valBox.ClearTextOnFocus = false
+        valBox.ZIndex = 114
+        valBox.Parent = row
+        local vbCorner = Instance.new("UICorner")
+        vbCorner.CornerRadius = UDim.new(0, 4)
+        vbCorner.Parent = valBox
+
+        valBox.FocusLost:Connect(function(enterPressed)
+            if enterPressed then
+                local r, g, b = valBox.Text:match("(%d+)[,%s]+(%d+)[,%s]+(%d+)")
+                if r and g and b then
+                    local newCol = Color3.fromRGB(tonumber(r), tonumber(g), tonumber(b))
+                    pcall(function() inst[propName] = newCol end)
+                    colorSwatch.BackgroundColor3 = newCol
+                end
+            end
+        end)
     else
         local valBox = Instance.new("TextBox")
-        valBox.Size = UDim2.new(0.56, -6, 0, 26)
-        valBox.Position = UDim2.new(0.44, 0, 0.5, -13)
+        valBox.Size = UDim2.new(0.56, -6, 0, 24)
+        valBox.Position = UDim2.new(0.44, 0, 0.5, -12)
         valBox.BackgroundColor3 = THEME.BgCard
         valBox.Font = Enum.Font.Code
         valBox.Text = tostring(propValue)
@@ -1275,12 +1542,57 @@ local function addPropertyRow(inst, propName, propValue, propType)
                         inst[propName] = tonumber(txt) or inst[propName]
                     elseif propType == "string" then
                         inst[propName] = txt
+                    elseif propType == "Vector3" then
+                        local x, y, z = txt:match("([%d%.%-]+)[,%s]+([%d%.%-]+)[,%s]+([%d%.%-]+)")
+                        if x and y and z then
+                            inst[propName] = Vector3.new(tonumber(x), tonumber(y), tonumber(z))
+                        end
                     end
                 end)
             end
         end)
     end
 end
+
+-- Katalog Kategori Properti Komprehensif
+local PROPERTY_CATEGORIES = {
+    {
+        Category = "▼ Identity",
+        Props = { "Name", "ClassName", "Parent", "Archivable" }
+    },
+    {
+        Category = "▼ Transform",
+        Props = { "CFrame", "Position", "Orientation", "Size", "PivotOffset", "WorldPivot" }
+    },
+    {
+        Category = "▼ Appearance",
+        Props = { "Color", "BrickColor", "Material", "Transparency", "Reflectance", "CastShadow", "TextureID", "MeshId", "DoubleSided" }
+    },
+    {
+        Category = "▼ Collision & Physics",
+        Props = { "CanCollide", "Anchored", "CanTouch", "CanQuery", "Massless", "AssemblyLinearVelocity", "AssemblyAngularVelocity" }
+    },
+    {
+        Category = "▼ Value & Variables",
+        Props = { "Value", "Text", "TextColor3", "TextSize", "SoundId", "Volume", "PlaybackSpeed", "Playing", "Looped" }
+    },
+    {
+        Category = "▼ Humanoid & Character",
+        Props = { "Health", "MaxHealth", "WalkSpeed", "JumpPower", "JumpHeight", "HipHeight", "DisplayName", "AutoRotate", "Sit", "PlatformStand" }
+    },
+    {
+        Category = "▼ GUI & Display",
+        Props = { "Visible", "Active", "Enabled", "ZIndex", "DisplayOrder", "LayoutOrder", "BackgroundTransparency", "BackgroundColor3", "ClipsDescendants" }
+    },
+    {
+        Category = "▼ Lights & Atmosphere",
+        Props = { "Brightness", "Range", "Shadows", "ClockTime", "FogStart", "FogEnd", "Density", "Haze", "Glare" }
+    },
+    {
+        Category = "▼ Interaction & Proximity",
+        Props = { "ActionText", "ObjectText", "HoldDuration", "MaxActivationDistance", "RequiresLineOfSight", "ClickablePrompt" }
+    }
+}
 
 updatePropertiesView = function(inst)
     if not inst then return end
@@ -1290,25 +1602,29 @@ updatePropertiesView = function(inst)
         if c:IsA("Frame") then c:Destroy() end
     end
 
-    local COMMON_PROPS = {
-        "Name", "ClassName", "Parent",
-        "Position", "Size", "Orientation", "CFrame",
-        "Transparency", "Reflectance", "Material", "Color", "CastShadow",
-        "CanCollide", "Anchored", "CanTouch", "CanQuery", "Massless",
-        "Value", "WalkSpeed", "JumpPower", "Health", "MaxHealth",
-        "Enabled", "Visible", "Text", "SoundId", "Volume", "Playing"
-    }
+    local renderedProps = {}
 
-    for _, prop in ipairs(COMMON_PROPS) do
-        local ok, val = pcall(function() return inst[prop] end)
-        if ok and val ~= nil then
-            addPropertyRow(inst, prop, val, typeof(val))
+    for _, cat in ipairs(PROPERTY_CATEGORIES) do
+        local catItems = {}
+        for _, prop in ipairs(cat.Props) do
+            local ok, val = pcall(function() return inst[prop] end)
+            if ok and val ~= nil and not renderedProps[prop] then
+                renderedProps[prop] = true
+                table.insert(catItems, { Name = prop, Value = val, Type = typeof(val) })
+            end
+        end
+
+        if #catItems > 0 then
+            addCategoryHeader(cat.Category)
+            for _, item in ipairs(catItems) do
+                addPropertyRow(inst, item.Name, item.Value, item.Type)
+            end
         end
     end
 end
 
 -- ==============================================================================
--- 📡 TAB 3: REAL-TIME REMOTE SPY & NETWORK CALLER
+-- 📡 TAB 3: REAL-TIME REMOTE SPY & REPLAY CALLER
 -- ==============================================================================
 local RemoteSpyLogs = {}
 local isSpyPaused = false
@@ -1466,7 +1782,6 @@ local function addRemoteLog(method, remoteInst, args)
     subLbl.ZIndex = 114
     subLbl.Parent = row
 
-    -- Tombol Re-fire / Test Invoke
     local fireBtn = Instance.new("TextButton")
     fireBtn.Size = UDim2.new(0, 38, 0, 24)
     fireBtn.Position = UDim2.new(1, -84, 0.5, -12)
@@ -1492,7 +1807,6 @@ local function addRemoteLog(method, remoteInst, args)
         end)
     end)
 
-    -- Tombol Salin Script Call
     local copyCallBtn = Instance.new("TextButton")
     copyCallBtn.Size = UDim2.new(0, 38, 0, 24)
     copyCallBtn.Position = UDim2.new(1, -42, 0.5, -12)
@@ -1529,7 +1843,6 @@ PauseSpyBtn.MouseButton1Click:Connect(function()
     PauseSpyBtn.TextColor3 = isSpyPaused and THEME.AccentRose or THEME.AccentCyan
 end)
 
--- Hooking __namecall untuk menangkap tendangan/remote game
 pcall(function()
     if hookmetamethod then
         local oldNamecall
@@ -1549,7 +1862,7 @@ pcall(function()
 end)
 
 -- ==============================================================================
--- 📜 TAB 4: SCRIPT VIEWER & DECOMPILER
+-- 📜 TAB 4: UNIVERSAL SCRIPT VIEWER & MULTI-TIER DECOMPILER ENGINE
 -- ==============================================================================
 local ScriptHeader = Instance.new("Frame")
 ScriptHeader.Size = UDim2.new(1, 0, 0, 36)
@@ -1563,7 +1876,7 @@ SHCorner.CornerRadius = UDim.new(0, 8)
 SHCorner.Parent = ScriptHeader
 
 local ScriptTitle = Instance.new("TextLabel")
-ScriptTitle.Size = UDim2.new(1, -160, 1, 0)
+ScriptTitle.Size = UDim2.new(1, -220, 1, 0)
 ScriptTitle.Position = UDim2.new(0, 10, 0, 0)
 ScriptTitle.BackgroundTransparency = 1
 ScriptTitle.Font = Enum.Font.GothamBold
@@ -1577,7 +1890,7 @@ ScriptTitle.Parent = ScriptHeader
 
 local DecompileBtn = Instance.new("TextButton")
 DecompileBtn.Size = UDim2.new(0, 76, 0, 26)
-DecompileBtn.Position = UDim2.new(1, -152, 0, 5)
+DecompileBtn.Position = UDim2.new(1, -214, 0, 5)
 DecompileBtn.BackgroundColor3 = THEME.AccentPurple
 DecompileBtn.Font = Enum.Font.GothamBold
 DecompileBtn.Text = "⚡ Decompile"
@@ -1589,9 +1902,23 @@ local DBCorner = Instance.new("UICorner")
 DBCorner.CornerRadius = UDim.new(0, 5)
 DBCorner.Parent = DecompileBtn
 
+local SaveFileBtn = Instance.new("TextButton")
+SaveFileBtn.Size = UDim2.new(0, 64, 0, 26)
+SaveFileBtn.Position = UDim2.new(1, -134, 0, 5)
+SaveFileBtn.BackgroundColor3 = THEME.AccentEmerald
+SaveFileBtn.Font = Enum.Font.GothamBold
+SaveFileBtn.Text = "💾 Save"
+SaveFileBtn.TextColor3 = Color3.new(1, 1, 1)
+SaveFileBtn.TextSize = 10
+SaveFileBtn.ZIndex = 114
+SaveFileBtn.Parent = ScriptHeader
+local SFBCorner = Instance.new("UICorner")
+SFBCorner.CornerRadius = UDim.new(0, 5)
+SFBCorner.Parent = SaveFileBtn
+
 local CopyScriptBtn = Instance.new("TextButton")
-CopyScriptBtn.Size = UDim2.new(0, 68, 0, 26)
-CopyScriptBtn.Position = UDim2.new(1, -72, 0, 5)
+CopyScriptBtn.Size = UDim2.new(0, 62, 0, 26)
+CopyScriptBtn.Position = UDim2.new(1, -66, 0, 5)
 CopyScriptBtn.BackgroundColor3 = THEME.BgInput
 CopyScriptBtn.Font = Enum.Font.GothamBold
 CopyScriptBtn.Text = "📋 Copy"
@@ -1609,7 +1936,7 @@ ScriptBox.Position = UDim2.new(0, 0, 0, 44)
 ScriptBox.BackgroundColor3 = THEME.BgCard
 ScriptBox.BorderSizePixel = 0
 ScriptBox.Font = Enum.Font.Code
-ScriptBox.Text = "-- Silakan pilih LocalScript / ModuleScript di Explorer lalu tekan 'Decompile'"
+ScriptBox.Text = "-- Silakan pilih LocalScript / ModuleScript di Explorer lalu tekan '⚡ Decompile'"
 ScriptBox.TextColor3 = THEME.TextPrimary
 ScriptBox.TextSize = 11
 ScriptBox.TextXAlignment = Enum.TextXAlignment.Left
@@ -1628,41 +1955,128 @@ openInScriptViewer = function(scriptInst)
     selectedInstance = scriptInst
     ScriptTitle.Text = string.format("📜 [%s] %s", scriptInst.ClassName, scriptInst.Name)
 
-    if not (scriptInst:IsA("LocalScript") or scriptInst:IsA("ModuleScript")) then
+    if not (scriptInst:IsA("LocalScript") or scriptInst:IsA("ModuleScript") or scriptInst:IsA("Script")) then
         ScriptBox.Text = string.format("-- '%s' adalah objek berkelas '%s', bukan Script!", scriptInst.Name, scriptInst.ClassName)
+        return
+    end
+
+    -- Cek langsung apakah .Source bisa dibaca (100% Original Source Code)
+    local okSource, rawSource = pcall(function() return scriptInst.Source end)
+    if okSource and type(rawSource) == "string" and #rawSource > 0 then
+        ScriptBox.Text = rawSource
+        showToast("📜 Source Code", "Berhasil membaca source code asli!", THEME.AccentEmerald)
         return
     end
 
     ScriptBox.Text = "-- Membaca script " .. scriptInst.Name .. "...\n-- Tekan tombol '⚡ Decompile' untuk membaca source code lengkap."
 end
 
+-- ==============================================================================
+-- 🔬 UNIVERSAL DECOMPILER ENGINE (DELTA, CODEX, FLUXUS, WAVE, SYNAPSE, ARCEUS)
+-- ==============================================================================
+local function executeUniversalDecompile(scriptInst)
+    if not scriptInst then return nil, "No Script" end
+
+    -- TIER 1: Direct .Source Property
+    local okSource, rawSource = pcall(function() return scriptInst.Source end)
+    if okSource and type(rawSource) == "string" and #rawSource > 0 then
+        return rawSource, "Direct Source Access"
+    end
+
+    -- TIER 2: Deteksi Seluruh API Decompiler Executor
+    local decompileAPIs = {
+        { Name = "decompile()", Func = decompile },
+        { Name = "syn.decompile()", Func = syn and syn.decompile },
+        { Name = "fluxus.decompile()", Func = fluxus and fluxus.decompile },
+        { Name = "getgenv().decompile()", Func = getgenv and getgenv().decompile },
+        { Name = "getrenv().decompile()", Func = getrenv and getrenv().decompile },
+    }
+
+    for _, api in ipairs(decompileAPIs) do
+        if type(api.Func) == "function" then
+            local ok, res = pcall(function() return api.Func(scriptInst) end)
+            if ok and type(res) == "string" and #res > 0 and not string.find(string.lower(res), "error") then
+                return res, api.Name
+            end
+            -- Mode fallback dengan timeout / flags
+            local ok2, res2 = pcall(function() return api.Func(scriptInst, 15) end)
+            if ok2 and type(res2) == "string" and #res2 > 0 then
+                return res2, api.Name .. " (Extended)"
+            end
+        end
+    end
+
+    -- TIER 3: Disassembler Bytecode
+    local bc = nil
+    if getscriptbytecode then
+        pcall(function() bc = getscriptbytecode(scriptInst) end)
+    end
+    if disassemble and bc then
+        local ok, disRes = pcall(function() return disassemble(bc) end)
+        if ok and type(disRes) == "string" and #disRes > 0 then
+            return disRes, "Bytecode Disassembler"
+        end
+    end
+
+    -- TIER 4: Fallback Constant & String Dumper
+    local dumpParts = {
+        string.format("-- ========================================================"),
+        string.format("-- ⚠️ DECOMPILE GAGAL / EXECUTOR BELUM MENYEDIAKAN DECOMPILER"),
+        string.format("-- Objek : %s (%s)", scriptInst.Name, scriptInst.ClassName),
+        string.format("-- Path  : %s", getInstancePath(scriptInst)),
+        string.format("-- ========================================================"),
+    }
+
+    if bc then
+        table.insert(dumpParts, string.format("-- Bytecode Length: %d bytes", #bc))
+    end
+
+    -- Ekstrak konstanta string via debug / getconstants jika tersedia
+    local getConstantsFunc = debug and debug.getconstants or getconstants
+    if getConstantsFunc and type(getConstantsFunc) == "function" then
+        local okC, consts = pcall(function() return getConstantsFunc(scriptInst) end)
+        if okC and type(consts) == "table" and #consts > 0 then
+            table.insert(dumpParts, "-- Daftar Konstanta / String di dalam Script:")
+            for idx, cVal in ipairs(consts) do
+                table.insert(dumpParts, string.format("  [%d] = %s", idx, serializeValue(cVal)))
+            end
+        end
+    end
+
+    return table.concat(dumpParts, "\n"), "Fallback Metadata Dump"
+end
+
 DecompileBtn.MouseButton1Click:Connect(function()
-    if not selectedInstance or not (selectedInstance:IsA("LocalScript") or selectedInstance:IsA("ModuleScript")) then
-        showToast("⚠️ Peringatan", "Pilih LocalScript atau ModuleScript terlebih dahulu!", THEME.AccentAmber)
+    if not selectedInstance or not (selectedInstance:IsA("LocalScript") or selectedInstance:IsA("ModuleScript") or selectedInstance:IsA("Script")) then
+        showToast("⚠️ Peringatan", "Pilih Script atau ModuleScript terlebih dahulu!", THEME.AccentAmber)
         return
     end
 
-    showToast("⚡ Decompiler", "Sedang men-decompile script...", THEME.AccentPurple)
+    showToast("⚡ Decompiler", "Sedang memproses decompile...", THEME.AccentPurple)
     ScriptBox.Text = "-- Memulai proses decompile, mohon tunggu beberapa detik..."
 
     task.spawn(function()
-        local decompiledSource = nil
-        local decompileFunc = decompile or (syn and syn.decompile) or (fluxus and fluxus.decompile)
-
-        if decompileFunc and type(decompileFunc) == "function" then
-            local ok, res = pcall(function() return decompileFunc(selectedInstance) end)
-            if ok and res then
-                decompiledSource = tostring(res)
-            end
+        local decompiledCode, methodUsed = executeUniversalDecompile(selectedInstance)
+        if decompiledCode then
+            ScriptBox.Text = string.format("-- [DECOMPILED VIA: %s]\n\n%s", methodUsed, decompiledCode)
+            showToast("✅ Sukses", "Decompile selesai via " .. methodUsed, THEME.AccentEmerald)
+        else
+            ScriptBox.Text = "-- Gagal melakukan decompile pada script ini."
+            showToast("❌ Gagal", "Script tidak dapat didecompile", THEME.AccentRose)
         end
-
-        if not decompiledSource or decompiledSource == "" then
-            decompiledSource = string.format("-- [DECOMPILE GAGAL / EXECUTOR TIDAK SUPPORT]\n-- Script: %s\n-- Path: %s\n-- Executor Anda belum menyediakan fungsi decompile() yang kompatibel.", selectedInstance.Name, getInstancePath(selectedInstance))
-        end
-
-        ScriptBox.Text = decompiledSource
-        showToast("✅ Sukses", "Decompile selesai!", THEME.AccentEmerald)
     end)
+end)
+
+SaveFileBtn.MouseButton1Click:Connect(function()
+    if ScriptBox.Text ~= "" and selectedInstance then
+        local safeName = string.gsub(selectedInstance.Name, "[^%w_%-]", "_") .. ".lua"
+        local ok = saveScriptToFile(safeName, ScriptBox.Text)
+        if ok then
+            showToast("💾 File Tersimpan", "Tersimpan sebagai " .. safeName, THEME.AccentEmerald)
+        else
+            showToast("⚠️ Gagal Simpan", "writefile() tidak tersedia di executor ini", THEME.AccentAmber)
+        end
+    end
 end)
 
 CopyScriptBtn.MouseButton1Click:Connect(function()
@@ -1675,8 +2089,8 @@ end)
 -- ==============================================================================
 -- 🚀 READY INITIALIZATION
 -- ==============================================================================
-showToast("💎 MiRaGe Dex Mobile", "Dex Explorer Siap Digunakan!", THEME.AccentPurple)
+showToast("💎 MiRaGe Dex Mobile", "Dex v2.0 Siap Digunakan!", THEME.AccentPurple)
 print("--------------------------------------------------")
-print("💎 [SUKSES] MiRaGe Dex Mobile V1.0 Berhasil Dimuat!")
-print("✨ [FITUR] Explorer, Properties, Remote Spy, Script Decompiler & Quick Actions Ready.")
+print("💎 [SUKSES] MiRaGe Dex Mobile V2.0 Berhasil Dimuat!")
+print("✨ [FITUR] Resizable Grip Handle, Minimize Only, Full Services, Nil Instances, Universal Decompiler Ready.")
 print("--------------------------------------------------")
